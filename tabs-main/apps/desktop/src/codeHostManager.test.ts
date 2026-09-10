@@ -59,6 +59,7 @@ import {
   resolveCodeHostConfig,
   resolveCodeOssAiProviderSettings,
   resolveCodeOssApplicationSettingsPaths,
+  removeLegacyForcedEditorSettings,
   resolveWorkspaceRootForSession,
   resolveCodeOssExtensionPath,
   resolveCodeOssNodeModulesResource,
@@ -94,6 +95,30 @@ describe("resolveCodeOssApplicationSettingsPaths", () => {
       Path.join(stateDir, "code-oss-main", "profile", "default", "settings.json"),
       Path.join(stateDir, "code-oss-desktop", "shared-profile", "default", "settings.json"),
     ]);
+  });
+});
+
+describe("removeLegacyForcedEditorSettings", () => {
+  it("removes only cosmetic values that an older Tabs build forced", () => {
+    expect(
+      removeLegacyForcedEditorSettings({
+        "breadcrumbs.enabled": false,
+        "editor.fontSize": 13,
+        "files.autoSave": "afterDelay",
+      }),
+    ).toEqual({ "files.autoSave": "afterDelay" });
+  });
+
+  it("preserves user values that differ from the former forced defaults", () => {
+    expect(
+      removeLegacyForcedEditorSettings({
+        "breadcrumbs.enabled": true,
+        "editor.fontSize": 16,
+      }),
+    ).toEqual({
+      "breadcrumbs.enabled": true,
+      "editor.fontSize": 16,
+    });
   });
 });
 

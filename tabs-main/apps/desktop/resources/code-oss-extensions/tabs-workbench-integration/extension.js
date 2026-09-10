@@ -32,34 +32,9 @@ const EMBED_CHROME_DEFAULTS = {
   "security.workspace.trust.enabled": false,
   // Don't nag about recommended extensions inside the embed.
   "extensions.ignoreRecommendations": true,
-  // Editor tab bar: shrink tabs, close button on the right (the React header owns
-  // window controls), no breadcrumbs / secondary side bar.
-  "workbench.editor.showTabs": "multiple",
-  "workbench.editor.tabActionLocation": "right",
-  "workbench.editor.tabSizing": "shrink",
-  "breadcrumbs.enabled": false,
+  // The auxiliary bar starts hidden unless the selected AI provider needs it.
+  // Ordinary editor preferences remain user-controlled, matching VS Code.
   "workbench.secondarySideBar.defaultVisibility": "hidden",
-  // Keep view-header actions (Explorer's new file / new folder / refresh /
-  // collapse, etc.) always visible rather than hover-only, so the sidebar is
-  // easier to work with (matches the Cursor reference).
-  "workbench.view.alwaysShowHeaderActions": true,
-  // Editor surface: Tabs typography + a thin accent line cursor, calm minimap,
-  // thin scrollbars, smooth scrolling everywhere.
-  "editor.fontFamily": '"Geist Mono", "Fira Code", monospace',
-  "editor.fontSize": 13,
-  "editor.lineHeight": 1.6,
-  "editor.cursorStyle": "line",
-  "editor.cursorWidth": 2,
-  "editor.cursorSmoothCaretAnimation": "on",
-  "editor.smoothScrolling": true,
-  "workbench.list.smoothScrolling": true,
-  "editor.minimap.autohide": true,
-  "editor.minimap.scale": 1,
-  "editor.scrollbar.verticalScrollbarSize": 4,
-  "editor.scrollbar.horizontalScrollbarSize": 4,
-  "editor.renderLineHighlight": "gutter",
-  "editor.overviewRulerBorder": false,
-  "editor.hideCursorInOverviewRuler": true,
   "window.dialogStyle": "custom",
 };
 

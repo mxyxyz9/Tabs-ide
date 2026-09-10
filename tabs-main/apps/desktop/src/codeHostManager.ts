@@ -356,6 +356,33 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   "extensions.autoCheckUpdates": false,
 };
 
+// Older builds wrote cosmetic editor choices on every extension activation.
+// They are not required by the embed and must remain user-controlled, just as
+// they are in stock VS Code. Only remove a value when it still exactly matches
+// the historical forced value; a user's different customization is preserved.
+const LEGACY_FORCED_EDITOR_SETTINGS: Record<string, unknown> = {
+  "workbench.editor.showTabs": "multiple",
+  "workbench.editor.tabActionLocation": "right",
+  "workbench.editor.tabSizing": "shrink",
+  "breadcrumbs.enabled": false,
+  "workbench.view.alwaysShowHeaderActions": true,
+  "editor.fontFamily": '"Geist Mono", "Fira Code", monospace',
+  "editor.fontSize": 13,
+  "editor.lineHeight": 1.6,
+  "editor.cursorStyle": "line",
+  "editor.cursorWidth": 2,
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.smoothScrolling": true,
+  "workbench.list.smoothScrolling": true,
+  "editor.minimap.autohide": true,
+  "editor.minimap.scale": 1,
+  "editor.scrollbar.verticalScrollbarSize": 4,
+  "editor.scrollbar.horizontalScrollbarSize": 4,
+  "editor.renderLineHighlight": "gutter",
+  "editor.overviewRulerBorder": false,
+  "editor.hideCursorInOverviewRuler": true,
+};
+
 function writeMergedJsonFile(pathname: string, patch: Record<string, unknown>): void {
   FS.mkdirSync(Path.dirname(pathname), { recursive: true });
   let current: Record<string, unknown> = {};
@@ -367,6 +394,18 @@ function writeMergedJsonFile(pathname: string, patch: Record<string, unknown>): 
     }
   }
   FS.writeFileSync(pathname, `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`, "utf8");
+}
+
+export function removeLegacyForcedEditorSettings(
+  settings: Record<string, unknown>,
+): Record<string, unknown> {
+  const cleaned = { ...settings };
+  for (const [key, forcedValue] of Object.entries(LEGACY_FORCED_EDITOR_SETTINGS)) {
+    if (JSON.stringify(cleaned[key]) === JSON.stringify(forcedValue)) {
+      delete cleaned[key];
+    }
+  }
+  return cleaned;
 }
 
 type ExtensionRegistration = {
@@ -2202,6 +2241,20 @@ export class CodeHostManager {
     }
     try {
       const desktopSettingsPath = Path.join(location, "settings.json");
+      if (isFile(desktopSettingsPath, FS)) {
+        try {
+          const current = JSON.parse(FS.readFileSync(desktopSettingsPath, "utf8")) as Record<
+            string,
+            unknown
+          >;
+          const cleaned = removeLegacyForcedEditorSettings(current);
+          if (JSON.stringify(cleaned) !== JSON.stringify(current)) {
+            FS.writeFileSync(desktopSettingsPath, `${JSON.stringify(cleaned, null, 2)}\n`, "utf8");
+          }
+        } catch {
+          // A malformed settings file is handled by writeMergedJsonFile below.
+        }
+      }
       writeMergedJsonFile(desktopSettingsPath, {
         ...CODE_OSS_EMBED_DEFAULT_SETTINGS,
         // Apply the outer Tabs theme before the extension host starts. The
