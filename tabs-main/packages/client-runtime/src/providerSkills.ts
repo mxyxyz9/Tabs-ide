@@ -1,31 +1,55 @@
-import type { ServerProviderSkill, ServerProviderSlashCommand } from "@tabs/contracts";
+import type {
+  ServerProvider,
+  ServerProviderSkill,
+  ServerProviderSlashCommand,
+} from "@tabs/contracts";
 
 export type ProviderSkillSourceKind = "app" | "repo" | "project" | "personal" | "system" | "other";
+
+function titleCaseWords(value: string): string {
+  const words: string[] = [];
+  for (const segment of value.split(/[\s:_-]+/)) {
+    if (segment.length === 0) continue;
+    words.push(segment.charAt(0).toUpperCase() + segment.slice(1));
+  }
+  return words.join(" ");
+}
+
+function normalizePathSeparators(pathValue: string): string {
+  return pathValue.replaceAll("\\", "/");
+}
 
 export function formatProviderSkillDisplayName(
   skill: Pick<ServerProviderSkill, "name" | "displayName">,
 ): string {
   const displayName = skill.displayName?.trim();
-  if (displayName) return displayName;
-  return skill.name
-    .split(/[\s:_-]+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  if (displayName) {
+    return displayName;
+  }
+  return titleCaseWords(skill.name);
 }
 
 export function dedupeProviderSkillsByName(
   skills: ReadonlyArray<ServerProviderSkill>,
 ): ServerProviderSkill[] {
-  const seen = new Set<string>();
+  const seenNames = new Set<string>();
   return skills.filter((skill) => {
-    const name = skill.name.trim().toLowerCase();
-    if (seen.has(name)) return false;
-    seen.add(name);
+    const normalizedName = skill.name.trim().toLowerCase();
+    if (seenNames.has(normalizedName)) {
+      return false;
+    }
+    seenNames.add(normalizedName);
     return true;
   });
 }
 
+/**
+ * Whether a composer pick can start this skill. A skill switched off in the
+ * provider's settings will not run, and one the provider reserves for the
+ * agent (Claude Code's `user-invocable: false`) rejects a user invocation.
+ * Everything else, including skills the agent may not start on its own, is
+ * fair game: the server dispatches the pick in the provider's native form.
+ */
 export function isProviderSkillUserInvocable(
   skill: Pick<ServerProviderSkill, "enabled" | "userInvocable">,
 ): boolean {
@@ -34,8 +58,11 @@ export function isProviderSkillUserInvocable(
 
 export function getProviderSkillsForSlashMenu(
   skills: ReadonlyArray<ServerProviderSkill>,
+  showSkillsInSlashMenu = true,
 ): ServerProviderSkill[] {
-  return dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
+  return showSkillsInSlashMenu
+    ? dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable))
+    : [];
 }
 
 export function getProviderSlashCommandsForSlashMenu(
@@ -49,9 +76,13 @@ export function getProviderSlashCommandsForSlashMenu(
 export function resolveProviderSkillSourceKind(
   skill: Pick<ServerProviderSkill, "path" | "scope">,
 ): ProviderSkillSourceKind {
-  const path = skill.path.replaceAll("\\", "/");
-  if (path.includes("/.codex/plugins/") || path.includes("/.agents/plugins/")) return "app";
-  switch (skill.scope?.trim().toLowerCase()) {
+  const normalizedPath = normalizePathSeparators(skill.path);
+  if (normalizedPath.includes("/.codex/plugins/") || normalizedPath.includes("/.agents/plugins/")) {
+    return "app";
+  }
+
+  const normalizedScope = skill.scope?.trim().toLowerCase();
+  switch (normalizedScope) {
     case "repo":
     case "repository":
       return "repo";
@@ -64,7 +95,32 @@ export function resolveProviderSkillSourceKind(
       return "personal";
     case "system":
       return "system";
+    case undefined:
+    case "":
+      return "other";
     default:
       return "other";
   }
+}
+
+function resolveProviderWorkspaceSnapshot(
+  provider: ServerProvider,
+  cwd: string | null | undefined,
+) {
+  if (!cwd) return undefined;
+  return provider.workspaceSnapshots?.find((snapshot) => snapshot.cwd === cwd);
+}
+
+export function resolveProviderSkillsForCwd(
+  provider: ServerProvider,
+  cwd: string | null | undefined,
+): ServerProvider["skills"] {
+  return resolveProviderWorkspaceSnapshot(provider, cwd)?.skills ?? provider.skills;
+}
+
+export function resolveProviderSlashCommandsForCwd(
+  provider: ServerProvider,
+  cwd: string | null | undefined,
+): ServerProvider["slashCommands"] {
+  return resolveProviderWorkspaceSnapshot(provider, cwd)?.slashCommands ?? provider.slashCommands;
 }

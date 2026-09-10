@@ -64,6 +64,10 @@
       "types": "./src/codeChrome.ts",
       "import": "./src/codeChrome.ts"
     },
+    "./searchRanking": {
+      "types": "./src/searchRanking.ts",
+      "import": "./src/searchRanking.ts"
+    },
     "./themeDerivation": {
       "types": "./src/themeDerivation.ts",
       "import": "./src/themeDerivation.ts"

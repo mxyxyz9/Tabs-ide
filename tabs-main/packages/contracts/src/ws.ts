@@ -88,6 +88,7 @@ import { KeybindingRule } from "./keybindings";
 import { ProjectReadFileInput, ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
 import { FilesystemBrowseInput } from "./filesystem";
 import { OpenInEditorInput } from "./editor";
+import { ProviderInstanceId } from "./providerInstance";
 import {
   ServerConfigUpdatedPayload,
   ServerProviderUpdatedPayload,
@@ -538,7 +539,14 @@ const WebSocketRequestBody = Schema.Union([
 
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),
-  tagRequestBody(WS_METHODS.serverRefreshProviders, Schema.Struct({})),
+  tagRequestBody(
+    WS_METHODS.serverRefreshProviders,
+    Schema.Struct({
+      instanceId: Schema.optional(ProviderInstanceId),
+      cwd: Schema.optional(TrimmedNonEmptyString),
+      refreshModels: Schema.optional(Schema.Boolean),
+    }),
+  ),
   tagRequestBody(WS_METHODS.serverRunProviderMaintenance, ServerRunProviderMaintenanceInput),
   tagRequestBody(WS_METHODS.serverUpsertKeybinding, KeybindingRule),
   tagRequestBody(WS_METHODS.serverRemoveKeybinding, KeybindingRule),

@@ -3,6 +3,7 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
+import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
   AuthAccessStreamError,
   AuthAccessStreamEvent,
@@ -272,6 +273,8 @@ export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProv
      * refreshes.
      */
     instanceId: Schema.optional(ProviderInstanceId),
+    cwd: Schema.optional(TrimmedNonEmptyString),
+    refreshModels: Schema.optional(Schema.Boolean),
   }),
   success: ServerProviderUpdatedPayload,
   error: EnvironmentAuthorizationError,
