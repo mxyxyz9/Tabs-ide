@@ -138,6 +138,7 @@ import {
 } from "../lib/gitReactQuery";
 import { GitAccountMenu } from "./git/GitAccountMenu";
 import { GitEnvironmentGate } from "./git/GitEnvironmentGate";
+import { ToolErrorBoundary } from "./ToolErrorBoundary";
 import { GitToolV2 } from "./GitToolV2";
 import {
   buildSingleHunkPatch,
@@ -12326,7 +12327,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         />
       ) : null}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{content}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <ToolErrorBoundary
+          resetKey={`${activeProject?.environmentId ?? "none"}:${activeProject?.id ?? "none"}:${activeTool?.id ?? "none"}`}
+        >
+          {content}
+        </ToolErrorBoundary>
+      </div>
 
       {!shouldHideShellChrome &&
       activeTool?.kind === "git" &&
