@@ -71,7 +71,9 @@ jobs:
         run: bun run build
       - name: Package Vercel Build Output API artifact
         working-directory: tabs-main/apps/marketing
-        run: bun scripts/vercel-output.ts
+        run: |
+          bun scripts/vercel-output.ts
+          mkdir -p ../../../.vercel
+          cp -r .vercel/output ../../../.vercel/output
       - name: Deploy production
-        working-directory: tabs-main/apps/marketing
         run: bunx vercel@59.11.7 deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
