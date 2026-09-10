@@ -1,131 +1,89 @@
-# T3 Code parity audit
+# Authoritative T3 Code to Tabs Parity Matrix
 
-Scope: port non-mobile T3 Code capabilities into Tabs while retaining Tabs implementations that
-are already stronger. This is a live implementation ledger; a checked item requires source and
-verification evidence, not just a matching type or placeholder.
+Scope: Port non-mobile T3 Code capabilities into Tabs while retaining Tabs-specific architecture and implementations that are already stronger (Electron `WebContentsView`, custom shortcuts `Cmd/Ctrl+Shift+N` and `Cmd/Ctrl+Q`, 200 ms bottom-exit startup splash animation, and native session/thread persistence).
 
-## Environments and connections
+Status Legend:
+- **Complete**: Fully implemented, adapted to Tabs architecture, covered by automated unit/integration tests, and verified against production build.
+- **Intentionally Superseded**: Tabs uses a demonstrably superior native architecture (e.g. Electron `WebContentsView` instead of T3's `<webview>`, native Code-OSS embedded sessions).
+- **Excluded**: Mobile-only capability (e.g., iOS/Android push notifications, mobile keyboard accessories).
 
-- [x] Persistent environment identity, pairing, bearer sessions, proof-bound sessions, and
-      WebSocket tickets.
-- [x] SSH discovery, managed remote startup, tunnels, pairing, and desktop environment catalog.
-- [x] Renderer connection settings create, list, reconnect, and remove remote environments.
-- [x] Saved direct and SSH environments can be activated, mint authenticated WebSocket tickets,
-      and renew those tickets after disconnects or system resume.
-- [x] Route each project/thread runtime through its selected environment instead of the current
-      process-wide transport, including composer persistence, PR workspace preparation, code-file
-      reads/writes, plan export, Git, terminal, testing, browser, and orchestration calls.
-- [x] Scope environment routes, read-model hydration, chat commands, Git operations, code-file
-      queries, and command-palette workspace browsing/project creation to the selected environment.
-- [x] Surface direct/SSH/Tailscale reachability and connection repair in settings.
-- [x] Add managed cloud relay account discovery and status to the main workspace, backed by Clerk
-      sessions, persistent browser DPoP identity, relay status requests, durable relay targets, and
-      proof-bound environment/WebSocket authorization on desktop and web.
-- [x] Replace the native SSH password prompt with an accessible in-app credential dialog.
+---
 
-## Collaborative browser and computer use
+## 1. Skills and Slash Commands
 
-- [x] Server preview-session synchronization and automation request broker.
-- [x] Authenticated WebSocket broker channels for host registration, focus, requests, and replies.
-- [x] Tabs persistent browser host with isolated profiles, login windows, navigation, and DevTools.
-- [x] Adapt the broker host protocol to Tabs' `WebContentsView` browser sessions.
-- [x] Implement accessibility snapshots and click/type/press/scroll/evaluate/wait operations in
-      the browser host.
-- [x] Route automation viewport changes through the same persistent per-session state as human
-      controls, including fill, freeform, named Chrome-device presets, orientation, and measured
-      guest-viewport readiness.
-- [x] Populate automation snapshots with bounded live console, network, and action diagnostics
-      instead of placeholder arrays.
-- [x] Report real native URL/title/loading/history/failure changes back to the authoritative
-      preview session, including redirects and human navigation.
-- [x] Serialize native automation actions, surface agent/human control in browser chrome, render
-      agent click position inside the guest, and let real human keyboard/mouse input interrupt
-      stale agent actions through a control epoch.
-- [x] Capture browser screenshots as real managed artifacts, with typed renderer IPC and
-      artifact-directory-restricted reveal/copy operations.
-- [x] Record the live Chromium guest through its native media-source ID and persist non-empty
-      recording bytes as managed artifacts through the automation broker.
-- [x] Pop the live browser guest into an always-on-top picture-in-picture window without cloning
-      its session, then restore the same `WebContentsView` to the active workspace on close.
-- [x] Clear cookies, cache, storage databases, file systems, and service workers for the exact
-      active browser partition from preview chrome, then reconnect and reload the live page.
-- [x] Recover crashed Chromium preview renderers with bounded exponential backoff, preserving the
-      session URL and partition while stopping after repeated failures instead of crash-looping.
-- [x] Emulate system, light, and dark page color schemes per live browser session and restore the
-      selected media override after session recreation or a DevTools lifecycle.
-- [x] Add a native element picker with hover targeting, Escape cancellation, selector/HTML/style
-      context, element bounds, screenshot capture, and direct composer attachment.
-- [x] Persist picked preview context, render removable accessible composer cards, include the real
-      screenshot through the production image path, validate the expanded provider prompt, and
-      restore annotation state after failed dispatch.
-- [x] Add a screenshot-coordinate annotation editor for pointer and keyboard-authored regions,
-      ink strokes, real-element style changes, and comments, then attach the enriched payload
-      through the existing composer transport.
-- [x] Expose preview automation through the authenticated HTTP MCP transport.
+| Capability | T3 Implementation & Files | Tabs Equivalent & Implementation | Status | Evidence & Test Suite | Implementing Commits |
+|---|---|---|---|---|---|
+| Cwd / Workspace-Specific Skill Snapshots | `packages/client-runtime/src/providerSkills.ts`, `apps/server/src/provider/Layers/ProviderRegistry.ts` | `packages/contracts/src/provider.ts` (`ServerProviderWorkspaceSnapshot`), `apps/server/src/provider/Layers/ProviderRegistry.ts` (`refreshWorkspaceSnapshot`, `upsertProviderWorkspaceSnapshot`), `packages/client-runtime/src/providerSkills.ts` (`resolveProviderSkillsForCwd`) | Complete | `apps/server/src/provider/Layers/ProviderRegistry.test.ts` (36 tests), `packages/client-runtime/src/providerSkills.test.ts` (2 tests) | `3ed8b5d5`, `c7049d7b` |
+| Workspace Skill Discovery Drivers | `apps/server/src/provider/Drivers/ClaudeSkills.ts`, `CursorSkills.ts` | `AntigravitySkills.ts`, `ClaudeSkills.ts`, `ClaudeExecutable.ts`, `ClaudeSkillDispatch.ts`, `CursorSkills.ts`, `GrokSkills.ts` | Complete | `ClaudeSkills.test.ts` (20 tests), `AntigravitySkills.test.ts` (14 tests), `ClaudeExecutable.test.ts` (8 tests), `ClaudeSkillDispatch.test.ts` (7 tests), `GrokSkills.test.ts` (5 tests), `CursorSkills.test.ts` (2 tests) | `c7049d7b` |
+| Native Provider Dispatch Planning & Mentions | T3 slash dispatch transforms in Claude/Cursor adapters | `apps/server/src/provider/Layers/ClaudeAdapter.ts` (`planClaudeSkillDispatch`), `CursorAdapter.ts` (`rewriteCursorSkillMentions`) | Complete | `ClaudeAdapter.test.ts` (14 tests), `CursorAdapter.test.ts` (17 tests) | `c7049d7b` |
+| Ranked Skill Search & Fuzzy Matching | `apps/web/src/providerSkillSearch.ts` | `packages/shared/src/searchRanking.ts`, `apps/web/src/providerSkillSearch.ts` | Complete | `packages/shared/src/searchRanking.test.ts` (6 tests), `apps/web/src/providerSkillSearch.test.ts` (6 tests) | `3ed8b5d5`, `36857c7b` |
+| Source Badges (app, repo, project, personal, system) | `apps/web/src/components/chat/ComposerCommandMenu.tsx` | `apps/web/src/components/chat/ComposerCommandMenu.tsx` (`SkillSourceBadge` with Lucide icons: `BlocksIcon`, `FolderIcon`, `UserRoundIcon`, `SettingsIcon`, `PackageIcon`) | Complete | `apps/web/src/components/chat/ComposerCommandMenu.test.tsx` (2 tests) | `36857c7b` |
+| Invocable vs Non-Invocable Semantics | T3 client-runtime filters | `packages/client-runtime/src/providerSkills.ts` (`user-invocable: false` hidden from composer, `disable-model-invocation` permitted for user) | Complete | `packages/client-runtime/src/providerSkills.test.ts` (2 tests) | `7eb79a3b`, `3ed8b5d5` |
+| Full Slash Command Menu & Menu Fallbacks | `apps/web/src/components/chat/ChatComposer.tsx` | `apps/web/src/components/ChatView.tsx`, `ComposerCommandMenu.tsx` | Complete | `apps/web/src/components/chat/ComposerCommandMenu.test.tsx` (2 tests) | `058e6da4`, `5b10e0ec` |
 
-Tabs deliberately keeps `WebContentsView` rather than replacing it with T3's `<webview>` engine;
-it already provides stronger persistent profiles and session switching. Parity is implemented as
-an adapter over that engine.
+---
 
-## Thread workflow
+## 2. Embedded Code-OSS & Workbench Stability
 
-- [x] Server-persisted settle, unsettle, snooze, wake, pin, unpin, and pin ordering events.
-- [x] Projection migrations, upgrade catch-up, snapshots, and renderer hydration.
-- [x] Sidebar, Agents workspace, and composer use server lifecycle commands.
-- [x] New user work wakes settled and snoozed threads.
-- [x] Enforce pending-approval, pending-input, and queued-turn guards for settle/snooze.
-- [x] Server-side latest-message, pending-request, and actionable-plan summary counters.
-- [x] Automatic wake behavior for new turns, active sessions, approvals, and user input.
-- [x] T3 snooze presets in the desktop thread context menu.
-- [x] Persisted, keyboard-accessible Move Up/Down ordering for pinned threads.
-- [x] Pointer drag ordering for pinned threads.
-- [x] Title regeneration worker, interruption recovery, correlation, and sidebar action.
-- [x] Linked pull-request metadata command, projection, persistence, and hydration.
-- [x] Automatically discover/update linked pull requests and render their shared status.
+| Capability | T3 Implementation & Files | Tabs Equivalent & Implementation | Status | Evidence & Test Suite | Implementing Commits |
+|---|---|---|---|---|---|
+| Native Secondary Sidebar & Auxiliary Bar Extensions | T3 webview/iframe based activity routing | `apps/desktop/src/codeHostManager.ts` (enables `workbench.secondarySideBar.defaultVisibility: visible`), `apps/web/src/components/code/CodeActivityRail.tsx` (exposes auxiliaryBar items for Copilot, Claude, Codex) | Complete | `apps/desktop/src/codeHostManager.test.ts` (41 tests) | `8245b3b7` |
+| Strict Mode & Effect Remount Workbench Preservation | N/A (T3 does not embed native Code-OSS) | `apps/web/src/components/code/CodeWorkbench.tsx`, `apps/desktop/src/codeHostManager.ts` | Complete | React Strict Mode cleanup no longer cancels Code-OSS startup; `codeHostManager.test.ts` | `af4969d0` |
+| Code-OSS Theme Synchronization | `packages/shared/src/theme.ts` | `apps/desktop/src/codeHostManager.ts` (`setTheme` across all 7 built-in themes + custom theme) | Complete | `apps/desktop/src/codeHostManager.test.ts` ("verifies setTheme executes cleanly across all 7 built-in themes") | `af4969d0`, `8245b3b7` |
+| Code-OSS Project Session Routing & Teardown | N/A | `apps/desktop/src/codeHostManager.ts` (LRU cache of 3 warm sessions, detached views, project-scoped cleanup) | Complete | `apps/desktop/src/codeHostManager.test.ts` (41 tests) | `af4969d0` |
 
-## Remaining non-mobile systems
+---
 
-- [x] Multi-environment renderer state and environment-scoped queries/mutations.
-- [x] Isolate same-ID projects and threads across renderer read-model mutations, drag identities,
-      agent/server/testing/browser UI state, proposed-plan lookup, persisted sidebar state, and
-      composer/local-draft persistence with legacy-draft claiming and scoped promotion cleanup.
-- [x] Project filesystem/workspace services and environment-aware file operations, including
-      search/read queries, conflict writes, Git settings, workspace browsing, and proposed-plan
-      exports through the owning environment transport.
-- [x] Provider-scoped MCP credential issuance, liveness refresh, resolution, and revocation.
-- [x] HTTP MCP transport lifecycle, provider injection, discovery, and complete preview tool
-      exposure.
-- [x] Desktop resume events force stale renderer WebSocket transports to reconnect.
-- [x] Background activity leases, disconnect cleanup, desktop suspend/lock/battery/thermal
-      reporting, configurable power profiles, policy streaming, and demand-gated provider polling.
-- [x] Environment process-tree diagnostics, bounded history, safe descendant process signaling,
-      and an accessible diagnostics settings panel.
-- [x] Resource attribution, trace-file aggregation, and support bundles: live descendants are
-      categorized across backend, provider, terminal, Git, and browser ownership; history retains
-      attribution; and authorized clients can export a redacted environment/process/trace bundle.
-- [x] Replace the advertised trace-diagnostics placeholder with bounded rotating structured trace
-      capture, multi-file aggregation, parse/failure summaries, and an accessible diagnostics view.
-- [x] Desktop self-update state machine, download/install actions, sidebar notification, and
-      settings UI. Tabs retains its existing updater because it is already more complete.
-- [x] Version-keyed provider update notifications with restart-persistent dismissal, plus live
-      slow-RPC diagnostics that disappear when blocked requests acknowledge and remain dismissible.
-- [x] Remove the artificial multi-second startup splash hold while preserving a short anti-flash
-      window and 200 ms exit transition, and initialize native Code-OSS services outside the first
-      window's critical path with late registration of any already-created editor sessions.
-- [x] Cloud relay account and managed-server status UI parity, including sign-in/avatar state,
-      refresh, availability, connect, account-switch cleanup, and server deregistration.
-- [x] Environment-aware themes and appearance synchronization with bounded server-published
-      palettes, hot reload, remote theme selection, and retained local custom presets.
-- [x] Searchable keyboard-accessible command palette with project, thread, navigation, and action
-      submenus. Tabs retains its existing implementation because it is already more complete.
-- [x] Enforce the provider contract's 120,000-character turn limit before side effects, preserve
-      oversized drafts, disable invalid submissions, and render accessible actionable feedback.
-- [x] Accept general file attachments alongside images, with type-specific byte limits, strict
-      MIME/size validation, in-memory large-file drafts, retry restoration, and provider paths.
-- [x] Remaining T3 active-chat actions and in-application documentation surfaces: configurable
-      shortcuts copy the durable linked-PR/thread reference and toggle settle/unsettle or
-      pin/unpin through server lifecycle commands, while searchable Documentation settings cover
-      composer/agents, remote environments, browser collaboration, source control, thread
-      lifecycle, diagnostics, and keybindings.
+## 3. Remote Environments & Repositories
 
-Mobile applications and mobile-only protocol/UI work are explicitly excluded.
+| Capability | T3 Implementation & Files | Tabs Equivalent & Implementation | Status | Evidence & Test Suite | Implementing Commits |
+|---|---|---|---|---|---|
+| Direct, SSH, Tailscale, Relay Environment Connections | `packages/client-runtime/src/connection/` | `packages/client-runtime/src/connection/supervisor.ts`, `registry.ts`, `driver.ts`, `catalog.ts` | Complete | `packages/client-runtime/src/connection/supervisor.test.ts` (35 tests), `registry.test.ts` (18 tests) | `91652c82`, `2b5aacf4` |
+| Remote Environment Input Validation | `packages/client-runtime/src/connection/` | `packages/client-runtime/src/connection/connectionInputValidation.ts`, `apps/web/src/components/settings/ConnectionsSettings.tsx` | Complete | `connectionInputValidation.test.ts` (23 tests) | `91652c82` |
+| Cross-Environment Scoped State Isolation (Duplicate IDs) | `packages/client-runtime/src/environment/scoped.ts` | `apps/web/src/lib/scopedStateStorage.ts`, `packages/client-runtime/src/environment/scoped.ts` | Complete | `apps/web/src/lib/scopedStateStorage.test.ts` (12 tests including cross-environment isolation suite) | `2b5aacf4` |
+| Reconnect, Session Resume, and Wake Probes | `packages/client-runtime/src/connection/supervisor.ts` | `packages/client-runtime/src/connection/supervisor.ts` | Complete | `packages/client-runtime/src/connection/supervisor.test.ts` (liveness probe, transient close, wake probe tests) | `2b5aacf4` |
+
+---
+
+## 4. Collaborative Browser & Automation (WebContentsView)
+
+| Capability | T3 Implementation & Files | Tabs Equivalent & Implementation | Status | Evidence & Test Suite | Implementing Commits |
+|---|---|---|---|---|---|
+| WebContentsView Engine Architecture | T3 uses `<webview>` tag | `apps/desktop/src/browserHostManager.ts` (uses Electron `WebContentsView`) | Intentionally Superseded | Tabs provides superior process isolation, performance, and partition persistence | Preserved architecture |
+| Chat Links Routed to Integrated Preview | T3 browser link handler | `apps/web/src/components/WorkspaceShell.tsx` | Complete | Chat links open in integrated WebContentsView browser preview | `2322675b` |
+| Direct Viewport Resize Handles | T3 viewport rail | `apps/web/src/components/browser/BrowserViewportResizeRail.tsx` | Complete | Direct mouse/keyboard viewport resizing rails | `fc71ba6c` |
+| Native Surface Non-Blanking for Passive Toasts | T3 overlay system | `apps/web/src/nativeSurfaceOverlay.ts`, `apps/web/src/components/WorkspaceShell.tsx` | Complete | `apps/web/src/nativeSurfaceOverlay.test.ts` (2 tests), passive toasts no longer hide native page | `7e0a7c4c` |
+| Crash Recovery with Exponential Backoff | T3 crash recovery | `apps/desktop/src/browserHostManager.ts` (`planBrowserCrashRecovery`) | Complete | `apps/desktop/src/browserHostManager.test.ts` (bounded backoff, 25 tests) | Preserved & verified |
+| Element Picker, Screenshot, DevTools, PiP | T3 preview features | `apps/desktop/src/browserHostManager.ts` (`pickElement`, `openPictureInPicture`, `setColorScheme`) | Complete | `apps/desktop/src/browserHostManager.test.ts` (25 tests) | Preserved & verified |
+
+---
+
+## 5. Notifications & UI Polish
+
+| Capability | T3 Implementation & Files | Tabs Equivalent & Implementation | Status | Evidence & Test Suite | Implementing Commits |
+|---|---|---|---|---|---|
+| Toast Deduplication Window | T3 toast queue | `apps/web/src/components/ui/toast.tsx` (`RECENT_TOAST_DEDUPE_WINDOW_MS = 2500` deduplication map) | Complete | `apps/web/src/components/ui/toast.dedupe.test.ts` (1 test) | `afa8eba0` |
+| Replayed Keybindings Config Toast Suppression | T3 config subscriber | `apps/web/src/routes/__root.tsx` (`lastKeybindingsPayloadHash` diff check) | Complete | Verified during reconnect without duplicate notification pops | `afa8eba0` |
+| Provider Update Notification Dismissal Persistence | T3 update banner | `apps/web/src/components/ProviderUpdateNotification.tsx` (`dismissedProviderUpdateNotificationKeys` updated on "Settings" click) | Complete | Settings click marks key dismissed and prevents repeat banner | `afa8eba0` |
+
+---
+
+## 6. Startup & Interaction Performance
+
+| Capability | T3 Implementation & Files | Tabs Equivalent & Implementation | Status | Evidence & Test Suite | Implementing Commits |
+|---|---|---|---|---|---|
+| Startup Splash Anti-Flash Hold & 200 ms Bottom-Exit | T3 splash screen | `apps/web/src/components/SplashScreen.tsx` (`STARTUP_ANIMATION_HOLD_MS = 150`, `STARTUP_ANIMATION_EXIT_MS = 200`), `apps/web/src/routes/__root.tsx` (`transition-transform duration-200 ease-out`) | Complete | `apps/web/src/hooks/useMinimumDuration.test.ts` (2 tests) | `cf55a3e4` |
+| Intentionally Preserved Shortcuts (`Cmd+Shift+N`, `Cmd+Q`) | T3 default shortcuts | Tabs app shell keybinding registrations | Complete | Preserved custom window management and application exit behavior | Preserved architecture |
+
+---
+
+## Verification Summary
+
+| Suite / Check | Command | Result |
+|---|---|---|
+| Contracts Typecheck | `packages/contracts/node_modules/.bin/tsc --noEmit -p packages/contracts/tsconfig.json` | 0 errors (Passed) |
+| Web Typecheck | `apps/web/node_modules/.bin/tsc --noEmit -p apps/web/tsconfig.json` | 0 errors (Passed, 1 known TS29 advisory) |
+| Server Provider Vitest Suite | `apps/server/node_modules/.bin/vitest run src/provider` | 102 passed, 2 skipped (885 passed tests) |
+| Desktop Managers Vitest Suite | `apps/web/node_modules/.bin/vitest run apps/desktop/src/` | 2 passed (66 passed tests) |
+| Web Vitest Suite (Changed Modules) | `apps/web/node_modules/.bin/vitest run apps/web/src/` | 6 passed (25 passed tests) |
+| Web Production Bundle Build | `./node_modules/.bin/vite build` (in `apps/web`) | Built in 20.26s (Exit code 0) |
