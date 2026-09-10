@@ -176,6 +176,7 @@ type BrowserSession = {
   canGoForward: boolean;
   devToolsOpen: boolean;
   zoomFactor: number;
+  audioMuted: boolean;
   lastError: string | null;
   /** Transient error set when ERR_CONNECTION_REFUSED fires (dev server not ready yet).
    * Cleared as soon as any successful navigation or page load occurs. */
@@ -295,6 +296,7 @@ export class BrowserHostManager {
         canGoForward: false,
         devToolsOpen: false,
         zoomFactor: 1,
+        audioMuted: false,
         lastError: null,
         transientError: null,
       };
@@ -355,6 +357,7 @@ export class BrowserHostManager {
       canGoForward: false,
       devToolsOpen: view.webContents.isDevToolsOpened(),
       zoomFactor: 1,
+      audioMuted: false,
       lastError: null,
       transientError: null,
       consoleEntries: [],
@@ -425,6 +428,7 @@ export class BrowserHostManager {
 
     const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
     view.webContents?.setZoomFactor(initialZoom * session.zoomFactor);
+    view.webContents.setAudioMuted(session.audioMuted);
 
     view.webContents.setUserAgent(
       sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
@@ -792,6 +796,14 @@ export class BrowserHostManager {
     session.zoomFactor = Math.min(2, Math.max(0.5, Math.round(requested * 10) / 10));
     const windowZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1;
     session.view.webContents.setZoomFactor(windowZoom * session.zoomFactor);
+    this.emitState(session);
+  }
+
+  setAudioMuted(input: DesktopBrowserHostControlInput & { audioMuted: boolean }): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) return;
+    session.audioMuted = input.audioMuted;
+    session.view.webContents.setAudioMuted(input.audioMuted);
     this.emitState(session);
   }
 
@@ -1389,6 +1401,7 @@ export class BrowserHostManager {
       canGoForward: session.canGoForward,
       devToolsOpen: session.devToolsOpen,
       zoomFactor: session.zoomFactor,
+      audioMuted: session.audioMuted,
       controller: session.controller ?? "none",
       lastError: session.lastError,
       transientError: session.transientError,

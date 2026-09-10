@@ -146,6 +146,7 @@ const BROWSER_HOST_HIDE_SESSION_CHANNEL = "desktop:browser-host:hide-session";
 const BROWSER_HOST_NAVIGATE_SESSION_CHANNEL = "desktop:browser-host:navigate-session";
 const BROWSER_HOST_RELOAD_SESSION_CHANNEL = "desktop:browser-host:reload-session";
 const BROWSER_HOST_SET_ZOOM_CHANNEL = "desktop:browser-host:set-zoom";
+const BROWSER_HOST_SET_AUDIO_MUTED_CHANNEL = "desktop:browser-host:set-audio-muted";
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
@@ -2387,6 +2388,23 @@ function registerIpcHandlers(): void {
       projectId: (input as { projectId: string }).projectId,
       sessionId: readBrowserSessionId(input),
       zoomFactor: (input as { zoomFactor: number }).zoomFactor,
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_SET_AUDIO_MUTED_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_SET_AUDIO_MUTED_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string" ||
+      typeof (input as { audioMuted?: unknown }).audioMuted !== "boolean"
+    ) {
+      return;
+    }
+    browserHostManager.setAudioMuted({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+      audioMuted: (input as { audioMuted: boolean }).audioMuted,
     });
   });
 

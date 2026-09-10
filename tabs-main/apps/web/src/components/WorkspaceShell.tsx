@@ -93,6 +93,8 @@ import {
   CircleCheckIcon,
   SquareIcon,
   TriangleAlertIcon,
+  Volume2Icon,
+  VolumeXIcon,
 } from "lucide-react";
 import {
   Fragment,
@@ -577,6 +579,7 @@ function createEmptyBrowserSessionState(
     canGoForward: false,
     devToolsOpen: false,
     zoomFactor: 1,
+    audioMuted: false,
     lastError: null,
     transientError: null,
   };
@@ -7275,6 +7278,24 @@ function DesktopBrowserChrome(props: {
               >
                 <BugIcon className="size-3.5" />
                 Inspect
+              </Button>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant={props.sessionState.audioMuted ? "secondary" : "outline"}
+                onClick={() =>
+                  void bridge?.setBrowserAudioMuted({
+                    ...sessionArg,
+                    audioMuted: !props.sessionState.audioMuted,
+                  })
+                }
+                aria-label={props.sessionState.audioMuted ? "Unmute browser" : "Mute browser"}
+              >
+                {props.sessionState.audioMuted ? (
+                  <VolumeXIcon className="size-3.5" />
+                ) : (
+                  <Volume2Icon className="size-3.5" />
+                )}
               </Button>
               <Button
                 type="button"

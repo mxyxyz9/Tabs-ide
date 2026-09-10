@@ -56,6 +56,7 @@ export function createEmptyBrowserSessionState(
     canGoForward: false,
     devToolsOpen: false,
     zoomFactor: 1,
+    audioMuted: false,
     lastError: null,
     transientError: null,
   };
