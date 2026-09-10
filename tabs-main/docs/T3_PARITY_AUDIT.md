@@ -45,6 +45,8 @@ verification evidence, not just a matching type or placeholder.
       artifact-directory-restricted reveal/copy operations.
 - [x] Record the live Chromium guest through its native media-source ID and persist non-empty
       recording bytes as managed artifacts through the automation broker.
+- [x] Pop the live browser guest into an always-on-top picture-in-picture window without cloning
+      its session, then restore the same `WebContentsView` to the active workspace on close.
 - [x] Add a native element picker with hover targeting, Escape cancellation, selector/HTML/style
       context, element bounds, screenshot capture, and direct composer attachment.
 - [x] Persist picked preview context, render removable accessible composer cards, include the real
@@ -107,6 +109,8 @@ an adapter over that engine.
       submenus. Tabs retains its existing implementation because it is already more complete.
 - [x] Enforce the provider contract's 120,000-character turn limit before side effects, preserve
       oversized drafts, disable invalid submissions, and render accessible actionable feedback.
+- [x] Accept general file attachments alongside images, with type-specific byte limits, strict
+      MIME/size validation, in-memory large-file drafts, retry restoration, and provider paths.
 - [x] Remaining T3 active-chat actions and in-application documentation surfaces: configurable
       shortcuts copy the durable linked-PR/thread reference and toggle settle/unsettle or
       pin/unpin through server lifecycle commands, while searchable Documentation settings cover

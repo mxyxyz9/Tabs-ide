@@ -147,6 +147,9 @@ const BROWSER_HOST_NAVIGATE_SESSION_CHANNEL = "desktop:browser-host:navigate-ses
 const BROWSER_HOST_RELOAD_SESSION_CHANNEL = "desktop:browser-host:reload-session";
 const BROWSER_HOST_SET_ZOOM_CHANNEL = "desktop:browser-host:set-zoom";
 const BROWSER_HOST_SET_AUDIO_MUTED_CHANNEL = "desktop:browser-host:set-audio-muted";
+const BROWSER_HOST_OPEN_PICTURE_IN_PICTURE_CHANNEL = "desktop:browser-host:open-picture-in-picture";
+const BROWSER_HOST_CLOSE_PICTURE_IN_PICTURE_CHANNEL =
+  "desktop:browser-host:close-picture-in-picture";
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
@@ -2405,6 +2408,36 @@ function registerIpcHandlers(): void {
       projectId: (input as { projectId: string }).projectId,
       sessionId: readBrowserSessionId(input),
       audioMuted: (input as { audioMuted: boolean }).audioMuted,
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_OPEN_PICTURE_IN_PICTURE_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_OPEN_PICTURE_IN_PICTURE_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      return;
+    }
+    browserHostManager.openPictureInPicture({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_CLOSE_PICTURE_IN_PICTURE_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_CLOSE_PICTURE_IN_PICTURE_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      return;
+    }
+    browserHostManager.closePictureInPicture({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
     });
   });
 

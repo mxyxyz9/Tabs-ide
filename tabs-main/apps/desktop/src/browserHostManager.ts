@@ -177,6 +177,7 @@ type BrowserSession = {
   devToolsOpen: boolean;
   zoomFactor: number;
   audioMuted: boolean;
+  pictureInPictureWindow: BrowserWindow | null;
   lastError: string | null;
   /** Transient error set when ERR_CONNECTION_REFUSED fires (dev server not ready yet).
    * Cleared as soon as any successful navigation or page load occurs. */
@@ -297,6 +298,7 @@ export class BrowserHostManager {
         devToolsOpen: false,
         zoomFactor: 1,
         audioMuted: false,
+        pictureInPicture: false,
         lastError: null,
         transientError: null,
       };
@@ -358,6 +360,7 @@ export class BrowserHostManager {
       devToolsOpen: view.webContents.isDevToolsOpened(),
       zoomFactor: 1,
       audioMuted: false,
+      pictureInPictureWindow: null,
       lastError: null,
       transientError: null,
       consoleEntries: [],
@@ -406,6 +409,8 @@ export class BrowserHostManager {
     const key = this.sessionKey(projectId, sessionId);
     const session = this.sessions.get(key);
     if (!session) return;
+
+    this.closePictureInPicture({ projectId, sessionId });
 
     const currentUrl = session.currentUrl;
     const partition = partitionInput ?? session.partition ?? `persist:tabs-browser:${projectId}`;
@@ -805,6 +810,71 @@ export class BrowserHostManager {
     session.audioMuted = input.audioMuted;
     session.view.webContents.setAudioMuted(input.audioMuted);
     this.emitState(session);
+  }
+
+  openPictureInPicture(input: DesktopBrowserHostControlInput): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session || session.view.webContents.isDestroyed()) return;
+    const existing = session.pictureInPictureWindow;
+    if (existing && !existing.isDestroyed()) {
+      existing.show();
+      existing.focus();
+      return;
+    }
+
+    this.detachSession(session);
+    const pictureWindow = new BrowserWindow({
+      width: 640,
+      height: 420,
+      minWidth: 320,
+      minHeight: 240,
+      title: session.pageTitle || "Browser preview",
+      autoHideMenuBar: true,
+      alwaysOnTop: true,
+      backgroundColor: "#111111",
+      show: false,
+    });
+    session.pictureInPictureWindow = pictureWindow;
+
+    const layout = () => {
+      if (pictureWindow.isDestroyed()) return;
+      const [width = 640, height = 420] = pictureWindow.getContentSize();
+      session.view.setBounds({ x: 0, y: 0, width, height });
+    };
+    pictureWindow.contentView.addChildView(session.view);
+    layout();
+    pictureWindow.on("resize", layout);
+    pictureWindow.once("ready-to-show", () => pictureWindow.show());
+    pictureWindow.once("closed", () => {
+      if (session.pictureInPictureWindow !== pictureWindow) return;
+      session.pictureInPictureWindow = null;
+      if (this.activeKey === session.key && session.bounds) {
+        this.attachSession(session);
+        session.view.setBounds(session.bounds);
+      }
+      this.emitState(session);
+    });
+    this.emitState(session);
+  }
+
+  closePictureInPicture(input: DesktopBrowserHostControlInput): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    const pictureWindow = session?.pictureInPictureWindow;
+    if (!session || !pictureWindow) return;
+    if (!pictureWindow.isDestroyed()) {
+      if (pictureWindow.contentView.children.includes(session.view)) {
+        pictureWindow.contentView.removeChildView(session.view);
+      }
+      pictureWindow.close();
+    }
+    if (session.pictureInPictureWindow === pictureWindow) {
+      session.pictureInPictureWindow = null;
+      if (this.activeKey === session.key && session.bounds) {
+        this.attachSession(session);
+        session.view.setBounds(session.bounds);
+      }
+      this.emitState(session);
+    }
   }
 
   async goForward(input: DesktopBrowserHostControlInput): Promise<void> {
@@ -1362,6 +1432,7 @@ export class BrowserHostManager {
         this.detachSession(session);
         this.activeKey = null;
       }
+      this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
       this.clearHumanControlTimer(session);
       session.view.webContents.close({ waitForBeforeUnload: false });
       this.sessions.delete(key);
@@ -1371,6 +1442,7 @@ export class BrowserHostManager {
   dispose(): void {
     this.hideActiveSession();
     for (const session of this.sessions.values()) {
+      this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
       this.clearHumanControlTimer(session);
       session.view.webContents.close({ waitForBeforeUnload: false });
     }
@@ -1402,6 +1474,8 @@ export class BrowserHostManager {
       devToolsOpen: session.devToolsOpen,
       zoomFactor: session.zoomFactor,
       audioMuted: session.audioMuted,
+      pictureInPicture:
+        session.pictureInPictureWindow !== null && !session.pictureInPictureWindow.isDestroyed(),
       controller: session.controller ?? "none",
       lastError: session.lastError,
       transientError: session.transientError,
@@ -1437,6 +1511,12 @@ export class BrowserHostManager {
   }
 
   private attachSession(session: BrowserSession): void {
+    if (
+      session.pictureInPictureWindow &&
+      !session.pictureInPictureWindow.isDestroyed()
+    ) {
+      return;
+    }
     const window = this.getWindow();
     if (!window) return;
     const currentViews = window.contentView.children;

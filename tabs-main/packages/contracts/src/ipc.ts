@@ -1186,6 +1186,8 @@ export interface DesktopBridge {
   setBrowserAudioMuted: (
     input: DesktopBrowserHostControlInput & { audioMuted: boolean },
   ) => Promise<void>;
+  openBrowserPictureInPicture: (input: DesktopBrowserHostControlInput) => Promise<void>;
+  closeBrowserPictureInPicture: (input: DesktopBrowserHostControlInput) => Promise<void>;
   goBackBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   goForwardBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;
@@ -1752,6 +1754,7 @@ export interface DesktopBrowserSessionState {
   /** Page zoom relative to the enclosing Tabs window zoom. */
   zoomFactor: number;
   audioMuted: boolean;
+  pictureInPicture: boolean;
   controller?: "human" | "agent" | "none";
   lastError: string | null;
   /** Set when did-fail-load fires with ERR_CONNECTION_REFUSED (-102).

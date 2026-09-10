@@ -3,6 +3,33 @@ import { describe, expect, it, vi } from "vitest";
 const electronMocks = vi.hoisted(() => ({
   fromPartition: vi.fn(),
   showItemInFolder: vi.fn(),
+  browserWindows: [] as Array<Record<string, unknown>>,
+  BrowserWindow: vi.fn(function () {
+    const listeners = new Map<string, () => void>();
+    const children: unknown[] = [];
+    const window = {
+      contentView: {
+        children,
+        addChildView: vi.fn((view: unknown) => children.push(view)),
+        removeChildView: vi.fn((view: unknown) => {
+          const index = children.indexOf(view);
+          if (index >= 0) children.splice(index, 1);
+        }),
+      },
+      isDestroyed: vi.fn(() => false),
+      getContentSize: vi.fn(() => [640, 420]),
+      on: vi.fn((event: string, listener: () => void) => listeners.set(event, listener)),
+      once: vi.fn((event: string, listener: () => void) => {
+        listeners.set(event, listener);
+        if (event === "ready-to-show") listener();
+      }),
+      show: vi.fn(),
+      focus: vi.fn(),
+      close: vi.fn(() => listeners.get("closed")?.()),
+    };
+    electronMocks.browserWindows.push(window);
+    return window;
+  }),
 }));
 
 // browserHostManager imports `electron` at module load; mock it so the pure
@@ -12,6 +39,7 @@ vi.mock("electron", () => ({
   clipboard: { write: vi.fn() },
   ClipboardItem: vi.fn(),
   nativeImage: { createFromBuffer: vi.fn() },
+  BrowserWindow: electronMocks.BrowserWindow,
   WebContentsView: vi.fn(),
   Menu: { buildFromTemplate: () => ({ popup: () => undefined }) },
   session: { fromPartition: electronMocks.fromPartition },
@@ -141,6 +169,55 @@ describe("BrowserHostManager profile storage", () => {
       expect.objectContaining({ dataTypes: expect.arrayContaining(["cookies", "indexedDB"]) }),
     );
     expect(profileSession.flushStorageData).toHaveBeenCalledOnce();
+  });
+});
+
+describe("BrowserHostManager picture in picture", () => {
+  it("reparents the live view and restores it to the active main window on close", () => {
+    electronMocks.browserWindows.length = 0;
+    const mainChildren: unknown[] = [];
+    const mainWindow = {
+      contentView: {
+        children: mainChildren,
+        addChildView: vi.fn((view: unknown) => mainChildren.push(view)),
+        removeChildView: vi.fn((view: unknown) => {
+          const index = mainChildren.indexOf(view);
+          if (index >= 0) mainChildren.splice(index, 1);
+        }),
+      },
+      isDestroyed: () => false,
+      webContents: { send: vi.fn(), getZoomFactor: () => 1 },
+    };
+    const manager = new BrowserHostManager(() => mainWindow as never);
+    const view = {
+      setBounds: vi.fn(),
+      webContents: { isDestroyed: () => false },
+    };
+    const session = {
+      projectId: "project-1",
+      sessionId: "preview-1",
+      key: "project-1::preview-1",
+      view,
+      bounds: { x: 10, y: 20, width: 800, height: 600 },
+      pageTitle: "Preview",
+      pictureInPictureWindow: null,
+    };
+    mainChildren.push(view);
+    (manager as unknown as { activeKey: string | null }).activeKey = session.key;
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(session.key, session);
+
+    manager.openPictureInPicture({ projectId: "project-1", sessionId: "preview-1" });
+    expect(mainChildren).toEqual([]);
+    expect(electronMocks.browserWindows).toHaveLength(1);
+    expect(
+      (electronMocks.browserWindows[0]?.contentView as { children: unknown[] }).children,
+    ).toEqual([view]);
+    expect(manager.getSessionState("project-1", "preview-1").pictureInPicture).toBe(true);
+
+    manager.closePictureInPicture({ projectId: "project-1", sessionId: "preview-1" });
+    expect(mainChildren).toEqual([view]);
+    expect(view.setBounds).toHaveBeenLastCalledWith(session.bounds);
+    expect(manager.getSessionState("project-1", "preview-1").pictureInPicture).toBe(false);
   });
 });
 

@@ -89,6 +89,7 @@ import {
   PanelLeftIcon,
   PanelLeftCloseIcon,
   PinIcon,
+  PictureInPicture2Icon,
   Clock3Icon,
   CircleCheckIcon,
   SquareIcon,
@@ -580,6 +581,7 @@ function createEmptyBrowserSessionState(
     devToolsOpen: false,
     zoomFactor: 1,
     audioMuted: false,
+    pictureInPicture: false,
     lastError: null,
     transientError: null,
   };
@@ -7310,6 +7312,24 @@ function DesktopBrowserChrome(props: {
                 ) : (
                   <Volume2Icon className="size-3.5" />
                 )}
+              </Button>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant={props.sessionState.pictureInPicture ? "secondary" : "outline"}
+                onClick={() =>
+                  void (props.sessionState.pictureInPicture
+                    ? bridge?.closeBrowserPictureInPicture(sessionArg)
+                    : bridge?.openBrowserPictureInPicture(sessionArg))
+                }
+                aria-label={
+                  props.sessionState.pictureInPicture
+                    ? "Close popped-out browser preview"
+                    : "Pop browser preview into separate window"
+                }
+                aria-pressed={props.sessionState.pictureInPicture}
+              >
+                <PictureInPicture2Icon className="size-3.5" />
               </Button>
               <Button
                 type="button"
