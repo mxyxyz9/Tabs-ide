@@ -122,4 +122,41 @@ describe("scopedStateStorage", () => {
       expect(mockStorage.getItem(testKey)).toBeNull();
     });
   });
+
+  describe("Cross-Environment Scoped Storage Isolation", () => {
+    it("isolates storage for identical project IDs across different environments", () => {
+      const localProjectKey = createScopedStorageKey("composerDraft", "env-local:proj-alpha");
+      const remoteProjectKey = createScopedStorageKey("composerDraft", "env-remote:proj-alpha");
+
+      expect(localProjectKey).not.toBe(remoteProjectKey);
+
+      saveScopedState(mockStorage, localProjectKey, { draft: "local draft for proj-alpha" });
+      saveScopedState(mockStorage, remoteProjectKey, { draft: "remote draft for proj-alpha" });
+
+      const localLoaded = loadScopedState<{ draft: string }>(mockStorage, localProjectKey);
+      const remoteLoaded = loadScopedState<{ draft: string }>(mockStorage, remoteProjectKey);
+
+      expect(localLoaded?.draft).toBe("local draft for proj-alpha");
+      expect(remoteLoaded?.draft).toBe("remote draft for proj-alpha");
+
+      // Clearing local state should not affect remote state with duplicate project ID
+      clearScopedState(mockStorage, localProjectKey);
+      expect(loadScopedState(mockStorage, localProjectKey)).toBeNull();
+      expect(loadScopedState<{ draft: string }>(mockStorage, remoteProjectKey)?.draft).toBe("remote draft for proj-alpha");
+    });
+
+    it("isolates storage for identical thread IDs across different environments", () => {
+      const localThreadKey = createScopedStorageKey("threadUi", "env-1:thread-999");
+      const remoteThreadKey = createScopedStorageKey("threadUi", "env-2:thread-999");
+
+      expect(localThreadKey).toBe("tabs:threadUi:v1:env-1_thread-999");
+      expect(remoteThreadKey).toBe("tabs:threadUi:v1:env-2_thread-999");
+
+      saveScopedState(mockStorage, localThreadKey, { expanded: true, scrollPos: 120 });
+      saveScopedState(mockStorage, remoteThreadKey, { expanded: false, scrollPos: 0 });
+
+      expect(loadScopedState<{ expanded: boolean }>(mockStorage, localThreadKey)?.expanded).toBe(true);
+      expect(loadScopedState<{ expanded: boolean }>(mockStorage, remoteThreadKey)?.expanded).toBe(false);
+    });
+  });
 });
