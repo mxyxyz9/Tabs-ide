@@ -7,11 +7,20 @@ import {
 import {
   formatProviderSkillDisplayName,
   resolveProviderSkillSourceKind,
+  type ProviderSkillSourceKind,
 } from "@tabs/client-runtime/providerSkills";
 import { memo, useLayoutEffect, useRef } from "react";
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { type ProviderPickerKind } from "../../session-logic";
-import { BotIcon, BlocksIcon } from "lucide-react";
+import {
+  BlocksIcon,
+  BotIcon,
+  FolderIcon,
+  PackageIcon,
+  SettingsIcon,
+  UserRoundIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Command, CommandItem, CommandList } from "../ui/command";
@@ -95,6 +104,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
             <ComposerCommandMenuItem
               key={item.id}
               item={item}
+              triggerKind={props.triggerKind}
               resolvedTheme={props.resolvedTheme}
               isActive={props.activeItemId === item.id}
               onSelect={props.onSelect}
@@ -119,12 +129,47 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   );
 });
 
+const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {
+  app: BlocksIcon,
+  repo: FolderIcon,
+  project: FolderIcon,
+  personal: UserRoundIcon,
+  system: SettingsIcon,
+  other: PackageIcon,
+};
+
+const SKILL_SOURCE_LABEL_BY_KIND: Record<ProviderSkillSourceKind, string> = {
+  app: "App",
+  repo: "Repo",
+  project: "Project",
+  personal: "Personal",
+  system: "System",
+  other: "Provider",
+};
+
+function SkillSourceBadge(props: { kind: ProviderSkillSourceKind; showSkillSuffix?: boolean }) {
+  const Icon = SKILL_SOURCE_ICON_BY_KIND[props.kind];
+  return (
+    <Badge variant="secondary" className="ms-auto flex items-center gap-1 px-1.5 py-0 text-[10px]">
+      <Icon aria-hidden="true" className="size-3 text-current" />
+      <span>{SKILL_SOURCE_LABEL_BY_KIND[props.kind]}</span>
+      {props.showSkillSuffix ? <span>Skill</span> : null}
+    </Badge>
+  );
+}
+
 const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   item: ComposerCommandItem;
+  triggerKind: ComposerTriggerKind | null;
   resolvedTheme: "light" | "dark";
   isActive: boolean;
   onSelect: (item: ComposerCommandItem) => void;
 }) {
+  const skillSourceKind =
+    props.item.type === "skill" ? resolveProviderSkillSourceKind(props.item.skill) : null;
+  const isSlashSkill =
+    props.triggerKind === "slash-command" && props.item.type === "skill" ? props.item.skill : null;
+
   return (
     <CommandItem
       value={props.item.id}
@@ -163,16 +208,24 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="min-w-0 max-w-[45%] shrink-0 truncate text-left text-xs font-medium">
-          {props.item.label}
+          {isSlashSkill ? (
+            <>
+              <span className="text-muted-foreground/70">/skill:</span>
+              {formatProviderSkillDisplayName(isSlashSkill)}
+            </>
+          ) : (
+            props.item.label
+          )}
         </span>
         <span className="min-w-0 flex-1 truncate text-left text-xs text-muted-foreground/70">
           {props.item.description}
         </span>
       </span>
-      {props.item.type === "skill" ? (
-        <Badge variant="secondary" className="ms-auto px-1.5 py-0 text-[10px] capitalize">
-          {resolveProviderSkillSourceKind(props.item.skill)}
-        </Badge>
+      {skillSourceKind ? (
+        <SkillSourceBadge
+          kind={skillSourceKind}
+          showSkillSuffix={props.triggerKind === "skill"}
+        />
       ) : null}
     </CommandItem>
   );

@@ -31,7 +31,10 @@ import {
   formatProviderSkillDisplayName,
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
+  resolveProviderSkillsForCwd,
+  resolveProviderSlashCommandsForCwd,
 } from "@tabs/client-runtime/providerSkills";
+import { searchProviderSkills } from "../providerSkillSearch";
 import {
   applyClaudePromptEffortPrefix,
   isClaudeUltrathinkPrompt,
@@ -1440,9 +1443,15 @@ export default function ChatView({
   )
     ? activeProviderStatus
     : null;
-  const selectedProviderSkills = activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS;
-  const selectedProviderSlashCommands =
-    activeProviderStatus?.slashCommands ?? EMPTY_PROVIDER_SLASH_COMMANDS;
+  const selectedProviderSkills = useMemo(() => {
+    if (!activeProviderStatus) return EMPTY_PROVIDER_SKILLS;
+    return resolveProviderSkillsForCwd(activeProviderStatus, gitCwd);
+  }, [activeProviderStatus, gitCwd]);
+
+  const selectedProviderSlashCommands = useMemo(() => {
+    if (!activeProviderStatus) return EMPTY_PROVIDER_SLASH_COMMANDS;
+    return resolveProviderSlashCommandsForCwd(activeProviderStatus, gitCwd);
+  }, [activeProviderStatus, gitCwd]);
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       environmentId: activeProject?.environmentId,
@@ -1492,7 +1501,10 @@ export default function ChatView({
           description: "Switch this thread back to normal chat mode",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
-      const skills = getProviderSkillsForSlashMenu(selectedProviderSkills);
+      const skills = searchProviderSkills(
+        getProviderSkillsForSlashMenu(selectedProviderSkills),
+        composerTrigger.query,
+      );
       const providerCommands = getProviderSlashCommandsForSlashMenu(
         selectedProviderSlashCommands,
         skills,
@@ -1520,25 +1532,14 @@ export default function ChatView({
     }
 
     if (composerTrigger.kind === "skill") {
-      const query = composerTrigger.query.trim().toLowerCase();
-      return getProviderSkillsForSlashMenu(selectedProviderSkills)
-        .filter((skill) => {
-          if (!query) return true;
-          return [
-            skill.name,
-            skill.displayName,
-            skill.shortDescription,
-            skill.description,
-            skill.scope,
-          ].some((value) => value?.toLowerCase().includes(query));
-        })
-        .map((skill: ServerProviderSkill) => ({
-          id: `skill:${selectedProvider}:${skill.name}`,
-          type: "skill" as const,
-          skill,
-          label: formatProviderSkillDisplayName(skill),
-          description: skill.shortDescription ?? skill.description ?? "Run provider skill",
-        }));
+      const skills = searchProviderSkills(selectedProviderSkills, composerTrigger.query);
+      return skills.map((skill: ServerProviderSkill) => ({
+        id: `skill:${selectedProvider}:${skill.name}`,
+        type: "skill" as const,
+        skill,
+        label: formatProviderSkillDisplayName(skill),
+        description: skill.shortDescription ?? skill.description ?? "Run provider skill",
+      }));
     }
 
     return searchableModelOptions

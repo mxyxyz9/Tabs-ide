@@ -47,5 +47,38 @@ describe("ComposerCommandMenu", () => {
     expect(markup).toContain("max-h-[min(22rem,45vh)]");
     expect(markup).toContain("overflow-y-auto");
     expect(markup).toContain("Validate Azure DevOps pipeline changes");
+    expect(markup).toContain("/skill:");
+    expect(markup).toContain("Repo");
+  });
+
+  it("renders app plugin badge and skill suffix when triggered with dollar", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerCommandMenu
+        items={[
+          {
+            id: "skill:claudeAgent:custom-plugin",
+            type: "skill",
+            skill: {
+              name: "custom-plugin",
+              path: "/home/.agents/plugins/custom/SKILL.md",
+              scope: "user",
+              enabled: true,
+            },
+            label: "$Custom Plugin",
+            description: "Custom plugin skill",
+          },
+        ]}
+        resolvedTheme="light"
+        isLoading={false}
+        triggerKind="skill"
+        activeItemId="skill:claudeAgent:custom-plugin"
+        onHighlightedItemChange={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(markup).toContain("App");
+    expect(markup).toContain("Skill");
+    expect(markup).toContain("$Custom Plugin");
   });
 });
