@@ -119,7 +119,7 @@ function FullAppRootView() {
 
   useEffect(() => {
     if (ready) {
-      const timer = setTimeout(() => setMounted(false), STARTUP_ANIMATION_EXIT_MS + 200);
+      const timer = setTimeout(() => setMounted(false), STARTUP_ANIMATION_EXIT_MS + 50);
       return () => clearTimeout(timer);
     } else {
       setMounted(true);
@@ -131,7 +131,7 @@ function FullAppRootView() {
       {mounted && (
         <div
           className={cn(
-            "pointer-events-auto fixed inset-0 z-[9999] bg-background transition-transform duration-1000 ease-in-out",
+            "pointer-events-auto fixed inset-0 z-[9999] bg-background transition-transform duration-200 ease-out",
             ready ? "-translate-y-full" : "translate-y-0",
           )}
         >

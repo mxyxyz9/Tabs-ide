@@ -208,11 +208,7 @@ import { SourceControlSettingsPanel } from "../components/settings/SourceControl
 import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
 import { Equal } from "effect";
 import { refreshServerConfig, useServerConfig } from "../state/settings";
-import {
-  SplashScreen,
-  STARTUP_ANIMATION_EXIT_MS,
-  STARTUP_ANIMATION_HOLD_MS,
-} from "../components/SplashScreen";
+import { SplashScreen } from "../components/SplashScreen";
 import { CloseScreen } from "../components/CloseScreen";
 import { useConfirm } from "~/hooks/useConfirm";
 import { createPortal } from "react-dom";
@@ -2101,6 +2097,8 @@ function uninstallInstructions(os: DesktopOsKind): string[] {
 }
 
 function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont, onClose }: any) {
+  const previewHoldMs = 2_000;
+  const previewExitMs = 1_000;
   const [isExiting, setIsExiting] = useState(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -2108,7 +2106,7 @@ function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont
   useEffect(() => {
     const exitTimer = setTimeout(() => {
       setIsExiting(true);
-    }, STARTUP_ANIMATION_HOLD_MS);
+    }, previewHoldMs);
 
     return () => clearTimeout(exitTimer);
   }, []);
@@ -2117,7 +2115,7 @@ function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont
     if (isExiting) {
       const closeTimer = setTimeout(() => {
         onCloseRef.current();
-      }, STARTUP_ANIMATION_EXIT_MS + 200);
+      }, previewExitMs + 200);
       return () => clearTimeout(closeTimer);
     }
   }, [isExiting]);

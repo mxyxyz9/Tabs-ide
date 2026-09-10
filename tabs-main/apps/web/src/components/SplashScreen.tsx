@@ -4,8 +4,11 @@ import { cn } from "~/lib/utils";
 import { FONT_COMBOS, type FontCombo } from "../lib/themes";
 import "./loaders.css";
 
-export const STARTUP_ANIMATION_HOLD_MS = 2_000;
-export const STARTUP_ANIMATION_EXIT_MS = 1_000;
+// Keep enough time to avoid a one-frame flash on a warm launch, without
+// deliberately delaying a ready workspace. The previous 2s hold + 1s exit
+// made every launch feel slow even when hydration had already completed.
+export const STARTUP_ANIMATION_HOLD_MS = 150;
+export const STARTUP_ANIMATION_EXIT_MS = 180;
 
 const GLASS_MESSAGES = [
   "COMPILING VIBES",
