@@ -107,6 +107,7 @@ import {
 } from "react";
 
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
+import { useBrowserHistoryStore } from "../browserHistoryStore";
 import {
   PREVIEW_ANNOTATION_PICKED_EVENT,
   type PreviewAnnotationPickedDetail,
@@ -7048,10 +7049,26 @@ function DesktopBrowserChrome(props: {
   const [changingRecording, setChangingRecording] = useState(false);
   const [pickingElement, setPickingElement] = useState(false);
   const [pendingAnnotation, setPendingAnnotation] = useState<PreviewAnnotationPayload | null>(null);
+  const browserHistory = useBrowserHistoryStore((state) => state.entries);
+  const recordBrowserHistory = useBrowserHistoryStore((state) => state.record);
+  const clearBrowserHistory = useBrowserHistoryStore((state) => state.clear);
 
   useEffect(() => {
     setRecordingBrowser(isNativeBrowserRecordingActive(props.projectId, recordingSessionId));
   }, [props.projectId, recordingSessionId]);
+  useEffect(() => {
+    if (props.sessionState.loading || !props.sessionState.currentUrl) return;
+    recordBrowserHistory({
+      url: props.sessionState.currentUrl,
+      title: props.sessionState.pageTitle?.trim() || props.sessionState.currentUrl,
+      visitedAt: new Date().toISOString(),
+    });
+  }, [
+    props.sessionState.currentUrl,
+    props.sessionState.loading,
+    props.sessionState.pageTitle,
+    recordBrowserHistory,
+  ]);
 
   const sessionArg = props.sessionId
     ? { projectId: props.projectId, sessionId: props.sessionId }
@@ -7308,6 +7325,45 @@ function DesktopBrowserChrome(props: {
                   {props.sessionState.controller === "agent" ? "Agent control" : "Human control"}
                 </Badge>
               ) : null}
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="outline"
+                      aria-label="Browser history"
+                    >
+                      <HistoryIcon className="size-3.5" />
+                    </Button>
+                  }
+                />
+                <MenuPopup align="start" className="max-h-80 w-96 overflow-y-auto">
+                  {browserHistory.length === 0 ? (
+                    <MenuItem disabled>No browser history</MenuItem>
+                  ) : (
+                    browserHistory.slice(0, 30).map((entry) => (
+                      <MenuItem
+                        key={entry.url}
+                        onClick={() => {
+                          props.setDraftUrl(entry.url);
+                          void bridge?.navigateBrowserSession({ ...sessionArg, url: entry.url });
+                        }}
+                      >
+                        <span className="min-w-0 flex-1 truncate" title={entry.url}>
+                          {entry.title}
+                        </span>
+                      </MenuItem>
+                    ))
+                  )}
+                  {browserHistory.length > 0 ? (
+                    <>
+                      <MenuSeparator />
+                      <MenuItem onClick={clearBrowserHistory}>Clear browser history</MenuItem>
+                    </>
+                  ) : null}
+                </MenuPopup>
+              </Menu>
               <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
                 <Input
                   className="h-8"
