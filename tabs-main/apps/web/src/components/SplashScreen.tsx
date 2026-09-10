@@ -8,7 +8,7 @@ import "./loaders.css";
 // deliberately delaying a ready workspace. The previous 2s hold + 1s exit
 // made every launch feel slow even when hydration had already completed.
 export const STARTUP_ANIMATION_HOLD_MS = 150;
-export const STARTUP_ANIMATION_EXIT_MS = 180;
+export const STARTUP_ANIMATION_EXIT_MS = 200;
 
 const GLASS_MESSAGES = [
   "COMPILING VIBES",
