@@ -2938,10 +2938,6 @@ function DesktopCodeTool(props: { project: Project }) {
   useEffect(() => {
     if (aiProvider === "copilot") {
       setSideChatOpen(false);
-    } else {
-      void window.desktopBridge
-        ?.runCodeCommand(projectId, CODE_CHROME_COMMANDS.closeAuxiliaryBar)
-        .catch(() => undefined);
     }
   }, [aiProvider, projectId, setSideChatOpen]);
   useEffect(() => {

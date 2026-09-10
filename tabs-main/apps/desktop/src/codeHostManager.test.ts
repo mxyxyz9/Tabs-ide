@@ -76,10 +76,10 @@ describe("resolveCodeOssAiProviderSettings", () => {
     },
   );
 
-  it("changes only the native Copilot chrome visibility between providers", () => {
+  it("keeps native assistant chrome visible between providers", () => {
     expect(resolveCodeOssAiProviderSettings("tabs")).toMatchObject({
-      "chat.commandCenter.enabled": false,
-      "workbench.secondarySideBar.defaultVisibility": "hidden",
+      "chat.commandCenter.enabled": true,
+      "workbench.secondarySideBar.defaultVisibility": "visible",
     });
     expect(resolveCodeOssAiProviderSettings("copilot")).toMatchObject({
       "chat.commandCenter.enabled": true,

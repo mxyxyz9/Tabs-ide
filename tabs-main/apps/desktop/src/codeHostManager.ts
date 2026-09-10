@@ -417,14 +417,16 @@ type ExtensionRegistration = {
 };
 
 export function resolveCodeOssAiProviderSettings(
-  provider: "tabs" | "copilot",
+  _provider: "tabs" | "copilot",
 ): Record<string, unknown> {
   return {
     // This must remain false for both providers. `chat.disableAIFeatures` is a
     // global Code-OSS extension-enablement switch, not a view-visibility flag.
     "chat.disableAIFeatures": false,
-    "chat.commandCenter.enabled": provider === "copilot",
-    "workbench.secondarySideBar.defaultVisibility": provider === "copilot" ? "visible" : "hidden",
+    // Provider selection controls Tabs' overlay. It must not disable or hide
+    // native extension views such as Copilot Chat, Claude Code, or Codex.
+    "chat.commandCenter.enabled": true,
+    "workbench.secondarySideBar.defaultVisibility": "visible",
   };
 }
 
