@@ -68,6 +68,7 @@ const BROWSER_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:browser-host:activate-ses
 const BROWSER_HOST_HIDE_SESSION_CHANNEL = "desktop:browser-host:hide-session";
 const BROWSER_HOST_NAVIGATE_SESSION_CHANNEL = "desktop:browser-host:navigate-session";
 const BROWSER_HOST_RELOAD_SESSION_CHANNEL = "desktop:browser-host:reload-session";
+const BROWSER_HOST_SET_ZOOM_CHANNEL = "desktop:browser-host:set-zoom";
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
@@ -231,6 +232,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   navigateBrowserSession: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_NAVIGATE_SESSION_CHANNEL, input),
   reloadBrowserSession: (input) => ipcRenderer.invoke(BROWSER_HOST_RELOAD_SESSION_CHANNEL, input),
+  setBrowserZoomFactor: (input) => ipcRenderer.invoke(BROWSER_HOST_SET_ZOOM_CHANNEL, input),
   goBackBrowserSession: (input) => ipcRenderer.invoke(BROWSER_HOST_BACK_SESSION_CHANNEL, input),
   goForwardBrowserSession: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_FORWARD_SESSION_CHANNEL, input),

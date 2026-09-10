@@ -62,6 +62,7 @@ import {
   HelpCircleIcon,
   HistoryIcon,
   Maximize2Icon,
+  MinusIcon,
   Minimize2Icon,
   MoreHorizontalIcon,
   MonitorIcon,
@@ -574,6 +575,7 @@ function createEmptyBrowserSessionState(
     canGoBack: false,
     canGoForward: false,
     devToolsOpen: false,
+    zoomFactor: 1,
     lastError: null,
     transientError: null,
   };
@@ -7206,6 +7208,48 @@ function DesktopBrowserChrome(props: {
                 <RefreshCwIcon className="size-3.5" />
                 Refresh
               </Button>
+              <div className="flex items-center rounded-md border border-border/70">
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  disabled={props.sessionState.zoomFactor <= 0.5}
+                  onClick={() =>
+                    void bridge?.setBrowserZoomFactor({
+                      ...sessionArg,
+                      zoomFactor: props.sessionState.zoomFactor - 0.1,
+                    })
+                  }
+                  aria-label="Zoom browser out"
+                >
+                  <MinusIcon className="size-3" />
+                </Button>
+                <button
+                  type="button"
+                  className="min-w-10 text-[10px] tabular-nums text-muted-foreground"
+                  onClick={() =>
+                    void bridge?.setBrowserZoomFactor({ ...sessionArg, zoomFactor: 1 })
+                  }
+                  title="Reset browser zoom"
+                >
+                  {Math.round(props.sessionState.zoomFactor * 100)}%
+                </button>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  disabled={props.sessionState.zoomFactor >= 2}
+                  onClick={() =>
+                    void bridge?.setBrowserZoomFactor({
+                      ...sessionArg,
+                      zoomFactor: props.sessionState.zoomFactor + 0.1,
+                    })
+                  }
+                  aria-label="Zoom browser in"
+                >
+                  <PlusIcon className="size-3" />
+                </Button>
+              </div>
               <Button
                 type="button"
                 size="xs"

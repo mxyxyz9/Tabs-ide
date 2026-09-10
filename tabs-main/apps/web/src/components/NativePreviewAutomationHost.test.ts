@@ -70,6 +70,7 @@ describe("buildPreviewStatusReport", () => {
     canGoBack: true,
     canGoForward: false,
     devToolsOpen: false,
+    zoomFactor: 1,
     lastError: null,
     transientError: null,
   };

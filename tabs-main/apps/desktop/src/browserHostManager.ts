@@ -175,6 +175,7 @@ type BrowserSession = {
   canGoBack: boolean;
   canGoForward: boolean;
   devToolsOpen: boolean;
+  zoomFactor: number;
   lastError: string | null;
   /** Transient error set when ERR_CONNECTION_REFUSED fires (dev server not ready yet).
    * Cleared as soon as any successful navigation or page load occurs. */
@@ -293,6 +294,7 @@ export class BrowserHostManager {
         canGoBack: false,
         canGoForward: false,
         devToolsOpen: false,
+        zoomFactor: 1,
         lastError: null,
         transientError: null,
       };
@@ -352,6 +354,7 @@ export class BrowserHostManager {
       canGoBack: false,
       canGoForward: false,
       devToolsOpen: view.webContents.isDevToolsOpened(),
+      zoomFactor: 1,
       lastError: null,
       transientError: null,
       consoleEntries: [],
@@ -421,7 +424,7 @@ export class BrowserHostManager {
     view.setBackgroundColor("#111111");
 
     const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
-    view.webContents?.setZoomFactor(initialZoom);
+    view.webContents?.setZoomFactor(initialZoom * session.zoomFactor);
 
     view.webContents.setUserAgent(
       sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
@@ -742,8 +745,9 @@ export class BrowserHostManager {
 
     if (session.view) {
       const currentZoom = session.view.webContents?.getZoomFactor() ?? 1.0;
-      if (Math.abs(currentZoom - zoomFactor) > 0.001) {
-        session.view.webContents?.setZoomFactor(zoomFactor);
+      const effectiveZoom = zoomFactor * session.zoomFactor;
+      if (Math.abs(currentZoom - effectiveZoom) > 0.001) {
+        session.view.webContents?.setZoomFactor(effectiveZoom);
       }
     }
 
@@ -779,6 +783,16 @@ export class BrowserHostManager {
     session.lastError = null;
     this.emitState(session);
     session.view.webContents.goBack();
+  }
+
+  setZoomFactor(input: DesktopBrowserHostControlInput & { zoomFactor: number }): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) return;
+    const requested = Number.isFinite(input.zoomFactor) ? input.zoomFactor : 1;
+    session.zoomFactor = Math.min(2, Math.max(0.5, Math.round(requested * 10) / 10));
+    const windowZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1;
+    session.view.webContents.setZoomFactor(windowZoom * session.zoomFactor);
+    this.emitState(session);
   }
 
   async goForward(input: DesktopBrowserHostControlInput): Promise<void> {
@@ -1374,6 +1388,7 @@ export class BrowserHostManager {
       canGoBack: session.canGoBack,
       canGoForward: session.canGoForward,
       devToolsOpen: session.devToolsOpen,
+      zoomFactor: session.zoomFactor,
       controller: session.controller ?? "none",
       lastError: session.lastError,
       transientError: session.transientError,

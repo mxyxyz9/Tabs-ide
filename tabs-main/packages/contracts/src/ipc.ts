@@ -1180,6 +1180,9 @@ export interface DesktopBridge {
   reloadBrowserSession: (
     input: DesktopBrowserHostControlInput & { ignoreCache?: boolean },
   ) => Promise<void>;
+  setBrowserZoomFactor: (
+    input: DesktopBrowserHostControlInput & { zoomFactor: number },
+  ) => Promise<void>;
   goBackBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   goForwardBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;
@@ -1743,6 +1746,8 @@ export interface DesktopBrowserSessionState {
   canGoBack: boolean;
   canGoForward: boolean;
   devToolsOpen: boolean;
+  /** Page zoom relative to the enclosing Tabs window zoom. */
+  zoomFactor: number;
   controller?: "human" | "agent" | "none";
   lastError: string | null;
   /** Set when did-fail-load fires with ERR_CONNECTION_REFUSED (-102).

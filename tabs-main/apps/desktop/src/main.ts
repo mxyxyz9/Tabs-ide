@@ -145,6 +145,7 @@ const BROWSER_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:browser-host:activate-ses
 const BROWSER_HOST_HIDE_SESSION_CHANNEL = "desktop:browser-host:hide-session";
 const BROWSER_HOST_NAVIGATE_SESSION_CHANNEL = "desktop:browser-host:navigate-session";
 const BROWSER_HOST_RELOAD_SESSION_CHANNEL = "desktop:browser-host:reload-session";
+const BROWSER_HOST_SET_ZOOM_CHANNEL = "desktop:browser-host:set-zoom";
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
@@ -2369,6 +2370,23 @@ function registerIpcHandlers(): void {
       projectId: (input as { projectId: string }).projectId,
       sessionId: readBrowserSessionId(input),
       ignoreCache: (input as { ignoreCache?: unknown }).ignoreCache === true,
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_SET_ZOOM_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_SET_ZOOM_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string" ||
+      typeof (input as { zoomFactor?: unknown }).zoomFactor !== "number"
+    ) {
+      return;
+    }
+    browserHostManager.setZoomFactor({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+      zoomFactor: (input as { zoomFactor: number }).zoomFactor,
     });
   });
 
