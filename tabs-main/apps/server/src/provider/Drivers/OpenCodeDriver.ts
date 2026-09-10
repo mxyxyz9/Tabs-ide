@@ -29,6 +29,7 @@ import { makeOpenCodeAdapter } from "../Layers/OpenCodeAdapter";
 import {
   checkOpenCodeProviderStatus,
   makePendingOpenCodeProvider,
+  openCodeSkillsToServerProviderSkills,
 } from "../Layers/OpenCodeProvider";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
@@ -176,6 +177,48 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         ),
       );
 
+      const loadSkillsForCwd = (cwd: string) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const server = yield* openCodeRuntime.connectToOpenCodeServer({
+              binaryPath: effectiveConfig.binaryPath,
+              serverUrl: effectiveConfig.serverUrl,
+              cwd,
+              environment: processEnv,
+            });
+            const client = openCodeRuntime.createOpenCodeSdkClient({
+              baseUrl: server.url,
+              directory: cwd,
+              ...(effectiveConfig.serverPassword
+                ? { serverPassword: effectiveConfig.serverPassword }
+                : {}),
+            });
+            return yield* openCodeRuntime.loadOpenCodeSkills(client);
+          }),
+        );
+
+      const snapshotForCwd = (cwd: string) =>
+        !effectiveConfig.enabled
+          ? snapshot.getSnapshot
+          : Effect.all([
+              snapshot.getSnapshot,
+              loadSkillsForCwd(cwd).pipe(Effect.timeout("20 seconds")),
+            ]).pipe(
+              Effect.map(([machineSnapshot, skills]) => ({
+                ...machineSnapshot,
+                skills: openCodeSkillsToServerProviderSkills(skills),
+              })),
+              Effect.mapError(
+                (cause) =>
+                  new ProviderDriverError({
+                    driver: DRIVER_KIND,
+                    instanceId,
+                    detail: `Failed to probe OpenCode skills for '${cwd}'`,
+                    cause,
+                  }),
+              ),
+            );
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,
@@ -199,6 +242,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
           { kind: "switch-account", command: "opencode auth logout && opencode auth login" },
         ]),
         snapshot,
+        snapshotForCwd,
         adapter,
         textGeneration,
       } satisfies ProviderInstance;

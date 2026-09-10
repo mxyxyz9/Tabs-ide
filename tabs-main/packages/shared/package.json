@@ -68,6 +68,10 @@
       "types": "./src/searchRanking.ts",
       "import": "./src/searchRanking.ts"
     },
+    "./testing/symlinks": {
+      "types": "./src/testing/symlinks.ts",
+      "import": "./src/testing/symlinks.ts"
+    },
     "./themeDerivation": {
       "types": "./src/themeDerivation.ts",
       "import": "./src/themeDerivation.ts"

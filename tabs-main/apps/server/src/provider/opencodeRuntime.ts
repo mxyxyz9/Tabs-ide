@@ -154,9 +154,16 @@ export interface OpenCodeCommandResult {
   readonly code: number;
 }
 
+export interface OpenCodeSkill {
+  readonly name: string;
+  readonly description?: string;
+  readonly location: string;
+}
+
 export interface OpenCodeInventory {
   readonly providerList: ProviderListResponse;
   readonly agents: ReadonlyArray<Agent>;
+  readonly skills?: ReadonlyArray<OpenCodeSkill>;
 }
 
 export interface ParsedOpenCodeModelSlug {
@@ -208,6 +215,9 @@ export interface OpenCodeRuntimeShape {
   readonly loadOpenCodeInventory: (
     client: OpencodeClient,
   ) => Effect.Effect<OpenCodeInventory, OpenCodeRuntimeError>;
+  readonly loadOpenCodeSkills: (
+    client: OpencodeClient,
+  ) => Effect.Effect<ReadonlyArray<OpenCodeSkill>, OpenCodeRuntimeError>;
 }
 
 function parseServerUrlFromOutput(output: string): string | null {
@@ -743,10 +753,24 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
         Effect.map((result) => result.data ?? []),
       );
 
+    const loadOpenCodeSkills: OpenCodeRuntimeShape["loadOpenCodeSkills"] = (client) =>
+      runOpenCodeSdk("app.skills", (signal) => (client.app as any).skills(undefined, { signal })).pipe(
+        Effect.map((result: any) =>
+          (result.data ?? []).map((skill: any) => ({
+            name: skill.name,
+            ...(skill.description === undefined ? {} : { description: skill.description }),
+            location: skill.location,
+          })),
+        ),
+      );
+
+    const loadSkills = (client: OpencodeClient) =>
+      loadOpenCodeSkills(client).pipe(Effect.orElseSucceed((): ReadonlyArray<OpenCodeSkill> => []));
+
     const loadOpenCodeInventory: OpenCodeRuntimeShape["loadOpenCodeInventory"] = (client) =>
-      Effect.all([loadProviders(client), loadAgents(client)], {
+      Effect.all([loadProviders(client), loadAgents(client), loadSkills(client)], {
         concurrency: "unbounded",
-      }).pipe(Effect.map(([providerList, agents]) => ({ providerList, agents })));
+      }).pipe(Effect.map(([providerList, agents, skills]) => ({ providerList, agents, skills })));
 
     return {
       startOpenCodeServerProcess,
@@ -754,6 +778,7 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
       runOpenCodeCommand,
       createOpenCodeSdkClient,
       loadOpenCodeInventory,
+      loadOpenCodeSkills,
     } satisfies OpenCodeRuntimeShape;
   });
 

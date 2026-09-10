@@ -33,6 +33,7 @@ import {
   makeStaticProviderMaintenanceResolver,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance";
+import { discoverGrokSkills } from "./GrokSkills";
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 const DRIVER_KIND = "grok" as ProviderDriverKind;
@@ -138,6 +139,25 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         ),
       );
 
+      const snapshotForCwd = (workspaceCwd: string) =>
+        !effectiveConfig.enabled
+          ? snapshot.getSnapshot
+          : Effect.all([
+              snapshot.getSnapshot,
+              discoverGrokSkills(effectiveConfig, processEnv, workspaceCwd).pipe(
+                Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderDriverError({
+                      driver: DRIVER_KIND,
+                      instanceId,
+                      detail: `Failed to discover Grok skills for '${workspaceCwd}'`,
+                      cause,
+                    }),
+                ),
+              ),
+            ]).pipe(Effect.map(([machineSnapshot, skills]) => ({ ...machineSnapshot, skills })));
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,
@@ -160,6 +180,7 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
           { kind: "switch-account", command: "grok logout && grok login" },
         ]),
         snapshot,
+        snapshotForCwd,
         adapter,
         textGeneration,
       } satisfies ProviderInstance;

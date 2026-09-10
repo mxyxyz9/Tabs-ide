@@ -73,6 +73,11 @@ import {
   extractPlanMarkdown,
   extractTodosAsPlan,
 } from "../acp/CursorAcpExtension";
+import {
+  discoverCursorSkills,
+  hasCursorSkillMention,
+  rewriteCursorSkillMentions,
+} from "../Drivers/CursorSkills";
 import { type CursorAdapterShape } from "../Services/CursorAdapter";
 import { resolveCursorAcpBaseModelId } from "./CursorProvider";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger";
@@ -133,6 +138,7 @@ interface CursorSessionContext {
   lastPlanFingerprint: string | undefined;
   activeTurnId: TurnId | undefined;
   stopped: boolean;
+  cursorSkillNames: ReadonlySet<string> | undefined;
 }
 
 function settlePendingApprovalsAsCancelled(
@@ -754,6 +760,7 @@ export function makeCursorAdapter(
             lastPlanFingerprint: undefined,
             activeTurnId: undefined,
             stopped: false,
+            cursorSkillNames: undefined,
           };
 
           const nf = yield* Stream.runDrain(
@@ -919,8 +926,28 @@ export function makeCursorAdapter(
         });
 
         const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
-        if (input.input?.trim()) {
-          promptParts.push({ type: "text", text: input.input.trim() });
+        const rawPrompt = input.input?.trim() ?? "";
+        if (rawPrompt) {
+          let cursorSkillNames = ctx.cursorSkillNames;
+          if (hasCursorSkillMention(rawPrompt) && cursorSkillNames === undefined) {
+            const skills = yield* discoverCursorSkills(
+              ctx.session.cwd,
+              options?.environment,
+            ).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+            );
+            cursorSkillNames = new Set(
+              skills
+                .filter((skill) => skill.enabled && skill.userInvocable !== false)
+                .map((skill) => skill.name),
+            );
+            ctx.cursorSkillNames = cursorSkillNames;
+          }
+          const prompt = cursorSkillNames
+            ? rewriteCursorSkillMentions(rawPrompt, cursorSkillNames)
+            : rawPrompt;
+          promptParts.push({ type: "text", text: prompt });
         }
         if (input.attachments && input.attachments.length > 0) {
           for (const attachment of input.attachments) {

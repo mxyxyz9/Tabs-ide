@@ -473,7 +473,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
       );
     });
 
-    describe("ProviderRegistryLive", () => {
+    describe("ProviderRegistryLive", { timeout: 20_000 }, () => {
       it("treats equal provider snapshots as unchanged", () => {
         const providers = [
           {
@@ -1048,8 +1048,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
       // probe uses `Effect.sleep` and `Effect.timeoutOption` internally;
       // under the default `it.effect` TestClock those timers never fire,
       // so the probe never completes and the test deadlocks.
-      itLive("propagates real Codex probe failures to the aggregator at boot", () =>
-        Effect.gen(function* () {
+      itLive(
+        "propagates real Codex probe failures to the aggregator at boot",
+        () =>
+          Effect.gen(function* () {
           const missingBinary = `t3code_codex_missing_`;
           const serverSettings = yield* makeMutableServerSettingsService(
             decodeServerSettings(

@@ -24,6 +24,7 @@ import { buildServerProvider } from "../providerSnapshot";
 import { makeProviderMaintenanceCapabilities } from "../providerMaintenance";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment";
 import { AntigravityInstallation } from "../AntigravityInstallation";
+import { discoverAntigravitySkills, resolveAntigravityUserHome } from "./AntigravitySkills";
 
 const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
 
@@ -67,6 +68,8 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const serverConfig = yield* ServerConfig;
       const installation = yield* Effect.serviceOption(AntigravityInstallation);
       const processEnv = mergeProviderInstanceEnvironment(environment);
@@ -142,6 +145,29 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
             attachmentsDir: serverConfig.attachmentsDir,
           });
 
+      const userHome = resolveAntigravityUserHome(process.platform, processEnv);
+      const snapshotForCwd = (cwd: string) =>
+        !enabled
+          ? snapshot.getSnapshot
+          : discoverAntigravitySkills({ cwd, userHome }).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+              Effect.flatMap((skills) =>
+                snapshot.getSnapshot.pipe(
+                  Effect.map((machineSnapshot) => ({ ...machineSnapshot, skills })),
+                ),
+              ),
+              Effect.mapError(
+                (cause) =>
+                  new ProviderDriverError({
+                    driver: DRIVER_KIND,
+                    instanceId,
+                    detail: "Could not read Antigravity workspace skills.",
+                    cause,
+                  }),
+              ),
+            );
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,
@@ -169,6 +195,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
           ],
         },
         snapshot,
+        snapshotForCwd,
         adapter: antigravityAdapter,
         textGeneration,
       } satisfies ProviderInstance;

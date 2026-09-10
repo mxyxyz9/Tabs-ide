@@ -2181,7 +2181,15 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* backgroundPolicy.snapshot;
 
       case WS_METHODS.serverRefreshProviders: {
-        const providers = yield* providerRegistry.refresh();
+        const body = request.body ? (stripRequestTag(request.body) as any) : undefined;
+        const providers = yield* body?.cwd !== undefined && body?.instanceId !== undefined
+          ? providerRegistry.refreshWorkspaceSnapshot({
+              instanceId: body.instanceId,
+              cwd: body.cwd,
+            })
+          : body?.instanceId !== undefined
+            ? providerRegistry.refreshInstance(body.instanceId)
+            : providerRegistry.refresh();
         yield* Ref.set(providersRef, providers);
         return { providers };
       }

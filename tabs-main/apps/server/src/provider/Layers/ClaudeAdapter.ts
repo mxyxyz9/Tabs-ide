@@ -35,9 +35,11 @@ import {
   ApprovalRequestId,
   type CanonicalItemType,
   type CanonicalRequestType,
+  type ClaudeSettings,
   EventId,
   type ProviderApprovalDecision,
   ProviderDriverKind,
+  ProviderInstanceId,
   ProviderItemId,
   type ProviderRuntimeEvent,
   type ProviderRuntimeTurnStatus,
@@ -115,12 +117,15 @@ import {
   Fiber,
   Layer,
   Option,
+  Path,
   Queue,
   Random,
   Ref,
   Semaphore,
   Stream,
 } from "effect";
+import { discoverClaudeSkills } from "../Drivers/ClaudeSkills";
+import { planClaudeSkillDispatch } from "../Drivers/ClaudeSkillDispatch";
 
 // Stubs for disabled agentGateway handoff proxying
 const buildClaudeMcpServers = (_: any) => undefined;
@@ -596,6 +601,8 @@ async function readInstalledClaudeCliVersion(input: {
 }
 
 export interface ClaudeAdapterLiveOptions {
+  readonly instanceId?: ProviderInstanceId;
+  readonly environment?: NodeJS.ProcessEnv;
   // Async because the default implementation lazily imports the Claude Agent
   // SDK; test doubles may still return a runtime synchronously.
   readonly createQuery?: (input: {
@@ -1206,13 +1213,19 @@ function buildUserMessageEffect(
   dependencies: {
     readonly fileSystem: FileSystem.FileSystem;
     readonly attachmentsDir: string;
+    readonly skillNames?: ReadonlySet<string>;
   },
 ): Effect.Effect<SDKUserMessage, ProviderAdapterRequestError> {
   return Effect.gen(function* () {
     const text = buildPromptText(input);
     const sdkContent: Array<Record<string, unknown>> = [];
 
-    if (text.length > 0) {
+    const dispatch = dependencies.skillNames
+      ? planClaudeSkillDispatch(text, dependencies.skillNames)
+      : undefined;
+    if (dispatch?.leadingText !== undefined) {
+      sdkContent.push({ type: "text", text: dispatch.leadingText });
+    } else if (dispatch === undefined && text.length > 0) {
       sdkContent.push({ type: "text", text });
     }
 
@@ -1266,6 +1279,10 @@ function buildUserMessageEffect(
     });
     if (fileBlock) {
       sdkContent.push({ type: "text", text: fileBlock });
+    }
+
+    if (dispatch) {
+      sdkContent.push({ type: "text", text: dispatch.commandText });
     }
 
     return buildUserMessage({ sdkContent });
@@ -1757,7 +1774,14 @@ export function makeClaudeAdapter(
       : undefined);
   return Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const serverConfig = yield* ServerConfig;
+    const claudeSettings =
+      claudeSettingsOrOptions &&
+      typeof claudeSettingsOrOptions === "object" &&
+      "homePath" in claudeSettingsOrOptions
+        ? (claudeSettingsOrOptions as Pick<ClaudeSettings, "homePath">)
+        : {};
     // Optional so adapter tests can run without the gateway layer; when
     // present, every session gets the synara_* MCP tools.
     const agentGatewayCredentials = Option.getOrUndefined(
@@ -5784,9 +5808,24 @@ export function makeClaudeAdapter(
           });
         }
 
+        const skills = yield* discoverClaudeSkills(
+          claudeSettings,
+          context.session.cwd,
+          options?.environment,
+        ).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
+        );
+        const skillNames = new Set(
+          skills
+            .filter((skill) => skill.enabled && skill.userInvocable !== false)
+            .map((skill) => skill.name),
+        );
+
         const message = yield* buildUserMessageEffect(input, {
           fileSystem,
           attachmentsDir: serverConfig.attachmentsDir,
+          skillNames,
         });
 
         yield* Queue.offer(context.promptQueue, {
@@ -5838,9 +5877,24 @@ export function makeClaudeAdapter(
           };
         }
 
+        const skills = yield* discoverClaudeSkills(
+          claudeSettings,
+          context.session.cwd,
+          options?.environment,
+        ).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
+        );
+        const skillNames = new Set(
+          skills
+            .filter((skill) => skill.enabled && skill.userInvocable !== false)
+            .map((skill) => skill.name),
+        );
+
         const message = yield* buildUserMessageEffect(input, {
           fileSystem,
           attachmentsDir: serverConfig.attachmentsDir,
+          skillNames,
         });
         yield* Queue.offer(context.promptQueue, {
           type: "message",
