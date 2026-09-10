@@ -112,6 +112,7 @@ import {
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
 import { useBrowserHistoryStore } from "../browserHistoryStore";
 import { BrowserViewportResizeFrame } from "./browser/BrowserViewportResizeFrame";
+import { NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR } from "../nativeSurfaceOverlay";
 import {
   PREVIEW_ANNOTATION_PICKED_EVENT,
   type PreviewAnnotationPickedDetail,
@@ -466,25 +467,7 @@ const DEFAULT_DESKTOP_BROWSER_HOST_STATE: DesktopBrowserHostState = {
   available: false,
   reason: null,
 };
-const CODE_HOST_OVERLAY_SELECTOR = [
-  "[data-slot='menu-positioner']",
-  "[data-slot='popover-positioner']",
-  "[data-slot='dialog-backdrop']",
-  "[data-slot='dialog-popup']",
-  "[data-slot='alert-dialog-backdrop']",
-  "[data-slot='alert-dialog-popup']",
-  "[data-slot='command-dialog-backdrop']",
-  "[data-slot='command-dialog-popup']",
-  // Native WebContentsViews are composited above the renderer, regardless of CSS
-  // z-index. Suspend them while a notification is visible so global and anchored
-  // toasts remain readable and interactive over Code, Browser, and Testing views.
-  "[data-slot='toast-root']",
-  "[data-slot='toast-popup']",
-  // While the AI side chat is being resized, this transparent overlay is mounted
-  // so the embedded BrowserView hides and the drag's pointer events reach the
-  // React window instead of being swallowed by the native editor view.
-  "[data-slot='code-resize-overlay']",
-].join(", ");
+const CODE_HOST_OVERLAY_SELECTOR = NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR;
 
 type EmbeddedWorkspaceMode = {
   enabled: boolean;
