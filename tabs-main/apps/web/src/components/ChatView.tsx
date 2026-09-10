@@ -260,7 +260,11 @@ function renderProviderTraitsPicker(input: {
     />
   );
 }
-import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
+import {
+  getProviderStatusBannerKey,
+  ProviderStatusBanner,
+  shouldShowProviderStatusBanner,
+} from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import {
   buildExpiredTerminalContextToastCopy,
@@ -1391,6 +1395,21 @@ export default function ChatView({
       ) ?? null,
     [selectedProvider, providerStatuses],
   );
+  const providerStatusBannerKey = getProviderStatusBannerKey(activeProviderStatus);
+  const [dismissedProviderStatusBannerKey, setDismissedProviderStatusBannerKey] = useState<
+    string | null
+  >(null);
+  useEffect(() => {
+    if (providerStatusBannerKey === null && dismissedProviderStatusBannerKey !== null) {
+      setDismissedProviderStatusBannerKey(null);
+    }
+  }, [dismissedProviderStatusBannerKey, providerStatusBannerKey]);
+  const visibleProviderStatus = shouldShowProviderStatusBanner(
+    activeProviderStatus,
+    dismissedProviderStatusBannerKey,
+  )
+    ? activeProviderStatus
+    : null;
   const selectedProviderSkills = activeProviderStatus?.skills ?? [];
   const selectedProviderSlashCommands = activeProviderStatus?.slashCommands ?? [];
   const workspaceEntriesQuery = useQuery(
@@ -4831,7 +4850,10 @@ export default function ChatView({
       )}
 
       {/* Error banner */}
-      <ProviderStatusBanner status={activeProviderStatus} />
+      <ProviderStatusBanner
+        status={visibleProviderStatus}
+        onDismiss={() => setDismissedProviderStatusBannerKey(providerStatusBannerKey)}
+      />
       <ThreadErrorBanner
         error={activeThread.error}
         onDismiss={() => setThreadError(activeThread.id, null)}
