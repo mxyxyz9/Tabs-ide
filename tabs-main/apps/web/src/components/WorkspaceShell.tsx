@@ -3051,7 +3051,10 @@ function DesktopCodeTool(props: { project: Project }) {
 
     return () => {
       cancelled = true;
-      void bridge.hideCodeSession().catch(() => undefined);
+      // Do not hide here. React Strict Mode and Fast Refresh run effect cleanup
+      // while the Code tool is still active; hiding aborts the custom-protocol
+      // navigation and leaves an empty workbench. WorkspaceShell's active-tool
+      // effect is the single owner of hiding when the user truly leaves Code.
     };
   }, [codeHostState.available, props.project.cwd, props.project.id]);
 
