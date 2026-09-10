@@ -1457,9 +1457,17 @@ export default function ChatView({
     inFlight: boolean;
     retryAfter: number;
   } | null>(null);
+  const hadWorkspaceProviderSnapshotRef = useRef(false);
   useEffect(() => {
     if (!threadApi || !activeProviderStatus || !gitCwd || !activeProviderStatus.enabled) return;
-    if (activeProviderStatus.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd)) {
+    const hasWorkspaceSnapshot = Boolean(
+      activeProviderStatus.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd),
+    );
+    if (hadWorkspaceProviderSnapshotRef.current && !hasWorkspaceSnapshot) {
+      workspaceProviderRefreshRef.current = null;
+    }
+    hadWorkspaceProviderSnapshotRef.current = hasWorkspaceSnapshot;
+    if (hasWorkspaceSnapshot) {
       return;
     }
     const key = `${activeProviderStatus.instanceId}:${gitCwd}`;
@@ -1497,7 +1505,7 @@ export default function ChatView({
           };
         }
       });
-  }, [activeProviderStatus, gitCwd, queryClient, serverConfigQuery.data, threadApi]);
+  }, [activeProviderStatus, gitCwd, prompt, queryClient, serverConfigQuery.data, threadApi]);
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       environmentId: activeProject?.environmentId,
