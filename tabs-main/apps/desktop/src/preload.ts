@@ -49,6 +49,7 @@ const ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL = "desktop:issue-ssh-websocket-token";
 const SSH_PASSWORD_PROMPT_CHANNEL = "desktop:ssh-password-prompt";
 const RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL = "desktop:resolve-ssh-password-prompt";
 const SYSTEM_RESUME_CHANNEL = "desktop:system-resume";
+const WRITE_CLIPBOARD_TEXT_CHANNEL = "desktop:clipboard:write-text";
 const HOST_POWER_GET_CHANNEL = "desktop:host-power:get";
 const HOST_POWER_CHANGED_CHANNEL = "desktop:host-power:changed";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
@@ -102,6 +103,7 @@ const SET_PERSISTED_ITEM_CHANNEL = "desktop:set-persisted-item";
 const REMOVE_PERSISTED_ITEM_CHANNEL = "desktop:remove-persisted-item";
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  writeClipboardText: (text) => ipcRenderer.invoke(WRITE_CLIPBOARD_TEXT_CHANNEL, text),
   getClientPlatform: () => process.platform,
   getLocalEnvironmentBootstraps: () => {
     const result = ipcRenderer.sendSync(GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL);

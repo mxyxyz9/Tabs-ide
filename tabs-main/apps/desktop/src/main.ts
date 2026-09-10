@@ -9,6 +9,7 @@ import { storage as clerkStorage } from "@clerk/electron/storage";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -139,6 +140,7 @@ const CODE_HOST_RUN_COMMAND_CHANNEL = "vscode:tabs-code-host:run-command";
 const CODE_HOST_GET_CHROME_STATE_CHANNEL = "desktop:code-host:get-chrome-state";
 const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
+const WRITE_CLIPBOARD_TEXT_CHANNEL = "desktop:clipboard:write-text";
 const BROWSER_HOST_GET_SESSION_STATE_CHANNEL = "desktop:browser-host:get-session-state";
 const BROWSER_HOST_ENSURE_SESSION_CHANNEL = "desktop:browser-host:ensure-session";
 const BROWSER_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:browser-host:activate-session";
@@ -2272,6 +2274,14 @@ function registerIpcHandlers(): void {
       codeControlChannel.getChromeState((input as { projectId: string }).projectId) ??
       DEFAULT_CODE_CHROME_STATE
     );
+  });
+
+  ipcMain.removeHandler(WRITE_CLIPBOARD_TEXT_CHANNEL);
+  ipcMain.handle(WRITE_CLIPBOARD_TEXT_CHANNEL, async (_event, value: unknown) => {
+    if (typeof value !== "string" || value.length > 1_000_000) {
+      throw new Error("Invalid clipboard text payload.");
+    }
+    clipboard.writeText(value);
   });
 
   ipcMain.removeHandler(BROWSER_HOST_GET_STATE_CHANNEL);

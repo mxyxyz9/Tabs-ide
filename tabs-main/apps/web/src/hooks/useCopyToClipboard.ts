@@ -1,5 +1,31 @@
 import * as React from "react";
 
+export async function writeClipboardTextWithNativeFallback(
+  value: string,
+  environment: {
+    rendererWriteText?: ((value: string) => Promise<void>) | undefined;
+    nativeWriteText?: ((value: string) => Promise<void>) | undefined;
+  } = {
+    rendererWriteText: navigator.clipboard?.writeText.bind(navigator.clipboard),
+    nativeWriteText: window.desktopBridge?.writeClipboardText,
+  },
+): Promise<void> {
+  try {
+    if (environment.rendererWriteText) {
+      await environment.rendererWriteText(value);
+      return;
+    }
+  } catch {
+    // Electron can deny the renderer Clipboard API depending on focus and
+    // permission state. The native bridge is the authoritative fallback.
+  }
+  if (environment.nativeWriteText) {
+    await environment.nativeWriteText(value);
+    return;
+  }
+  throw new Error("Clipboard API unavailable.");
+}
+
 export function useCopyToClipboard<TContext = void>({
   timeout = 2000,
   onCopy,
@@ -20,14 +46,14 @@ export function useCopyToClipboard<TContext = void>({
   timeoutRef.current = timeout;
 
   const copyToClipboard = React.useCallback((value: string, ctx: TContext): void => {
-    if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
+    if (typeof window === "undefined") {
       onErrorRef.current?.(new Error("Clipboard API unavailable."), ctx);
       return;
     }
 
     if (!value) return;
 
-    navigator.clipboard.writeText(value).then(
+    writeClipboardTextWithNativeFallback(value).then(
       () => {
         if (timeoutIdRef.current) {
           clearTimeout(timeoutIdRef.current);
