@@ -205,7 +205,7 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
               probeCodexSkillsForCwd({
                 binaryPath: effectiveConfig.binaryPath,
                 homePath: effectiveConfig.homePath,
-                launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, processEnv),
+                launchArgs: resolveCodexLaunchArgs(undefined, processEnv),
                 cwd,
                 environment: processEnv,
               }).pipe(

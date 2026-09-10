@@ -4,6 +4,7 @@ import {
   EventId,
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
+  ProviderInstanceId,
   type OrchestrationEvent,
   ProjectId,
   ThreadId,
@@ -118,6 +119,20 @@ afterEach(() => {
 });
 
 describe("wsNativeApi", () => {
+  it("forwards workspace provider refresh inputs", async () => {
+    const { createWsNativeApi } = await import("./wsNativeApi");
+    requestMock.mockResolvedValue({ providers: [] });
+    const api = createWsNativeApi();
+    const input = {
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
+      cwd: "/workspace/project",
+    } as const;
+
+    await api.server.refreshProviders(input);
+
+    expect(requestMock).toHaveBeenCalledWith(WS_METHODS.serverRefreshProviders, input);
+  });
+
   it("isolates progress listeners between non-singleton environment transports", async () => {
     const { createWsNativeApi } = await import("./wsNativeApi");
     const firstListeners = new Map<string, (message: WsPush) => void>();

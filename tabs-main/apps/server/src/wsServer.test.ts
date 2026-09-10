@@ -97,6 +97,7 @@ const defaultProviderRegistryService: ProviderRegistryShape = {
   getProviders: Effect.succeed(defaultProviderStatuses),
   refresh: () => Effect.succeed(defaultProviderStatuses),
   refreshInstance: () => Effect.succeed(defaultProviderStatuses),
+  refreshWorkspaceSnapshot: () => Effect.succeed(defaultProviderStatuses),
   getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
     Effect.succeed({ provider, packageName: null, update: null }),
   setProviderMaintenanceActionState: () => Effect.succeed(defaultProviderStatuses),

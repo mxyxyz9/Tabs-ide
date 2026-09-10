@@ -38,6 +38,12 @@ const recentToastTimestamps = new Map<string, { id: ToastId; timestamp: number }
 
 const originalToastAdd = toastManager.add.bind(toastManager);
 toastManager.add = (options: Parameters<typeof originalToastAdd>[0]): ToastId => {
+  // Action-bearing toasts are distinct interactions even when their text is
+  // identical. Returning an older toast id would silently discard the newer
+  // callback (for example Retry, Approve, or Copy image).
+  if (options.actionProps || options.data?.onClose) {
+    return originalToastAdd(options);
+  }
   const titleStr = typeof options.title === "string" ? options.title : "";
   const descStr = typeof options.description === "string" ? options.description : "";
   const threadIdStr = options.data?.threadId ?? "";

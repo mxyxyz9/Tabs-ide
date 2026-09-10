@@ -56,7 +56,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { gitBranchesQueryOptions, gitCreateWorktreeMutationOptions } from "~/lib/gitReactQuery";
 import { projectSearchEntriesQueryOptions } from "~/lib/projectReactQuery";
-import { serverConfigQueryOptions } from "~/lib/serverReactQuery";
+import { serverConfigQueryOptions, serverQueryKeys } from "~/lib/serverReactQuery";
 import { isElectron } from "../env";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import {
@@ -1452,6 +1452,52 @@ export default function ChatView({
     if (!activeProviderStatus) return EMPTY_PROVIDER_SLASH_COMMANDS;
     return resolveProviderSlashCommandsForCwd(activeProviderStatus, gitCwd);
   }, [activeProviderStatus, gitCwd]);
+  const workspaceProviderRefreshRef = useRef<{
+    key: string;
+    inFlight: boolean;
+    retryAfter: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!threadApi || !activeProviderStatus || !gitCwd || !activeProviderStatus.enabled) return;
+    if (activeProviderStatus.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd)) {
+      return;
+    }
+    const key = `${activeProviderStatus.instanceId}:${gitCwd}`;
+    const previousRefresh = workspaceProviderRefreshRef.current;
+    if (
+      previousRefresh?.key === key &&
+      (previousRefresh.inFlight || previousRefresh.retryAfter > Date.now())
+    ) {
+      return;
+    }
+    workspaceProviderRefreshRef.current = { key, inFlight: true, retryAfter: 0 };
+    void threadApi.server
+      .refreshProviders({ instanceId: activeProviderStatus.instanceId, cwd: gitCwd })
+      .then((payload) => {
+        queryClient.setQueryData(
+          serverQueryKeys.config(),
+          (current: typeof serverConfigQuery.data) =>
+            current ? { ...current, providers: payload.providers } : current,
+        );
+        const refreshed = payload.providers
+          .find((provider) => provider.instanceId === activeProviderStatus.instanceId)
+          ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd);
+        if (workspaceProviderRefreshRef.current?.key === key) {
+          workspaceProviderRefreshRef.current = refreshed
+            ? { key, inFlight: false, retryAfter: Number.POSITIVE_INFINITY }
+            : { key, inFlight: false, retryAfter: Date.now() + 30_000 };
+        }
+      })
+      .catch(() => {
+        if (workspaceProviderRefreshRef.current?.key === key) {
+          workspaceProviderRefreshRef.current = {
+            key,
+            inFlight: false,
+            retryAfter: Date.now() + 30_000,
+          };
+        }
+      });
+  }, [activeProviderStatus, gitCwd, queryClient, serverConfigQuery.data, threadApi]);
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       environmentId: activeProject?.environmentId,
@@ -4509,7 +4555,9 @@ export default function ChatView({
                           key={`restore:${entry.id}`}
                           onClick={() => void restoreStashedPrompt(entry.id)}
                         >
-                          <span className="min-w-0 flex-1 truncate">{promptStashSnippet(entry)}</span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {promptStashSnippet(entry)}
+                          </span>
                         </MenuItem>,
                         <MenuItem
                           key={`delete:${entry.id}`}

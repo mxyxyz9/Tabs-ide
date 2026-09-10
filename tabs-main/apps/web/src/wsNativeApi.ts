@@ -262,8 +262,7 @@ export function createWsNativeApi(options?: {
       readArtifact: (input) => transport.request(WS_METHODS.testingReadArtifact, input),
       runTests: (input) =>
         transport.request(WS_METHODS.testingRunTests, input, { timeoutMs: null }),
-      cancelExecutionRun: (input) =>
-        transport.request(WS_METHODS.testingCancelExecutionRun, input),
+      cancelExecutionRun: (input) => transport.request(WS_METHODS.testingCancelExecutionRun, input),
       listExecutionRuns: (input) => transport.request(WS_METHODS.testingListExecutionRuns, input),
       decideHealingProposal: (input) =>
         transport.request(WS_METHODS.testingDecideHealingProposal, input),
@@ -430,7 +429,7 @@ export function createWsNativeApi(options?: {
     },
     server: {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),
-      refreshProviders: () => transport.request(WS_METHODS.serverRefreshProviders),
+      refreshProviders: (input) => transport.request(WS_METHODS.serverRefreshProviders, input),
       runProviderMaintenance: (input) =>
         transport.request(WS_METHODS.serverRunProviderMaintenance, input),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),

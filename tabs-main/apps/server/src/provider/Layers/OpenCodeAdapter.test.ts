@@ -85,6 +85,7 @@ const runtimeMock = {
 };
 
 const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
+  loadOpenCodeSkills: () => Effect.succeed([]),
   startOpenCodeServerProcess: ({ binaryPath }) =>
     Effect.gen(function* () {
       runtimeMock.state.startCalls.push(binaryPath);

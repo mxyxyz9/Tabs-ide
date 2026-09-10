@@ -754,7 +754,7 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
       );
 
     const loadOpenCodeSkills: OpenCodeRuntimeShape["loadOpenCodeSkills"] = (client) =>
-      runOpenCodeSdk("app.skills", (signal) => (client.app as any).skills(undefined, { signal })).pipe(
+      runOpenCodeSdk("app.skills", () => (client.app as any).skills()).pipe(
         Effect.map((result: any) =>
           (result.data ?? []).map((skill: any) => ({
             name: skill.name,

@@ -544,7 +544,6 @@ const WebSocketRequestBody = Schema.Union([
     Schema.Struct({
       instanceId: Schema.optional(ProviderInstanceId),
       cwd: Schema.optional(TrimmedNonEmptyString),
-      refreshModels: Schema.optional(Schema.Boolean),
     }),
   ),
   tagRequestBody(WS_METHODS.serverRunProviderMaintenance, ServerRunProviderMaintenanceInput),

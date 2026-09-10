@@ -53,6 +53,7 @@ const runtimeMock = {
 };
 
 const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
+  loadOpenCodeSkills: () => Effect.succeed([]),
   startOpenCodeServerProcess: () =>
     Effect.succeed({
       url: "http://127.0.0.1:4301",

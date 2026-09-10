@@ -25,4 +25,17 @@ describe("toastManager deduplication", () => {
 
     expect(id3).not.toBe(id1);
   });
+
+  it("preserves distinct actions even when notification text matches", () => {
+    const first = toastManager.add({
+      title: "Operation failed",
+      actionProps: { children: "Retry", onClick: () => undefined },
+    });
+    const second = toastManager.add({
+      title: "Operation failed",
+      actionProps: { children: "Retry", onClick: () => undefined },
+    });
+
+    expect(second).not.toBe(first);
+  });
 });

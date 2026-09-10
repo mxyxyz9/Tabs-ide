@@ -1781,7 +1781,7 @@ export function makeClaudeAdapter(
       typeof claudeSettingsOrOptions === "object" &&
       "homePath" in claudeSettingsOrOptions
         ? (claudeSettingsOrOptions as Pick<ClaudeSettings, "homePath">)
-        : {};
+        : { homePath: "" };
     // Optional so adapter tests can run without the gateway layer; when
     // present, every session gets the synara_* MCP tools.
     const agentGatewayCredentials = Option.getOrUndefined(
