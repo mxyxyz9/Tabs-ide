@@ -119,6 +119,7 @@ import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings"
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
+  ArchiveIcon,
   BotIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -132,6 +133,7 @@ import {
   MousePointer2Icon,
   PaperclipIcon,
   PenIcon,
+  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -162,6 +164,7 @@ import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
   type PersistedComposerImageAttachment,
+  hydrateImagesFromPersisted,
   useComposerDraftStore,
   useEffectiveComposerModelState,
 } from "../composerDraftStore";
@@ -173,6 +176,7 @@ import {
   useComposerDraft,
   useDraftThread,
 } from "../state/composerDrafts";
+import { promptStashSnippet, usePromptStashStore } from "../promptStashStore";
 import { appAtomRegistry } from "../state/atomRegistry";
 import {
   appendTerminalContextsToPrompt,
@@ -614,6 +618,75 @@ export default function ChatView({
       setComposerDraftPrompt(threadId, nextPrompt);
     },
     [setComposerDraftPrompt, threadId],
+  );
+  const promptStashEntries = usePromptStashStore((state) => state.entries);
+  const stashPrompt = usePromptStashStore((state) => state.stash);
+  const takeStashedPrompt = usePromptStashStore((state) => state.take);
+  const removeStashedPrompt = usePromptStashStore((state) => state.remove);
+  const stashCurrentPrompt = useCallback(async () => {
+    if (!prompt.trim() && composerImages.length === 0) return false;
+    try {
+      const attachments = await Promise.all(
+        composerImages.map(async (image) => ({
+          id: image.id,
+          name: image.name,
+          mimeType: image.mimeType,
+          sizeBytes: image.sizeBytes,
+          dataUrl: await readFileAsDataUrl(image.file),
+        })),
+      );
+      const evicted = stashPrompt({
+        id: randomUUID(),
+        createdAt: new Date().toISOString(),
+        prompt,
+        attachments,
+      });
+      clearComposerDraftContent(threadId);
+      promptRef.current = "";
+      setComposerCursor(0);
+      setComposerTrigger(null);
+      toastManager.add({
+        type: "success",
+        title: "Prompt stashed",
+        description: evicted
+          ? "Saved this prompt and discarded the oldest stash entry."
+          : "You can restore it from the stash menu.",
+      });
+      return true;
+    } catch (cause) {
+      toastManager.add({
+        type: "error",
+        title: "Could not stash prompt",
+        description: cause instanceof Error ? cause.message : String(cause),
+      });
+      return false;
+    }
+  }, [clearComposerDraftContent, composerImages, prompt, stashPrompt, threadId]);
+  const restoreStashedPrompt = useCallback(
+    async (entryId: string) => {
+      if ((prompt.trim() || composerImages.length > 0) && !(await stashCurrentPrompt())) return;
+      const entry = takeStashedPrompt(entryId);
+      if (!entry) return;
+      clearComposerDraftContent(threadId);
+      setPrompt(entry.prompt);
+      const restoredImages = hydrateImagesFromPersisted(entry.attachments);
+      if (restoredImages.length > 0) addComposerDraftImages(threadId, restoredImages);
+      promptRef.current = entry.prompt;
+      const cursor = collapseExpandedComposerCursor(entry.prompt, entry.prompt.length);
+      setComposerCursor(cursor);
+      setComposerTrigger(null);
+      window.requestAnimationFrame(() => composerEditorRef.current?.focusAtEnd());
+    },
+    [
+      addComposerDraftImages,
+      clearComposerDraftContent,
+      composerImages.length,
+      prompt,
+      setPrompt,
+      stashCurrentPrompt,
+      takeStashedPrompt,
+      threadId,
+    ],
   );
   const addComposerImage = useCallback(
     (image: ComposerImageAttachment) => {
@@ -4288,6 +4361,60 @@ export default function ChatView({
 
               <div className="flex shrink-0 items-center gap-1.5">
                 {activeContextWindow ? <ContextWindowMeter usage={activeContextWindow} /> : null}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
+                        disabled={!prompt.trim() && composerImages.length === 0}
+                        onClick={() => void stashCurrentPrompt()}
+                        aria-label="Stash current prompt"
+                      >
+                        <ArchiveIcon className="size-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="top">Stash current prompt</TooltipPopup>
+                </Tooltip>
+                {promptStashEntries.length > 0 ? (
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 gap-1 px-2 text-xs text-muted-foreground/70 hover:text-foreground/80"
+                          aria-label={`${promptStashEntries.length} stashed prompts`}
+                        >
+                          {promptStashEntries.length}
+                          <ChevronDownIcon className="size-3" />
+                        </Button>
+                      }
+                    />
+                    <MenuPopup align="end" side="top" className="max-h-80 w-80 overflow-y-auto">
+                      {promptStashEntries.flatMap((entry) => [
+                        <MenuItem
+                          key={`restore:${entry.id}`}
+                          onClick={() => void restoreStashedPrompt(entry.id)}
+                        >
+                          <span className="min-w-0 flex-1 truncate">{promptStashSnippet(entry)}</span>
+                        </MenuItem>,
+                        <MenuItem
+                          key={`delete:${entry.id}`}
+                          onClick={() => removeStashedPrompt(entry.id)}
+                          className="text-muted-foreground"
+                        >
+                          <Trash2Icon className="size-3.5" />
+                          Delete the prompt above
+                        </MenuItem>,
+                      ])}
+                    </MenuPopup>
+                  </Menu>
+                ) : null}
                 <Tooltip>
                   <TooltipTrigger
                     render={
