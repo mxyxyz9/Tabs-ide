@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
+import {
+  splitPastedPromptIntoComposerSegments,
+  splitPromptIntoComposerSegments,
+} from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 describe("splitPromptIntoComposerSegments", () => {
@@ -36,6 +39,21 @@ describe("splitPromptIntoComposerSegments", () => {
       { type: "terminal-context", context: null },
       { type: "mention", path: "AGENTS.md" },
       { type: "text", text: " please" },
+    ]);
+  });
+});
+
+describe("splitPastedPromptIntoComposerSegments", () => {
+  it("recognizes a mention at the end of pasted text", () => {
+    expect(splitPastedPromptIntoComposerSegments("Review @src/main.ts")).toEqual([
+      { type: "text", text: "Review " },
+      { type: "mention", path: "src/main.ts" },
+    ]);
+  });
+
+  it("keeps ordinary pasted text unchanged", () => {
+    expect(splitPastedPromptIntoComposerSegments("hello\nworld")).toEqual([
+      { type: "text", text: "hello\nworld" },
     ]);
   });
 });

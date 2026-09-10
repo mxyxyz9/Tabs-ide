@@ -25,6 +25,7 @@ import {
   KEY_TAB_COMMAND,
   COMMAND_PRIORITY_HIGH,
   KEY_BACKSPACE_COMMAND,
+  PASTE_COMMAND,
   $getRoot,
   DecoratorNode,
   type ElementNode,
@@ -58,7 +59,10 @@ import {
   expandCollapsedComposerCursor,
   isCollapsedCursorAdjacentToInlineToken,
 } from "~/composer-logic";
-import { splitPromptIntoComposerSegments } from "~/composer-editor-mentions";
+import {
+  splitPastedPromptIntoComposerSegments,
+  splitPromptIntoComposerSegments,
+} from "~/composer-editor-mentions";
 import {
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   type TerminalContextDraft,
@@ -594,6 +598,56 @@ function $appendTextWithLineBreaks(parent: ElementNode, text: string): void {
       parent.append($createLineBreakNode());
     }
   }
+}
+
+function appendTextNodes(nodes: LexicalNode[], text: string): void {
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (line) nodes.push($createTextNode(line));
+    if (index < lines.length - 1) nodes.push($createLineBreakNode());
+  }
+}
+
+function ComposerMentionPastePlugin() {
+  const [editor] = useLexicalComposerContext();
+  useEffect(
+    () =>
+      editor.registerCommand(
+        PASTE_COMMAND,
+        (event) => {
+          if (!(event instanceof ClipboardEvent)) {
+            return false;
+          }
+          const clipboardData = event.clipboardData;
+          if (!clipboardData || clipboardData.files.length > 0) return false;
+          const text = clipboardData.getData("text/plain");
+          const segments = splitPastedPromptIntoComposerSegments(text);
+          if (!segments.some((segment) => segment.type === "mention")) return false;
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) return false;
+
+          const nodes: LexicalNode[] = [];
+          if (segments[0]?.type === "mention") {
+            const start = selection.isBackward() ? selection.focus : selection.anchor;
+            const offset = getExpandedAbsoluteOffsetForPoint(start.getNode(), start.offset);
+            const preceding = $getRoot().getTextContent().slice(offset - 1, offset);
+            if (preceding && !/\s/.test(preceding)) nodes.push($createTextNode(" "));
+          }
+          for (const segment of segments) {
+            if (segment.type === "mention") nodes.push($createComposerMentionNode(segment.path));
+            else if (segment.type === "text") appendTextNodes(nodes, segment.text);
+          }
+          if (segments.at(-1)?.type === "mention") nodes.push($createTextNode(" "));
+          selection.insertNodes(nodes);
+          event.preventDefault();
+          return true;
+        },
+        COMMAND_PRIORITY_HIGH,
+      ),
+    [editor],
+  );
+  return null;
 }
 
 function $setComposerEditorPrompt(
@@ -1216,6 +1270,7 @@ function ComposerPromptEditorInner({
         <ComposerInlineTokenArrowPlugin />
         <ComposerInlineTokenSelectionNormalizePlugin />
         <ComposerInlineTokenBackspacePlugin />
+        <ComposerMentionPastePlugin />
         <HistoryPlugin />
       </div>
     </ComposerTerminalContextActionsContext.Provider>

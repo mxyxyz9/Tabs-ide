@@ -64,6 +64,20 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
   return segments;
 }
 
+export function splitPastedPromptIntoComposerSegments(text: string): ComposerPromptSegment[] {
+  if (!text) return [];
+  // Mention grammar normally requires trailing whitespace. A virtual space
+  // lets a clipboard value ending in a mention tokenize consistently, then is
+  // removed from the returned text segments.
+  const segments = splitPromptTextIntoComposerSegments(`${text} `);
+  const last = segments.at(-1);
+  if (last?.type === "text") {
+    last.text = last.text.slice(0, -1);
+    if (last.text.length === 0) segments.pop();
+  }
+  return segments;
+}
+
 export function splitPromptIntoComposerSegments(
   prompt: string,
   terminalContexts: ReadonlyArray<TerminalContextDraft> = [],
