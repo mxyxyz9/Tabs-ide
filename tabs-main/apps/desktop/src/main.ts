@@ -167,6 +167,7 @@ const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
 const BROWSER_HOST_RECREATE_SESSION_CHANNEL = "desktop:browser-host:recreate-session";
+const BROWSER_HOST_CLEAR_SESSION_DATA_CHANNEL = "desktop:browser-host:clear-session-data";
 const BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL = "desktop:browser-host:clear-profile-data";
 const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL =
   "desktop:browser-host:open-profile-login-window";
@@ -2679,6 +2680,21 @@ function registerIpcHandlers(): void {
       return;
     }
     await browserHostManager.clearProfileData((input as { profileId: string }).profileId);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_CLEAR_SESSION_DATA_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_CLEAR_SESSION_DATA_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      return;
+    }
+    await browserHostManager.clearSessionData(
+      (input as { projectId: string }).projectId,
+      readBrowserSessionId(input),
+    );
   });
 
   ipcMain.removeHandler(BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL);

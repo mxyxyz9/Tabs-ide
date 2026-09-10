@@ -7054,6 +7054,7 @@ function DesktopBrowserChrome(props: {
   );
   const [changingRecording, setChangingRecording] = useState(false);
   const [pickingElement, setPickingElement] = useState(false);
+  const [clearingBrowserData, setClearingBrowserData] = useState(false);
   const [pendingAnnotation, setPendingAnnotation] = useState<PreviewAnnotationPayload | null>(null);
   const browserHistory = useBrowserHistoryStore((state) => state.entries);
   const recordBrowserHistory = useBrowserHistoryStore((state) => state.record);
@@ -7079,6 +7080,30 @@ function DesktopBrowserChrome(props: {
   const sessionArg = props.sessionId
     ? { projectId: props.projectId, sessionId: props.sessionId }
     : { projectId: props.projectId };
+  const clearBrowserData = useCallback(async () => {
+    if (!bridge || clearingBrowserData) return;
+    const confirmed = await bridge.confirm(
+      "Clear cookies, cache, and site storage for this browser session? This will sign you out of sites using the same browser profile.",
+    );
+    if (!confirmed) return;
+    setClearingBrowserData(true);
+    try {
+      await bridge.clearBrowserSessionData(sessionArg);
+      toastManager.add({
+        type: "success",
+        title: "Browser data cleared",
+        description: "Cookies, cache, and site storage were cleared and the page was reloaded.",
+      });
+    } catch (cause) {
+      toastManager.add({
+        type: "error",
+        title: "Could not clear browser data",
+        description: cause instanceof Error ? cause.message : String(cause),
+      });
+    } finally {
+      setClearingBrowserData(false);
+    }
+  }, [bridge, clearingBrowserData, sessionArg]);
   const captureScreenshot = useCallback(async () => {
     if (!bridge || capturingScreenshot) return;
     setCapturingScreenshot(true);
@@ -7435,6 +7460,10 @@ function DesktopBrowserChrome(props: {
                       <MenuItem onClick={clearBrowserHistory}>Clear browser history</MenuItem>
                     </>
                   ) : null}
+                  <MenuSeparator />
+                  <MenuItem disabled={clearingBrowserData} onClick={() => void clearBrowserData()}>
+                    {clearingBrowserData ? "Clearing browser data…" : "Clear cookies and cache"}
+                  </MenuItem>
                 </MenuPopup>
               </Menu>
               <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">

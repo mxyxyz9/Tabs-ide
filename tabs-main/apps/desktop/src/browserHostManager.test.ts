@@ -170,6 +170,36 @@ describe("BrowserHostManager profile storage", () => {
     );
     expect(profileSession.flushStorageData).toHaveBeenCalledOnce();
   });
+
+  it("clears the exact partition owned by an active browser session", async () => {
+    const storageSession = {
+      closeAllConnections: vi.fn().mockResolvedValue(undefined),
+      clearData: vi.fn().mockResolvedValue(undefined),
+      flushStorageData: vi.fn(),
+    };
+    const manager = new BrowserHostManager(() => null);
+    const browserSession = {
+      projectId: "project-1",
+      sessionId: "preview-1",
+      key: "project-1::preview-1",
+      currentUrl: null,
+      view: { webContents: { session: storageSession } },
+    };
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(
+      browserSession.key,
+      browserSession,
+    );
+
+    await manager.clearSessionData("project-1", "preview-1");
+
+    expect(storageSession.closeAllConnections).toHaveBeenCalledOnce();
+    expect(storageSession.clearData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataTypes: expect.arrayContaining(["cache", "cookies", "localStorage", "serviceWorkers"]),
+      }),
+    );
+    expect(storageSession.flushStorageData).toHaveBeenCalledOnce();
+  });
 });
 
 describe("BrowserHostManager picture in picture", () => {

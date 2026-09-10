@@ -90,6 +90,7 @@ const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const BROWSER_HOST_SESSION_STATE_CHANNEL = "desktop:browser-host:session-state";
 const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
 const BROWSER_HOST_RECREATE_SESSION_CHANNEL = "desktop:browser-host:recreate-session";
+const BROWSER_HOST_CLEAR_SESSION_DATA_CHANNEL = "desktop:browser-host:clear-session-data";
 const BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL = "desktop:browser-host:clear-profile-data";
 const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL =
   "desktop:browser-host:open-profile-login-window";
@@ -186,12 +187,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   showContextMenu: (items, position) => ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, items, position),
   openExternal: (url: string) => ipcRenderer.invoke(OPEN_EXTERNAL_CHANNEL, url),
   isPopout: isPopoutProcess,
-  openPopoutWindow: (options: {
-    url: string;
-    title?: string;
-    width?: number;
-    height?: number;
-  }) => ipcRenderer.invoke(OPEN_POPOUT_WINDOW_CHANNEL, options),
+  openPopoutWindow: (options: { url: string; title?: string; width?: number; height?: number }) =>
+    ipcRenderer.invoke(OPEN_POPOUT_WINDOW_CHANNEL, options),
   onMenuAction: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
       if (typeof action !== "string") return;
@@ -265,6 +262,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_SYNC_SESSIONS_CHANNEL, projectIds),
   recreateBrowserSession: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_RECREATE_SESSION_CHANNEL, input),
+  clearBrowserSessionData: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_CLEAR_SESSION_DATA_CHANNEL, input),
   clearBrowserProfileData: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL, input),
   openBrowserProfileLoginWindow: (input) =>

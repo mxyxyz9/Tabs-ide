@@ -486,6 +486,30 @@ export class BrowserHostManager {
     }
   }
 
+  async clearSessionData(projectId: string, sessionId?: string): Promise<void> {
+    const browserSession = this.sessions.get(this.sessionKey(projectId, sessionId));
+    if (!browserSession) {
+      throw new Error("Browser session is not available.");
+    }
+    const storageSession = browserSession.view.webContents.session;
+    await storageSession.closeAllConnections();
+    await storageSession.clearData({
+      dataTypes: [
+        "cache",
+        "cookies",
+        "fileSystems",
+        "indexedDB",
+        "localStorage",
+        "serviceWorkers",
+        "webSQL",
+      ],
+    });
+    storageSession.flushStorageData();
+    if (browserSession.currentUrl) {
+      await this.loadUrl(browserSession, browserSession.currentUrl);
+    }
+  }
+
   async getProfileDomains(profileId: string): Promise<BrowserProfileDomainInfo[]> {
     const trimmed = normalizeBrowserProfileId(profileId);
     const partition = `persist:tabs-browser:profile:${trimmed}`;

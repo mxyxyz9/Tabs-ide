@@ -1215,6 +1215,7 @@ export interface DesktopBridge {
     sessionId?: string | undefined;
     partition?: string | undefined;
   }) => Promise<void>;
+  clearBrowserSessionData: (input: DesktopBrowserHostControlInput) => Promise<void>;
   clearBrowserProfileData: (input: { profileId: string }) => Promise<void>;
   openBrowserProfileLoginWindow: (input: { profileId: string; url?: string }) => Promise<void>;
   getBrowserProfileDomains: (input: { profileId: string }) => Promise<BrowserProfileDomainInfo[]>;
