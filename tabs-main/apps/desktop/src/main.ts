@@ -3174,19 +3174,30 @@ async function bootstrap(): Promise<void> {
   writeDesktopLogHeader(`bootstrap resolved websocket endpoint baseUrl=${wsBaseUrl}`);
 
   if (codeHostConfig.runtime) {
-    nativeCodeHostMainBackend = await nativeCodeHostBackendPromise;
-    for (const rawUrl of pendingNativeCodeHostURLs.splice(0)) {
-      forwardNativeCodeHostURL(rawUrl);
-    }
-    codeHostManager.setNativeWebContentsRegistrar((webContents, getBounds, projectId) => {
-      nativeCodeHostMainBackend?.registerWebContents(
-        webContents,
-        getBounds,
-        mainWindow ?? undefined,
-        projectId,
-      );
-    });
-    writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");
+    // Do not hold first paint behind Code-OSS's large compatibility imports.
+    // The shell and agent workspace are useful before the editor is opened;
+    // attach the native workbench registrar as soon as its backend is ready.
+    void nativeCodeHostBackendPromise
+      .then((backend) => {
+        nativeCodeHostMainBackend = backend;
+        for (const rawUrl of pendingNativeCodeHostURLs.splice(0)) {
+          forwardNativeCodeHostURL(rawUrl);
+        }
+        codeHostManager.setNativeWebContentsRegistrar((webContents, getBounds, projectId) => {
+          nativeCodeHostMainBackend?.registerWebContents(
+            webContents,
+            getBounds,
+            mainWindow ?? undefined,
+            projectId,
+          );
+        });
+        writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");
+      })
+      .catch((error: unknown) => {
+        const reason = `Embedded editor services failed to start: ${formatErrorMessage(error)}`;
+        codeHostManager.disableEmbeddedHost(reason);
+        writeDesktopLogHeader(`bootstrap native Code-OSS backend failed: ${reason}`);
+      });
   }
 
   // Start the loopback control channel and expose its URL to the embedded
