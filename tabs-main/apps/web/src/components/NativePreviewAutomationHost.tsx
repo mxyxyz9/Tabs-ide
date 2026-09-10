@@ -29,6 +29,10 @@ interface ActiveBrowserRecording {
 
 const activeRecordings = new Map<string, ActiveBrowserRecording>();
 
+export function isNativeBrowserRecordingActive(projectId: string, sessionId: string): boolean {
+  return activeRecordings.has(recordingKey(projectId, sessionId));
+}
+
 export function buildPreviewStatusReport(
   state: DesktopBrowserSessionState,
   target: { threadId: PreviewReportStatusInput["threadId"]; tabId: string },
@@ -74,7 +78,10 @@ export async function startNativeBrowserRecording(
   const key = recordingKey(projectId, sessionId);
   const existing = activeRecordings.get(key);
   if (existing) return { tabId: sessionId, recording: true, startedAt: existing.startedAt };
-  const sourceId = await bridge.getBrowserMediaSourceId({ projectId, sessionId });
+  const sourceId = await bridge.getBrowserMediaSourceId({
+    projectId,
+    sessionId,
+  });
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
@@ -113,7 +120,9 @@ export async function stopNativeBrowserRecording(
   try {
     if (active.recorder.state !== "inactive") {
       await new Promise<void>((resolve, reject) => {
-        active.recorder.addEventListener("stop", () => resolve(), { once: true });
+        active.recorder.addEventListener("stop", () => resolve(), {
+          once: true,
+        });
         active.recorder.addEventListener(
           "error",
           (event) =>
@@ -129,7 +138,12 @@ export async function stopNativeBrowserRecording(
     const mimeType = active.recorder.mimeType || active.chunks[0]?.type || "video/webm";
     const data = new Uint8Array(await new Blob(active.chunks, { type: mimeType }).arrayBuffer());
     if (data.byteLength === 0) throw new Error("The browser recording did not produce video data.");
-    return await bridge.saveBrowserRecording({ projectId, sessionId, mimeType, data });
+    return await bridge.saveBrowserRecording({
+      projectId,
+      sessionId,
+      mimeType,
+      data,
+    });
   } finally {
     activeRecordings.delete(key);
     for (const track of active.stream.getTracks()) track.stop();
@@ -282,7 +296,10 @@ export function NativePreviewAutomationHost() {
           initialUrl: url,
         });
         if (input.show !== false) {
-          await bridge.activateBrowserSession({ projectId: thread.projectId, sessionId });
+          await bridge.activateBrowserSession({
+            projectId: thread.projectId,
+            sessionId,
+          });
         }
         return bridge.runBrowserAutomation({
           projectId: thread.projectId,
@@ -293,7 +310,11 @@ export function NativePreviewAutomationHost() {
       if (request.operation === "navigate") {
         const url = typeof input.url === "string" ? input.url : null;
         if (!url) throw new Error("Native preview navigation requires a resolved URL.");
-        await bridge.navigateBrowserSession({ projectId: thread.projectId, sessionId, url });
+        await bridge.navigateBrowserSession({
+          projectId: thread.projectId,
+          sessionId,
+          url,
+        });
         return bridge.runBrowserAutomation({
           projectId: thread.projectId,
           sessionId,
@@ -333,7 +354,11 @@ export function NativePreviewAutomationHost() {
           setting,
           resizeInput.timeoutMs ?? 15_000,
         );
-        return { tabId: sessionId, setting, viewport } satisfies PreviewAutomationResizeResult;
+        return {
+          tabId: sessionId,
+          setting,
+          viewport,
+        } satisfies PreviewAutomationResizeResult;
       }
       return bridge.runBrowserAutomation({
         projectId: thread.projectId,

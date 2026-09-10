@@ -19,6 +19,11 @@ import {
 } from "@tabs/contracts";
 import { makeAppModelSelection } from "../modelSelection";
 import { TestingTool } from "./testing/TestingTool";
+import {
+  isNativeBrowserRecordingActive,
+  startNativeBrowserRecording,
+  stopNativeBrowserRecording,
+} from "./NativePreviewAutomationHost";
 import { PreviewAnnotationEditor } from "./PreviewAnnotationEditor";
 import {
   type ProjectToolKind,
@@ -65,6 +70,7 @@ import {
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
+  RadioIcon,
   RocketIcon,
   RotateCwIcon,
   SearchIcon,
@@ -84,6 +90,7 @@ import {
   PinIcon,
   Clock3Icon,
   CircleCheckIcon,
+  SquareIcon,
   TriangleAlertIcon,
 } from "lucide-react";
 import {
@@ -703,7 +710,10 @@ function resolveGitHunkActionModes(file: GitStatusFile | null): {
   unavailableReason: string | null;
 } {
   if (!file) {
-    return { modes: [], unavailableReason: "Select a changed file to review its hunks." };
+    return {
+      modes: [],
+      unavailableReason: "Select a changed file to review its hunks.",
+    };
   }
   if (file.conflicted) {
     return {
@@ -732,7 +742,10 @@ function resolveGitHunkActionModes(file: GitStatusFile | null): {
   if (file.unstaged) {
     return { modes: ["stage", "discard"], unavailableReason: null };
   }
-  return { modes: [], unavailableReason: "No hunk actions are available for this file yet." };
+  return {
+    modes: [],
+    unavailableReason: "No hunk actions are available for this file yet.",
+  };
 }
 
 type ServerPresetRuntimeStatus = "idle" | "stopped" | "running";
@@ -895,8 +908,18 @@ function ProjectTabs(props: {
   type TabEntry = { kind: "project"; project: Project } | { kind: "pending"; pendingId: string };
 
   const tabs: TabEntry[] = [
-    ...props.openProjects.map((project): TabEntry => ({ kind: "project", project })),
-    ...(props.pendingTabIds ?? []).map((pendingId): TabEntry => ({ kind: "pending", pendingId })),
+    ...props.openProjects.map(
+      (project): TabEntry => ({
+        kind: "project",
+        project,
+      }),
+    ),
+    ...(props.pendingTabIds ?? []).map(
+      (pendingId): TabEntry => ({
+        kind: "pending",
+        pendingId,
+      }),
+    ),
   ];
 
   return (
@@ -1033,7 +1056,11 @@ function ProjectTabs(props: {
 
 function ProjectToolBar(props: {
   activeToolId: string;
-  availableTools: ReadonlyArray<{ id: string; kind: ProjectToolKind; label: string }>;
+  availableTools: ReadonlyArray<{
+    id: string;
+    kind: ProjectToolKind;
+    label: string;
+  }>;
   onSelectTool: (toolId: string) => void;
   onOpenSettings: () => void;
 }) {
@@ -1247,13 +1274,23 @@ function AgentsThreadList(props: {
       } else if (action === "settle") {
         await api.orchestration.dispatchCommand(
           thread.settledAt
-            ? { type: "thread.unsettle", commandId, threadId: thread.id, reason: "user" }
+            ? {
+                type: "thread.unsettle",
+                commandId,
+                threadId: thread.id,
+                reason: "user",
+              }
             : { type: "thread.settle", commandId, threadId: thread.id },
         );
       } else {
         await api.orchestration.dispatchCommand(
           isSnoozed(thread)
-            ? { type: "thread.unsnooze", commandId, threadId: thread.id, reason: "user" }
+            ? {
+                type: "thread.unsnooze",
+                commandId,
+                threadId: thread.id,
+                reason: "user",
+              }
             : {
                 type: "thread.snooze",
                 commandId,
@@ -1457,7 +1494,11 @@ function AgentsThreadList(props: {
     view,
   ]);
   const visibleThreads = threadSections.flatMap((section) =>
-    section.threads.map((thread, index) => ({ thread, section: section.name, first: index === 0 })),
+    section.threads.map((thread, index) => ({
+      thread,
+      section: section.name,
+      first: index === 0,
+    })),
   );
   const settledCount = activeThreads.filter((thread) =>
     isSettled(thread, thread.updatedAt ?? thread.createdAt),
@@ -3430,10 +3471,18 @@ function GitTool(props: {
   );
   const branchesQuery = useQuery(gitBranchesQueryOptions(project.cwd, project.environmentId));
   const gitInitMutation = useMutation(
-    gitInitMutationOptions({ cwd: project.cwd, queryClient, environmentId: project.environmentId }),
+    gitInitMutationOptions({
+      cwd: project.cwd,
+      queryClient,
+      environmentId: project.environmentId,
+    }),
   );
   const historyQuery = useQuery(
-    gitHistoryQueryOptions({ cwd: project.cwd, limit: 40, environmentId: project.environmentId }),
+    gitHistoryQueryOptions({
+      cwd: project.cwd,
+      limit: 40,
+      environmentId: project.environmentId,
+    }),
   );
   const stashQuery = useQuery(gitStashListQueryOptions(project.cwd, project.environmentId));
   const [branchDraft, setBranchDraft] = useState("");
@@ -3816,7 +3865,11 @@ function GitTool(props: {
   const branchDeleteMutation = useMutation({
     mutationFn: async (input: { branch: string; force?: boolean }) => {
       if (!api) throw new Error("Git API unavailable.");
-      await api.git.deleteBranch({ cwd: project.cwd, branch: input.branch, force: input.force });
+      await api.git.deleteBranch({
+        cwd: project.cwd,
+        branch: input.branch,
+        force: input.force,
+      });
       return input.branch;
     },
     onSuccess: async (branchName) => {
@@ -4192,7 +4245,9 @@ function GitTool(props: {
 
   const executeDiscardAll = useCallback(() => {
     if (!api) return;
-    emitGitWorkspaceTelemetry("git_advanced_action_executed", { action: "discard_all" });
+    emitGitWorkspaceTelemetry("git_advanced_action_executed", {
+      action: "discard_all",
+    });
     void runGitTask({
       id: "discard:all",
       title: "Could not discard all changes",
@@ -4247,7 +4302,9 @@ function GitTool(props: {
 
   const handleSaveStash = useCallback(() => {
     if (!api) return;
-    emitGitWorkspaceTelemetry("git_advanced_action_executed", { action: "stash_save" });
+    emitGitWorkspaceTelemetry("git_advanced_action_executed", {
+      action: "stash_save",
+    });
     void runGitTask({
       id: "stash:save",
       title: "Could not create stash",
@@ -4275,7 +4332,10 @@ function GitTool(props: {
       action: "delete_branch",
       branch: branchToolsBranch.name,
     });
-    branchDeleteMutation.mutate({ branch: branchToolsBranch.name, force: true });
+    branchDeleteMutation.mutate({
+      branch: branchToolsBranch.name,
+      force: true,
+    });
   }, [branchDeleteMutation, branchToolsBranch]);
 
   const handleDeleteBranch = useCallback(() => {
@@ -4413,7 +4473,11 @@ function GitTool(props: {
         successTitle: `Resolved ${files.length} conflict${files.length === 1 ? "" : "s"} with ${side}`,
         task: async () => {
           for (const file of files) {
-            await api.git.resolveConflict({ cwd: project.cwd, path: file.path, side });
+            await api.git.resolveConflict({
+              cwd: project.cwd,
+              path: file.path,
+              side,
+            });
           }
         },
       });
@@ -4438,7 +4502,10 @@ function GitTool(props: {
             contents: resolverDraft,
           });
           if (markResolved) {
-            await api.git.stageFiles({ cwd: project.cwd, paths: [trimmedPath] });
+            await api.git.stageFiles({
+              cwd: project.cwd,
+              paths: [trimmedPath],
+            });
           }
         },
         onSuccess: () => {
@@ -4665,7 +4732,9 @@ function GitTool(props: {
   useEffect(() => {
     if (gitWorkspaceMode !== "basic" || !blockingSwitchReason) return;
     setGitWorkspaceMode("advanced");
-    emitGitWorkspaceTelemetry("git_mode_auto_switched", { reason: blockingSwitchReason });
+    emitGitWorkspaceTelemetry("git_mode_auto_switched", {
+      reason: blockingSwitchReason,
+    });
   }, [blockingSwitchReason, gitWorkspaceMode]);
 
   const handleWorkspaceModeChange = useCallback((mode: GitWorkspaceMode) => {
@@ -6974,8 +7043,17 @@ function DesktopBrowserChrome(props: {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
+  const recordingSessionId = props.sessionId ?? props.sessionState.sessionId;
+  const [recordingBrowser, setRecordingBrowser] = useState(() =>
+    isNativeBrowserRecordingActive(props.projectId, recordingSessionId),
+  );
+  const [changingRecording, setChangingRecording] = useState(false);
   const [pickingElement, setPickingElement] = useState(false);
   const [pendingAnnotation, setPendingAnnotation] = useState<PreviewAnnotationPayload | null>(null);
+
+  useEffect(() => {
+    setRecordingBrowser(isNativeBrowserRecordingActive(props.projectId, recordingSessionId));
+  }, [props.projectId, recordingSessionId]);
 
   const sessionArg = props.sessionId
     ? { projectId: props.projectId, sessionId: props.sessionId }
@@ -7008,6 +7086,48 @@ function DesktopBrowserChrome(props: {
       setCapturingScreenshot(false);
     }
   }, [bridge, capturingScreenshot, props.projectId, props.sessionId]);
+  const toggleRecording = useCallback(async () => {
+    if (!bridge || changingRecording) return;
+    setChangingRecording(true);
+    try {
+      if (isNativeBrowserRecordingActive(props.projectId, recordingSessionId)) {
+        const artifact = await stopNativeBrowserRecording(
+          bridge,
+          props.projectId,
+          recordingSessionId,
+        );
+        setRecordingBrowser(false);
+        toastManager.add({
+          type: "success",
+          title: "Browser recording saved",
+          description: artifact.path,
+          actionProps: {
+            children: "Reveal in Finder",
+            onClick: () => void bridge.revealBrowserArtifact(artifact.path),
+          },
+        });
+      } else {
+        await startNativeBrowserRecording(bridge, props.projectId, recordingSessionId);
+        setRecordingBrowser(true);
+        toastManager.add({
+          type: "success",
+          title: "Browser recording started",
+          description: "Use Stop recording when you are finished.",
+        });
+      }
+    } catch (cause) {
+      setRecordingBrowser(isNativeBrowserRecordingActive(props.projectId, recordingSessionId));
+      toastManager.add({
+        type: "error",
+        title: recordingBrowser
+          ? "Could not stop browser recording"
+          : "Could not start browser recording",
+        description: cause instanceof Error ? cause.message : String(cause),
+      });
+    } finally {
+      setChangingRecording(false);
+    }
+  }, [bridge, changingRecording, props.projectId, recordingBrowser, recordingSessionId]);
   const pickElement = useCallback(async () => {
     if (!bridge || pickingElement) return;
     setPickingElement(true);
@@ -7102,6 +7222,27 @@ function DesktopBrowserChrome(props: {
               >
                 <CameraIcon className="size-3.5" />
                 {capturingScreenshot ? "Capturing…" : "Screenshot"}
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant={recordingBrowser ? "destructive" : "outline"}
+                disabled={changingRecording}
+                aria-pressed={recordingBrowser}
+                onClick={() => void toggleRecording()}
+              >
+                {recordingBrowser ? (
+                  <SquareIcon className="size-3.5" />
+                ) : (
+                  <RadioIcon className="size-3.5" />
+                )}
+                {changingRecording
+                  ? recordingBrowser
+                    ? "Stopping…"
+                    : "Starting…"
+                  : recordingBrowser
+                    ? "Stop recording"
+                    : "Record"}
               </Button>
               <Button
                 type="button"
@@ -7523,7 +7664,10 @@ function DesktopBrowserTool(props: {
       })
       .catch(() => undefined);
     void bridge
-      .getBrowserSessionState({ projectId: props.project.id, sessionId: "browser" })
+      .getBrowserSessionState({
+        projectId: props.project.id,
+        sessionId: "browser",
+      })
       .then((nextState) => {
         if (disposed || !nextState) return;
         setSessionState(nextState);
@@ -8108,7 +8252,9 @@ function EmbeddedBrowserTool(props: {
                 src={normalizedUrl}
                 sandbox="allow-downloads allow-forms allow-modals allow-popups allow-scripts"
                 className="h-full w-full bg-white"
-                style={{ visibility: viewportSelectorOpen ? "hidden" : "visible" }}
+                style={{
+                  visibility: viewportSelectorOpen ? "hidden" : "visible",
+                }}
                 onLoad={() => {
                   setLoading(false);
                   setEmbedBlocked(false);
@@ -8431,7 +8577,10 @@ function DesktopCustomEmbedTool(props: {
       })
       .catch(() => undefined);
     void bridge
-      .getBrowserSessionState({ projectId: props.project.id, sessionId: props.sessionId })
+      .getBrowserSessionState({
+        projectId: props.project.id,
+        sessionId: props.sessionId,
+      })
       .then((nextState) => {
         if (disposed || !nextState) return;
         setSessionState(nextState);
@@ -8994,7 +9143,12 @@ function CustomProcessTool(props: {
           height={props.terminalState.terminalHeight}
           terminalIds={[props.process.id]}
           activeTerminalId={props.process.id}
-          terminalGroups={[{ id: `group-${props.process.id}`, terminalIds: [props.process.id] }]}
+          terminalGroups={[
+            {
+              id: `group-${props.process.id}`,
+              terminalIds: [props.process.id],
+            },
+          ]}
           activeTerminalGroupId={`group-${props.process.id}`}
           focusRequestId={props.focusRequestId}
           onSplitTerminal={() => {}}
@@ -10552,7 +10706,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       if (targetThreadId && targetProject?.environmentId) {
         await navigate({
           to: "/$environmentId/$threadId",
-          params: { environmentId: targetProject.environmentId, threadId: targetThreadId },
+          params: {
+            environmentId: targetProject.environmentId,
+            threadId: targetThreadId,
+          },
         });
         return;
       }
@@ -10641,7 +10798,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         if (nextThreadId && activeProject.environmentId) {
           await navigate({
             to: "/$environmentId/$threadId",
-            params: { environmentId: activeProject.environmentId, threadId: nextThreadId },
+            params: {
+              environmentId: activeProject.environmentId,
+              threadId: nextThreadId,
+            },
           });
           return;
         }
@@ -10770,7 +10930,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   // Tool-switching shortcuts (cmd/ctrl+alt+1..9 → the Nth visible tool of the
   // active project), via menu accelerators so they work everywhere — including
   // inside the embedded editor/browser views.
-  const toolShortcutRef = useRef({ availableTools, switchTool: handleSelectTool });
+  const toolShortcutRef = useRef({
+    availableTools,
+    switchTool: handleSelectTool,
+  });
   toolShortcutRef.current = { availableTools, switchTool: handleSelectTool };
   useEffect(() => {
     const bridge = window.desktopBridge;
@@ -10964,7 +11127,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           ref: branchRef,
           version: trimmed,
         });
-        toastManager.add({ type: "success", title: `Release ${trimmed} dispatched` });
+        toastManager.add({
+          type: "success",
+          title: `Release ${trimmed} dispatched`,
+        });
       } catch (error) {
         toastManager.add({
           type: "error",
@@ -11084,7 +11250,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       }
       setShellTerminalFocusRequestId((value) => value + 1);
       try {
-        await api.terminal.open({ threadId: input.threadId, terminalId, cwd, env });
+        await api.terminal.open({
+          threadId: input.threadId,
+          terminalId,
+          cwd,
+          env,
+        });
         const runKey = `${input.threadId}:${terminalId}`;
         const isAlreadyRunningLocally = executedCommandsRef.current.has(runKey);
         const isAlreadyRunningRemotely =
@@ -11129,7 +11300,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       const isFinalTerminal = (input.terminalState?.terminalIds.length ?? 0) <= 1;
       const fallbackExitWrite = () =>
         api?.terminal
-          .write({ threadId: input.threadId, terminalId: input.terminalId, data: "exit\n" })
+          .write({
+            threadId: input.threadId,
+            terminalId: input.terminalId,
+            data: "exit\n",
+          })
           .catch(() => undefined) ?? Promise.resolve();
       if (api && "close" in api.terminal && typeof api.terminal.close === "function") {
         try {
@@ -11171,7 +11346,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               .clear({ threadId: serverThreadId, terminalId })
               .catch(() => undefined);
           }
-          await api.terminal.close({ threadId: serverThreadId, terminalId, deleteHistory: true });
+          await api.terminal.close({
+            threadId: serverThreadId,
+            terminalId,
+            deleteHistory: true,
+          });
         })().catch(() => fallbackExitWrite());
       } else {
         void fallbackExitWrite();
@@ -11188,8 +11367,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         return;
       }
       const fallbackExitWrite = () =>
-        api?.terminal.write({ threadId: serverThreadId, terminalId: processId, data: "exit\n" }) ??
-        Promise.resolve();
+        api?.terminal.write({
+          threadId: serverThreadId,
+          terminalId: processId,
+          data: "exit\n",
+        }) ?? Promise.resolve();
 
       try {
         if (api && "close" in api.terminal && typeof api.terminal.close === "function") {
@@ -11260,7 +11442,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         } else {
           if (process.previewUrl && activeProject?.id) {
             workspaceShellActions.setBrowserCurrentUrl(activeProject.id, process.previewUrl);
-            window.desktopBridge?.reloadBrowserSession({ projectId: activeProject.id });
+            window.desktopBridge?.reloadBrowserSession({
+              projectId: activeProject.id,
+            });
           }
           if (process.autoOpenPreview && activeProject?.id) {
             workspaceShellActions.setActiveTool(activeProject.id, "browser");
@@ -11362,12 +11546,19 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     await Promise.all(
       terminalIds.map(async (terminalId) => {
         const fallbackExitWrite = () =>
-          api?.terminal.write({ threadId: serverThreadId, terminalId, data: "exit\n" }) ??
-          Promise.resolve();
+          api?.terminal.write({
+            threadId: serverThreadId,
+            terminalId,
+            data: "exit\n",
+          }) ?? Promise.resolve();
 
         try {
           if (api && "close" in api.terminal && typeof api.terminal.close === "function") {
-            await api.terminal.close({ threadId: serverThreadId, terminalId, deleteHistory: true });
+            await api.terminal.close({
+              threadId: serverThreadId,
+              terminalId,
+              deleteHistory: true,
+            });
           } else {
             await fallbackExitWrite();
           }
