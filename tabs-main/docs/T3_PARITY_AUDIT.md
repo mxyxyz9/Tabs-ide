@@ -47,6 +47,10 @@ verification evidence, not just a matching type or placeholder.
       recording bytes as managed artifacts through the automation broker.
 - [x] Pop the live browser guest into an always-on-top picture-in-picture window without cloning
       its session, then restore the same `WebContentsView` to the active workspace on close.
+- [x] Clear cookies, cache, storage databases, file systems, and service workers for the exact
+      active browser partition from preview chrome, then reconnect and reload the live page.
+- [x] Recover crashed Chromium preview renderers with bounded exponential backoff, preserving the
+      session URL and partition while stopping after repeated failures instead of crash-looping.
 - [x] Emulate system, light, and dark page color schemes per live browser session and restore the
       selected media override after session recreation or a DevTools lifecycle.
 - [x] Add a native element picker with hover targeting, Escape cancellation, selector/HTML/style
@@ -103,6 +107,11 @@ an adapter over that engine.
       capture, multi-file aggregation, parse/failure summaries, and an accessible diagnostics view.
 - [x] Desktop self-update state machine, download/install actions, sidebar notification, and
       settings UI. Tabs retains its existing updater because it is already more complete.
+- [x] Version-keyed provider update notifications with restart-persistent dismissal, plus live
+      slow-RPC diagnostics that disappear when blocked requests acknowledge and remain dismissible.
+- [x] Remove the artificial multi-second startup splash hold while preserving a short anti-flash
+      window and 200 ms exit transition, and initialize native Code-OSS services outside the first
+      window's critical path with late registration of any already-created editor sessions.
 - [x] Cloud relay account and managed-server status UI parity, including sign-in/avatar state,
       refresh, availability, connect, account-switch cleanup, and server deregistration.
 - [x] Environment-aware themes and appearance synchronization with bounded server-published
