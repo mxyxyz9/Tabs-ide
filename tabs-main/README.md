@@ -110,6 +110,9 @@ You can also override detection with:
 - `TABS_CODE_OSS_BUILD_DIR`
   Absolute path to the local `tabs-code-main` checkout root
 
+The intentional integration boundary, upstream update workflow, and required
+regression coverage are documented in [Code-OSS parity contract](docs/code-oss-parity.md).
+
 ## Workspace folder layout expected by this repo
 
 A typical local layout now looks like:
