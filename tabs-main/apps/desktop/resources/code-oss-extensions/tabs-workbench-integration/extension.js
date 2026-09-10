@@ -32,9 +32,8 @@ const EMBED_CHROME_DEFAULTS = {
   "security.workspace.trust.enabled": false,
   // Don't nag about recommended extensions inside the embed.
   "extensions.ignoreRecommendations": true,
-  // The auxiliary bar starts hidden unless the selected AI provider needs it.
   // Ordinary editor preferences remain user-controlled, matching VS Code.
-  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  "workbench.secondarySideBar.defaultVisibility": "visible",
   "window.dialogStyle": "custom",
 };
 

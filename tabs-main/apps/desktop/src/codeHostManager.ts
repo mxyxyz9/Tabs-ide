@@ -344,8 +344,8 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   // startup. The outer shell controls whether Copilot's auxiliary bar is
   // visible without changing extension enablement.
   "chat.disableAIFeatures": false,
-  "chat.commandCenter.enabled": false,
-  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  "chat.commandCenter.enabled": true,
+  "workbench.secondarySideBar.defaultVisibility": "visible",
   // Open VSX signature archives are not Microsoft Marketplace repository
   // signatures. Some currently contain the Open VSX signature alongside an
   // empty legacy .signature.p7s, which Microsoft's verifier rejects before an
