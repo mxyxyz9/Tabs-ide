@@ -37,6 +37,7 @@ import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
 import { CommandPalette } from "../components/CommandPalette";
 import { NativePreviewAutomationHost } from "../components/NativePreviewAutomationHost";
 import { BackgroundActivityReporter } from "../components/BackgroundActivityReporter";
+import { ProviderUpdateNotification } from "../components/ProviderUpdateNotification";
 import {
   removeEnvironmentReadModelFromAtoms,
   setProjectExpandedInAtoms,
@@ -155,6 +156,7 @@ function FullAppRootView() {
           <RemoteEnvironmentEventRouter />
           <NativePreviewAutomationHost />
           <BackgroundActivityReporter />
+          <ProviderUpdateNotification />
           <DesktopProjectBootstrap />
           <CommandPalette>
             <Outlet />
@@ -178,7 +180,6 @@ function RootRouteView() {
   }
   return <FullAppRootView />;
 }
-
 
 function RootRouteErrorView({ error, reset }: ErrorComponentProps) {
   const message = errorMessage(error);

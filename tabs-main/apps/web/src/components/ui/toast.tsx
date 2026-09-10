@@ -25,6 +25,7 @@ type ThreadToastData = {
   threadId?: ThreadId | null;
   tooltipStyle?: boolean;
   dismissAfterVisibleMs?: number;
+  onClose?: () => void;
 };
 
 const toastManager = Toast.createToastManager<ThreadToastData>();
@@ -347,7 +348,12 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
                     {toast.actionProps.children}
                   </Toast.Action>
                 )}
-                <DismissToastButton onClick={() => toastManager.close(toast.id)} />
+                <DismissToastButton
+                  onClick={() => {
+                    toast.data?.onClose?.();
+                    toastManager.close(toast.id);
+                  }}
+                />
               </Toast.Content>
             </Toast.Root>
           );
@@ -442,7 +448,12 @@ function AnchoredToasts() {
                           {toast.actionProps.children}
                         </Toast.Action>
                       )}
-                      <DismissToastButton onClick={() => anchoredToastManager.close(toast.id)} />
+                      <DismissToastButton
+                        onClick={() => {
+                          toast.data?.onClose?.();
+                          anchoredToastManager.close(toast.id);
+                        }}
+                      />
                     </Toast.Content>
                   )}
                 </Toast.Root>
