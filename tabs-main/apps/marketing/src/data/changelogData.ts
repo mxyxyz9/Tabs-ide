@@ -21,15 +21,124 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 145;
+export const TOTAL_TAGS_COUNT = 146;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.3",
+    title: "Workspace skills, preview controls, and attachments",
+    date: "September 10, 2026",
+    shortDate: "Sep 10",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Workspace-specific skill discovery and dispatch, direct browser preview controls, file attachments, and progressive desktop startup stability.",
+    highlights: [
+      "Discover and dispatch directory-aware skills for Claude, Cursor, Codex, OpenCode, Antigravity, and Grok with ranked fuzzy search.",
+      "Added direct viewport resize handles, picture-in-picture, appearance emulation, and active session controls to the browser preview.",
+      "General file attachments in composer, persistent prompt stashing, and paste mention preservation.",
+      "Progressive Code-OSS workbench startup, secondary sidebar support, and multi-environment state isolation.",
+    ],
+    categories: [
+      {
+        title: "Skills & Slash Commands",
+        items: [
+          "Ranked skill search with source badges for app, repo, project, personal, and system skills.",
+          "Directory-aware skill snapshots and native provider dispatch planning.",
+        ],
+      },
+      {
+        title: "Browser & Preview",
+        items: [
+          "Direct viewport resize frame with responsive presets.",
+          "Theme appearance emulation, native picture-in-picture, and per-session audio controls.",
+        ],
+      },
+      {
+        title: "Composer & Desktop Stability",
+        items: [
+          "File attachments with provider upload support and persistent prompt stash.",
+          "Progressive Code-OSS startup, secondary sidebar support, and effect remount preservation.",
+        ],
+      },
+    ],
+    installers: [
+      {
+        platform: "macOS",
+        arch: "Apple Silicon (M1/M2/M3/M4)",
+        filename: "Tabs-1.3.3-arm64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.3/Tabs-1.3.3-arm64.dmg",
+      },
+      {
+        platform: "macOS",
+        arch: "Intel x64",
+        filename: "Tabs-1.3.3-x64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.3/Tabs-1.3.3-x64.dmg",
+      },
+      {
+        platform: "Windows",
+        arch: "x64 installer",
+        filename: "Tabs-1.3.3-x64.exe",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.3/Tabs-1.3.3-x64.exe",
+      },
+      {
+        platform: "Linux",
+        arch: "x64 AppImage",
+        filename: "Tabs-1.3.3-x86_64.AppImage",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.3/Tabs-1.3.3-x86_64.AppImage",
+      },
+    ],
+  },
+  {
+    tag: "v1.3.2",
+    title: "A steadier embedded editor",
+    date: "September 9, 2026",
+    shortDate: "Sep 9",
+    type: "patch",
+    summary:
+      "A stability release that makes the shipped desktop workspace and its release validation path more dependable.",
+    highlights: [
+      "Stabilized the embedded Code OSS host and its startup path in the desktop app.",
+      "Fixed a TypeScript declaration issue in the web application's atom registry so release validation can complete reliably.",
+    ],
+    categories: [
+      {
+        title: "Release scope",
+        items: ["This release does not add a new end-user workflow."],
+      },
+    ],
+    installers: [
+      {
+        platform: "macOS",
+        arch: "Apple Silicon (M1/M2/M3/M4)",
+        filename: "Tabs-1.3.2-arm64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.2/Tabs-1.3.2-arm64.dmg",
+      },
+      {
+        platform: "macOS",
+        arch: "Intel x64",
+        filename: "Tabs-1.3.2-x64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.2/Tabs-1.3.2-x64.dmg",
+      },
+      {
+        platform: "Windows",
+        arch: "x64 installer",
+        filename: "Tabs-1.3.2-x64.exe",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.2/Tabs-1.3.2-x64.exe",
+      },
+      {
+        platform: "Linux",
+        arch: "x64 AppImage",
+        filename: "Tabs-1.3.2-x86_64.AppImage",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.2/Tabs-1.3.2-x86_64.AppImage",
+      },
+    ],
+  },
   {
     tag: "v1.3.1",
     title: "Standalone installers and reliable updates",
     date: "September 5, 2026",
     shortDate: "Sep 5",
-    isLatest: true,
     type: "patch",
     summary:
       "Tabs now ships as a complete desktop installer for macOS, Windows, and Linux, with update manifests checked as part of every release.",

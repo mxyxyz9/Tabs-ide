@@ -1,3 +1,5 @@
+import { resolveReleaseNotes } from "../src/lib/release-note-content";
+
 const GITHUB_RELEASES_URL = "https://api.github.com/repos/mxyxyz9/Tabs-ide/releases";
 const RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
 
@@ -48,7 +50,7 @@ function sanitizeRelease(value: unknown) {
     name: release.name,
     html_url: release.html_url,
     published_at: release.published_at,
-    body: release.body,
+    body: resolveReleaseNotes(release.tag_name, release.body),
     assets,
   };
 }

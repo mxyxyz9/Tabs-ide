@@ -6,6 +6,7 @@ import {
   pickAsset,
   validateRelease,
 } from "../src/lib/releases";
+import { resolveReleaseNotes } from "../src/lib/release-note-content";
 const headers: Record<string, string> = {
   Accept: "application/vnd.github+json",
   "X-GitHub-Api-Version": "2022-11-28",
@@ -43,7 +44,7 @@ const sanitized = [latest, ...history].map((r) => ({
   tag_name: r.tag_name,
   name: r.name ?? r.tag_name,
   published_at: r.published_at,
-  body: r.body,
+  body: resolveReleaseNotes(r.tag_name, r.body),
   html_url: r.html_url,
   assets: r.assets.map((a) => ({ name: a.name, browser_download_url: a.browser_download_url })),
 }));

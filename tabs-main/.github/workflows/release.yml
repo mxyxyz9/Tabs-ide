@@ -56,6 +56,27 @@ jobs:
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify manual release notes
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes_file=".github/release-notes/${RELEASE_TAG}.md"
+          if [[ ! -s "$notes_file" ]]; then
+            echo "Missing manual release notes: $notes_file" >&2
+            exit 1
+          fi
+          note_lines="$(grep -Evc '^[[:space:]]*(#.*)?$' "$notes_file")"
+          if (( note_lines < 3 )); then
+            echo "Release notes must contain a headline and meaningful in-site copy." >&2
+            exit 1
+          fi
+          if grep -Eq '^\*\*Full Changelog\*\*:[[:space:]]*https?://' "$notes_file"; then
+            echo "A compare link alone is not a release note. Describe the shipped changes." >&2
+            exit 1
+          fi
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -303,7 +324,7 @@ jobs:
           tag_name: ${{ needs.preflight.outputs.tag }}
           target_commitish: ${{ needs.preflight.outputs.ref }}
           name: Tabs v${{ needs.preflight.outputs.version }}
-          generate_release_notes: true
+          body_path: .github/release-notes/${{ needs.preflight.outputs.tag }}.md
           prerelease: ${{ needs.preflight.outputs.is_prerelease }}
           make_latest: ${{ needs.preflight.outputs.make_latest }}
           files: |

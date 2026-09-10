@@ -31,9 +31,9 @@ import { RELEASES_URL } from "../../lib/releases";
     </div>
     <a class="hs-cl-latest-ticket" href={`#${changelogData[0].tag}`} data-latest-release-link>
       <span class="hs-cl-ticket-top"><span><i aria-hidden="true"></i> THE LATEST RELEASE</span><Icon name="ArrowDown" size={20} /></span>
-      <strong>{changelogData[0].tag}</strong>
+      <strong data-latest-release-tag>{changelogData[0].tag}</strong>
       <span class="hs-cl-ticket-title" data-latest-release-title>{changelogData[0].title}</span>
-      <span class="hs-cl-ticket-bottom"><time>{changelogData[0].date}</time><span>Explore the update ↗</span></span>
+      <span class="hs-cl-ticket-bottom"><time data-latest-release-date>{changelogData[0].date}</time><span>Explore the update ↗</span></span>
     </a>
   </section>
 

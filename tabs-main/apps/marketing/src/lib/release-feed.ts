@@ -1,4 +1,5 @@
 import { fetchAllReleases, pickAsset, type Platform, type Release } from "./releases";
+import { resolveReleaseNotes } from "./release-note-content";
 
 const downloadLabels: Record<Platform, [string, string]> = {
   "mac-arm64": ["macOS", "Apple Silicon"],
@@ -133,7 +134,7 @@ function buildReleaseCard(release: Release, isLatest: boolean) {
   trigger.append(plus, triggerText);
   summary.append(trigger);
   const notes = el("div", "hs-cl-details-content");
-  notes.append(renderNotes(release.body));
+  notes.append(renderNotes(resolveReleaseNotes(release.tag_name, release.body)));
   details.append(summary, notes);
   body.append(details);
   article.append(header, body);
@@ -181,6 +182,17 @@ export async function refreshReleaseFeed() {
     node.href = `#${releases[0]!.tag_name}`;
   });
   document
+    .querySelectorAll<HTMLElement>("[data-latest-release-tag]")
+    .forEach((node) => (node.textContent = releases[0]!.tag_name));
+  document
     .querySelectorAll<HTMLElement>("[data-latest-release-title]")
     .forEach((node) => (node.textContent = releases[0]!.name || releases[0]!.tag_name));
+  document.querySelectorAll<HTMLTimeElement>("[data-latest-release-date]").forEach((node) => {
+    node.dateTime = releases[0]!.published_at;
+    node.textContent = new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(releases[0]!.published_at));
+  });
 }
