@@ -38,6 +38,7 @@ import { CommandPalette } from "../components/CommandPalette";
 import { NativePreviewAutomationHost } from "../components/NativePreviewAutomationHost";
 import { BackgroundActivityReporter } from "../components/BackgroundActivityReporter";
 import { ProviderUpdateNotification } from "../components/ProviderUpdateNotification";
+import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import {
   removeEnvironmentReadModelFromAtoms,
   setProjectExpandedInAtoms,
@@ -157,6 +158,7 @@ function FullAppRootView() {
           <NativePreviewAutomationHost />
           <BackgroundActivityReporter />
           <ProviderUpdateNotification />
+          <SlowRpcRequestToastCoordinator />
           <DesktopProjectBootstrap />
           <CommandPalette>
             <Outlet />

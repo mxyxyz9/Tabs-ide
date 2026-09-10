@@ -8,6 +8,7 @@ import {
 } from "@tabs/contracts";
 import { decodeUnknownJsonResult, formatSchemaError } from "@tabs/shared/schemaJson";
 import { Result, Schema } from "effect";
+import { acknowledgeRpcRequest, trackRpcRequest } from "./rpc/requestLatencyState";
 
 type PushListener<C extends WsPushChannel> = (message: WsPushMessage<C>) => void;
 
@@ -141,6 +142,7 @@ export class WsTransport {
           ? null
           : setTimeout(() => {
               this.pending.delete(id);
+              acknowledgeRpcRequest(id);
               reject(new Error(`Request timed out: ${method}`));
             }, timeoutMs);
 
@@ -149,6 +151,8 @@ export class WsTransport {
         reject,
         timeout,
       });
+
+      if (timeoutMs !== null) trackRpcRequest(id, method);
 
       this.send(encoded);
     });
@@ -232,6 +236,7 @@ export class WsTransport {
       }
       pending.reject(new Error("Transport disposed"));
     }
+    for (const id of this.pending.keys()) acknowledgeRpcRequest(id);
     this.pending.clear();
     this.outboundQueue.length = 0;
     this.ws?.close();
@@ -333,6 +338,7 @@ export class WsTransport {
             clearTimeout(pending.timeout);
           }
           this.pending.delete(id);
+          acknowledgeRpcRequest(id);
           pending.reject(new Error("WebSocket connection closed."));
         }
       }
@@ -393,6 +399,7 @@ export class WsTransport {
       clearTimeout(pending.timeout);
     }
     this.pending.delete(message.id);
+    acknowledgeRpcRequest(message.id);
 
     if (message.error) {
       const err = new Error(message.error.message);
