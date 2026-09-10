@@ -23,17 +23,34 @@ export class NotificationService extends Disposable implements INotificationServ
 	) {
 		super();
 
+		// Tabs hosts each project in an isolated application storage root while
+		// sharing the user's Code-OSS profile. Notification preferences are user
+		// preferences, so profile scope keeps Do Not Disturb consistent across
+		// projects without sharing workspace/session state. Fall back to the old
+		// application-scoped values once so existing preferences are preserved.
+		const profileSourceFilters = this.storageService.getObject<INotificationSourceFilter[]>(NotificationService.PER_SOURCE_FILTER_SETTINGS_KEY, StorageScope.PROFILE);
+		const applicationSourceFilters = this.storageService.getObject<INotificationSourceFilter[]>(NotificationService.PER_SOURCE_FILTER_SETTINGS_KEY, StorageScope.APPLICATION);
+		const sourceFilters = profileSourceFilters ?? applicationSourceFilters ?? [];
+		if (!profileSourceFilters && applicationSourceFilters) {
+			this.storageService.store(NotificationService.PER_SOURCE_FILTER_SETTINGS_KEY, JSON.stringify(applicationSourceFilters), StorageScope.PROFILE, StorageTarget.MACHINE);
+		}
+
 		this.mapSourceToFilter = (() => {
 			const map = new Map<string, INotificationSourceFilter>();
 
-			for (const sourceFilter of this.storageService.getObject<INotificationSourceFilter[]>(NotificationService.PER_SOURCE_FILTER_SETTINGS_KEY, StorageScope.APPLICATION, [])) {
+			for (const sourceFilter of sourceFilters) {
 				map.set(sourceFilter.id, sourceFilter);
 			}
 
 			return map;
 		})();
 
-		this.globalFilterEnabled = this.storageService.getBoolean(NotificationService.GLOBAL_FILTER_SETTINGS_KEY, StorageScope.APPLICATION, false);
+		const profileGlobalFilter = this.storageService.getBoolean(NotificationService.GLOBAL_FILTER_SETTINGS_KEY, StorageScope.PROFILE);
+		const applicationGlobalFilter = this.storageService.getBoolean(NotificationService.GLOBAL_FILTER_SETTINGS_KEY, StorageScope.APPLICATION);
+		this.globalFilterEnabled = profileGlobalFilter ?? applicationGlobalFilter ?? false;
+		if (profileGlobalFilter === undefined && applicationGlobalFilter !== undefined) {
+			this.storageService.store(NotificationService.GLOBAL_FILTER_SETTINGS_KEY, applicationGlobalFilter, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}
 
 		this.updateFilters();
 		this.registerListeners();
@@ -82,7 +99,7 @@ export class NotificationService extends Disposable implements INotificationServ
 
 			// Store into model and persist
 			this.globalFilterEnabled = filter === NotificationsFilter.ERROR;
-			this.storageService.store(NotificationService.GLOBAL_FILTER_SETTINGS_KEY, this.globalFilterEnabled, StorageScope.APPLICATION, StorageTarget.MACHINE);
+			this.storageService.store(NotificationService.GLOBAL_FILTER_SETTINGS_KEY, this.globalFilterEnabled, StorageScope.PROFILE, StorageTarget.MACHINE);
 
 			// Update model
 			this.updateFilters();
@@ -126,7 +143,7 @@ export class NotificationService extends Disposable implements INotificationServ
 	}
 
 	private saveSourceFilters(): void {
-		this.storageService.store(NotificationService.PER_SOURCE_FILTER_SETTINGS_KEY, JSON.stringify([...this.mapSourceToFilter.values()]), StorageScope.APPLICATION, StorageTarget.MACHINE);
+		this.storageService.store(NotificationService.PER_SOURCE_FILTER_SETTINGS_KEY, JSON.stringify([...this.mapSourceToFilter.values()]), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
 	getFilters(): INotificationSourceFilter[] {
