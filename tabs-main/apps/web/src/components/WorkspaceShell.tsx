@@ -7090,8 +7090,22 @@ function DesktopBrowserChrome(props: {
         title: "Browser screenshot saved",
         description: artifact.path,
         actionProps: {
-          children: "Reveal in Finder",
-          onClick: () => void bridge.revealBrowserArtifact(artifact.path),
+          children: "Copy image",
+          onClick: () => {
+            void bridge.copyBrowserArtifactToClipboard(artifact.path).then(
+              () =>
+                toastManager.add({
+                  type: "success",
+                  title: "Screenshot copied",
+                }),
+              (cause) =>
+                toastManager.add({
+                  type: "error",
+                  title: "Could not copy screenshot",
+                  description: cause instanceof Error ? cause.message : String(cause),
+                }),
+            );
+          },
         },
       });
     } catch (cause) {
