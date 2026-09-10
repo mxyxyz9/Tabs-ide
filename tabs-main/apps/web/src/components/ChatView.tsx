@@ -22,6 +22,7 @@ import {
   RuntimeMode,
   DEFAULT_MODEL,
   type ServerProviderModel,
+  type ServerProviderSlashCommand,
   type ProviderOptionSelection,
   type PreviewAnnotationPayload,
   type ServerProviderSkill,
@@ -299,6 +300,8 @@ const EMPTY_AVAILABLE_EDITORS: EditorId[] = [];
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
+const EMPTY_PROVIDER_SKILLS: ServerProviderSkill[] = [];
+const EMPTY_PROVIDER_SLASH_COMMANDS: ServerProviderSlashCommand[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 
 function formatOutgoingPrompt(params: {
@@ -1437,8 +1440,9 @@ export default function ChatView({
   )
     ? activeProviderStatus
     : null;
-  const selectedProviderSkills = activeProviderStatus?.skills ?? [];
-  const selectedProviderSlashCommands = activeProviderStatus?.slashCommands ?? [];
+  const selectedProviderSkills = activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS;
+  const selectedProviderSlashCommands =
+    activeProviderStatus?.slashCommands ?? EMPTY_PROVIDER_SLASH_COMMANDS;
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       environmentId: activeProject?.environmentId,

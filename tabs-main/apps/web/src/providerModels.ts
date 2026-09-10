@@ -25,6 +25,8 @@ const EMPTY_CAPABILITIES: ModelCapabilities = {
   optionDescriptors: [],
 };
 
+const EMPTY_PROVIDER_MODELS: ReadonlyArray<ServerProviderModel> = [];
+
 const DEFAULT_FALLBACK_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [
     {
@@ -167,7 +169,7 @@ export function getProviderModels(
   if (snapshot) {
     return snapshot.models;
   }
-  return FALLBACK_BUILTIN_MODELS_BY_PROVIDER[provider] ?? [];
+  return FALLBACK_BUILTIN_MODELS_BY_PROVIDER[provider] ?? EMPTY_PROVIDER_MODELS;
 }
 
 export function getProviderSnapshot(
