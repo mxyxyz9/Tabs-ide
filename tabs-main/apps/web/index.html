@@ -39,7 +39,13 @@
     <title>Tabs</title>
   </head>
   <body style="margin: 0; background: inherit">
-    <div id="root"></div>
+    <div
+      id="root"
+      aria-busy="true"
+      style="min-height: 100vh; display: grid; place-items: center; color: #888; font: 13px system-ui"
+    >
+      Starting Tabs…
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
