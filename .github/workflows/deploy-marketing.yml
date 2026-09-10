@@ -76,4 +76,12 @@ jobs:
           mkdir -p ../../../.vercel
           cp -r .vercel/output ../../../.vercel/output
       - name: Deploy production
-        run: bunx vercel@59.11.7 deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+        shell: bash
+        run: |
+          deployment_output="$(bunx vercel@59.11.7 deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN")"
+          echo "$deployment_output"
+          deployment_url="$(echo "$deployment_output" | grep -oE 'https://[a-zA-Z0-9.-]+\.vercel\.app' | head -n 1)"
+          if [[ -n "$deployment_url" ]]; then
+            echo "Aliasing $deployment_url to tabside.vercel.app"
+            bunx vercel@59.11.7 alias set "$deployment_url" tabside.vercel.app --token "$VERCEL_TOKEN" || true
+          fi
