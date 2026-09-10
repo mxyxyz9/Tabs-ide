@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildInlineSkillInstructions,
+  resolveInvokedSkillReferences,
   shouldInlineSkillForProvider,
 } from "./skillPromptInjection.ts";
 
@@ -20,6 +21,26 @@ const codexSkillPath = "/Users/me/.codex/skills/reviewer/SKILL.md";
 const claudeSkillPath = "/Users/me/.claude/skills/reviewer/SKILL.md";
 const cursorSkillPath = "/Users/me/.cursor/skills/reviewer/SKILL.md";
 const piSkillPath = "/Users/me/.pi/agent/skills/reviewer/SKILL.md";
+
+describe("resolveInvokedSkillReferences", () => {
+  const catalog = [
+    { name: "reviewer", path: codexSkillPath, enabled: true },
+    { name: "release:notes", path: claudeSkillPath, enabled: true },
+    { name: "disabled", path: cursorSkillPath, enabled: false },
+  ];
+
+  it("resolves known enabled skill tokens once and ignores shell variables", () => {
+    expect(
+      resolveInvokedSkillReferences(
+        "Use $reviewer and ($release:notes), then $reviewer; leave $HOME alone and skip $disabled.",
+        catalog,
+      ),
+    ).toEqual([
+      { name: "reviewer", path: codexSkillPath },
+      { name: "release:notes", path: claudeSkillPath },
+    ]);
+  });
+});
 
 describe("shouldInlineSkillForProvider", () => {
   it("skips codex-native and synara roots for codex but inlines foreign provider roots", () => {

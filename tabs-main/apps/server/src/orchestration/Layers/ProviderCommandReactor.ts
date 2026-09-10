@@ -25,6 +25,12 @@ import {
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { ServerConfig } from "../../config.ts";
+import { discoverSkillsCatalog } from "../../provider/skillsCatalog.ts";
+import {
+  buildInlineSkillInstructions,
+  resolveInvokedSkillReferences,
+} from "../../provider/skillPromptInjection.ts";
 
 type ProviderIntentEvent = Extract<
   OrchestrationEvent,
@@ -72,6 +78,7 @@ const serverCommandId = (tag: string): CommandId =>
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
+const MAX_INLINE_SKILL_INSTRUCTIONS_CHARS = 96_000;
 const WORKTREE_BRANCH_PREFIX = "tabs";
 const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(`^${WORKTREE_BRANCH_PREFIX}\\/[0-9a-f]{8}$`);
 
@@ -139,6 +146,7 @@ const make = Effect.gen(function* () {
   const git = yield* GitCore;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+  const serverConfig = yield* ServerConfig;
   const handledTurnStartKeys = yield* Cache.make<string, true>({
     capacity: HANDLED_TURN_START_KEY_MAX,
     timeToLive: HANDLED_TURN_START_KEY_TTL,
@@ -396,6 +404,33 @@ const make = Effect.gen(function* () {
       .pipe(
         Effect.map((sessions) => sessions.find((session) => session.threadId === input.threadId)),
       );
+    let providerInput = normalizedInput;
+    if (normalizedInput?.includes("$") && activeSession) {
+      const project = yield* resolveProject(thread.projectId);
+      const cwd = resolveThreadWorkspaceCwd({
+        thread,
+        projects: project ? [project] : [],
+      });
+      const catalog = yield* Effect.promise(() =>
+        discoverSkillsCatalog({
+          ...(cwd ? { cwd } : {}),
+          homeDir: process.env.HOME ?? process.cwd(),
+          synaraBaseDir: serverConfig.baseDir,
+          provider: activeSession.provider,
+        }),
+      );
+      const invokedSkills = resolveInvokedSkillReferences(normalizedInput, catalog);
+      if (invokedSkills.length > 0) {
+        const inlineInstructions = yield* Effect.promise(() =>
+          buildInlineSkillInstructions({
+            provider: activeSession.provider,
+            skills: invokedSkills,
+            maxChars: MAX_INLINE_SKILL_INSTRUCTIONS_CHARS,
+          }),
+        );
+        if (inlineInstructions) providerInput = `${normalizedInput}\n\n${inlineInstructions}`;
+      }
+    }
     const sessionModelSwitch =
       activeSession === undefined
         ? "in-session"
@@ -416,7 +451,7 @@ const make = Effect.gen(function* () {
 
     yield* providerService.sendTurn({
       threadId: input.threadId,
-      ...(normalizedInput ? { input: normalizedInput } : {}),
+      ...(providerInput ? { input: providerInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),

@@ -23,7 +23,13 @@ import {
   type ServerProviderModel,
   type ProviderOptionSelection,
   type PreviewAnnotationPayload,
+  type ServerProviderSkill,
 } from "@tabs/contracts";
+import {
+  formatProviderSkillDisplayName,
+  getProviderSkillsForSlashMenu,
+  getProviderSlashCommandsForSlashMenu,
+} from "@tabs/client-runtime/providerSkills";
 import {
   applyClaudePromptEffortPrefix,
   isClaudeUltrathinkPrompt,
@@ -1305,6 +1311,15 @@ export default function ChatView({
       ),
     [lockedProvider, modelOptionsByProvider],
   );
+  const activeProviderStatus = useMemo(
+    () =>
+      providerStatuses.find(
+        (status) => status.instanceId === selectedProvider || status.driver === selectedProvider,
+      ) ?? null,
+    [selectedProvider, providerStatuses],
+  );
+  const selectedProviderSkills = activeProviderStatus?.skills ?? [];
+  const selectedProviderSlashCommands = activeProviderStatus?.slashCommands ?? [];
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       environmentId: activeProject?.environmentId,
@@ -1354,13 +1369,53 @@ export default function ChatView({
           description: "Switch this thread back to normal chat mode",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
+      const skills = getProviderSkillsForSlashMenu(selectedProviderSkills);
+      const providerCommands = getProviderSlashCommandsForSlashMenu(
+        selectedProviderSlashCommands,
+        skills,
+      ).map((command) => ({
+        id: `provider-slash-command:${selectedProvider}:${command.name}`,
+        type: "provider-slash-command" as const,
+        command,
+        label: `/${command.name}`,
+        description: command.description ?? command.input?.hint ?? "Run provider command",
+      }));
+      const skillItems = skills.map((skill) => ({
+        id: `skill:${selectedProvider}:${skill.name}`,
+        type: "skill" as const,
+        skill,
+        label: `/skill:${skill.name}`,
+        description: skill.shortDescription ?? skill.description ?? "Run provider skill",
+      }));
       const query = composerTrigger.query.trim().toLowerCase();
-      if (!query) {
-        return [...slashCommandItems];
-      }
-      return slashCommandItems.filter(
-        (item) => item.command.includes(query) || item.label.slice(1).includes(query),
-      );
+      return [...slashCommandItems, ...providerCommands, ...skillItems].filter((item) => {
+        if (!query) return true;
+        return (
+          item.label.toLowerCase().includes(query) || item.description.toLowerCase().includes(query)
+        );
+      });
+    }
+
+    if (composerTrigger.kind === "skill") {
+      const query = composerTrigger.query.trim().toLowerCase();
+      return getProviderSkillsForSlashMenu(selectedProviderSkills)
+        .filter((skill) => {
+          if (!query) return true;
+          return [
+            skill.name,
+            skill.displayName,
+            skill.shortDescription,
+            skill.description,
+            skill.scope,
+          ].some((value) => value?.toLowerCase().includes(query));
+        })
+        .map((skill: ServerProviderSkill) => ({
+          id: `skill:${selectedProvider}:${skill.name}`,
+          type: "skill" as const,
+          skill,
+          label: formatProviderSkillDisplayName(skill),
+          description: skill.shortDescription ?? skill.description ?? "Run provider skill",
+        }));
     }
 
     return searchableModelOptions
@@ -1379,7 +1434,14 @@ export default function ChatView({
         label: name,
         description: `${providerLabel} · ${slug}`,
       }));
-  }, [composerTrigger, searchableModelOptions, workspaceEntries]);
+  }, [
+    composerTrigger,
+    searchableModelOptions,
+    selectedProvider,
+    selectedProviderSkills,
+    selectedProviderSlashCommands,
+    workspaceEntries,
+  ]);
   const composerMenuOpen = Boolean(composerTrigger);
   const activeComposerMenuItem = useMemo(
     () =>
@@ -1394,10 +1456,6 @@ export default function ChatView({
   const nonPersistedComposerImageIdSet = useMemo(
     () => new Set(nonPersistedComposerImageIds),
     [nonPersistedComposerImageIds],
-  );
-  const activeProviderStatus = useMemo(
-    () => providerStatuses.find((status) => status.instanceId === selectedProvider) ?? null,
-    [selectedProvider, providerStatuses],
   );
   const activeProjectCwd = activeProject?.cwd ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
@@ -2384,7 +2442,9 @@ export default function ChatView({
           .catch((error: unknown) => {
             toastManager.add({
               type: "error",
-              title: activeThreadIsSettled ? "Could not unsettle thread" : "Could not settle thread",
+              title: activeThreadIsSettled
+                ? "Could not unsettle thread"
+                : "Could not settle thread",
               description: error instanceof Error ? error.message : "The thread action failed.",
             });
           });
@@ -3770,6 +3830,38 @@ export default function ChatView({
         }
         return;
       }
+      if (item.type === "provider-slash-command") {
+        const replacement = `/${item.command.name} `;
+        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+          snapshot.value,
+          trigger.rangeEnd,
+          replacement,
+        );
+        if (
+          applyPromptReplacement(trigger.rangeStart, replacementRangeEnd, replacement, {
+            expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+          })
+        ) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
+      if (item.type === "skill") {
+        const replacement = `$${item.skill.name} `;
+        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+          snapshot.value,
+          trigger.rangeEnd,
+          replacement,
+        );
+        if (
+          applyPromptReplacement(trigger.rangeStart, replacementRangeEnd, replacement, {
+            expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+          })
+        ) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
       onProviderModelSelect(item.provider, item.model);
       const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
         expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
@@ -4769,10 +4861,7 @@ export default function ChatView({
       })()}
 
       {expandedImage && (
-        <ExpandedImageDialog
-          preview={expandedImage}
-          onClose={closeExpandedImage}
-        />
+        <ExpandedImageDialog preview={expandedImage} onClose={closeExpandedImage} />
       )}
       {confirmDialog}
     </div>

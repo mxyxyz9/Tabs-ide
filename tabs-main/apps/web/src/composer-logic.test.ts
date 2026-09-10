@@ -12,6 +12,16 @@ import {
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 describe("detectComposerTrigger", () => {
+  it("detects a skill trigger at the cursor", () => {
+    const text = "Use $review";
+    expect(detectComposerTrigger(text, text.length)).toEqual({
+      kind: "skill",
+      query: "review",
+      rangeStart: "Use ".length,
+      rangeEnd: text.length,
+    });
+  });
+
   it("detects @path trigger at cursor", () => {
     const text = "Please check @src/com";
     const trigger = detectComposerTrigger(text, text.length);

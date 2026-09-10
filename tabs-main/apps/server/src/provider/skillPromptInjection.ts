@@ -8,7 +8,11 @@
 import * as fs from "node:fs/promises";
 import * as nodePath from "node:path";
 
-import type { ProviderDriverKind, ProviderSkillReference } from "@tabs/contracts";
+import type {
+  ProviderDriverKind,
+  ProviderSkillDescriptor,
+  ProviderSkillReference,
+} from "@tabs/contracts";
 
 // Per-skill cap keeps a single oversized SKILL.md from eating the turn budget.
 const MAX_INLINE_SKILL_CONTENT_CHARS = 24_000;
@@ -25,6 +29,31 @@ const CROSS_PROVIDER_SKILL_DIR_NAMES = [
   ".claude",
   ".agents",
 ] as const;
+
+const SKILL_REFERENCE_PATTERN = /(?:^|[\s([{])\$([A-Za-z0-9][A-Za-z0-9_.:-]*)/gu;
+
+/** Resolve only explicit `$name` tokens that exist in the active catalog. */
+export function resolveInvokedSkillReferences(
+  prompt: string,
+  catalog: ReadonlyArray<ProviderSkillDescriptor>,
+): ProviderSkillReference[] {
+  const byName = new Map(
+    catalog
+      .filter((skill) => skill.enabled)
+      .map((skill) => [skill.name.trim().toLowerCase(), skill] as const),
+  );
+  const seen = new Set<string>();
+  const references: ProviderSkillReference[] = [];
+  for (const match of prompt.matchAll(SKILL_REFERENCE_PATTERN)) {
+    const requestedName = match[1]?.toLowerCase();
+    if (!requestedName || seen.has(requestedName)) continue;
+    const skill = byName.get(requestedName);
+    if (!skill) continue;
+    seen.add(requestedName);
+    references.push({ name: skill.name, path: skill.path });
+  }
+  return references;
+}
 
 function pathSegments(path: string): Set<string> {
   return new Set(nodePath.normalize(path).split(/[\\/]+/));

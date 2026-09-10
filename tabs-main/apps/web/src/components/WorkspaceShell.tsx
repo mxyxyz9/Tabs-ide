@@ -6989,11 +6989,14 @@ function DesktopBrowserChrome(props: {
           ? { projectId: props.projectId, sessionId: props.sessionId }
           : { projectId: props.projectId },
       );
-      await bridge.revealBrowserArtifact(artifact.path);
       toastManager.add({
         type: "success",
         title: "Browser screenshot saved",
         description: artifact.path,
+        actionProps: {
+          children: "Reveal in Finder",
+          onClick: () => void bridge.revealBrowserArtifact(artifact.path),
+        },
       });
     } catch (cause) {
       toastManager.add({
