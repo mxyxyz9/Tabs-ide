@@ -268,6 +268,21 @@ describe("composerDraftStore syncPersistedAttachments", () => {
     removeLocalStorageItem(COMPOSER_DRAFT_STORAGE_KEY);
   });
 
+  it("does not publish another update when persisted attachment state is already empty", () => {
+    const store = useComposerDraftStore.getState();
+    store.setPrompt(threadId, "keep this draft");
+    const listener = vi.fn();
+    const unsubscribe = useComposerDraftStore.subscribe(listener);
+
+    store.clearPersistedAttachments(threadId);
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]?.prompt).toBe(
+      "keep this draft",
+    );
+    unsubscribe();
+  });
+
   it("treats malformed persisted draft storage as empty", async () => {
     const image = makeImage({
       id: "img-persisted",
