@@ -96,6 +96,10 @@ export const AiProvider = Schema.Literals(["tabs", "copilot"]);
 export type AiProvider = typeof AiProvider.Type;
 export const DEFAULT_AI_PROVIDER: AiProvider = "copilot";
 
+export const BrowserLinkTarget = Schema.Literals(["system", "app"]);
+export type BrowserLinkTarget = typeof BrowserLinkTarget.Type;
+export const DEFAULT_BROWSER_LINK_TARGET: BrowserLinkTarget = "system";
+
 export const BrowserProfileDefinition = Schema.Struct({
   id: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
@@ -120,6 +124,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   browserProfiles: Schema.Array(BrowserProfileDefinition).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_PROFILES)),
+  ),
+  browserLinkTarget: BrowserLinkTarget.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_LINK_TARGET)),
   ),
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1131,6 +1138,7 @@ export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 export const ClientSettingsPatch = Schema.Struct({
   toolbarStyle: Schema.optionalKey(ToolbarStyle),
   desktopIconTheme: Schema.optionalKey(DesktopIconTheme),
+  browserLinkTarget: Schema.optionalKey(BrowserLinkTarget),
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),

@@ -1,4 +1,8 @@
-import { type BrowserProfileDefinition } from "@tabs/contracts/settings";
+import {
+  DEFAULT_BROWSER_LINK_TARGET,
+  type BrowserLinkTarget,
+  type BrowserProfileDefinition,
+} from "@tabs/contracts/settings";
 import { type BrowserProfileDomainInfo } from "@tabs/contracts";
 import {
   FingerprintIcon,
@@ -411,6 +415,32 @@ export function BrowserProfilesSettings() {
           Create Profile
         </Button>
       </div>
+
+      <Card className="border border-border/70 bg-card shadow-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ExternalLinkIcon className="size-4" />
+            Open links in
+          </CardTitle>
+          <CardDescription>
+            Choose where links from chat open. Hold Command or Control while clicking to always use
+            your system browser.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <select
+            aria-label="Open chat links in"
+            className="h-9 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm"
+            value={settings.browserLinkTarget ?? DEFAULT_BROWSER_LINK_TARGET}
+            onChange={(event) =>
+              updateSettings({ browserLinkTarget: event.target.value as BrowserLinkTarget })
+            }
+          >
+            <option value="system">Default system browser</option>
+            <option value="app">Tabs integrated browser</option>
+          </select>
+        </CardContent>
+      </Card>
 
       {!hasNamedProfileAssignments ? (
         <div

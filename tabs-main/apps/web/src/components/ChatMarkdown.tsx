@@ -38,6 +38,9 @@ import { useTheme } from "../hooks/useTheme";
 import { remarkGithubAlerts } from "../markdown-github-alerts";
 import { resolveMarkdownFileLinkTarget } from "../markdown-links";
 import { readNativeApi } from "../nativeApi";
+import { useSettings } from "../hooks/useSettings";
+import { useWorkspaceActiveProjectId } from "../state/workspaceShell";
+import { openLinkInIntegratedBrowser, resolveBrowserLinkTarget } from "../browserLinkTarget";
 
 class CodeHighlightErrorBoundary extends React.Component<
   { fallback: ReactNode; children: ReactNode },
@@ -400,6 +403,8 @@ function SuspenseShikiCodeBlock({
 
 function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
   const { resolvedTheme } = useTheme();
+  const browserLinkTarget = useSettings((settings) => settings.browserLinkTarget);
+  const activeProjectId = useWorkspaceActiveProjectId();
   const diffThemeName = resolveDiffThemeName(resolvedTheme);
   const markdownComponents = useMemo<Components>(
     () => ({
@@ -432,7 +437,28 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
       a({ node: _node, href, ...props }) {
         const targetPath = resolveMarkdownFileLinkTarget(href, cwd);
         if (!targetPath) {
-          return <a {...props} href={href} target="_blank" rel="noreferrer" />;
+          return (
+            <a
+              {...props}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => {
+                if (!href) return;
+                const target = resolveBrowserLinkTarget({
+                  url: href,
+                  preference: browserLinkTarget,
+                  projectId: activeProjectId,
+                  metaKey: event.metaKey,
+                  ctrlKey: event.ctrlKey,
+                });
+                if (target !== "app" || !activeProjectId) return;
+                event.preventDefault();
+                event.stopPropagation();
+                openLinkInIntegratedBrowser(activeProjectId, href);
+              }}
+            />
+          );
         }
 
         return (
@@ -476,7 +502,7 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
         );
       },
     }),
-    [cwd, diffThemeName, isStreaming],
+    [activeProjectId, browserLinkTarget, cwd, diffThemeName, isStreaming],
   );
 
   return (
