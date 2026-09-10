@@ -45,6 +45,7 @@
     "playwright": "^1.61.1",
     "typescript": "catalog:",
     "ws": "^8.21.0",
+    "yaml": "^2.9.0",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
