@@ -1,5 +1,5 @@
 import type { DesktopSshPasswordPromptRequest } from "@tabs/contracts";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
@@ -46,6 +46,11 @@ import {
 } from "~/connection/environmentApiRegistry";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { ManagedCloudConnections } from "./ManagedCloudConnections";
+import {
+  validateRemoteHost,
+  validateSshPort,
+  validateSshTarget,
+} from "~/connection/connectionInputValidation";
 
 interface TailscaleStatus {
   available: boolean;
@@ -83,6 +88,7 @@ export function ConnectionsSettings() {
     () => new Set(connectedEnvironmentIds()),
   );
   const [isSavingConnection, setIsSavingConnection] = useState(false);
+  const connectionInFlightRef = useRef(false);
   const [sshPasswordPrompts, setSshPasswordPrompts] = useState<
     readonly DesktopSshPasswordPromptRequest[]
   >([]);
@@ -161,6 +167,20 @@ export function ConnectionsSettings() {
   };
 
   const handleAddEnvironment = async () => {
+    if (connectionInFlightRef.current) return;
+    const validationError =
+      addMode === "remote"
+        ? validateRemoteHost(remoteHost) || (!pairingCode.trim() ? "Enter the pairing code." : null)
+        : validateSshTarget(sshHost) || validateSshPort(sshPort);
+    if (validationError) {
+      toastManager.add({
+        type: "error",
+        title: "Check connection details",
+        description: validationError,
+      });
+      return;
+    }
+    connectionInFlightRef.current = true;
     setIsSavingConnection(true);
     try {
       if (addMode === "remote") {
@@ -173,7 +193,7 @@ export function ConnectionsSettings() {
           alias: sshHost,
           hostname,
           username,
-          port: Number.parseInt(sshPort, 10) || 22,
+          port: Number.parseInt(sshPort, 10),
         });
       }
       setSavedConnections(await listManualConnections());
@@ -193,6 +213,7 @@ export function ConnectionsSettings() {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
+      connectionInFlightRef.current = false;
       setIsSavingConnection(false);
     }
   };
@@ -776,6 +797,8 @@ export function ConnectionsSettings() {
                               Backend Host Address
                             </label>
                             <Input
+                              aria-label="Remote backend address"
+                              aria-required="true"
                               value={remoteHost}
                               onChange={(e) => setRemoteHost(e.target.value)}
                               placeholder="e.g. https://my-server.tailnet.ts.net"
@@ -791,6 +814,8 @@ export function ConnectionsSettings() {
                               Pairing Code
                             </label>
                             <Input
+                              aria-label="Pairing code"
+                              aria-required="true"
                               type="password"
                               value={pairingCode}
                               onChange={(e) => setPairingCode(e.target.value)}
@@ -810,6 +835,8 @@ export function ConnectionsSettings() {
                                 SSH Host / Alias
                               </label>
                               <Input
+                                aria-label="SSH host or alias"
+                                aria-required="true"
                                 value={sshHost}
                                 onChange={(e) => setSshHost(e.target.value)}
                                 placeholder="e.g. user@hostname"
@@ -819,8 +846,11 @@ export function ConnectionsSettings() {
                             <div className="space-y-1">
                               <label className="text-xs font-semibold text-foreground">Port</label>
                               <Input
+                                aria-label="SSH port"
+                                aria-required="true"
+                                inputMode="numeric"
                                 value={sshPort}
-                                disabled
+                                onChange={(event) => setSshPort(event.target.value)}
                                 placeholder="22"
                                 className="text-xs h-9 bg-background/50"
                               />
@@ -848,7 +878,10 @@ export function ConnectionsSettings() {
                           onClick={handleAddEnvironment}
                           disabled={
                             isSavingConnection ||
-                            (addMode === "remote" ? !remoteHost || !pairingCode : !sshHost)
+                            (addMode === "remote"
+                              ? validateRemoteHost(remoteHost) !== null || !pairingCode.trim()
+                              : validateSshTarget(sshHost) !== null ||
+                                validateSshPort(sshPort) !== null)
                           }
                           className="text-xs h-8 font-semibold"
                         >
