@@ -246,7 +246,6 @@ const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 const LOG_DIR = Path.join(STATE_DIR, "logs");
 const DEV_DESKTOP_LOG_PATH = Path.join(STATE_DIR, "desktop-dev.log");
-const SLIDER_DEBUG_LOG_PATH = Path.join(process.cwd(), "slider-debug.log");
 const DESKTOP_PREFERENCES_PATH = Path.join(STATE_DIR, "desktop-preferences.json");
 const LOG_FILE_MAX_BYTES = 10 * 1024 * 1024;
 const LOG_FILE_MAX_FILES = 10;
@@ -2847,17 +2846,6 @@ function createTabsWindow(): BrowserWindow {
     window.setTitle(APP_DISPLAY_NAME);
     emitUpdateState();
   });
-  window.webContents.on("console-message", (_event, _level, message, line, sourceId) => {
-    if (message.includes("[SLIDER-DEBUG-3]")) {
-      console.log(`[RENDERER] [${sourceId}:${line}] ${message}`);
-      try {
-        const logLine = `[${new Date().toISOString()}] ${message}\n`;
-        FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, logLine, "utf8");
-      } catch {
-        /* ignore */
-      }
-    }
-  });
   window.once("ready-to-show", () => {
     if (process.env.TABS_DEV_RESTART === "1") {
       window.showInactive();
@@ -3023,32 +3011,52 @@ function ensureDownloadedCodeOssRuntime(): void {
 }
 
 async function bootstrap(): Promise<void> {
+  const bootstrapStartedAt = performance.now();
   writeDesktopLogHeader("bootstrap start");
+  // Code-OSS main-process compatibility services and the Tabs loopback
+  // backend are independent. Start the expensive compatibility imports now
+  // and overlap them with port/control-channel initialization.
+  const nativeCodeHostBackendPromise = codeHostConfig.runtime
+    ? createNativeCodeHostMainBackend(
+        codeHostConfig.runtime.vscodeRoot,
+        codeHostConfig.runtime.stateDir,
+        {
+          openFile(projectId, path) {
+            if (!codeControlChannel.openFile(projectId, path, { pinned: true })) {
+              throw new Error(`Code-OSS is not ready to open ${path}`);
+            }
+          },
+          openFolder(path) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send(
+                MENU_ACTION_CHANNEL,
+                path ? `code-open-folder:${encodeURIComponent(path)}` : "tab-new",
+              );
+            }
+          },
+          dispatchTabAction(action) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send(MENU_ACTION_CHANNEL, action);
+            }
+          },
+        },
+      )
+    : Promise.resolve(null);
+  ensureDownloadedCodeOssRuntime();
+  backendPort = await Effect.service(NetService).pipe(
+    Effect.flatMap((net) => net.reserveLoopbackPort()),
+    Effect.provide(netServiceLayer),
+    Effect.runPromise,
+  );
+  writeDesktopLogHeader(`reserved backend port via NetService port=${backendPort}`);
+  backendAuthToken = Crypto.randomBytes(24).toString("hex");
+  const wsBaseUrl = `ws://127.0.0.1:${backendPort}`;
+  backendWsUrl = `${wsBaseUrl}/?token=${encodeURIComponent(backendAuthToken)}`;
+  backendHttpUrl = `http://127.0.0.1:${backendPort}`;
+  writeDesktopLogHeader(`bootstrap resolved websocket endpoint baseUrl=${wsBaseUrl}`);
+
   if (codeHostConfig.runtime) {
-    nativeCodeHostMainBackend = await createNativeCodeHostMainBackend(
-      codeHostConfig.runtime.vscodeRoot,
-      codeHostConfig.runtime.stateDir,
-      {
-        openFile(projectId, path) {
-          if (!codeControlChannel.openFile(projectId, path, { pinned: true })) {
-            throw new Error(`Code-OSS is not ready to open ${path}`);
-          }
-        },
-        openFolder(path) {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(
-              MENU_ACTION_CHANNEL,
-              path ? `code-open-folder:${encodeURIComponent(path)}` : "tab-new",
-            );
-          }
-        },
-        dispatchTabAction(action) {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(MENU_ACTION_CHANNEL, action);
-          }
-        },
-      },
-    );
+    nativeCodeHostMainBackend = await nativeCodeHostBackendPromise;
     for (const rawUrl of pendingNativeCodeHostURLs.splice(0)) {
       forwardNativeCodeHostURL(rawUrl);
     }
@@ -3062,18 +3070,6 @@ async function bootstrap(): Promise<void> {
     });
     writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");
   }
-  ensureDownloadedCodeOssRuntime();
-  backendPort = await Effect.service(NetService).pipe(
-    Effect.flatMap((net) => net.reserveLoopbackPort()),
-    Effect.provide(netServiceLayer),
-    Effect.runPromise,
-  );
-  writeDesktopLogHeader(`reserved backend port via NetService port=${backendPort}`);
-  backendAuthToken = Crypto.randomBytes(24).toString("hex");
-  const wsBaseUrl = `ws://127.0.0.1:${backendPort}`;
-  backendWsUrl = `${wsBaseUrl}/?token=${encodeURIComponent(backendAuthToken)}`;
-  backendHttpUrl = `http://127.0.0.1:${backendPort}`;
-  writeDesktopLogHeader(`bootstrap resolved websocket endpoint baseUrl=${wsBaseUrl}`);
 
   // Start the loopback control channel and expose its URL to the embedded
   // Code-OSS extension host via env (inherited by the spawned REH server). Done
@@ -3110,68 +3106,9 @@ async function bootstrap(): Promise<void> {
   startBackend();
   writeDesktopLogHeader("bootstrap backend start requested");
   mainWindow = createWindow();
-  writeDesktopLogHeader("bootstrap main window created");
-
-  // SLIDER-DEBUG: Inject a console.log wrapper into the renderer and poll for logs
-  if (isDevelopment && mainWindow) {
-    const win = mainWindow;
-    const injectScript = `
-      if (!window.__SLIDER_LOGS) {
-        window.__SLIDER_LOGS = [];
-        const origLog = console.log.bind(console);
-        console.log = function(...args) {
-          origLog(...args);
-          const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
-          if (msg.includes('[SLIDER-DEBUG-3]')) {
-            window.__SLIDER_LOGS.push('[' + new Date().toISOString() + '] ' + msg);
-          }
-        };
-      }
-      'injected';
-    `;
-    // Inject after page loads, and re-inject on navigation
-    const inject = () => {
-      if (!win.isDestroyed()) {
-        win.webContents.executeJavaScript(injectScript).catch(() => {});
-      }
-    };
-    win.webContents.on("did-finish-load", inject);
-    win.webContents.on("dom-ready", inject);
-    // Poll every 2 seconds to read accumulated logs
-    const pollTimer = setInterval(() => {
-      if (win.isDestroyed()) {
-        clearInterval(pollTimer);
-        return;
-      }
-      win.webContents
-        .executeJavaScript(
-          `
-        (() => {
-          const entries = window.__SLIDER_LOGS || [];
-          window.__SLIDER_LOGS = [];
-          return JSON.stringify(entries);
-        })();
-      `,
-        )
-        .then((result: string) => {
-          const logs = JSON.parse(result) as string[];
-          if (logs.length > 0) {
-            const content = logs.join("\\n") + "\\n";
-            try {
-              FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, content, "utf8");
-            } catch {}
-            console.log(
-              "[SLIDER-DEBUG-POLL] wrote " +
-                logs.length +
-                " log entries to " +
-                SLIDER_DEBUG_LOG_PATH,
-            );
-          }
-        })
-        .catch(() => {});
-    }, 2000);
-    win.on("closed", () => clearInterval(pollTimer));
-  }
+  writeDesktopLogHeader(
+    `bootstrap main window created durationMs=${Math.round(performance.now() - bootstrapStartedAt)}`,
+  );
 }
 
 let isCleanupFinished = false;

@@ -71,6 +71,7 @@ const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
 const CODE_OSS_WEBVIEW_PROTOCOL = "vscode-webview";
 const CODE_OSS_WEBVIEW_RESOURCES = new Set(["index.html", "fake.html", "service-worker.js"]);
 const CODE_OSS_NAVIGATION_TIMEOUT_MS = 30_000;
+const MAX_WARM_CODE_SESSIONS = 3;
 const DEFAULT_CODE_HOST_STATE_DIR = Path.join(
   process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs"),
   "userdata",
@@ -110,6 +111,8 @@ type CodeHostRuntime = {
 };
 
 type CodeSession = {
+  generation: number;
+  lastActivatedAt: number;
   projectId: string;
   workspaceRoot: string;
   view: WebContentsView | null;
@@ -926,6 +929,8 @@ export function resolveCodeOssWorkbenchTheme(themeId: string, customConfig?: any
 export class CodeHostManager {
   private readonly sessions = new Map<string, CodeSession>();
   private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
+  private readonly rendererDiagnosticLastSeen = new Map<string, number>();
+  private nextSessionGeneration = 1;
   private activeProjectId: string | null = null;
   private currentThemeId: string = "tabs-dark";
   private currentCustomConfig: any = null;
@@ -1046,7 +1051,9 @@ export class CodeHostManager {
       // 1. Sync active theme
       this.controlChannel?.setTheme(this.currentThemeId, this.currentCustomConfig);
 
-      // 2. Restore persisted workspace tabs sequentially
+      // 2. Queue persisted tabs without artificial per-editor sleeps. The
+      // control channel preserves message order, so inactive editors still
+      // arrive before the active editor without extending startup linearly.
       const session = this.sessions.get(projectId);
       const savedTabs = readWorkspaceTabs(projectId);
 
@@ -1079,7 +1086,6 @@ export class CodeHostManager {
           if (typeof tab.pinned === "boolean") openOpts.pinned = tab.pinned;
           if (typeof tab.viewColumn === "number") openOpts.viewColumn = tab.viewColumn;
           this.controlChannel?.openFile(projectId, fullPath, openOpts);
-          await new Promise((resolve) => setTimeout(resolve, 60));
         }
 
         // Open active tab last with preserveFocus: false
@@ -1097,7 +1103,6 @@ export class CodeHostManager {
           if (typeof tab.pinned === "boolean") openOpts.pinned = tab.pinned;
           if (typeof tab.viewColumn === "number") openOpts.viewColumn = tab.viewColumn;
           this.controlChannel?.openFile(projectId, fullPath, openOpts);
-          await new Promise((resolve) => setTimeout(resolve, 60));
         }
         return;
       }
@@ -1246,6 +1251,8 @@ export class CodeHostManager {
     }
 
     const session: CodeSession = {
+      generation: this.nextSessionGeneration++,
+      lastActivatedAt: Date.now(),
       projectId: input.projectId,
       workspaceRoot,
       view,
@@ -1291,6 +1298,7 @@ export class CodeHostManager {
     }
 
     const session = this.sessions.get(input.projectId);
+    const generation = session?.generation;
     const window = this.getWindow();
     if (!session || !window) {
       writeCodeHostDiagnostic(
@@ -1316,19 +1324,44 @@ export class CodeHostManager {
     }
 
     this.activeProjectId = session.projectId;
+    session.lastActivatedAt = Date.now();
     if (session.bounds && session.view) {
       this.attachSession(session);
       session.view.setBounds(session.bounds);
     }
     await this.loadSessionWhenVisible(session);
+    if (
+      this.sessions.get(input.projectId) !== session ||
+      session.generation !== generation ||
+      !session.view ||
+      session.view.webContents.isDestroyed()
+    ) {
+      writeCodeHostDiagnostic(`[code-oss:${input.projectId}] activation cancelled: stale session`);
+      return;
+    }
     if (session.lastLoadedUrl && this.controlChannel) {
       writeCodeHostDiagnostic(
         `[code-oss:${input.projectId}] waiting for integration extension host`,
       );
       console.log(`[code-oss:${input.projectId}] waiting for integration extension host`);
-      await this.controlChannel.waitForExtensionHost(session.projectId);
-      writeCodeHostDiagnostic(`[code-oss:${input.projectId}] integration extension host connected`);
-      console.log(`[code-oss:${input.projectId}] integration extension host connected`);
+      // Extension activation must not hold the editor's visible/interactive
+      // state hostage. Copilot, Claude and other providers become available
+      // progressively after the workbench itself is usable.
+      void this.controlChannel
+        .waitForExtensionHost(session.projectId)
+        .then(() => {
+          if (this.sessions.get(input.projectId) !== session) return;
+          writeCodeHostDiagnostic(
+            `[code-oss:${input.projectId}] integration extension host connected`,
+          );
+          console.log(`[code-oss:${input.projectId}] integration extension host connected`);
+        })
+        .catch((error) => {
+          if (this.sessions.get(input.projectId) !== session) return;
+          writeCodeHostDiagnostic(`[code-oss:${input.projectId}] extension host wait failed`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     }
 
     const cachedState = this.controlChannel?.getChromeState(session.projectId);
@@ -1337,6 +1370,24 @@ export class CodeHostManager {
         projectId: session.projectId,
         state: cachedState,
       });
+    }
+    this.pruneWarmSessions();
+  }
+
+  private pruneWarmSessions(): void {
+    if (this.sessions.size <= MAX_WARM_CODE_SESSIONS) return;
+    const inactiveSessions = [...this.sessions.values()]
+      .filter((session) => session.projectId !== this.activeProjectId)
+      .toSorted((left, right) => left.lastActivatedAt - right.lastActivatedAt);
+    while (this.sessions.size > MAX_WARM_CODE_SESSIONS && inactiveSessions.length > 0) {
+      const session = inactiveSessions.shift();
+      if (!session) break;
+      writeCodeHostDiagnostic(`[code-oss:${session.projectId}] evicting cold session`);
+      this.disposeSessionConfigChannel(session);
+      this.disposeDesktopProtocols(session);
+      session.view?.webContents.close({ waitForBeforeUnload: false });
+      this.sessions.delete(session.projectId);
+      this.loadPromiseByProjectId.delete(session.projectId);
     }
   }
 
@@ -1642,6 +1693,7 @@ export class CodeHostManager {
     }
 
     const promise = (async () => {
+      const loadStartedAt = Date.now();
       try {
         const runtime = await this.ensureSessionRuntime(session);
         if (!session.lastFocusedPath) {
@@ -1693,7 +1745,9 @@ export class CodeHostManager {
           }
         }
         session.lastLoadedUrl = nextUrl;
-        writeCodeHostDiagnostic(`[code-oss:${session.projectId}] workbench loadURL resolved`);
+        writeCodeHostDiagnostic(`[code-oss:${session.projectId}] workbench loadURL resolved`, {
+          durationMs: Date.now() - loadStartedAt,
+        });
         console.log(`[code-oss:${session.projectId}] workbench loadURL resolved`);
       } catch (error) {
         writeCodeHostDiagnostic(`[code-oss:${session.projectId}] workbench load failed`, error);
@@ -2320,6 +2374,27 @@ export class CodeHostManager {
       if (level < 3) {
         return;
       }
+      // ResizeObserver warnings are emitted by complex extension webviews and
+      // are not actionable host failures. Chromium can emit them hundreds of
+      // times per second, turning diagnostics into a main-process I/O storm.
+      if (message.includes("ResizeObserver loop")) {
+        return;
+      }
+      if (message.startsWith("Loading the font 'data:font/")) {
+        return;
+      }
+      const diagnosticKey = `${session.projectId}:${level}:${sourceId}:${line}:${message}`;
+      const now = Date.now();
+      const lastSeen = this.rendererDiagnosticLastSeen.get(diagnosticKey) ?? 0;
+      if (now - lastSeen < 10_000) {
+        return;
+      }
+      if (this.rendererDiagnosticLastSeen.size >= 500) {
+        for (const [key, timestamp] of this.rendererDiagnosticLastSeen) {
+          if (now - timestamp >= 10_000) this.rendererDiagnosticLastSeen.delete(key);
+        }
+      }
+      this.rendererDiagnosticLastSeen.set(diagnosticKey, now);
       writeCodeHostDiagnostic(`${prefix} renderer-console`, {
         level,
         message: message.slice(0, 1000),

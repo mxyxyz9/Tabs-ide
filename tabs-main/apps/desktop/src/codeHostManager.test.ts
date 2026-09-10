@@ -518,6 +518,35 @@ describe("CodeHostManager", () => {
     expect(webContentsViews[1]!.webContents.close).not.toHaveBeenCalled();
   });
 
+  it("keeps only three warm Code sessions", async () => {
+    const window = createMockWindow();
+    const manager = new CodeHostManager(() => window as never, {
+      state: {
+        available: true,
+        mode: "embedded",
+        entry: "http://127.0.0.1:3000",
+        reason: null,
+      },
+      runtime: null,
+    });
+
+    for (const projectId of ["a", "b", "c", "d"]) {
+      await manager.ensureSession({
+        projectId,
+        workspaceRoot: makeTempDir(`tabs-session-${projectId}-`),
+      });
+      manager.setBounds({ projectId, x: 0, y: 0, width: 800, height: 600, visible: true });
+      await manager.activateSession({ projectId });
+    }
+
+    expect(webContentsViews[0]!.webContents.close).toHaveBeenCalledWith({
+      waitForBeforeUnload: false,
+    });
+    expect(
+      webContentsViews.slice(1).every((view) => !view.webContents.close.mock.calls.length),
+    ).toBe(true);
+  });
+
   it("re-syncs the active theme ID (not generic dark/light) on extension host reconnect", async () => {
     let extensionHostConnectedHandler: ((projectId: string) => void) | null = null;
     const mockControlChannel = {
