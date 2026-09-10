@@ -1,5 +1,5 @@
 import { FolderSearchIcon, GitBranchIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { readNativeApi } from "../nativeApi";
 import { Button } from "./ui/button";
@@ -14,6 +14,8 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Spinner } from "./ui/spinner";
+import { validateCloneSource } from "./cloneRepositoryValidation";
+import { toastManager } from "./ui/toast";
 
 interface CloneRepositoryDialogProps {
   open: boolean;
@@ -32,6 +34,7 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
   const [parentDir, setParentDir] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cloneInFlightRef = useRef(false);
 
   const reset = () => {
     setUrl("");
@@ -56,25 +59,46 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
     }
   };
 
-  const canClone = url.trim().length > 0 && parentDir !== null && !busy;
+  const validationError = validateCloneSource(url);
+  const canClone = validationError === null && parentDir !== null && !busy;
 
   const handleClone = async () => {
-    if (!canClone || parentDir === null) return;
+    if (cloneInFlightRef.current || parentDir === null) return;
+    const sourceError = validateCloneSource(url);
+    if (sourceError) {
+      setError(sourceError);
+      return;
+    }
     const api = readNativeApi();
     if (!api) {
       setError("Cloning a repository requires the desktop app.");
       return;
     }
+    cloneInFlightRef.current = true;
     setBusy(true);
     setError(null);
-    const result = await api.repositories.clone({ url: url.trim(), parentDir });
-    setBusy(false);
-    if (result.ok) {
-      reset();
-      props.onOpenChange(false);
-      await props.onCloned(result.path);
-    } else {
-      setError(result.error);
+    try {
+      const result = await api.repositories.clone({ url: url.trim(), parentDir });
+      if (result.ok) {
+        reset();
+        props.onOpenChange(false);
+        try {
+          await props.onCloned(result.path);
+        } catch (cause) {
+          toastManager.add({
+            type: "error",
+            title: "Repository cloned but could not be opened",
+            description: cause instanceof Error ? cause.message : String(cause),
+          });
+        }
+      } else {
+        setError(result.error);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The repository could not be cloned.");
+    } finally {
+      cloneInFlightRef.current = false;
+      setBusy(false);
     }
   };
 
@@ -93,6 +117,9 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
           <div className="flex flex-col gap-3">
             <Input
               autoFocus
+              aria-label="Repository URL or path"
+              aria-invalid={Boolean(url.trim()) && validationError !== null}
+              aria-required="true"
               value={url}
               placeholder="https://github.com/owner/repo.git"
               disabled={busy}
@@ -106,6 +133,11 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
                 }
               }}
             />
+            {url.trim() && validationError ? (
+              <p className="text-xs text-destructive" role="alert">
+                {validationError}
+              </p>
+            ) : null}
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -124,7 +156,9 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
                 {parentDir ? `Into ${parentDir}` : "No destination chosen"}
               </span>
             </div>
-            {error ? <p className="text-xs font-medium text-destructive dark:text-red-400">{error}</p> : null}
+            {error ? (
+              <p className="text-xs font-medium text-destructive dark:text-red-400">{error}</p>
+            ) : null}
           </div>
 
           <DialogFooter>
