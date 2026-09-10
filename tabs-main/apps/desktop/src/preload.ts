@@ -73,6 +73,7 @@ const BROWSER_HOST_SET_AUDIO_MUTED_CHANNEL = "desktop:browser-host:set-audio-mut
 const BROWSER_HOST_OPEN_PICTURE_IN_PICTURE_CHANNEL = "desktop:browser-host:open-picture-in-picture";
 const BROWSER_HOST_CLOSE_PICTURE_IN_PICTURE_CHANNEL =
   "desktop:browser-host:close-picture-in-picture";
+const BROWSER_HOST_SET_COLOR_SCHEME_CHANNEL = "desktop:browser-host:set-color-scheme";
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
@@ -242,6 +243,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_OPEN_PICTURE_IN_PICTURE_CHANNEL, input),
   closeBrowserPictureInPicture: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLOSE_PICTURE_IN_PICTURE_CHANNEL, input),
+  setBrowserColorScheme: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_SET_COLOR_SCHEME_CHANNEL, input),
   goBackBrowserSession: (input) => ipcRenderer.invoke(BROWSER_HOST_BACK_SESSION_CHANNEL, input),
   goForwardBrowserSession: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_FORWARD_SESSION_CHANNEL, input),

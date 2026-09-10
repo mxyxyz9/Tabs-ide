@@ -73,6 +73,7 @@ describe("buildPreviewStatusReport", () => {
     zoomFactor: 1,
     audioMuted: false,
     pictureInPicture: false,
+    colorScheme: "system" as const,
     lastError: null,
     transientError: null,
   };

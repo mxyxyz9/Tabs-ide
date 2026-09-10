@@ -47,6 +47,8 @@ verification evidence, not just a matching type or placeholder.
       recording bytes as managed artifacts through the automation broker.
 - [x] Pop the live browser guest into an always-on-top picture-in-picture window without cloning
       its session, then restore the same `WebContentsView` to the active workspace on close.
+- [x] Emulate system, light, and dark page color schemes per live browser session and restore the
+      selected media override after session recreation or a DevTools lifecycle.
 - [x] Add a native element picker with hover targeting, Escape cancellation, selector/HTML/style
       context, element bounds, screenshot capture, and direct composer attachment.
 - [x] Persist picked preview context, render removable accessible composer cards, include the real

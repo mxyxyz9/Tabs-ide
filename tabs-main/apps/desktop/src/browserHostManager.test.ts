@@ -221,6 +221,43 @@ describe("BrowserHostManager picture in picture", () => {
   });
 });
 
+describe("BrowserHostManager appearance", () => {
+  it("applies and exposes a persistent prefers-color-scheme override", async () => {
+    const sendCommand = vi.fn().mockResolvedValue(undefined);
+    const manager = new BrowserHostManager(() => null);
+    const session = {
+      projectId: "project-1",
+      sessionId: "preview-1",
+      key: "project-1::preview-1",
+      view: {
+        webContents: {
+          isDestroyed: () => false,
+          isDevToolsOpened: () => false,
+          debugger: {
+            isAttached: () => false,
+            attach: vi.fn(),
+            sendCommand,
+          },
+        },
+      },
+      colorScheme: "system",
+      pictureInPictureWindow: null,
+    };
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(session.key, session);
+
+    await manager.setColorScheme({
+      projectId: "project-1",
+      sessionId: "preview-1",
+      colorScheme: "dark",
+    });
+
+    expect(sendCommand).toHaveBeenCalledWith("Emulation.setEmulatedMedia", {
+      features: [{ name: "prefers-color-scheme", value: "dark" }],
+    });
+    expect(manager.getSessionState("project-1", "preview-1").colorScheme).toBe("dark");
+  });
+});
+
 describe("BrowserHostManager automation", () => {
   it("routes status and evaluation to the requested persistent session", async () => {
     const executeJavaScript = vi.fn().mockResolvedValue({ heading: "Ready" });

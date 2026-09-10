@@ -582,6 +582,7 @@ function createEmptyBrowserSessionState(
     zoomFactor: 1,
     audioMuted: false,
     pictureInPicture: false,
+    colorScheme: "system",
     lastError: null,
     transientError: null,
   };
@@ -7330,6 +7331,23 @@ function DesktopBrowserChrome(props: {
                 aria-pressed={props.sessionState.pictureInPicture}
               >
                 <PictureInPicture2Icon className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant={props.sessionState.colorScheme === "system" ? "outline" : "secondary"}
+                onClick={() => {
+                  const colorScheme =
+                    props.sessionState.colorScheme === "system"
+                      ? "light"
+                      : props.sessionState.colorScheme === "light"
+                        ? "dark"
+                        : "system";
+                  void bridge?.setBrowserColorScheme({ ...sessionArg, colorScheme });
+                }}
+                aria-label={`Browser appearance: ${props.sessionState.colorScheme}. Click to change.`}
+              >
+                <MonitorIcon className="size-3.5" />
               </Button>
               <Button
                 type="button"

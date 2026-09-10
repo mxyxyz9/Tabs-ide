@@ -1188,6 +1188,9 @@ export interface DesktopBridge {
   ) => Promise<void>;
   openBrowserPictureInPicture: (input: DesktopBrowserHostControlInput) => Promise<void>;
   closeBrowserPictureInPicture: (input: DesktopBrowserHostControlInput) => Promise<void>;
+  setBrowserColorScheme: (
+    input: DesktopBrowserHostControlInput & { colorScheme: "system" | "light" | "dark" },
+  ) => Promise<void>;
   goBackBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   goForwardBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;
@@ -1755,6 +1758,7 @@ export interface DesktopBrowserSessionState {
   zoomFactor: number;
   audioMuted: boolean;
   pictureInPicture: boolean;
+  colorScheme: "system" | "light" | "dark";
   controller?: "human" | "agent" | "none";
   lastError: string | null;
   /** Set when did-fail-load fires with ERR_CONNECTION_REFUSED (-102).

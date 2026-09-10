@@ -150,6 +150,7 @@ const BROWSER_HOST_SET_AUDIO_MUTED_CHANNEL = "desktop:browser-host:set-audio-mut
 const BROWSER_HOST_OPEN_PICTURE_IN_PICTURE_CHANNEL = "desktop:browser-host:open-picture-in-picture";
 const BROWSER_HOST_CLOSE_PICTURE_IN_PICTURE_CHANNEL =
   "desktop:browser-host:close-picture-in-picture";
+const BROWSER_HOST_SET_COLOR_SCHEME_CHANNEL = "desktop:browser-host:set-color-scheme";
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
@@ -2438,6 +2439,27 @@ function registerIpcHandlers(): void {
     browserHostManager.closePictureInPicture({
       projectId: (input as { projectId: string }).projectId,
       sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_SET_COLOR_SCHEME_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_SET_COLOR_SCHEME_CHANNEL, async (_event, input: unknown) => {
+    const colorScheme =
+      typeof input === "object" && input !== null
+        ? (input as { colorScheme?: unknown }).colorScheme
+        : null;
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string" ||
+      (colorScheme !== "system" && colorScheme !== "light" && colorScheme !== "dark")
+    ) {
+      return;
+    }
+    await browserHostManager.setColorScheme({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+      colorScheme,
     });
   });
 

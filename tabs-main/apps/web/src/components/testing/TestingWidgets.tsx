@@ -58,6 +58,7 @@ export function createEmptyBrowserSessionState(
     zoomFactor: 1,
     audioMuted: false,
     pictureInPicture: false,
+    colorScheme: "system",
     lastError: null,
     transientError: null,
   };

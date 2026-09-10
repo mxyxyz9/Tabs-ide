@@ -178,6 +178,7 @@ type BrowserSession = {
   zoomFactor: number;
   audioMuted: boolean;
   pictureInPictureWindow: BrowserWindow | null;
+  colorScheme: "system" | "light" | "dark";
   lastError: string | null;
   /** Transient error set when ERR_CONNECTION_REFUSED fires (dev server not ready yet).
    * Cleared as soon as any successful navigation or page load occurs. */
@@ -299,6 +300,7 @@ export class BrowserHostManager {
         zoomFactor: 1,
         audioMuted: false,
         pictureInPicture: false,
+        colorScheme: "system",
         lastError: null,
         transientError: null,
       };
@@ -361,6 +363,7 @@ export class BrowserHostManager {
       zoomFactor: 1,
       audioMuted: false,
       pictureInPictureWindow: null,
+      colorScheme: "system",
       lastError: null,
       transientError: null,
       consoleEntries: [],
@@ -376,6 +379,7 @@ export class BrowserHostManager {
     this.sessions.set(key, session);
     this.registerSessionEvents(session);
     this.observeAutomationNetwork(view.webContents.session);
+    await this.applyColorScheme(session);
     if (input.initialUrl) {
       await this.loadUrl(session, input.initialUrl);
     }
@@ -445,6 +449,7 @@ export class BrowserHostManager {
     session.transientError = null;
     this.registerSessionEvents(session);
     this.observeAutomationNetwork(view.webContents.session);
+    await this.applyColorScheme(session);
 
     if (this.activeKey === key && session.bounds) {
       this.attachSession(session);
@@ -812,6 +817,16 @@ export class BrowserHostManager {
     this.emitState(session);
   }
 
+  async setColorScheme(
+    input: DesktopBrowserHostControlInput & { colorScheme: "system" | "light" | "dark" },
+  ): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) return;
+    session.colorScheme = input.colorScheme;
+    await this.applyColorScheme(session);
+    this.emitState(session);
+  }
+
   openPictureInPicture(input: DesktopBrowserHostControlInput): void {
     const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session || session.view.webContents.isDestroyed()) return;
@@ -891,6 +906,9 @@ export class BrowserHostManager {
     if (session.view.webContents.isDevToolsOpened()) {
       session.view.webContents.closeDevTools();
     } else {
+      if (session.view.webContents.debugger.isAttached()) {
+        session.view.webContents.debugger.detach();
+      }
       session.view.webContents.openDevTools({ mode: DOCKED_DEVTOOLS_MODE, activate: false });
     }
   }
@@ -1476,6 +1494,7 @@ export class BrowserHostManager {
       audioMuted: session.audioMuted,
       pictureInPicture:
         session.pictureInPictureWindow !== null && !session.pictureInPictureWindow.isDestroyed(),
+      colorScheme: session.colorScheme,
       controller: session.controller ?? "none",
       lastError: session.lastError,
       transientError: session.transientError,
@@ -1488,6 +1507,24 @@ export class BrowserHostManager {
       return;
     }
     window.webContents.send("desktop:browser-host:session-state", this.snapshotSession(session));
+  }
+
+  private async applyColorScheme(session: BrowserSession): Promise<void> {
+    const contents = session.view.webContents;
+    if (contents.isDestroyed() || contents.isDevToolsOpened()) return;
+    try {
+      if (!contents.debugger.isAttached()) contents.debugger.attach("1.3");
+      await contents.debugger.sendCommand("Emulation.setEmulatedMedia", {
+        features: [
+          {
+            name: "prefers-color-scheme",
+            value: session.colorScheme === "system" ? "" : session.colorScheme,
+          },
+        ],
+      });
+    } catch (error) {
+      console.warn("[browserHostManager] Failed to apply browser color scheme:", error);
+    }
   }
 
   private clearHumanControlTimer(session: BrowserSession): void {
@@ -1669,6 +1706,7 @@ export class BrowserHostManager {
     contents.on("devtools-closed", () => {
       session.devToolsOpen = false;
       this.emitState(session);
+      void this.applyColorScheme(session);
     });
     contents.setWindowOpenHandler(({ url, disposition }) => {
       // OAuth flows ("Continue with Google", SSO, etc.) call window.open(...)
