@@ -111,6 +111,7 @@ import {
 
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
 import { useBrowserHistoryStore } from "../browserHistoryStore";
+import { BrowserViewportResizeFrame } from "./browser/BrowserViewportResizeFrame";
 import {
   PREVIEW_ANNOTATION_PICKED_EVENT,
   type PreviewAnnotationPickedDetail,
@@ -8201,15 +8202,18 @@ function DesktopBrowserTool(props: {
           onOpenServerTab={() => workspaceShellActions.setActiveTool(props.project.id, "server")}
         />
       ) : null}
-      <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
-        <div
-          className="relative overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg"
-          style={{
-            width: viewportWidth ? `min(${viewportWidth}px, 100%)` : "100%",
-            height: viewportHeight ? `min(${viewportHeight}px, 100%)` : "100%",
-            minHeight: viewportHeight ? undefined : "100%",
-          }}
-        >
+      <BrowserViewportResizeFrame
+        width={viewportWidth}
+        height={viewportHeight}
+        onCommit={({ width, height }) =>
+          setBrowserViewport(props.project.id, {
+            devicePreset: "custom",
+            customWidth: width,
+            customHeight: height,
+            landscape: false,
+          })
+        }
+      >
           <div ref={hostRef} className="absolute inset-0 bg-background" />
           {sessionState.loading ? (
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
@@ -8250,8 +8254,7 @@ function DesktopBrowserTool(props: {
               </Card>
             </div>
           ) : null}
-        </div>
-      </div>
+      </BrowserViewportResizeFrame>
     </DesktopBrowserChrome>
   );
 }
@@ -9064,15 +9067,22 @@ function DesktopCustomEmbedTool(props: {
       toolbarTarget={toolbarTarget}
     >
       {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
-      <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
-        <div
-          className="relative overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg"
-          style={{
-            width: viewportWidth ? `min(${viewportWidth}px, 100%)` : "100%",
-            height: viewportHeight ? `min(${viewportHeight}px, 100%)` : "100%",
-            minHeight: viewportHeight ? undefined : "100%",
-          }}
-        >
+      <BrowserViewportResizeFrame
+        width={viewportWidth}
+        height={viewportHeight}
+        onCommit={({ width, height }) =>
+          setBrowserViewport(
+            props.project.id,
+            {
+              devicePreset: "custom",
+              customWidth: width,
+              customHeight: height,
+              landscape: false,
+            },
+            props.sessionId,
+          )
+        }
+      >
           <div ref={hostRef} className="absolute inset-0 bg-background" />
           {sessionState.loading ? (
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
@@ -9114,8 +9124,7 @@ function DesktopCustomEmbedTool(props: {
               </Card>
             </div>
           ) : null}
-        </div>
-      </div>
+      </BrowserViewportResizeFrame>
     </DesktopBrowserChrome>
   );
 }
