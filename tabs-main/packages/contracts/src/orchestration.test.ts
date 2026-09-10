@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
+  ClientOrchestrationCommand,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   ModelSelection,
@@ -25,6 +26,7 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 
 const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput);
+const decodeClientOrchestrationCommand = Schema.decodeUnknownEffect(ClientOrchestrationCommand);
 const decodeFullThreadDiffInput = Schema.decodeUnknownEffect(OrchestrationGetFullThreadDiffInput);
 const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
 const decodeProjectCreateCommand = Schema.decodeUnknownEffect(ProjectCreateCommand);
@@ -219,6 +221,68 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
     assert.strictEqual(parsed.modelSelection, undefined);
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+  }),
+);
+
+it.effect("accepts file uploads in client thread.turn.start commands", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeClientOrchestrationCommand({
+      type: "thread.turn.start",
+      commandId: "cmd-file-1",
+      threadId: "thread-1",
+      message: {
+        messageId: "msg-file-1",
+        role: "user",
+        text: "Summarize the attachment",
+        attachments: [
+          {
+            type: "file",
+            name: "notes.txt",
+            mimeType: "text/plain",
+            sizeBytes: 5,
+            dataUrl: "data:text/plain;base64,aGVsbG8=",
+          },
+        ],
+      },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    assert.strictEqual(parsed.type, "thread.turn.start");
+    if (parsed.type === "thread.turn.start") {
+      assert.strictEqual(parsed.message.attachments[0]?.type, "file");
+    }
+  }),
+);
+
+it.effect("rejects image MIME payloads declared as file uploads", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.exit(
+      decodeClientOrchestrationCommand({
+        type: "thread.turn.start",
+        commandId: "cmd-file-2",
+        threadId: "thread-1",
+        message: {
+          messageId: "msg-file-2",
+          role: "user",
+          text: "Inspect the attachment",
+          attachments: [
+            {
+              type: "file",
+              name: "photo.png",
+              mimeType: "image/png",
+              sizeBytes: 4,
+              dataUrl: "data:image/png;base64,iVBORw==",
+            },
+          ],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(result._tag, "Failure");
   }),
 );
 

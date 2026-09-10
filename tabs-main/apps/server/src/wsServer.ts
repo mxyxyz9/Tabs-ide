@@ -22,6 +22,7 @@ import {
   type OrchestrationCommand,
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   ProjectId,
   ProviderInstanceId,
@@ -503,16 +504,43 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       (attachment) =>
         Effect.gen(function* () {
           const parsed = parseBase64DataUrl(attachment.dataUrl);
-          if (!parsed || !parsed.mimeType.startsWith("image/")) {
+          if (!parsed) {
+            return yield* new RouteRequestError({
+              message: `Invalid attachment payload for '${attachment.name}'.`,
+            });
+          }
+
+          const parsedMimeType = parsed.mimeType.toLowerCase();
+          const declaredMimeType = attachment.mimeType.toLowerCase();
+          if (parsedMimeType !== declaredMimeType) {
+            return yield* new RouteRequestError({
+              message: `Attachment MIME type mismatch for '${attachment.name}'.`,
+            });
+          }
+          if (attachment.type === "image" && !parsedMimeType.startsWith("image/")) {
             return yield* new RouteRequestError({
               message: `Invalid image attachment payload for '${attachment.name}'.`,
             });
           }
+          if (attachment.type === "file" && parsedMimeType.startsWith("image/")) {
+            return yield* new RouteRequestError({
+              message: `Image payload '${attachment.name}' must use the image attachment type.`,
+            });
+          }
 
           const bytes = Buffer.from(parsed.base64, "base64");
-          if (bytes.byteLength === 0 || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
+          const maxBytes =
+            attachment.type === "image"
+              ? PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
+              : PROVIDER_SEND_TURN_MAX_FILE_BYTES;
+          if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
             return yield* new RouteRequestError({
-              message: `Image attachment '${attachment.name}' is empty or too large.`,
+              message: `Attachment '${attachment.name}' is empty or too large.`,
+            });
+          }
+          if (bytes.byteLength !== attachment.sizeBytes) {
+            return yield* new RouteRequestError({
+              message: `Attachment size mismatch for '${attachment.name}'.`,
             });
           }
 
@@ -524,10 +552,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           }
 
           const persistedAttachment = {
-            type: "image" as const,
+            type: attachment.type,
             id: attachmentId,
             name: attachment.name,
-            mimeType: parsed.mimeType.toLowerCase(),
+            mimeType: parsedMimeType,
             sizeBytes: bytes.byteLength,
           };
 

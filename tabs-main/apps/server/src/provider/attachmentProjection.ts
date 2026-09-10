@@ -3,8 +3,7 @@
 // Layer: Provider adapter utility
 // Depends on: attachmentStore path resolution and shared byte formatting.
 
-import type { ChatAttachment, ChatImageAttachment } from "@tabs/contracts";
-type ChatFileAttachment = any;
+import type { ChatAttachment, ChatFileAttachment, ChatImageAttachment } from "@tabs/contracts";
 const formatBytes = (bytes: number) => `${bytes} B`;
 
 import { resolveProviderAttachmentPath } from "./providerAttachmentPaths.ts";
