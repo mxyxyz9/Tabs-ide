@@ -26,10 +26,16 @@ export function dedupeProviderSkillsByName(
   });
 }
 
+export function isProviderSkillUserInvocable(
+  skill: Pick<ServerProviderSkill, "enabled" | "userInvocable">,
+): boolean {
+  return skill.enabled && skill.userInvocable !== false;
+}
+
 export function getProviderSkillsForSlashMenu(
   skills: ReadonlyArray<ServerProviderSkill>,
 ): ServerProviderSkill[] {
-  return dedupeProviderSkillsByName(skills.filter((skill) => skill.enabled));
+  return dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
 }
 
 export function getProviderSlashCommandsForSlashMenu(

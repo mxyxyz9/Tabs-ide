@@ -259,15 +259,18 @@ export async function readSkillDescriptor(input: {
     "shortDescription",
     "summary",
   ]);
-  const disabled =
+  const userInvocationOnly =
     readBooleanField(frontmatter, ["disable-model-invocation", "disableModelInvocation"]) === true;
+  const userInvocable = readBooleanField(frontmatter, ["user-invocable", "userInvocable"]);
 
   return {
     name,
     ...(description ? { description } : {}),
     path: input.skillPath,
-    enabled: !disabled,
+    enabled: true,
     scope: input.scope,
+    ...(userInvocationOnly ? { userInvocationOnly: true } : {}),
+    ...(userInvocable === false ? { userInvocable: false } : {}),
     ...(displayName || shortDescription
       ? {
           interface: {
@@ -490,7 +493,11 @@ function projectRootNamesForOrigin(origin: SkillsHomeOrigin): readonly string[] 
 function preferredOriginsForProvider(
   provider: ProviderDriverKind | string | null | undefined,
 ): ReadonlyArray<SkillsHomeOrigin> {
-  return provider ? (PROVIDER_SKILL_ORIGIN_PREFERENCES[provider as keyof typeof PROVIDER_SKILL_ORIGIN_PREFERENCES] ?? []) : [];
+  return provider
+    ? (PROVIDER_SKILL_ORIGIN_PREFERENCES[
+        provider as keyof typeof PROVIDER_SKILL_ORIGIN_PREFERENCES
+      ] ?? [])
+    : [];
 }
 
 function orderedOriginsForProvider(

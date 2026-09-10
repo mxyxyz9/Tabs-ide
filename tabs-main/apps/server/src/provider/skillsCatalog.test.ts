@@ -18,6 +18,7 @@ import {
   filterDisabledSkills,
   mergeSkillsIntoCatalog,
   parseSkillFrontmatter,
+  readSkillDescriptor,
 } from "./skillsCatalog.ts";
 import { pathIsWithin } from "./claudePluginSkills.ts";
 
@@ -77,6 +78,32 @@ disable-model-invocation: true
       name: "check-code",
       description: "Review recent code changes",
       "disable-model-invocation": true,
+    });
+  });
+});
+
+describe("readSkillDescriptor", () => {
+  it("preserves user-only skills and hides agent-only skills from composer metadata", async () => {
+    const skillDir = path.join(root, "metadata-skill");
+    await mkdir(skillDir, { recursive: true });
+    const skillPath = path.join(skillDir, "SKILL.md");
+    await writeFile(
+      skillPath,
+      [
+        "---",
+        "name: controlled-skill",
+        "disable-model-invocation: true",
+        "user-invocable: false",
+        "---",
+        "# Controlled skill",
+      ].join("\n"),
+    );
+
+    await expect(readSkillDescriptor({ skillPath, scope: "repo" })).resolves.toMatchObject({
+      name: "controlled-skill",
+      enabled: true,
+      userInvocationOnly: true,
+      userInvocable: false,
     });
   });
 });

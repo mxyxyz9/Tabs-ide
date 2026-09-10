@@ -148,6 +148,12 @@ export const ServerProviderSkill = Schema.Struct({
   enabled: Schema.Boolean,
   displayName: Schema.optional(TrimmedNonEmptyString),
   shortDescription: Schema.optional(TrimmedNonEmptyString),
+  // The skill may only be started explicitly by the user. Providers such as
+  // Claude expose this as `disable-model-invocation`.
+  userInvocationOnly: Schema.optional(Schema.Boolean),
+  // `false` reserves the skill for the agent and keeps it out of composer
+  // command menus (`user-invocable: false` in Claude/Cursor frontmatter).
+  userInvocable: Schema.optional(Schema.Boolean),
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 export const ProviderSkillDescriptor = ServerProviderSkill;

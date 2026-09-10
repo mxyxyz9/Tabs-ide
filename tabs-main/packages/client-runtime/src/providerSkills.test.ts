@@ -23,6 +23,7 @@ describe("provider skill presentation", () => {
         skill("review"),
         skill("REVIEW"),
         skill("disabled", { enabled: false }),
+        skill("agent-only", { userInvocable: false }),
       ]),
     ).toEqual([skill("review")]);
     expect(dedupeProviderSkillsByName([skill("one"), skill("ONE")])).toHaveLength(1);
