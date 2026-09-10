@@ -65,6 +65,9 @@ export function ProviderUpdateNotification() {
       actionProps: {
         children: "Settings",
         onClick: () => {
+          updateSettings({
+            dismissedProviderUpdateNotificationKeys: [...dismissedKeys, notificationKey],
+          });
           toastManager.close(id);
           activeToast.current = null;
           void navigate({ to: "/settings" });

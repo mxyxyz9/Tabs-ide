@@ -33,6 +33,32 @@ const anchoredToastManager = Toast.createToastManager<ThreadToastData>();
 type ToastId = ReturnType<typeof toastManager.add>;
 const threadToastVisibleTimeoutRemainingMs = new Map<ToastId, number>();
 
+const RECENT_TOAST_DEDUPE_WINDOW_MS = 2500;
+const recentToastTimestamps = new Map<string, { id: ToastId; timestamp: number }>();
+
+const originalToastAdd = toastManager.add.bind(toastManager);
+toastManager.add = (options: Parameters<typeof originalToastAdd>[0]): ToastId => {
+  const titleStr = typeof options.title === "string" ? options.title : "";
+  const descStr = typeof options.description === "string" ? options.description : "";
+  const threadIdStr = options.data?.threadId ?? "";
+  const key = `${options.type ?? ""}:${titleStr}:${descStr}:${threadIdStr}`;
+  const now = Date.now();
+  const recent = recentToastTimestamps.get(key);
+  if (recent && now - recent.timestamp < RECENT_TOAST_DEDUPE_WINDOW_MS) {
+    return recent.id;
+  }
+  const id = originalToastAdd(options);
+  recentToastTimestamps.set(key, { id, timestamp: now });
+  if (recentToastTimestamps.size > 50) {
+    for (const [k, v] of recentToastTimestamps.entries()) {
+      if (now - v.timestamp > 10_000) {
+        recentToastTimestamps.delete(k);
+      }
+    }
+  }
+  return id;
+};
+
 const TOAST_ICONS = {
   error: CircleAlertIcon,
   info: InfoIcon,

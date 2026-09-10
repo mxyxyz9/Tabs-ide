@@ -8,6 +8,10 @@ export default defineConfig({
         find: /^@tabs\/contracts$/,
         replacement: path.resolve(import.meta.dirname, "./packages/contracts/src/index.ts"),
       },
+      {
+        find: /^~\/(.*)$/,
+        replacement: path.resolve(import.meta.dirname, "./apps/web/src/$1"),
+      },
     ],
   },
 });

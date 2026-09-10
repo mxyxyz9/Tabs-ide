@@ -494,6 +494,7 @@ function EventRouter() {
     // during subscribe. Skip the toast for that replay so effect re-runs
     // don't produce duplicate toasts.
     let subscribed = false;
+    let lastKeybindingsPayloadHash: string | null = null;
     const unsubServerConfigUpdated = onServerConfigUpdated((payload) => {
       if (payload.settings) {
         applyServerConfigUpdate(payload);
@@ -502,10 +503,19 @@ function EventRouter() {
       // Invalidate the config query so active observers refetch fresh data.
       void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
 
-      if (!subscribed) return;
+      if (!subscribed) {
+        lastKeybindingsPayloadHash = JSON.stringify(payload.issues);
+        return;
+      }
 
       // Only show keybindings toasts for keybindings changes (no settings in payload)
       if (payload.settings) return;
+
+      const currentHash = JSON.stringify(payload.issues);
+      if (currentHash === lastKeybindingsPayloadHash) {
+        return;
+      }
+      lastKeybindingsPayloadHash = currentHash;
 
       const issue = payload.issues.find((entry) => entry.kind.startsWith("keybindings."));
       if (!issue) {
