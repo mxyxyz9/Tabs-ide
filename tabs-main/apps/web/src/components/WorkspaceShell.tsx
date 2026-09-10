@@ -7199,7 +7199,13 @@ function DesktopBrowserChrome(props: {
                 type="button"
                 size="xs"
                 variant="outline"
-                onClick={() => void bridge?.reloadBrowserSession(sessionArg)}
+                onClick={(event) =>
+                  void bridge?.reloadBrowserSession({
+                    ...sessionArg,
+                    ignoreCache: event.shiftKey,
+                  })
+                }
+                title="Refresh (hold Shift to bypass the cache)"
               >
                 <RefreshCwIcon className="size-3.5" />
                 Refresh

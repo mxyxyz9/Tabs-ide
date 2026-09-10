@@ -759,12 +759,18 @@ export class BrowserHostManager {
     await this.loadUrl(session, input.url);
   }
 
-  async reload(input: DesktopBrowserHostControlInput): Promise<void> {
+  async reload(
+    input: DesktopBrowserHostControlInput & { ignoreCache?: boolean },
+  ): Promise<void> {
     const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session) return;
     session.lastError = null;
     this.emitState(session);
-    session.view.webContents.reload();
+    if (input.ignoreCache) {
+      session.view.webContents.reloadIgnoringCache();
+    } else {
+      session.view.webContents.reload();
+    }
   }
 
   async goBack(input: DesktopBrowserHostControlInput): Promise<void> {

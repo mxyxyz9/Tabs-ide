@@ -1177,7 +1177,9 @@ export interface DesktopBridge {
   activateBrowserSession: (input: DesktopBrowserHostActivateSessionInput) => Promise<void>;
   hideBrowserSession: () => Promise<void>;
   navigateBrowserSession: (input: DesktopBrowserHostNavigateInput) => Promise<void>;
-  reloadBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
+  reloadBrowserSession: (
+    input: DesktopBrowserHostControlInput & { ignoreCache?: boolean },
+  ) => Promise<void>;
   goBackBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   goForwardBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;

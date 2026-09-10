@@ -2368,6 +2368,7 @@ function registerIpcHandlers(): void {
     await browserHostManager.reload({
       projectId: (input as { projectId: string }).projectId,
       sessionId: readBrowserSessionId(input),
+      ignoreCache: (input as { ignoreCache?: unknown }).ignoreCache === true,
     });
   });
 
