@@ -928,6 +928,15 @@ export function isPathInsideWorkspace(workspaceRoot: string, filePath: string): 
   );
 }
 
+export function shouldOpenCodeOssUrlExternally(url: string): boolean {
+  try {
+    const protocol = new URL(url).protocol.toLowerCase();
+    return protocol === "http:" || protocol === "https:" || protocol === "mailto:" || protocol === "tabs:";
+  } catch {
+    return false;
+  }
+}
+
 export function filterWorkspaceTabs(
   workspaceRoot: string,
   tabs: readonly CodeTabInfo[],
@@ -1261,7 +1270,7 @@ export class CodeHostManager {
     view.webContents.setWindowOpenHandler(({ url }) => {
       const isInternal =
         url === "about:blank" || /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(url);
-      if (!isInternal && /^https?:\/\//i.test(url)) {
+      if (!isInternal && shouldOpenCodeOssUrlExternally(url)) {
         void shell.openExternal(url).catch(() => {
           /* ignore */
         });

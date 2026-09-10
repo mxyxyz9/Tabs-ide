@@ -64,6 +64,7 @@ import {
   resolveCodeOssExtensionPath,
   resolveCodeOssNodeModulesResource,
   resolveCodeOssWorkbenchTheme,
+  shouldOpenCodeOssUrlExternally,
   writeWorkspaceTabs,
 } from "./codeHostManager";
 
@@ -120,6 +121,24 @@ describe("removeLegacyForcedEditorSettings", () => {
       "editor.fontSize": 16,
     });
   });
+});
+
+describe("shouldOpenCodeOssUrlExternally", () => {
+  it.each([
+    "https://github.com/login",
+    "http://example.com",
+    "mailto:support@example.com",
+    "tabs://vscode.github-authentication/did-authenticate?nonce=123",
+  ])("allows safe external and authentication URLs: %s", (url) => {
+    expect(shouldOpenCodeOssUrlExternally(url)).toBe(true);
+  });
+
+  it.each(["javascript:alert(1)", "data:text/html,test", "file:///tmp/secret", "not a url"])(
+    "rejects unsafe popup URLs: %s",
+    (url) => {
+      expect(shouldOpenCodeOssUrlExternally(url)).toBe(false);
+    },
+  );
 });
 
 describe("resolveWorkspaceRootForSession", () => {
