@@ -162,6 +162,26 @@ export function sanitizeEmbeddedBrowserUserAgent(userAgent: string): string {
   return userAgent.replace(/ Electron\/[^ ]+/g, "").replace(/ [^ /]+\/[^ ]+ Chrome\//, " Chrome/");
 }
 
+export const BROWSER_CRASH_RECOVERY_WINDOW_MS = 30_000;
+const BROWSER_CRASH_RECOVERY_MAX_ATTEMPTS = 3;
+const BROWSER_CRASH_RECOVERY_BASE_DELAY_MS = 250;
+
+export function planBrowserCrashRecovery(
+  attempts: number,
+  windowStartedAt: number | null,
+  now: number,
+): { attempts: number; windowStartedAt: number; delayMs: number } | null {
+  const startsNewWindow =
+    windowStartedAt === null || now - windowStartedAt >= BROWSER_CRASH_RECOVERY_WINDOW_MS;
+  const attemptsInWindow = startsNewWindow ? 0 : attempts;
+  if (attemptsInWindow >= BROWSER_CRASH_RECOVERY_MAX_ATTEMPTS) return null;
+  return {
+    attempts: attemptsInWindow + 1,
+    windowStartedAt: startsNewWindow ? now : windowStartedAt,
+    delayMs: BROWSER_CRASH_RECOVERY_BASE_DELAY_MS * 2 ** attemptsInWindow,
+  };
+}
+
 type BrowserSession = {
   projectId: string;
   sessionId: string;
@@ -190,6 +210,9 @@ type BrowserSession = {
   controlEpoch: number;
   dispatchingAgentInput: boolean;
   humanControlTimer: ReturnType<typeof setTimeout> | null;
+  crashRecoveryAttempts: number;
+  crashRecoveryWindowStartedAt: number | null;
+  crashRecoveryTimer: ReturnType<typeof setTimeout> | null;
   automationTail: Promise<void>;
   journeyRecorder?: JourneyRecorder;
 };
@@ -373,6 +396,9 @@ export class BrowserHostManager {
       controlEpoch: 0,
       dispatchingAgentInput: false,
       humanControlTimer: null,
+      crashRecoveryAttempts: 0,
+      crashRecoveryWindowStartedAt: null,
+      crashRecoveryTimer: null,
       automationTail: Promise.resolve(),
     };
 
@@ -419,6 +445,7 @@ export class BrowserHostManager {
     const currentUrl = session.currentUrl;
     const partition = partitionInput ?? session.partition ?? `persist:tabs-browser:${projectId}`;
 
+    this.clearCrashRecoveryTimer(session);
     this.clearHumanControlTimer(session);
     this.detachSession(session);
     session.view.webContents.close({ waitForBeforeUnload: false });
@@ -1476,6 +1503,7 @@ export class BrowserHostManager {
       }
       this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
       this.clearHumanControlTimer(session);
+      this.clearCrashRecoveryTimer(session);
       session.view.webContents.close({ waitForBeforeUnload: false });
       this.sessions.delete(key);
     }
@@ -1486,6 +1514,7 @@ export class BrowserHostManager {
     for (const session of this.sessions.values()) {
       this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
       this.clearHumanControlTimer(session);
+      this.clearCrashRecoveryTimer(session);
       session.view.webContents.close({ waitForBeforeUnload: false });
     }
     this.sessions.clear();
@@ -1555,6 +1584,12 @@ export class BrowserHostManager {
     if (!session.humanControlTimer) return;
     clearTimeout(session.humanControlTimer);
     session.humanControlTimer = null;
+  }
+
+  private clearCrashRecoveryTimer(session: BrowserSession): void {
+    if (!session.crashRecoveryTimer) return;
+    clearTimeout(session.crashRecoveryTimer);
+    session.crashRecoveryTimer = null;
   }
 
   private observeProfileSession(partition: string, s: Session): void {
@@ -1660,6 +1695,8 @@ export class BrowserHostManager {
       session.currentUrl = url;
       session.lastError = null;
       session.transientError = null;
+      session.crashRecoveryAttempts = 0;
+      session.crashRecoveryWindowStartedAt = null;
       refreshNavigationState();
       this.emitState(session);
     });
@@ -1696,12 +1733,30 @@ export class BrowserHostManager {
     // reload affordance) instead of a silent black void.
     contents.on("render-process-gone", (_event, details) => {
       session.loading = false;
-      session.lastError = `The page crashed (${details.reason}). Reload to try again.`;
+      const recovery = planBrowserCrashRecovery(
+        session.crashRecoveryAttempts,
+        session.crashRecoveryWindowStartedAt,
+        Date.now(),
+      );
+      session.lastError = recovery
+        ? `The page crashed (${details.reason}). Recovering…`
+        : `The page crashed repeatedly (${details.reason}). Reload to try again.`;
       refreshNavigationState();
       this.emitState(session);
       console.error(
         `[browser-host] render process gone for ${session.key} (${session.currentUrl ?? "?"}): ${details.reason}`,
       );
+      if (!recovery || session.crashRecoveryTimer) return;
+      session.crashRecoveryAttempts = recovery.attempts;
+      session.crashRecoveryWindowStartedAt = recovery.windowStartedAt;
+      session.crashRecoveryTimer = setTimeout(() => {
+        session.crashRecoveryTimer = null;
+        if (this.sessions.get(session.key) !== session) return;
+        void this.recreateSession(session.projectId, session.sessionId).catch((error) => {
+          session.lastError = error instanceof Error ? error.message : String(error);
+          this.emitState(session);
+        });
+      }, recovery.delayMs);
     });
     // Forward page-level error logs to the main process log. Many "the site is
     // blank" reports are a client-side exception thrown by the embedded page

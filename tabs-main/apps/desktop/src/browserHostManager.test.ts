@@ -57,8 +57,20 @@ import {
   normalizeBrowserCookieDomain,
   normalizeBrowserProfileId,
   normalizeRemoteBrowserUrl,
+  planBrowserCrashRecovery,
   sanitizeEmbeddedBrowserUserAgent,
 } from "./browserHostManager";
+
+describe("browser crash recovery", () => {
+  it("uses bounded exponential backoff and resets after the recovery window", () => {
+    const first = planBrowserCrashRecovery(0, null, 1_000)!;
+    expect(first).toEqual({ attempts: 1, windowStartedAt: 1_000, delayMs: 250 });
+    expect(planBrowserCrashRecovery(1, 1_000, 1_100)?.delayMs).toBe(500);
+    expect(planBrowserCrashRecovery(2, 1_000, 1_200)?.delayMs).toBe(1_000);
+    expect(planBrowserCrashRecovery(3, 1_000, 1_300)).toBeNull();
+    expect(planBrowserCrashRecovery(3, 1_000, 31_000)?.delayMs).toBe(250);
+  });
+});
 
 describe("hasReturnedToAuthenticationOrigin", () => {
   it("recognizes a completed redirect back to the originating site", () => {
