@@ -18,6 +18,7 @@ export interface ComposerDraftsState {
 const emptyDraft: ComposerThreadDraftState = {
   prompt: "",
   images: [],
+  files: [],
   nonPersistedImageIds: [],
   persistedAttachments: [],
   terminalContexts: [],
@@ -176,6 +177,11 @@ export const composerDraftActions = {
   removeImage: (
     ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["removeImage"]>
   ) => useComposerDraftStore.getState().removeImage(...args),
+  addFiles: (...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["addFiles"]>) =>
+    useComposerDraftStore.getState().addFiles(...args),
+  removeFile: (
+    ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["removeFile"]>
+  ) => useComposerDraftStore.getState().removeFile(...args),
   insertTerminalContext: (
     ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["insertTerminalContext"]>
   ) => useComposerDraftStore.getState().insertTerminalContext(...args),

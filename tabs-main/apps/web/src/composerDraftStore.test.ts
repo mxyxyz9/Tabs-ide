@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   COMPOSER_DRAFT_STORAGE_KEY,
+  type ComposerFileAttachment,
   type ComposerImageAttachment,
   useComposerDraftStore,
 } from "./composerDraftStore";
@@ -49,6 +50,18 @@ function makeImage(input: {
     mimeType,
     sizeBytes: file.size,
     previewUrl: input.previewUrl,
+    file,
+  };
+}
+
+function makeFile(id: string, name = "notes.txt"): ComposerFileAttachment {
+  const file = new File(["hello"], name, { type: "text/plain" });
+  return {
+    type: "file",
+    id,
+    name,
+    mimeType: file.type,
+    sizeBytes: file.size,
     file,
   };
 }
@@ -192,6 +205,26 @@ describe("composerDraftStore addImages", () => {
     const draft = useComposerDraftStore.getState().draftsByThreadId[threadId];
     expect(draft?.images.map((image) => image.id)).toEqual(["img-shared"]);
     expect(revokeSpy).not.toHaveBeenCalledWith("blob:shared");
+  });
+});
+
+describe("composerDraftStore files", () => {
+  const threadId = ThreadId.makeUnsafe("thread-files");
+
+  beforeEach(resetComposerDraftStore);
+
+  it("stages, removes, and clears file attachments", () => {
+    const store = useComposerDraftStore.getState();
+    store.addFiles(threadId, [makeFile("file-1"), makeFile("file-2", "report.pdf")]);
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]?.files).toHaveLength(2);
+
+    useComposerDraftStore.getState().removeFile(threadId, "file-1");
+    expect(
+      useComposerDraftStore.getState().draftsByThreadId[threadId]?.files.map((file) => file.id),
+    ).toEqual(["file-2"]);
+
+    useComposerDraftStore.getState().clearComposerContent(threadId);
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toBeUndefined();
   });
 });
 
