@@ -17,6 +17,7 @@ const assistantViewContainerIds = new Set([
 	'codexSecondaryViewContainer',
 	'geminiChat'
 ].map(extensionViewContainerId));
+assistantViewContainerIds.add('workbench.panel.chat');
 
 const sidebarViewContainerIds = new Set([
 	'claude-sidebar',

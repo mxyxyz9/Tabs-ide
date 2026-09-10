@@ -12,7 +12,7 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import * as strings from '../../../../base/common/strings.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { ExtensionIdentifier, IExtensionManifest } from '../../../../platform/extensions/common/extensions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
@@ -67,18 +67,11 @@ const chatViewDescriptor: IViewDescriptor = {
 		},
 		order: 1
 	},
-	ctorDescriptor: new SyncDescriptor(ChatViewPane),
-	when: ContextKeyExpr.and(
-		ChatContextKeys.accountPolicyGateActive.negate(),
-		ContextKeyExpr.or(
-			ContextKeyExpr.and(
-				ChatContextKeys.Setup.hidden.negate(),
-				ChatContextKeys.Setup.disabledInWorkspace.negate(),
-			),
-			ChatContextKeys.panelParticipantRegistered,
-			ChatContextKeys.extensionInvalid
-		)
-	)
+	// Tabs exposes Chat beside extension-provided assistants in the native
+	// auxiliary bar. Keep its tab registered from workbench startup instead of
+	// making the entire view appear and disappear as Copilot entitlement/setup
+	// context keys settle asynchronously.
+	ctorDescriptor: new SyncDescriptor(ChatViewPane)
 };
 Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([chatViewDescriptor], chatViewContainer);
 
