@@ -1,6 +1,9 @@
 import { cn } from "~/lib/utils";
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "~/lib/contextWindow";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { Button } from "../ui/button";
+import { Minimize2Icon } from "lucide-react";
+import { formatContextWindowCompactionMessage } from "./ContextWindowMeter.logic";
 
 function formatPercentage(value: number | null): string | null {
   if (value === null || !Number.isFinite(value)) {
@@ -12,8 +15,16 @@ function formatPercentage(value: number | null): string | null {
   return `${Math.round(value)}%`;
 }
 
-export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
-  const { usage } = props;
+export interface ContextWindowMeterProps {
+  usage: ContextWindowSnapshot;
+  modelDisplayName?: string | null | undefined;
+  onCompact?: (() => void) | undefined;
+  compactDisabled?: boolean | undefined;
+  compactDisabledReason?: string | null | undefined;
+}
+
+export function ContextWindowMeter(props: ContextWindowMeterProps) {
+  const { usage, modelDisplayName, onCompact, compactDisabled = false, compactDisabledReason } = props;
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
   const radius = 9.75;
@@ -25,7 +36,7 @@ export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
       <PopoverTrigger
         openOnHover
         delay={150}
-        closeDelay={0}
+        closeDelay={onCompact ? 150 : 0}
         render={
           <button
             type="button"
@@ -104,7 +115,26 @@ export function ContextWindowMeter(props: { usage: ContextWindowSnapshot }) {
           ) : null}
           {usage.compactsAutomatically ? (
             <div className="text-xs text-muted-foreground">
-              Automatically compacts its context when needed.
+              {formatContextWindowCompactionMessage(modelDisplayName, usage.autoCompactThreshold)}
+            </div>
+          ) : null}
+          {onCompact ? (
+            <div className="pt-1">
+              <Button
+                size="xs"
+                variant="outline"
+                className="w-full justify-center text-xs"
+                disabled={compactDisabled}
+                onClick={onCompact}
+              >
+                <Minimize2Icon className="size-3.5 mr-1" />
+                Compact context
+              </Button>
+              {compactDisabled && compactDisabledReason ? (
+                <div className="pt-1 text-pretty text-[11px] text-muted-foreground">
+                  {compactDisabledReason}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

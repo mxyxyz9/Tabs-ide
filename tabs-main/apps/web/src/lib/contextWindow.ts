@@ -22,6 +22,7 @@ export type ContextWindowSnapshot = NullableContextWindowUsage & {
   readonly remainingTokens: number | null;
   readonly usedPercentage: number | null;
   readonly remainingPercentage: number | null;
+  readonly autoCompactThreshold?: number | null;
   readonly updatedAt: string;
 };
 
@@ -66,6 +67,7 @@ export function deriveLatestContextWindowSnapshot(
       toolUses: asFiniteNumber(payload?.toolUses),
       durationMs: asFiniteNumber(payload?.durationMs),
       compactsAutomatically: asBoolean(payload?.compactsAutomatically) ?? false,
+      autoCompactThreshold: asFiniteNumber(payload?.autoCompactThreshold),
       updatedAt: activity.createdAt,
     };
   }

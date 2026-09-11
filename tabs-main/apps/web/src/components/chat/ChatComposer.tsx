@@ -53,6 +53,10 @@ export interface ChatComposerProps {
   ) => Promise<void>;
   onUserInputSubmit?: (inputId: string, value: string) => void;
   onPlanFollowUp?: (planId: string) => void;
+  onCompactContext?: () => void;
+  onCompact?: () => void;
+  compactDisabled?: boolean;
+  compactDisabledReason?: string | null;
 }
 
 export function ChatComposer({
@@ -75,6 +79,10 @@ export function ChatComposer({
   onApprovalAction,
   onUserInputSubmit,
   onPlanFollowUp,
+  onCompactContext,
+  onCompact,
+  compactDisabled = false,
+  compactDisabledReason = null,
 }: ChatComposerProps) {
   const [message, setMessage] = useState("");
   const [showCommands, setShowCommands] = useState(false);

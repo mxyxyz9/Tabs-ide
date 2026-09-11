@@ -210,6 +210,10 @@ import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { ChatHeader } from "./chat/ChatHeader";
 import { ContextWindowMeter } from "./chat/ContextWindowMeter";
+import {
+  isCompactCommandMessage,
+  providerSupportsManualCompaction,
+} from "./chat/ContextWindowMeter.logic";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/ProviderModelPicker";
@@ -1006,7 +1010,39 @@ export default function ChatView({
   const phase = derivePhase(activeThread?.session ?? null);
   const isSendBusy = sendPhase !== "idle";
   const isPreparingWorktree = sendPhase === "preparing-worktree";
-  const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const optimisticCompactionMessage = optimisticUserMessages.at(-1);
+  const pendingCompactionMessage =
+    isSendBusy &&
+    optimisticCompactionMessage !== undefined &&
+    isCompactCommandMessage(optimisticCompactionMessage)
+      ? optimisticCompactionMessage
+      : activeThread?.messages.findLast(isCompactCommandMessage);
+  const compactRequestIsActive =
+    pendingCompactionMessage !== undefined &&
+    (pendingCompactionMessage.createdAt >
+      (activeLatestTurn?.requestedAt ?? pendingCompactionMessage.createdAt) ||
+      (activeLatestTurn?.state === "running" &&
+        pendingCompactionMessage.createdAt === activeLatestTurn.requestedAt));
+  const compactionSettled =
+    pendingCompactionMessage !== undefined &&
+    Boolean(
+      activeThread?.activities.some((activity) => {
+        if (
+          activity.kind !== "context-compaction" &&
+          activity.kind !== "provider.turn.start.failed"
+        ) {
+          return false;
+        }
+        const payload = activity.payload as { readonly requestId?: unknown } | null | undefined;
+        return payload?.requestId === pendingCompactionMessage.id;
+      }),
+    );
+  const isCompacting =
+    (isSendBusy || phase === "connecting" || phase === "running") &&
+    Boolean(compactRequestIsActive) &&
+    !compactionSettled;
+  const isWorking =
+    phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint || isCompacting;
   const nowIso = new Date(nowTick).toISOString();
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
@@ -1442,6 +1478,47 @@ export default function ChatView({
     dismissedProviderStatusBannerKey,
   )
     ? activeProviderStatus
+    : null;
+  const manualCompactionProviderAvailable = useMemo(() => {
+    if (!activeProviderStatus) return false;
+    return (
+      providerSupportsManualCompaction(activeProviderStatus) ||
+      selectedProvider === "codex" ||
+      selectedProvider === "claudeAgent" ||
+      selectedProvider === "opencode"
+    );
+  }, [activeProviderStatus, selectedProvider]);
+
+  const activeThreadHasCompactableConversation = useMemo(
+    () =>
+      activeThread?.messages.some(
+        (message) => message.role === "user" && !isCompactCommandMessage(message),
+      ) ?? false,
+    [activeThread?.messages],
+  );
+
+  const compactThreadUnavailable =
+    !activeThread ||
+    !activeThreadHasCompactableConversation ||
+    !activeProject ||
+    !isServerThread ||
+    !manualCompactionProviderAvailable ||
+    phase === "running" ||
+    isSendBusy ||
+    isConnecting ||
+    isCompacting ||
+    pendingApprovals.length > 0 ||
+    pendingUserInputs.length > 0 ||
+    showPlanFollowUpPrompt;
+  const compactDisabled = compactThreadUnavailable;
+  const compactDisabledReason = compactDisabled
+    ? !activeProject
+      ? "Choose a project before compacting"
+      : !manualCompactionProviderAvailable
+        ? "Compaction is unavailable for this provider"
+        : !activeThreadHasCompactableConversation
+          ? "Start a conversation before compacting"
+          : "Compacting is unavailable right now"
     : null;
   const selectedProviderSkills = useMemo(() => {
     if (!activeProviderStatus) return EMPTY_PROVIDER_SKILLS;
@@ -2957,6 +3034,82 @@ export default function ChatView({
     ],
   );
 
+  const onCompactContext = useCallback(async () => {
+    if (compactDisabled || !activeThread || sendInFlightRef.current) {
+      return;
+    }
+    const api = threadApi;
+    if (!api) return;
+
+    // Compaction is a standalone command; the draft and its attachments stay local.
+    const threadId = activeThread.id;
+    const messageId = newMessageId();
+    const createdAt = new Date().toISOString();
+    sendInFlightRef.current = true;
+    beginSendPhase("sending-turn");
+    setThreadError(threadId, null);
+    setOptimisticUserMessages((messages) => [
+      ...messages,
+      {
+        id: messageId,
+        role: "user",
+        text: "/compact",
+        turnId: null,
+        createdAt,
+        updatedAt: createdAt,
+        streaming: false,
+      },
+    ]);
+    scrollMessagesToBottom();
+    try {
+      await persistThreadSettingsForNextTurn({
+        threadId,
+        createdAt,
+        modelSelection: selectedModelSelection,
+        runtimeMode,
+        interactionMode,
+      });
+      await api.orchestration.dispatchCommand({
+        type: "thread.turn.start",
+        commandId: newCommandId(),
+        threadId,
+        message: {
+          messageId,
+          role: "user",
+          text: "/compact",
+          attachments: [],
+        },
+        modelSelection: selectedModelSelection,
+        runtimeMode,
+        interactionMode,
+        createdAt,
+      });
+    } catch (err) {
+      setOptimisticUserMessages((messages) =>
+        messages.filter((message) => message.id !== messageId),
+      );
+      setThreadError(
+        threadId,
+        err instanceof Error ? err.message : "Failed to compact context.",
+      );
+    } finally {
+      sendInFlightRef.current = false;
+      resetSendPhase();
+    }
+  }, [
+    activeThread,
+    beginSendPhase,
+    compactDisabled,
+    interactionMode,
+    persistThreadSettingsForNextTurn,
+    resetSendPhase,
+    runtimeMode,
+    scrollMessagesToBottom,
+    selectedModelSelection,
+    setThreadError,
+    threadApi,
+  ]);
+
   const onSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
     const api = threadApi;
@@ -3014,6 +3167,23 @@ export default function ChatView({
       setComposerCursor(0);
       setComposerTrigger(null);
       return;
+    }
+    if (
+      trimmed.toLowerCase() === "/compact" &&
+      composerImages.length === 0 &&
+      composerFiles.length === 0 &&
+      sendableComposerTerminalContexts.length === 0 &&
+      composerPreviewAnnotations.length === 0
+    ) {
+      if (manualCompactionProviderAvailable && activeThreadHasCompactableConversation) {
+        promptRef.current = "";
+        clearComposerDraftContent(activeThread.id);
+        setComposerHighlightedItemId(null);
+        setComposerCursor(0);
+        setComposerTrigger(null);
+        void onCompactContext();
+        return;
+      }
     }
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
@@ -4522,7 +4692,15 @@ export default function ChatView({
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
-                {activeContextWindow ? <ContextWindowMeter usage={activeContextWindow} /> : null}
+                {activeContextWindow ? (
+                  <ContextWindowMeter
+                    usage={activeContextWindow}
+                    modelDisplayName={selectedModel}
+                    onCompact={onCompactContext}
+                    compactDisabled={compactDisabled}
+                    compactDisabledReason={compactDisabledReason}
+                  />
+                ) : null}
                 <Tooltip>
                   <TooltipTrigger
                     render={
