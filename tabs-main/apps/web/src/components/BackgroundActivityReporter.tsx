@@ -25,12 +25,15 @@ export function BackgroundActivityReporter() {
   useEffect(() => {
     let recentlyInteracted = true;
     let lastInteraction = Date.now();
+    let reportInFlight = false;
     const markInteraction = () => {
       lastInteraction = Date.now();
       recentlyInteracted = true;
     };
     const report = () => {
+      if (reportInFlight) return;
       recentlyInteracted = Date.now() - lastInteraction < 60_000;
+      reportInFlight = true;
       void ensureNativeApi()
         .server.reportClientActivity({
           clientId: clientId(),
@@ -44,7 +47,10 @@ export function BackgroundActivityReporter() {
           ttlMs: 45_000,
           observedAt: DateTime.nowUnsafe(),
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => {
+          reportInFlight = false;
+        });
     };
     for (const event of ["pointerdown", "keydown", "focus", "online", "offline"] as const) {
       window.addEventListener(event, markInteraction, { passive: true });

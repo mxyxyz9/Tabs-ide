@@ -29,4 +29,11 @@ describe("RPC latency tracking", () => {
     acknowledgeRpcRequest("1");
     expect(getSlowRpcRequests()).toEqual([]);
   });
+
+  it("does not surface background lease heartbeats as slow user requests", () => {
+    trackRpcRequest("activity", "server.reportClientActivity");
+    trackRpcRequest("power", "server.reportHostPowerState");
+    vi.advanceTimersByTime(SLOW_RPC_THRESHOLD_MS);
+    expect(getSlowRpcRequests()).toEqual([]);
+  });
 });

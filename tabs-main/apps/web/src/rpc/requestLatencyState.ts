@@ -16,6 +16,10 @@ const longRunningMethods = new Set([
   "server.refreshProviders",
   "server.updateServer",
 ]);
+const backgroundHeartbeatMethods = new Set([
+  "server.reportClientActivity",
+  "server.reportHostPowerState",
+]);
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
 let slowRequests: ReadonlyArray<SlowRpcRequest> = [];
 const listeners = new Set<() => void>();
@@ -25,7 +29,12 @@ function emit() {
 }
 
 export function trackRpcRequest(requestId: string, method: string): void {
-  if (method.includes("subscribe") || method.startsWith("pullRequests.")) return;
+  if (
+    method.includes("subscribe") ||
+    method.startsWith("pullRequests.") ||
+    backgroundHeartbeatMethods.has(method)
+  )
+    return;
   acknowledgeRpcRequest(requestId);
   while (pending.size >= MAX_TRACKED_REQUESTS) {
     const oldest = pending.keys().next().value;

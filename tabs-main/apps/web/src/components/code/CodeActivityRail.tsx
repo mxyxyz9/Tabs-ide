@@ -18,6 +18,7 @@ import {
 } from "@tabs/shared/codeChrome";
 
 import { cn } from "../../lib/utils";
+import { getVisibleCustomActivityBarItems } from "./CodeActivityRail.logic";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -202,18 +203,16 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
           </Fragment>
         );
       })}
-      {props.chromeState.activityBarItems
-        ?.toSorted((left, right) => (left.order ?? 0) - (right.order ?? 0))
-        .map((item) => (
-          <RailButton
-            active={props.chromeState.activeViewId === item.id}
-            key={item.id}
-            label={item.label}
-            onClick={() => props.onRunCommand(item.commandId)}
-          >
-            <CustomActivityIcon item={item} />
-          </RailButton>
-        ))}
+      {getVisibleCustomActivityBarItems(props.chromeState.activityBarItems).map((item) => (
+        <RailButton
+          active={props.chromeState.activeViewId === item.id}
+          key={item.id}
+          label={item.label}
+          onClick={() => props.onRunCommand(item.commandId)}
+        >
+          <CustomActivityIcon item={item} />
+        </RailButton>
+      ))}
       <div className="mt-auto">
         <RailButton
           label="Open settings"

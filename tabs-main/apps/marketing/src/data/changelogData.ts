@@ -21,15 +21,79 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 146;
+export const TOTAL_TAGS_COUNT = 147;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.4",
+    title: "Toast notifications over native views, clean activity rail, and heartbeat optimization",
+    date: "September 11, 2026",
+    shortDate: "Sep 11",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Toast notifications remain visible over embedded views, auxiliary items are cleaned from Code activity rail, and background heartbeat latency warnings are eliminated.",
+    highlights: [
+      "Embedded Code-OSS, browser preview, and testing views suspend during active toasts and notifications so alerts remain visible.",
+      "Auxiliary bar items filtered out from the primary activity bar to prevent cluttering main rail navigation.",
+      "Excluded routine lease heartbeats from slow RPC latency tracking and added concurrency guards to activity reporting.",
+      "Refined production website deployment packaging and verified live release assets.",
+    ],
+    categories: [
+      {
+        title: "Native Overlays & Notifications",
+        items: [
+          "Suspends native WebContentsViews when toasts are mounted so notifications are never occluded.",
+          "Updated overlay selectors across Code host and testing previews.",
+        ],
+      },
+      {
+        title: "Workbench & Activity Rail",
+        items: [
+          "Secondary auxiliary bar items excluded from main activity rail.",
+          "Deterministic ordering for custom activity bar extensions.",
+        ],
+      },
+      {
+        title: "RPC & Performance",
+        items: [
+          "Heartbeat RPC methods excluded from latency monitoring to avoid spurious slow request toasts.",
+          "In-flight concurrency guard for client activity reporting.",
+        ],
+      },
+    ],
+    installers: [
+      {
+        platform: "macOS",
+        arch: "Apple Silicon (M1/M2/M3/M4)",
+        filename: "Tabs-1.3.4-arm64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.4/Tabs-1.3.4-arm64.dmg",
+      },
+      {
+        platform: "macOS",
+        arch: "Intel x64",
+        filename: "Tabs-1.3.4-x64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.4/Tabs-1.3.4-x64.dmg",
+      },
+      {
+        platform: "Windows",
+        arch: "x64 installer",
+        filename: "Tabs-1.3.4-x64.exe",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.4/Tabs-1.3.4-x64.exe",
+      },
+      {
+        platform: "Linux",
+        arch: "x64 AppImage",
+        filename: "Tabs-1.3.4-x86_64.AppImage",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.4/Tabs-1.3.4-x86_64.AppImage",
+      },
+    ],
+  },
   {
     tag: "v1.3.3",
     title: "Workspace skills, preview controls, and attachments",
     date: "September 10, 2026",
     shortDate: "Sep 10",
-    isLatest: true,
     type: "patch",
     summary:
       "Workspace-specific skill discovery and dispatch, direct browser preview controls, file attachments, and progressive desktop startup stability.",

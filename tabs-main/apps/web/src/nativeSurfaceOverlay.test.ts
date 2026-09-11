@@ -9,8 +9,8 @@ describe("native surface overlay policy", () => {
     expect(isNativeSurfaceBlockingOverlaySlot("code-resize-overlay")).toBe(true);
   });
 
-  it("does not blank native surfaces for passive notifications", () => {
-    expect(isNativeSurfaceBlockingOverlaySlot("toast-root")).toBe(false);
-    expect(isNativeSurfaceBlockingOverlaySlot("toast-popup")).toBe(false);
+  it("suspends native surfaces while notifications are visible", () => {
+    expect(isNativeSurfaceBlockingOverlaySlot("toast-root")).toBe(true);
+    expect(isNativeSurfaceBlockingOverlaySlot("toast-popup")).toBe(true);
   });
 });

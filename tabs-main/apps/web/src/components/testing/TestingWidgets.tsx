@@ -14,18 +14,9 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
 import { clipTestingPreviewBounds } from "~/lib/testingPreviewBounds";
+import { NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR } from "~/nativeSurfaceOverlay";
 
-export const CODE_HOST_OVERLAY_SELECTOR = [
-  "[data-slot='menu-positioner']",
-  "[data-slot='popover-positioner']",
-  "[data-slot='dialog-backdrop']",
-  "[data-slot='dialog-popup']",
-  "[data-slot='alert-dialog-backdrop']",
-  "[data-slot='alert-dialog-popup']",
-  "[data-slot='command-dialog-backdrop']",
-  "[data-slot='command-dialog-popup']",
-  "[data-slot='code-resize-overlay']",
-].join(", ");
+export const CODE_HOST_OVERLAY_SELECTOR = NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR;
 
 export function isSameWebUrl(
   urlA: string | null | undefined,
