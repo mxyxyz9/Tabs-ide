@@ -19,6 +19,15 @@ import { useCallback, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { GitPullRequestAction, GitPullRequestReviewThread } from "@tabs/contracts";
 import { PullRequestReviewThreadCard } from "./PullRequestReviewThreadCard";
+import {
+  PullRequestChecksView,
+  PullRequestChecksRollupBadge,
+} from "./PullRequestChecksSummary";
+import {
+  PullRequestReviewersSection,
+  PullRequestLabelsSection,
+  PullRequestActivityView,
+} from "./PullRequestMetadataControls";
 
 import {
   gitAllPullRequestsQueryOptions,
@@ -882,125 +891,31 @@ export function PRsPanel({
                             ) : (
                               <p className="text-muted-foreground">No description provided.</p>
                             )}
-                            {(detailQuery.data.pullRequest.reviewers ?? []).length > 0 ? (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-muted-foreground">Reviewers:</span>
-                                {detailQuery.data.pullRequest.reviewers?.map((reviewer) => (
-                                  <Button
-                                    key={reviewer.login}
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={
-                                      pendingAction !== null || !supportsAction("remove_reviewer")
-                                    }
-                                    aria-label={`Remove reviewer ${reviewer.login}`}
-                                    onClick={() =>
-                                      void mutatePullRequest(
-                                        pr.n,
-                                        "remove_reviewer",
-                                        undefined,
-                                        reviewer.id ?? reviewer.login,
-                                      )
-                                    }
-                                  >
-                                    @{reviewer.login} ×
-                                  </Button>
-                                ))}
-                              </div>
-                            ) : null}
-                            {detailQuery.data.pullRequest.state === "open" ? (
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                <form
-                                  hidden={!supportsAction("add_reviewer")}
-                                  className="flex gap-1"
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    const value = reviewerInput.trim().replace(/^@/, "");
-                                    if (!value) return;
-                                    void mutatePullRequest(
-                                      pr.n,
-                                      "add_reviewer",
-                                      undefined,
-                                      value,
-                                    ).then((ok) => {
-                                      if (ok) setReviewerInput("");
-                                    });
-                                  }}
-                                >
-                                  <input
-                                    value={reviewerInput}
-                                    onChange={(event) => setReviewerInput(event.target.value)}
-                                    className="min-w-0 flex-1 rounded-md border border-border bg-background px-2"
-                                    aria-label="Reviewer login"
-                                    placeholder="Reviewer login"
-                                  />
-                                  <Button
-                                    type="submit"
-                                    size="sm"
-                                    disabled={!reviewerInput.trim() || pendingAction !== null}
-                                  >
-                                    Add
-                                  </Button>
-                                </form>
-                                <form
-                                  hidden={!supportsAction("add_label")}
-                                  className="flex gap-1"
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    const value = labelInput.trim();
-                                    if (!value) return;
-                                    void mutatePullRequest(
-                                      pr.n,
-                                      "add_label",
-                                      undefined,
-                                      value,
-                                    ).then((ok) => {
-                                      if (ok) setLabelInput("");
-                                    });
-                                  }}
-                                >
-                                  <input
-                                    value={labelInput}
-                                    onChange={(event) => setLabelInput(event.target.value)}
-                                    className="min-w-0 flex-1 rounded-md border border-border bg-background px-2"
-                                    aria-label="Label name"
-                                    placeholder="Label name"
-                                  />
-                                  <Button
-                                    type="submit"
-                                    size="sm"
-                                    disabled={!labelInput.trim() || pendingAction !== null}
-                                  >
-                                    Add
-                                  </Button>
-                                </form>
-                              </div>
-                            ) : null}
-                            {(detailQuery.data.pullRequest.labels ?? []).length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {detailQuery.data.pullRequest.labels?.map((label) => (
-                                  <Button
-                                    key={label.name}
-                                    size="sm"
-                                    variant="secondary"
-                                    disabled={
-                                      pendingAction !== null || !supportsAction("remove_label")
-                                    }
-                                    aria-label={`Remove label ${label.name}`}
-                                    onClick={() =>
-                                      void mutatePullRequest(
-                                        pr.n,
-                                        "remove_label",
-                                        undefined,
-                                        label.name,
-                                      )
-                                    }
-                                  >
-                                    {label.name} ×
-                                  </Button>
-                                ))}
-                              </div>
-                            ) : null}
+                            <PullRequestReviewersSection
+                              reviewers={detailQuery.data.pullRequest.reviewers ?? []}
+                              reviews={detailQuery.data.pullRequest.reviews ?? []}
+                              supportsAction={supportsAction}
+                              onAddReviewer={(login) =>
+                                mutatePullRequest(pr.n, "add_reviewer", undefined, login)
+                              }
+                              onRemoveReviewer={(idOrLogin) =>
+                                mutatePullRequest(pr.n, "remove_reviewer", undefined, idOrLogin)
+                              }
+                              isPending={pendingAction !== null}
+                              isOpen={detailQuery.data.pullRequest.state === "open"}
+                            />
+                            <PullRequestLabelsSection
+                              labels={detailQuery.data.pullRequest.labels ?? []}
+                              supportsAction={supportsAction}
+                              onAddLabel={(name) =>
+                                mutatePullRequest(pr.n, "add_label", undefined, name)
+                              }
+                              onRemoveLabel={(name) =>
+                                mutatePullRequest(pr.n, "remove_label", undefined, name)
+                              }
+                              isPending={pendingAction !== null}
+                              isOpen={detailQuery.data.pullRequest.state === "open"}
+                            />
                             </div>
                           ) : detailTab === "code" ? (
                           (() => {
@@ -1410,26 +1325,7 @@ export function PRsPanel({
                             );
                           })()
                         ) : detailTab === "checks" ? (
-                          <div className="space-y-1.5">
-                            {(detailQuery.data.pullRequest.checks ?? []).length > 0 ? (
-                              detailQuery.data.pullRequest.checks?.map((check) => (
-                                <div
-                                  key={`${check.workflowName ?? ""}:${check.name}`}
-                                  className="flex items-center justify-between gap-3"
-                                >
-                                  <span>
-                                    {check.workflowName ? `${check.workflowName} / ` : ""}
-                                    {check.name}
-                                  </span>
-                                  <Badge variant="outline">
-                                    {check.conclusion ?? check.status.replaceAll("_", " ")}
-                                  </Badge>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-muted-foreground">No checks reported.</p>
-                            )}
-                          </div>
+                          <PullRequestChecksView checks={detailQuery.data.pullRequest.checks ?? []} />
                         ) : detailTab === "commits" ? (
                           <div className="space-y-2">
                             {(detailQuery.data.pullRequest.commits ?? []).length > 0 ? (
@@ -1446,28 +1342,12 @@ export function PRsPanel({
                             )}
                           </div>
                         ) : (
-                          <div className="space-y-3">
-                            {(detailQuery.data.pullRequest.reviews ?? []).map((review) => (
-                              <div key={review.id}>
-                                <p className="font-medium">
-                                  {review.author ? `@${review.author.login}` : "Unknown reviewer"} ·{" "}
-                                  {review.state.toLowerCase().replaceAll("_", " ")}
-                                </p>
-                                {review.body ? <ChatMarkdown text={review.body} cwd={cwd} /> : null}
-                              </div>
-                            ))}
-                            {(detailQuery.data.pullRequest.comments ?? []).map((comment) => (
-                              <div key={comment.id}>
-                                <p className="font-medium">
-                                  {comment.author ? `@${comment.author.login}` : "Unknown author"}
-                                </p>
-                                <ChatMarkdown text={comment.body} cwd={cwd} />
-                              </div>
-                            ))}
-                            {(detailQuery.data.pullRequest.reviews ?? []).length === 0 &&
-                            (detailQuery.data.pullRequest.comments ?? []).length === 0 ? (
-                              <p className="text-muted-foreground">No review activity reported.</p>
-                            ) : null}
+                          <div className="space-y-4">
+                            <PullRequestActivityView
+                              reviews={detailQuery.data.pullRequest.reviews ?? []}
+                              comments={detailQuery.data.pullRequest.comments ?? []}
+                              cwd={cwd}
+                            />
                             {detailQuery.data.pullRequest.state === "open" ? (
                               <div className="space-y-2 border-t border-border/60 pt-3">
                                 <label
