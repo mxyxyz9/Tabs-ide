@@ -12,7 +12,7 @@ import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type EditorId,
-  type EnvironmentId,
+  EnvironmentId,
   type ResolvedKeybindingsConfig,
   type ServerProvider,
   type ThreadId,
@@ -284,18 +284,29 @@ import {
   cloneComposerImageForRetry,
   collectUserMessageBlobPreviewUrls,
   deriveComposerSendState,
+  isPaintOnlyThreadTimeline,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
+  peekHeldThreadTimeline,
+  peekRememberedThreadScrollTop,
+  peekRememberedThreadTimeline,
   PullRequestDialogState,
   readFileAsDataUrl,
+  rememberReadyThreadTimeline,
+  rememberThreadScrollTop,
   resolveBaseComposerPlaceholder,
+  resolveThreadSwitchTimeline,
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
   SendPhase,
   shouldPauseAutoScrollOnUserScrollIntent,
   shouldUseCenteredEmptyComposer,
+  timelineHasEphemeralPreviewUrls,
 } from "./ChatView.logic";
+import { scopedThreadKey, scopeThreadRef } from "@tabs/client-runtime/environment";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+
+const noop = () => {};
 
 const ATTACHMENT_PREVIEW_HANDOFF_TTL_MS = 5000;
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
@@ -310,6 +321,7 @@ const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_SKILLS: ServerProviderSkill[] = [];
 const EMPTY_PROVIDER_SLASH_COMMANDS: ServerProviderSlashCommand[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+const EMPTY_MAP = new Map();
 
 function formatOutgoingPrompt(params: {
   provider: ProviderKind;
@@ -1302,6 +1314,12 @@ export default function ChatView({
     }
     return [...serverMessagesWithPreviewHandoff, ...pendingMessages];
   }, [serverMessages, attachmentPreviewHandoffByMessageId, optimisticUserMessages]);
+  const activeEnvironmentId =
+    environmentId ?? activeThread?.environmentId ?? EnvironmentId.make("local");
+  const activeThreadKey = activeThreadId
+    ? scopedThreadKey(scopeThreadRef(activeEnvironmentId, activeThreadId))
+    : null;
+
   const timelineEntries = useMemo(
     () =>
       deriveTimelineEntries(
@@ -1312,7 +1330,29 @@ export default function ChatView({
       ),
     [activeThread?.proposedPlans, taskGroups, timelineMessages, workLogEntries],
   );
-  const hasTimelineEntries = timelineEntries.length > 0;
+
+  const threadDetailLoading =
+    !isLocalDraftThread &&
+    !activeThread?.error &&
+    !localDraftError &&
+    timelineEntries.length === 0 &&
+    Boolean(activeThreadId);
+
+  const displayedTimeline = resolveThreadSwitchTimeline({
+    loading: threadDetailLoading,
+    activeThreadKey,
+    nextEntries: timelineEntries,
+    rememberedForActive: peekRememberedThreadTimeline<typeof timelineEntries>(activeThreadKey),
+  });
+  const displayedTimelineKey = displayedTimeline.displayThreadKey ?? activeThreadKey;
+  const paintOnlyDisplayedTimeline = isPaintOnlyThreadTimeline(
+    displayedTimeline.displayThreadKey,
+    activeThreadKey,
+  );
+  const heldPaintContext = paintOnlyDisplayedTimeline
+    ? peekHeldThreadTimeline<typeof timelineEntries>()
+    : null;
+  const hasTimelineEntries = displayedTimeline.entries.length > 0;
   const hasConversationHistory = hasTimelineEntries || activeLatestTurn !== null;
   const baseComposerPlaceholder = resolveBaseComposerPlaceholder({
     hasConversationHistory,
@@ -1412,6 +1452,31 @@ export default function ChatView({
         worktreePath: activeThread?.worktreePath ?? null,
       })
     : null;
+  const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
+  const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProject?.cwd ?? undefined;
+  useLayoutEffect(() => {
+    if (
+      threadDetailLoading ||
+      !activeThread ||
+      timelineEntries.length === 0 ||
+      timelineHasEphemeralPreviewUrls(timelineEntries)
+    ) {
+      return;
+    }
+    rememberReadyThreadTimeline({
+      threadKey: activeThreadKey,
+      entries: timelineEntries,
+      markdownCwd: gitCwd ?? null,
+      workspaceRoot: activeWorkspaceRoot ?? null,
+    });
+  }, [
+    activeThread,
+    activeThreadKey,
+    activeWorkspaceRoot,
+    gitCwd,
+    threadDetailLoading,
+    timelineEntries,
+  ]);
   const composerTriggerKind = composerTrigger?.kind ?? null;
   const pathTriggerQuery = composerTrigger?.kind === "path" ? composerTrigger.query : "";
   const isPathTrigger = composerTriggerKind === "path";
@@ -1713,7 +1778,6 @@ export default function ChatView({
     [nonPersistedComposerImageIds],
   );
   const activeProjectCwd = activeProject?.cwd ?? null;
-  const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const threadTerminalRuntimeEnv = useMemo(() => {
     if (!activeProjectCwd) return {};
     return projectScriptRuntimeEnv({
@@ -2256,7 +2320,22 @@ export default function ChatView({
 
     setShowScrollToBottom(!shouldAutoScrollRef.current);
     lastKnownScrollTopRef.current = currentScrollTop;
-  }, [cancelPendingStickToBottom]);
+    if (activeThreadKey && !paintOnlyDisplayedTimeline) {
+      rememberThreadScrollTop(activeThreadKey, currentScrollTop);
+    }
+  }, [activeThreadKey, cancelPendingStickToBottom, paintOnlyDisplayedTimeline]);
+
+  useEffect(() => {
+    const scrollContainer = messagesScrollRef.current;
+    if (!scrollContainer || !displayedTimelineKey) return;
+    const savedScrollTop = peekRememberedThreadScrollTop(displayedTimelineKey);
+    if (savedScrollTop !== null) {
+      scrollContainer.scrollTop = savedScrollTop;
+      lastKnownScrollTopRef.current = savedScrollTop;
+      shouldAutoScrollRef.current = false;
+      setShowScrollToBottom(true);
+    }
+  }, [displayedTimelineKey]);
   const onMessagesWheel = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
       const scrollContainer = messagesScrollRef.current;
@@ -4439,11 +4518,13 @@ export default function ChatView({
     );
   }
 
-  const shouldCenterEmptyThreadComposer = shouldUseCenteredEmptyComposer({
-    isLocalDraftThread,
-    hasTimelineEntries,
-    isWorking,
-  });
+  const shouldCenterEmptyThreadComposer =
+    !paintOnlyDisplayedTimeline &&
+    shouldUseCenteredEmptyComposer({
+      isLocalDraftThread,
+      hasTimelineEntries,
+      isWorking,
+    });
   const composerPromptLengthValidationMessage =
     submissionValidationMessage ?? getComposerPromptLengthValidationMessage(prompt);
   const composerSection = (
@@ -5081,17 +5162,20 @@ export default function ChatView({
                       disabled={
                         isSendBusy ||
                         isConnecting ||
+                        threadDetailLoading ||
                         !composerSendState.hasSendableContent ||
                         Boolean(composerPromptLengthValidationMessage)
                       }
                       aria-label={
-                        isConnecting
-                          ? "Connecting"
-                          : isPreparingWorktree
-                            ? "Preparing worktree"
-                            : isSendBusy
-                              ? "Sending"
-                              : "Send message"
+                        threadDetailLoading
+                          ? "Messages loading"
+                          : isConnecting
+                            ? "Connecting"
+                            : isPreparingWorktree
+                              ? "Preparing worktree"
+                              : isSendBusy
+                                ? "Sending"
+                                : "Send message"
                       }
                     >
                       {isConnecting || isSendBusy ? (
@@ -5215,30 +5299,51 @@ export default function ChatView({
                 onTouchCancel={onMessagesTouchEnd}
               >
                 <MessagesTimeline
-                  key={activeThread.id}
+                  key={displayedTimelineKey ?? activeThread.id}
                   hasMessages={hasTimelineEntries}
-                  isWorking={isWorking}
-                  activeTurnInProgress={isWorking || !latestTurnSettled}
-                  activeTurnStartedAt={activeWorkStartedAt}
+                  isWorking={!paintOnlyDisplayedTimeline && isWorking}
+                  activeTurnInProgress={
+                    !paintOnlyDisplayedTimeline && (isWorking || !latestTurnSettled)
+                  }
+                  activeTurnStartedAt={paintOnlyDisplayedTimeline ? null : activeWorkStartedAt}
                   scrollContainer={messagesScrollElement}
-                  timelineEntries={timelineEntries}
-                  completionDividerBeforeEntryId={completionDividerBeforeEntryId}
-                  completionSummary={completionSummary}
-                  turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
+                  timelineEntries={displayedTimeline.entries}
+                  completionDividerBeforeEntryId={
+                    paintOnlyDisplayedTimeline ? null : completionDividerBeforeEntryId
+                  }
+                  completionSummary={paintOnlyDisplayedTimeline ? null : completionSummary}
+                  turnDiffSummaryByAssistantMessageId={
+                    paintOnlyDisplayedTimeline
+                      ? (EMPTY_MAP as Map<MessageId, TurnDiffSummary>)
+                      : turnDiffSummaryByAssistantMessageId
+                  }
                   nowIso={nowIso}
                   expandedWorkGroups={expandedWorkGroups}
                   onToggleWorkGroup={onToggleWorkGroup}
-                  onOpenTurnDiff={onOpenTurnDiff}
-                  revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
-                  onRevertUserMessage={onRevertUserMessage}
-                  isRevertingCheckpoint={isRevertingCheckpoint}
+                  onOpenTurnDiff={paintOnlyDisplayedTimeline ? noop : onOpenTurnDiff}
+                  revertTurnCountByUserMessageId={
+                    paintOnlyDisplayedTimeline
+                      ? (EMPTY_MAP as Map<MessageId, number>)
+                      : revertTurnCountByUserMessageId
+                  }
+                  onRevertUserMessage={paintOnlyDisplayedTimeline ? noop : onRevertUserMessage}
+                  isRevertingCheckpoint={!paintOnlyDisplayedTimeline && isRevertingCheckpoint}
                   onImageExpand={onExpandTimelineImage}
-                  markdownCwd={gitCwd ?? undefined}
+                  markdownCwd={
+                    (paintOnlyDisplayedTimeline ? heldPaintContext?.markdownCwd : gitCwd) ??
+                    undefined
+                  }
                   resolvedTheme={resolvedTheme}
                   timestampFormat={timestampFormat}
-                  workspaceRoot={activeProject?.cwd ?? undefined}
+                  workspaceRoot={
+                    (paintOnlyDisplayedTimeline
+                      ? heldPaintContext?.workspaceRoot
+                      : activeProject?.cwd) ?? undefined
+                  }
                   environmentId={environmentId ?? undefined}
-                  latestTaskDescription={latestTaskDescription}
+                  latestTaskDescription={
+                    paintOnlyDisplayedTimeline ? null : latestTaskDescription
+                  }
                   providerInstanceId={selectedProvider}
                 />
               </div>
