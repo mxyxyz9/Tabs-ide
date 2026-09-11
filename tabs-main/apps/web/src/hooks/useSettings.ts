@@ -53,7 +53,24 @@ function mergeServerSettingsPatch(
   current: ServerSettings,
   patch: ServerSettingsPatch,
 ): ServerSettings {
-  const next = deepMerge(current, patch);
+  const { usageLimitSources: usageLimitSourcesPatch, ...restPatch } = patch;
+  let next = deepMerge(current, restPatch as any);
+
+  if (usageLimitSourcesPatch) {
+    const updatedSources = { ...(next.usageLimitSources ?? {}) };
+    for (const [id, value] of Object.entries(usageLimitSourcesPatch)) {
+      if (value === null) {
+        delete (updatedSources as any)[id];
+      } else if (value !== undefined) {
+        (updatedSources as any)[id] = value;
+      }
+    }
+    next = {
+      ...next,
+      usageLimitSources: updatedSources as any,
+    };
+  }
+
   const selectionPatch = patch.textGenerationModelSelection;
   if (!selectionPatch) {
     return next;

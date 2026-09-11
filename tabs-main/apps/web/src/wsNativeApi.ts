@@ -468,6 +468,7 @@ export function createWsNativeApi(options?: {
       readUsageSummary: (input) => transport.request(WS_METHODS.usageReadSummary, input),
       listUsageSnapshots: (input = {}) => transport.request(WS_METHODS.usageListSnapshots, input),
       refreshAllUsageSnapshots: () => transport.request(WS_METHODS.usageRefreshAll, {}),
+      consumeResetCredit: (input) => transport.request(WS_METHODS.providerConsumeResetCredit, input),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

@@ -91,6 +91,8 @@ export const make = Effect.gen(function* () {
       repositoryIdentity: true,
       connectionProbe: true,
       attachmentUploads: true,
+      usageLimitSources: true,
+      usagePriceOverrides: true,
     },
   };
 

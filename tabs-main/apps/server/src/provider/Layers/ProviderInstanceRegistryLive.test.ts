@@ -46,7 +46,9 @@ import { GrokDriver } from "../Drivers/GrokDriver";
 import { OpenCodeDriver } from "../Drivers/OpenCodeDriver";
 import { OpenCodeRuntimeLive } from "../opencodeRuntime";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers";
-import { makeProviderInstanceRegistry } from "./ProviderInstanceRegistryLive";
+import * as CodexResetCredit from "./codexResetCredit.ts";
+import type { BuiltInDriversEnv } from "../builtInDrivers";
+import { makeProviderInstanceRegistry, ProviderInstanceRegistryMutableLayer } from "./ProviderInstanceRegistryLive";
 
 const TestHttpClientLive = Layer.succeed(
   HttpClient.HttpClient,
@@ -110,6 +112,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
     Layer.provideMerge(NodeServices.layer),
     Layer.provideMerge(TestHttpClientLive),
     Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
+    Layer.provideMerge(CodexResetCredit.layerTest),
   );
 
   it.live("boots two independent codex instances from a ProviderInstanceConfigMap", () =>
@@ -247,6 +250,7 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
     Layer.provideMerge(infraLayer),
     Layer.provideMerge(TestHttpClientLive),
     Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
+    Layer.provideMerge(CodexResetCredit.layerTest),
   );
 
   it.live("boots one instance of every shipped driver from a single config map", () =>
@@ -299,7 +303,7 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
         },
       };
 
-      const { registry } = yield* makeProviderInstanceRegistry({
+      const { registry } = yield* makeProviderInstanceRegistry<BuiltInDriversEnv>({
         drivers: [CodexDriver, ClaudeDriver, CursorDriver, GrokDriver, OpenCodeDriver],
         configMap,
       });

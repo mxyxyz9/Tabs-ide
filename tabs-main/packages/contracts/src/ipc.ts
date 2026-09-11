@@ -26,6 +26,10 @@ import type {
   VcsStatusInput,
   VcsStatusResult,
 } from "./git.ts";
+import type {
+  ProviderConsumeResetCreditInput,
+  ProviderConsumeResetCreditResult,
+} from "./providerUsageLimits.ts";
 import type { TestingApi } from "./testing.ts";
 import type {
   BackgroundPolicySnapshot,
@@ -1373,6 +1377,9 @@ export interface LocalApi {
       input?: ServerListProviderUsageInput,
     ) => Promise<ServerListProviderUsageResult>;
     refreshAllUsageSnapshots: () => Promise<ServerListProviderUsageResult>;
+    consumeResetCredit: (
+      input: ProviderConsumeResetCreditInput,
+    ) => Promise<ProviderConsumeResetCreditResult>;
   };
 }
 

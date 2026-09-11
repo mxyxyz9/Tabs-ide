@@ -46,6 +46,8 @@ import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import { AntigravityInstallation } from "./provider/AntigravityInstallation.ts";
+import * as CodexResetCreditCoordinator from "./provider/Layers/codexResetCredit.ts";
+import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -81,6 +83,7 @@ const makeRuntimePtyAdapterLayer = () =>
 // ServerSettingsService) which the outer composition supplies.
 export function makeProviderInstanceRegistryLayer() {
   return ProviderInstanceRegistryHydrationLive.pipe(
+    Layer.provideMerge(CodexResetCreditCoordinator.layer),
     Layer.provideMerge(AntigravityInstallation.layer),
     Layer.provideMerge(ProviderEventLoggersLive),
     Layer.provideMerge(OpenCodeRuntimeLive),
@@ -161,6 +164,9 @@ export function makeServerRuntimeServicesLayer() {
   );
 
   const usageLayer = UsageServiceLive.pipe(Layer.provide(FetchHttpClient.layer));
+  const usageLimitSourcesLayer = UsageLimitSources.layer.pipe(
+    Layer.provide(FetchHttpClient.layer),
+  );
 
   // NodeServices (FileSystem/Path/ChildProcessSpawner) is provided once, at the
   // innermost level of the main composition, so the instance-registry drivers
@@ -175,6 +181,7 @@ export function makeServerRuntimeServicesLayer() {
     KeybindingsLive,
     ProviderMaintenanceRunnerLive,
     usageLayer,
+    usageLimitSourcesLayer,
     PreviewManager.layer,
     PreviewAutomationBroker.layer,
     EnvironmentTheme.layer,

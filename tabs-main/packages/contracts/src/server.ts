@@ -595,6 +595,7 @@ export const ServerConfigUpdatedPayload = Schema.Struct({
   providers: ServerProviders,
   settings: Schema.optional(ServerSettings),
   environmentThemes: Schema.optional(Schema.Array(EnvironmentTheme)),
+  usageLimitSources: Schema.optional(UsageLimitSourceSnapshots),
 });
 export type ServerConfigUpdatedPayload = typeof ServerConfigUpdatedPayload.Type;
 

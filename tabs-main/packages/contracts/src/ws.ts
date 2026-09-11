@@ -89,6 +89,8 @@ import { ProjectReadFileInput, ProjectSearchEntriesInput, ProjectWriteFileInput 
 import { FilesystemBrowseInput } from "./filesystem";
 import { OpenInEditorInput } from "./editor";
 import { ProviderInstanceId } from "./providerInstance";
+import { ProviderConsumeResetCreditInput } from "./providerUsageLimits";
+import { UsageLimitSourceId } from "./usageLimitSourceId";
 import {
   ServerConfigUpdatedPayload,
   ServerProviderUpdatedPayload,
@@ -339,6 +341,7 @@ export const WS_METHODS = {
   sourceControlCloneRepository: "sourceControl.cloneRepository",
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlPublishRepository: "sourceControl.publishRepository",
+  providerConsumeResetCredit: "provider.consumeResetCredit",
   usageReadSummary: "usage.readSummary",
   usageListSnapshots: "usage.listSnapshots",
   usageRefreshAll: "usage.refreshAll",
@@ -567,6 +570,16 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverGetBackgroundPolicy, Schema.Struct({})),
 
   // Usage & Limits
+  Schema.Struct({
+    _tag: Schema.tag(WS_METHODS.providerConsumeResetCredit),
+    instanceId: ProviderInstanceId,
+  }),
+  Schema.Struct({
+    _tag: Schema.tag(WS_METHODS.providerConsumeResetCredit),
+    sourceId: UsageLimitSourceId,
+    accountId: TrimmedNonEmptyString,
+    creditId: TrimmedNonEmptyString,
+  }),
   tagRequestBody(WS_METHODS.usageReadSummary, UsageSummaryInput),
   tagRequestBody(WS_METHODS.usageListSnapshots, ServerListProviderUsageInput),
   tagRequestBody(WS_METHODS.usageRefreshAll, Schema.Struct({})),

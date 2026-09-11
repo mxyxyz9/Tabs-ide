@@ -69,6 +69,7 @@ import {
   type ServerListProviderUsageInput,
   type ServerProcessResourceHistoryInput,
   type ServerSignalProcessInput,
+  type ProviderConsumeResetCreditInput,
   WS_CHANNELS,
   WS_METHODS,
   WebSocketRequest,
@@ -154,6 +155,9 @@ import { verifyDpopRequestFields } from "./auth/dpop.ts";
 import { ServerSecretStore } from "./auth/ServerSecretStore.ts";
 import { BackgroundPolicy } from "./background/BackgroundPolicy.ts";
 import { EnvironmentThemeService } from "./environmentTheme.ts";
+import { withUsageLimitsCommands } from "@tabs/shared/usageLimits";
+import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
+import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry.ts";
 import {
   readProcessDiagnostics,
   readProcessResourceHistory,
@@ -348,7 +352,9 @@ export type ServerRuntimeServices =
   | Crypto.Crypto
   | BackgroundPolicy
   | EnvironmentThemeService
-  | TraceDiagnostics.TraceDiagnostics;
+  | TraceDiagnostics.TraceDiagnostics
+  | UsageLimitSources.UsageLimitSources
+  | ProviderInstanceRegistry;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -410,6 +416,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const effectCrypto = yield* Crypto.Crypto;
   const backgroundPolicy = yield* BackgroundPolicy;
   const environmentTheme = yield* EnvironmentThemeService;
+  const usageLimitSources = yield* UsageLimitSources.UsageLimitSources;
+  const providerInstances = yield* ProviderInstanceRegistry;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -424,6 +432,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   );
 
   const providersRef = yield* Ref.make(yield* providerRegistry.getProviders);
+
+  const getEffectiveProviders = (rawProviders: ReadonlyArray<any>) =>
+    Effect.gen(function* () {
+      const sources = yield* usageLimitSources.current;
+      return withUsageLimitsCommands(rawProviders as any, sources);
+    });
 
   const clients = yield* Ref.make(new Set<WebSocket>());
   const previewAutomationFibers = new Map<WebSocket, Set<Fiber.Fiber<void, unknown>>>();
@@ -1030,7 +1044,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   yield* Stream.runForEach(keybindingsManager.streamChanges, (event) =>
     Effect.gen(function* () {
-      const providers = yield* Ref.get(providersRef);
+      const providers = yield* getEffectiveProviders(yield* Ref.get(providersRef));
       yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
         issues: event.issues,
         providers,
@@ -1040,7 +1054,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   yield* Stream.runForEach(serverSettingsManager.streamChanges, (settings) =>
     Effect.gen(function* () {
-      const providers = yield* Ref.get(providersRef);
+      const providers = yield* getEffectiveProviders(yield* Ref.get(providersRef));
       yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
         issues: [],
         providers,
@@ -1051,7 +1065,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   yield* Stream.runForEach(environmentTheme.streamChanges, (environmentThemes) =>
     Effect.gen(function* () {
-      const providers = yield* Ref.get(providersRef);
+      const providers = yield* getEffectiveProviders(yield* Ref.get(providersRef));
       yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
         issues: [],
         providers,
@@ -1060,11 +1074,24 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
+  yield* Stream.runForEach(usageLimitSources.streamChanges, (sources) =>
+    Effect.gen(function* () {
+      const rawProviders = yield* Ref.get(providersRef);
+      const providers = withUsageLimitsCommands(rawProviders as any, sources);
+      yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+        issues: [],
+        providers,
+        usageLimitSources: sources,
+      });
+    }),
+  ).pipe(Effect.forkIn(subscriptionsScope));
+
   yield* Stream.runForEach(providerRegistry.streamChanges, (providers) =>
     Effect.gen(function* () {
       yield* Ref.set(providersRef, providers);
+      const effectiveProviders = yield* getEffectiveProviders(providers);
       yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, {
-        providers,
+        providers: effectiveProviders,
       });
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
@@ -1084,7 +1111,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       if (!(yield* backgroundPolicy.shouldRunScopeWork({ type: "provider-status" }))) return;
       const providers = yield* providerRegistry.refresh();
       yield* Ref.set(providersRef, providers);
-      yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, { providers });
+      const effectiveProviders = yield* getEffectiveProviders(providers);
+      yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, { providers: effectiveProviders });
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("background provider refresh failed", {
@@ -2033,7 +2061,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.serverGetConfig: {
         const keybindingsConfig = yield* keybindingsManager.loadConfigState;
         const settings = yield* serverSettingsManager.getSettings;
-        const providers = yield* Ref.get(providersRef);
+        const rawProviders = yield* Ref.get(providersRef);
+        const usageLimitSourcesSnapshot = yield* usageLimitSources.current;
+        const providers = withUsageLimitsCommands(rawProviders as any, usageLimitSourcesSnapshot);
         return {
           environment: yield* serverEnvironment.getDescriptor,
           auth: yield* environmentAuth.getDescriptor(),
@@ -2051,6 +2081,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           },
           settings,
           environmentThemes: yield* environmentTheme.current,
+          usageLimitSources: usageLimitSourcesSnapshot,
         };
       }
 
@@ -2183,6 +2214,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.serverRefreshProviders: {
         const body = request.body ? (stripRequestTag(request.body) as any) : undefined;
+        if (body?.instanceId === undefined) {
+          yield* usageLimitSources.refresh;
+        }
         const providers = yield* body?.cwd !== undefined && body?.instanceId !== undefined
           ? providerRegistry.refreshWorkspaceSnapshot({
               instanceId: body.instanceId,
@@ -2192,7 +2226,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             ? providerRegistry.refreshInstance(body.instanceId)
             : providerRegistry.refresh();
         yield* Ref.set(providersRef, providers);
-        return { providers };
+        const effectiveProviders = yield* getEffectiveProviders(providers);
+        return { providers: effectiveProviders };
       }
 
       case WS_METHODS.serverRunProviderMaintenance: {
@@ -2216,7 +2251,43 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               })
         ).pipe(Effect.mapError((error: any) => new RouteRequestError({ message: error.reason })));
         yield* Ref.set(providersRef, result.providers);
-        return result;
+        const effectiveProviders = yield* getEffectiveProviders(result.providers);
+        return { ...result, providers: effectiveProviders };
+      }
+
+      case WS_METHODS.providerConsumeResetCredit: {
+        const input = stripRequestTag(request.body) as ProviderConsumeResetCreditInput;
+        if ("sourceId" in input) {
+          const outcome = yield* usageLimitSources.consumeResetCredit(input).pipe(
+            Effect.mapError(
+              (error: any) =>
+                new RouteRequestError({
+                  message: error?.detail ?? (error instanceof Error ? error.message : String(error)),
+                }),
+            ),
+          );
+          return outcome;
+        }
+        const instance = yield* providerInstances.getInstance(input.instanceId);
+        if (instance === undefined || !instance.enabled) {
+          return yield* new RouteRequestError({
+            message: instance ? "This provider is disabled." : "Provider instance not found.",
+          });
+        }
+        if (instance.consumeResetCredit === undefined) {
+          return yield* new RouteRequestError({
+            message: "This provider does not bank reset credits.",
+          });
+        }
+        const outcome = yield* instance.consumeResetCredit().pipe(
+          Effect.mapError(
+            (error) =>
+              new RouteRequestError({
+                message: error.detail,
+              }),
+          ),
+        );
+        return { outcome };
       }
 
       case WS_METHODS.serverUpsertKeybinding: {

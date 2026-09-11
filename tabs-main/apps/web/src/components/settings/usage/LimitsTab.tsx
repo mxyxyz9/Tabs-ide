@@ -4,6 +4,8 @@ import type { ServerProviderUsageSnapshot } from "@tabs/contracts";
 import { providerUsageSnapshotsAtom } from "../../../state/usage";
 import { serverSettingsAtom } from "../../../state/settings";
 import { ProviderQuotaCard } from "./ProviderQuotaCard";
+import { UsageLimitsSection } from "../../usage/UsageLimits";
+import { UsageProviderSettings } from "../UsageProviderSettings";
 import { InfoIcon, LoaderIcon } from "lucide-react";
 
 const ALL_ACP_PROVIDERS = [
@@ -80,19 +82,32 @@ export function LimitsTab() {
   }, [snapshotsByProvider, serverSettings.providers]);
 
   return (
-    <div className="space-y-6">
-      {snapshotsState.loading && snapshots.length === 0 ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex h-64 flex-col items-center justify-center gap-3 text-muted-foreground"
-        >
-          <LoaderIcon className="size-6 animate-spin" />
-          <span className="text-sm">Fetching live provider quotas and limits...</span>
+    <div className="space-y-8">
+      {/* Live Pooled Provider Limits */}
+      <UsageLimitsSection />
+
+      {/* Hub Configuration */}
+      <UsageProviderSettings />
+
+      {/* Provider Quota Probes */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Local Provider Quota Probes</h3>
+          <p className="text-xs text-muted-foreground">
+            Direct quota and token probe snapshots detected from local CLI credentials.
+          </p>
         </div>
-      ) : (
-        <>
-          {/* Quota Cards Stack */}
+
+        {snapshotsState.loading && snapshots.length === 0 ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex h-48 flex-col items-center justify-center gap-3 text-muted-foreground"
+          >
+            <LoaderIcon className="size-6 animate-spin" />
+            <span className="text-sm">Fetching live provider quotas and limits...</span>
+          </div>
+        ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {providerCards.map(({ snapshot, isEnabled }) => (
               <ProviderQuotaCard
@@ -102,18 +117,18 @@ export function LimitsTab() {
               />
             ))}
           </div>
+        )}
+      </div>
 
-          {/* Footer Note */}
-          <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-4 text-xs text-muted-foreground backdrop-blur-sm">
-            <InfoIcon className="mt-0.5 size-4 shrink-0 text-primary" />
-            <p className="leading-relaxed">
-              Usage is read locally from each provider CLI&apos;s stored credentials and fetched
-              directly from the provider. Short-lived tokens are refreshed through the
-              provider&apos;s own CLI or official token endpoint.
-            </p>
-          </div>
-        </>
-      )}
+      {/* Footer Note */}
+      <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-4 text-xs text-muted-foreground backdrop-blur-sm">
+        <InfoIcon className="mt-0.5 size-4 shrink-0 text-primary" />
+        <p className="leading-relaxed">
+          Usage is read locally from each provider CLI&apos;s stored credentials and fetched
+          directly from the provider. Short-lived tokens are refreshed through the
+          provider&apos;s own CLI or official token endpoint.
+        </p>
+      </div>
     </div>
   );
 }

@@ -74,6 +74,7 @@ export function applyServerConfigUpdate(payload: ServerConfigUpdatedPayload) {
           providers: payload.providers,
           ...(payload.settings ? { settings: payload.settings } : {}),
           ...(payload.environmentThemes ? { environmentThemes: payload.environmentThemes } : {}),
+          ...(payload.usageLimitSources ? { usageLimitSources: payload.usageLimitSources } : {}),
         },
   );
 }
