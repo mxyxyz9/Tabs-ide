@@ -110,25 +110,81 @@ export function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+export type CommandPaletteProject = Project & { readonly displayName?: string };
+
+export function resolveEnvironmentLabel(
+  environmentId: string | undefined,
+  locationByEnvironmentId?: ReadonlyMap<string, { readonly label: string }>,
+): string {
+  if (!environmentId) return "Local";
+  const match = locationByEnvironmentId?.get(environmentId);
+  if (match?.label) return match.label;
+  if (environmentId === "local" || environmentId === "default") return "Local";
+  return environmentId;
+}
+
+export function buildCommandPaletteProjectMetadata(input: {
+  readonly projects: ReadonlyArray<Pick<Project, "name" | "cwd"> & { readonly environmentId?: string | undefined }>;
+  readonly locationByEnvironmentId?: ReadonlyMap<string, { readonly label: string }>;
+}): { searchTerms: string[]; environmentLabels: string[] } {
+  const searchTerms: string[] = [];
+  const environmentLabels = new Set<string>();
+
+  for (const project of input.projects) {
+    const label = resolveEnvironmentLabel(project.environmentId, input.locationByEnvironmentId);
+    searchTerms.push(project.name, project.cwd, label);
+    environmentLabels.add(label);
+  }
+
+  return { searchTerms, environmentLabels: [...environmentLabels] };
+}
+
 export function buildProjectActionItems(input: {
-  projects: ReadonlyArray<Project>;
+  projects: ReadonlyArray<CommandPaletteProject>;
   valuePrefix: string;
-  icon: (project: Project) => ReactNode;
-  runProject: (project: Project) => Promise<void>;
+  icon: (project: CommandPaletteProject) => ReactNode;
+  runProject: (project: CommandPaletteProject) => Promise<void>;
+  locationByEnvironmentId?: ReadonlyMap<string, { readonly label: string }>;
+  searchTerms?: (project: CommandPaletteProject) => ReadonlyArray<string>;
+  renderDescription?: (project: CommandPaletteProject) => string | undefined;
+  renderTrailingContent?: (project: CommandPaletteProject) => ReactNode;
   shortcutCommand?: KeybindingCommand;
 }): CommandPaletteActionItem[] {
-  return input.projects.map((project) => ({
-    kind: "action",
-    value: `${input.valuePrefix}:${project.id}`,
-    searchTerms: [project.name, project.cwd],
-    title: project.name,
-    description: project.cwd,
-    icon: input.icon(project),
-    ...(input.shortcutCommand !== undefined ? { shortcutCommand: input.shortcutCommand } : {}),
-    run: async () => {
-      await input.runProject(project);
-    },
-  }));
+  const hasMultipleEnvironments =
+    new Set(input.projects.map((p) => p.environmentId ?? "local")).size > 1;
+  const projectCountsByName = new Map<string, number>();
+  for (const p of input.projects) {
+    projectCountsByName.set(p.name, (projectCountsByName.get(p.name) ?? 0) + 1);
+  }
+
+  return input.projects.map((project) => {
+    const displayName = project.displayName ?? project.name;
+    const envId = project.environmentId ?? "local";
+    const envLabel = resolveEnvironmentLabel(project.environmentId, input.locationByEnvironmentId);
+    const isAmbiguous =
+      hasMultipleEnvironments ||
+      (projectCountsByName.get(project.name) ?? 0) > 1 ||
+      (envId !== "local" && envId !== "default");
+    const extraSearchTerms = input.searchTerms?.(project) ?? [];
+
+    const defaultDescription = isAmbiguous
+      ? `${project.cwd} · ${envLabel}`
+      : project.cwd;
+
+    return {
+      kind: "action",
+      value: `${input.valuePrefix}:${envId}:${project.id}`,
+      searchTerms: [displayName, project.name, project.cwd, envLabel, ...extraSearchTerms],
+      title: displayName,
+      description: input.renderDescription?.(project) ?? defaultDescription,
+      icon: input.icon(project),
+      ...(input.renderTrailingContent ? { titleTrailingContent: input.renderTrailingContent(project) } : {}),
+      ...(input.shortcutCommand !== undefined ? { shortcutCommand: input.shortcutCommand } : {}),
+      run: async () => {
+        await input.runProject(project);
+      },
+    };
+  });
 }
 
 export interface ThreadSortInput {
@@ -202,13 +258,18 @@ export function sortThreads(
 export function buildThreadActionItems(input: {
   threads: ReadonlyArray<Thread>;
   activeThreadId?: Thread["id"];
-  projectTitleById: ReadonlyMap<Project["id"], string>;
+  projectTitleById: ReadonlyMap<string, string>;
   sortOrder: SidebarThreadSortOrder;
   icon: ReactNode;
+  locationByEnvironmentId?: ReadonlyMap<string, { readonly label: string }>;
   /** Optional content rendered inline before the title text per-thread. */
   renderLeadingContent?: (thread: Thread) => ReactNode;
   /** Optional content rendered inline after the title text per-thread. */
   renderTrailingContent?: (thread: Thread) => ReactNode;
+  renderDescription?: (
+    thread: Thread,
+    meta: { projectTitle: string | undefined; environmentLabel: string },
+  ) => string | undefined;
   runThread: (thread: Thread) => Promise<void>;
   limit?: number;
 }): CommandPaletteActionItem[] {
@@ -219,8 +280,22 @@ export function buildThreadActionItems(input: {
   const visibleThreads =
     input.limit === undefined ? sortedThreads : sortedThreads.slice(0, input.limit);
 
+  const hasMultipleEnvironments =
+    new Set(input.threads.map((t) => t.environmentId ?? "local")).size > 1;
+  const threadCountsByTitle = new Map<string, number>();
+  for (const t of input.threads) {
+    threadCountsByTitle.set(t.title, (threadCountsByTitle.get(t.title) ?? 0) + 1);
+  }
+
   return visibleThreads.map((thread) => {
     const projectTitle = input.projectTitleById.get(thread.projectId);
+    const envId = thread.environmentId ?? "local";
+    const envLabel = resolveEnvironmentLabel(thread.environmentId, input.locationByEnvironmentId);
+    const isAmbiguous =
+      hasMultipleEnvironments ||
+      (threadCountsByTitle.get(thread.title) ?? 0) > 1 ||
+      (envId !== "local" && envId !== "default");
+
     const descriptionParts: string[] = [];
 
     if (projectTitle) {
@@ -228,6 +303,9 @@ export function buildThreadActionItems(input: {
     }
     if (thread.branch) {
       descriptionParts.push(`#${thread.branch}`);
+    }
+    if (isAmbiguous) {
+      descriptionParts.push(envLabel);
     }
     if (thread.id === input.activeThreadId) {
       descriptionParts.push("Current thread");
@@ -251,15 +329,20 @@ export function buildThreadActionItems(input: {
       return `${days}d ago`;
     };
 
-    const latestMessage = thread.messages.at(-1);
+    const latestMessage = thread.messages?.at(-1);
+    const defaultDescription = descriptionParts.join(" · ");
+    const customDescription = input.renderDescription?.(thread, {
+      projectTitle,
+      environmentLabel: envLabel,
+    });
 
     return Object.assign(
       {
         kind: "action" as const,
-        value: `thread:${thread.id}`,
-        searchTerms: [thread.title, projectTitle ?? ``, thread.branch ?? ``],
+        value: `thread:${envId}:${thread.id}`,
+        searchTerms: [thread.title, projectTitle ?? "", thread.branch ?? "", envLabel],
         title: thread.title,
-        description: descriptionParts.join(` · `),
+        description: customDescription ?? defaultDescription,
         timestamp: formatRelativeTimeLabel(
           latestMessage?.createdAt ?? thread.updatedAt ?? thread.createdAt,
         ),

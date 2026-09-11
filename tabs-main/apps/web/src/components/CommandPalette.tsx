@@ -32,6 +32,7 @@ import { environmentApi } from "../connection/environmentApiRegistry";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { useSourceControlDiscovery } from "~/lib/sourceControlReactQuery";
+import { listManualConnections } from "~/connection/manualConnections";
 import { readNativeApi } from "../nativeApi";
 import { readModelStateAtom } from "../state/readModel";
 import { useKeybindings } from "../state/settings";
@@ -336,31 +337,61 @@ function OpenCommandPaletteDialog(props: {
     [navigate, handleNewThread, threads],
   );
 
+  const { data: manualConnections } = useQuery({
+    queryKey: ["manualConnections"],
+    queryFn: () => listManualConnections(),
+    staleTime: 10_000,
+  });
+
+  const locationByEnvironmentId = useMemo(() => {
+    const map = new Map<string, { label: string }>();
+    if (manualConnections) {
+      for (const conn of manualConnections) {
+        map.set(conn.environmentId, { label: conn.label });
+      }
+    }
+    return map;
+  }, [manualConnections]);
+
   const projectSearchItems = useMemo(
     () =>
       buildProjectActionItems({
         projects,
         valuePrefix: "project",
+        locationByEnvironmentId,
         icon: (project) => <ProjectFavicon cwd={project.cwd} className={ITEM_ICON_CLASS} />,
         runProject: openProjectFromSearch,
       }),
-    [openProjectFromSearch, projects],
+    [locationByEnvironmentId, openProjectFromSearch, projects],
   );
 
   const projectThreadItems = useMemo(
     () =>
-      projects.map((project) => ({
-        kind: "action" as const,
-        value: `new-thread-in:${project.id}`,
-        searchTerms: [project.name, project.cwd],
-        title: project.name,
-        description: project.cwd,
-        icon: <ProjectFavicon cwd={project.cwd} className={ITEM_ICON_CLASS} />,
-        run: async () => {
-          await handleNewThread(project.id, { environmentId: project.environmentId });
-        },
-      })),
-    [handleNewThread, projects],
+      projects.map((project) => {
+        const envId = project.environmentId ?? "local";
+        const envLabel =
+          locationByEnvironmentId.get(envId)?.label ??
+          (envId === "local" ? "Local" : "Remote");
+        const hasMultipleEnvironments =
+          new Set(projects.map((p) => p.environmentId ?? "local")).size > 1;
+        const isAmbiguous =
+          hasMultipleEnvironments ||
+          projects.filter((p) => p.name === project.name).length > 1 ||
+          (envId !== "local" && envId !== "default");
+
+        return {
+          kind: "action" as const,
+          value: `new-thread-in:${envId}:${project.id}`,
+          searchTerms: [project.name, project.cwd, envLabel],
+          title: project.name,
+          description: isAmbiguous ? `${project.cwd} · ${envLabel}` : project.cwd,
+          icon: <ProjectFavicon cwd={project.cwd} className={ITEM_ICON_CLASS} />,
+          run: async () => {
+            await handleNewThread(project.id, { environmentId: project.environmentId });
+          },
+        };
+      }),
+    [handleNewThread, locationByEnvironmentId, projects],
   );
 
   const allThreadItems = useMemo(
@@ -369,6 +400,7 @@ function OpenCommandPaletteDialog(props: {
         threads,
         activeThreadId: currentThreadId,
         projectTitleById: new Map(projects.map((p) => [p.id, p.name])),
+        locationByEnvironmentId,
         sortOrder: "updated_at",
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
         runThread: async (thread) => {
@@ -380,7 +412,7 @@ function OpenCommandPaletteDialog(props: {
           }
         },
       }),
-    [threads, projects, navigate, currentThreadId],
+    [threads, projects, locationByEnvironmentId, navigate, currentThreadId],
   );
 
   const recentThreadItems = useMemo(
