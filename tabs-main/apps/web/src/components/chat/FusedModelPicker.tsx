@@ -250,9 +250,14 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       return pinnedModels;
     }
     const raw = getProviderModels(props.providers, activeTab);
-    const customOrder = settings.providerModelPreferences?.[activeTab as any]?.modelOrder;
-    return applyCustomModelOrdering(raw, customOrder, activeTab);
-  }, [activeTab, pinnedModels, props.providers, settings.providerModelPreferences]);
+    const prefs = settings.providerModelPreferences?.[activeTab as any];
+    const hiddenSet = new Set(prefs?.hiddenModels ?? []);
+    const visible = raw.filter(
+      (m) => m.isCustom || !hiddenSet.has(m.slug) || m.slug === props.model,
+    );
+    const customOrder = prefs?.modelOrder;
+    return applyCustomModelOrdering(visible, customOrder, activeTab);
+  }, [activeTab, pinnedModels, props.providers, props.model, settings.providerModelPreferences]);
 
   const activeCatalogStatus =
     activeTab === "pinned"

@@ -83,3 +83,43 @@ describe.each(["claudeAgent", "cursor", "grok"] as const)(
     });
   },
 );
+
+describe("hidden model filtering", () => {
+  const codexSnapshot: ServerProvider = {
+    ...copilotProvider,
+    instanceId: ProviderInstanceId.makeUnsafe("codex"),
+    driver: ProviderDriverKind.make("codex"),
+    displayName: "Codex",
+    models: [
+      { slug: "gpt-5.4", name: "GPT-5.4", isCustom: false, capabilities: null },
+      { slug: "gpt-5.3", name: "GPT-5.3", isCustom: false, capabilities: null },
+      { slug: "custom-1", name: "Custom 1", isCustom: true, capabilities: null },
+    ],
+  };
+
+  it("filters out hidden models while preserving custom models and actively selected models", () => {
+    const settings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      providerModelPreferences: {
+        codex: {
+          hiddenModels: ["gpt-5.3", "custom-1"],
+          modelOrder: [],
+        },
+      },
+    };
+
+    // When active model is gpt-5.4
+    const options = getAppModelOptions(settings, [codexSnapshot], "codex", "gpt-5.4");
+    // gpt-5.3 is hidden; custom-1 is custom so it is never hidden; gpt-5.4 is visible
+    expect(options.map((m) => m.slug)).toEqual(["gpt-5.4", "custom-1"]);
+
+    // If active model is gpt-5.3, it is preserved even though it is in hiddenModels
+    const optionsWithActiveHidden = getAppModelOptions(
+      settings,
+      [codexSnapshot],
+      "codex",
+      "gpt-5.3",
+    );
+    expect(optionsWithActiveHidden.map((m) => m.slug)).toContain("gpt-5.3");
+  });
+});

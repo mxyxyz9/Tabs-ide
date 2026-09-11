@@ -42,6 +42,8 @@ import {
   GaugeIcon,
   ActivityIcon,
   BookOpenIcon,
+  EyeIcon,
+  EyeOffIcon,
 } from "lucide-react";
 import { UsageLimitsPage } from "../components/settings/usage/UsageLimitsPage";
 import { BrowserProfilesSettings } from "../components/settings/BrowserProfilesSettings";
@@ -69,14 +71,22 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { applyCustomModelOrdering, resetModelOrder, updateModelOrder } from "../modelOrdering";
+import {
+  applyCustomModelOrdering,
+  isAllBuiltInModelsHidden,
+  nextHiddenModelsForBulkToggle,
+  resetModelOrder,
+  toggleHiddenModel,
+  updateHiddenModels,
+  updateModelOrder,
+} from "../modelOrdering";
 import {
   getPinnedModels,
   isPinnedModel,
   reorderPinnedModels,
   togglePinnedModel,
 } from "../modelPinning";
-import { getProviderModels } from "../providerModels";
+import { getDefaultServerModel, getProviderModels } from "../providerModels";
 import {
   type DesktopUpdateState,
   type KeybindingRule,
@@ -2406,6 +2416,8 @@ function SettingsRouteView() {
     },
     [draftModelOrders, setDraftModelOrders, settings.providerModelPreferences, updateSettings],
   );
+
+  const [modelFilters, setModelFilters] = useState<Record<string, string>>({});
 
   const [previewStyle, setPreviewStyle] = useState(settings.splashLoaderStyle);
   const [previewPalette, setPreviewPalette] = useState(settings.splashLoaderPalette);
@@ -6090,266 +6102,452 @@ function SettingsRouteView() {
                                     {/* Models Section */}
                                     <div className="border-t border-border/60 px-4 py-4 sm:px-5">
                                       <div className="rounded-xl border border-border/50 bg-muted/10 overflow-hidden shadow-2xs">
-                                        {/* Section Header */}
-                                        <div className="flex items-center justify-between px-3.5 py-2.5 bg-muted/20 border-b border-border/40">
-                                          <div>
-                                            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                              Models
-                                              <Badge
-                                                variant="outline"
-                                                className="text-[10px] px-1.5 py-0 font-mono"
-                                              >
-                                                {providerCard.models.length}
-                                              </Badge>
-                                              {providerCard.liveProvider?.catalogStatus ===
-                                              "stale" ? (
-                                                <Badge
-                                                  variant="secondary"
-                                                  className="text-[10px] px-1.5 py-0"
-                                                >
-                                                  Stale
-                                                </Badge>
-                                              ) : null}
-                                            </div>
-                                            <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                              {providerCard.liveProvider?.catalogStatus === "stale"
-                                                ? "Showing the last successful catalog. Refresh to retry discovery."
-                                                : "Drag handles to reorder model preference."}
-                                            </div>
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            {providerCard.hasPendingOrderChanges ? (
-                                              <Button
-                                                size="xs"
-                                                variant="default"
-                                                className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
-                                                onClick={() =>
-                                                  handleSaveModelOrder(providerCard.provider)
-                                                }
-                                                title="Save model order changes"
-                                              >
-                                                <SaveIcon className="size-3" />
-                                                Save Order
-                                              </Button>
-                                            ) : null}
-                                            {settings.providerModelPreferences?.[
-                                              providerCard.provider as any
-                                            ]?.modelOrder?.length ? (
-                                              <Button
-                                                size="xs"
-                                                variant="ghost"
-                                                className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                                                onClick={() => {
-                                                  setDraftModelOrders((existing) => {
-                                                    const next = {
-                                                      ...existing,
-                                                    };
-                                                    delete next[providerCard.provider];
-                                                    return next;
-                                                  });
-                                                  const nextPrefs = resetModelOrder(
-                                                    settings.providerModelPreferences,
-                                                    providerCard.provider,
-                                                  );
-                                                  updateSettings({
-                                                    providerModelPreferences: nextPrefs as any,
-                                                  });
-                                                }}
-                                                title="Restore default model order"
-                                              >
-                                                <RotateCcwIcon className="size-3" />
-                                                Restore Default Order
-                                              </Button>
-                                            ) : null}
-                                          </div>
-                                        </div>
+                                        {(() => {
+                                          const filterValue = modelFilters[providerCard.provider] ?? "";
+                                          const isFiltering = filterValue.trim().length > 0;
+                                          const normalizedFilter = filterValue.trim().toLowerCase();
+                                          const filteredModels = isFiltering
+                                            ? providerCard.models.filter(
+                                                (m: ServerProviderModel) =>
+                                                  m.name.toLowerCase().includes(normalizedFilter) ||
+                                                  m.slug.toLowerCase().includes(normalizedFilter),
+                                              )
+                                            : providerCard.models;
 
-                                        {/* Sortable Model List */}
-                                        <div
-                                          ref={(el) => {
-                                            modelListRefs.current[providerCard.provider] = el;
-                                          }}
-                                          className="divide-y divide-border/30 p-1"
-                                        >
-                                          {providerCard.models.length === 0 ? (
-                                            <div className="py-4 px-3 text-center text-xs text-muted-foreground">
-                                              {providerCard.provider === "copilot"
-                                                ? "Copilot is not currently advertising any selectable models."
-                                                : "No models available."}
-                                            </div>
-                                          ) : null}
-                                          <DndContext
-                                            collisionDetection={closestCenter}
-                                            modifiers={[
-                                              restrictToVerticalAxis,
-                                              restrictToParentElement,
-                                            ]}
-                                            onDragEnd={(event: DragEndEvent) => {
-                                              const { active, over } = event;
-                                              if (!over || active.id === over.id) return;
-                                              const oldIndex = providerCard.models.findIndex(
-                                                (m: ServerProviderModel) => m.slug === active.id,
-                                              );
-                                              const newIndex = providerCard.models.findIndex(
-                                                (m: ServerProviderModel) => m.slug === over.id,
-                                              );
-                                              if (oldIndex !== -1 && newIndex !== -1) {
-                                                const reordered = arrayMove(
-                                                  [...providerCard.models],
-                                                  oldIndex,
-                                                  newIndex,
-                                                );
-                                                const newOrder = reordered.map(
-                                                  (m: ServerProviderModel) => m.slug,
-                                                );
-                                                setDraftModelOrders((existing) => ({
-                                                  ...existing,
-                                                  [providerCard.provider]: newOrder,
-                                                }));
-                                              }
-                                            }}
-                                          >
-                                            <SortableContext
-                                              items={providerCard.models.map(
-                                                (m: ServerProviderModel) => m.slug,
-                                              )}
-                                              strategy={verticalListSortingStrategy}
-                                            >
-                                              {providerCard.models.map(
-                                                (model: ServerProviderModel) => {
-                                                  const caps = model.capabilities;
-                                                  const capLabels: string[] = [];
-                                                  if (caps?.supportsFastMode)
-                                                    capLabels.push("Fast");
-                                                  if (caps?.supportsThinkingToggle)
-                                                    capLabels.push("Thinking");
-                                                  if (
-                                                    caps?.reasoningEffortLevels &&
-                                                    caps.reasoningEffortLevels.length > 0
-                                                  )
-                                                    capLabels.push("Reasoning");
-                                                  const isPinned = isPinnedModel(
-                                                    getPinnedModels(settings),
-                                                    providerCard.provider,
-                                                    model.slug,
-                                                  );
+                                          const hiddenModelsList =
+                                            settings.providerModelPreferences?.[providerCard.provider as any]
+                                              ?.hiddenModels ?? [];
+                                          const hiddenSet = new Set(hiddenModelsList);
+                                          const hiddenCount = providerCard.models.filter(
+                                            (m: ServerProviderModel) =>
+                                              !m.isCustom && hiddenSet.has(m.slug),
+                                          ).length;
 
-                                                  return (
-                                                    <SortableModelRowItem
-                                                      key={`${providerCard.provider}:${model.slug}`}
-                                                      id={model.slug}
+                                          const defaultModelSlug = getDefaultServerModel(
+                                            serverProviders,
+                                            providerCard.provider,
+                                          );
+                                          const preserveSlugs = [
+                                            "auto",
+                                            ...(defaultModelSlug ? [defaultModelSlug] : []),
+                                          ];
+
+                                          const allTargetHidden = isAllBuiltInModelsHidden(
+                                            filteredModels,
+                                            hiddenModelsList,
+                                            { preserveSlugs },
+                                          );
+                                          const builtInCount = filteredModels.filter(
+                                            (m: ServerProviderModel) => !m.isCustom,
+                                          ).length;
+
+                                          return (
+                                            <>
+                                              {/* Section Header */}
+                                              <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-muted/20 border-b border-border/40">
+                                                <div className="min-w-0">
+                                                  <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                    Models
+                                                    <Badge
+                                                      variant="outline"
+                                                      className="text-[10px] px-1.5 py-0 font-mono"
                                                     >
-                                                      {(handle) => (
-                                                        <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
-                                                          <div className="flex items-center gap-2 min-w-0">
-                                                            <button
-                                                              type="button"
-                                                              className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
-                                                              aria-label={`Reorder ${model.name}`}
-                                                              {...handle.attributes}
-                                                              {...handle.listeners}
-                                                            >
-                                                              <GripVerticalIcon className="size-3.5" />
-                                                            </button>
-                                                            <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
-                                                              {model.name}
-                                                            </span>
-                                                            {capLabels.map((label) => (
-                                                              <span
-                                                                key={label}
-                                                                className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
+                                                      {providerCard.models.length}
+                                                    </Badge>
+                                                    {hiddenCount > 0 ? (
+                                                      <Badge
+                                                        variant="secondary"
+                                                        className="text-[10px] px-1.5 py-0 text-muted-foreground"
+                                                      >
+                                                        {hiddenCount} hidden
+                                                      </Badge>
+                                                    ) : null}
+                                                    {isFiltering ? (
+                                                      <span className="text-[11px] text-muted-foreground font-normal">
+                                                        ({filteredModels.length} shown)
+                                                      </span>
+                                                    ) : null}
+                                                    {providerCard.liveProvider?.catalogStatus === "stale" ? (
+                                                      <Badge
+                                                        variant="secondary"
+                                                        className="text-[10px] px-1.5 py-0"
+                                                      >
+                                                        Stale
+                                                      </Badge>
+                                                    ) : null}
+                                                  </div>
+                                                  <div className="mt-0.5 text-[11px] text-muted-foreground truncate">
+                                                    {providerCard.liveProvider?.catalogStatus === "stale"
+                                                      ? "Showing the last successful catalog. Refresh to retry discovery."
+                                                      : isFiltering
+                                                        ? "Filtered results. Clear search to reorder models."
+                                                        : "Drag handles to reorder, toggle switches to hide/show in picker."}
+                                                  </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                  {/* Search Filter if provider has > 6 models or actively searching */}
+                                                  {providerCard.models.length > 6 || isFiltering ? (
+                                                    <div className="relative">
+                                                      <SearchIcon className="size-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                                                      <Input
+                                                        value={filterValue}
+                                                        onChange={(e) =>
+                                                          setModelFilters((prev) => ({
+                                                            ...prev,
+                                                            [providerCard.provider]: e.target.value,
+                                                          }))
+                                                        }
+                                                        placeholder="Filter models..."
+                                                        className="h-6 text-[11px] pl-6 pr-5 w-32 sm:w-40 bg-background/50 border-border/60"
+                                                      />
+                                                      {filterValue ? (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() =>
+                                                            setModelFilters((prev) => ({
+                                                              ...prev,
+                                                              [providerCard.provider]: "",
+                                                            }))
+                                                          }
+                                                          className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                          aria-label="Clear filter"
+                                                        >
+                                                          <XIcon className="size-2.5" />
+                                                        </button>
+                                                      ) : null}
+                                                    </div>
+                                                  ) : null}
+
+                                                  {/* Bulk Toggle Button */}
+                                                  {builtInCount > 0 ? (
+                                                    <Button
+                                                      size="xs"
+                                                      variant="ghost"
+                                                      className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground font-medium cursor-pointer border border-border/40"
+                                                      onClick={() => {
+                                                        const nextHidden = nextHiddenModelsForBulkToggle(
+                                                          filteredModels,
+                                                          hiddenModelsList,
+                                                          { preserveSlugs },
+                                                        );
+                                                        const nextPrefs = updateHiddenModels(
+                                                          settings.providerModelPreferences,
+                                                          providerCard.provider,
+                                                          nextHidden,
+                                                        );
+                                                        updateSettings({
+                                                          providerModelPreferences: nextPrefs as any,
+                                                        });
+                                                      }}
+                                                      title={
+                                                        allTargetHidden
+                                                          ? isFiltering
+                                                            ? "Enable all matching models for model picker"
+                                                            : "Enable all built-in models for model picker"
+                                                          : isFiltering
+                                                            ? "Disable all matching models from model picker"
+                                                            : "Disable all built-in models from model picker"
+                                                      }
+                                                    >
+                                                      {allTargetHidden ? (
+                                                        <>
+                                                          <EyeIcon className="size-3" />
+                                                          {isFiltering ? "Enable shown" : "Enable all"}
+                                                        </>
+                                                      ) : (
+                                                        <>
+                                                          <EyeOffIcon className="size-3" />
+                                                          {isFiltering ? "Disable shown" : "Disable all"}
+                                                        </>
+                                                      )}
+                                                    </Button>
+                                                  ) : null}
+
+                                                  {providerCard.hasPendingOrderChanges ? (
+                                                    <Button
+                                                      size="xs"
+                                                      variant="default"
+                                                      className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
+                                                      onClick={() =>
+                                                        handleSaveModelOrder(providerCard.provider)
+                                                      }
+                                                      title="Save model order changes"
+                                                    >
+                                                      <SaveIcon className="size-3" />
+                                                      Save Order
+                                                    </Button>
+                                                  ) : null}
+                                                  {settings.providerModelPreferences?.[
+                                                    providerCard.provider as any
+                                                  ]?.modelOrder?.length ? (
+                                                    <Button
+                                                      size="xs"
+                                                      variant="ghost"
+                                                      className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                                                      onClick={() => {
+                                                        setDraftModelOrders((existing) => {
+                                                          const next = {
+                                                            ...existing,
+                                                          };
+                                                          delete next[providerCard.provider];
+                                                          return next;
+                                                        });
+                                                        const nextPrefs = resetModelOrder(
+                                                          settings.providerModelPreferences,
+                                                          providerCard.provider,
+                                                        );
+                                                        updateSettings({
+                                                          providerModelPreferences: nextPrefs as any,
+                                                        });
+                                                      }}
+                                                      title="Restore default model order"
+                                                    >
+                                                      <RotateCcwIcon className="size-3" />
+                                                      Restore Default Order
+                                                    </Button>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+
+                                              {/* Sortable Model List */}
+                                              <div
+                                                ref={(el) => {
+                                                  modelListRefs.current[providerCard.provider] = el;
+                                                }}
+                                                className="divide-y divide-border/30 p-1"
+                                              >
+                                                {filteredModels.length === 0 ? (
+                                                  <div className="py-4 px-3 text-center text-xs text-muted-foreground">
+                                                    {isFiltering
+                                                      ? `No models match "${filterValue}".`
+                                                      : providerCard.provider === "copilot"
+                                                        ? "Copilot is not currently advertising any selectable models."
+                                                        : "No models available."}
+                                                  </div>
+                                                ) : null}
+                                                <DndContext
+                                                  collisionDetection={closestCenter}
+                                                  modifiers={[
+                                                    restrictToVerticalAxis,
+                                                    restrictToParentElement,
+                                                  ]}
+                                                  onDragEnd={(event: DragEndEvent) => {
+                                                    const { active, over } = event;
+                                                    if (!over || active.id === over.id) return;
+                                                    const oldIndex = providerCard.models.findIndex(
+                                                      (m: ServerProviderModel) => m.slug === active.id,
+                                                    );
+                                                    const newIndex = providerCard.models.findIndex(
+                                                      (m: ServerProviderModel) => m.slug === over.id,
+                                                    );
+                                                    if (oldIndex !== -1 && newIndex !== -1) {
+                                                      const reordered = arrayMove(
+                                                        [...providerCard.models],
+                                                        oldIndex,
+                                                        newIndex,
+                                                      );
+                                                      const newOrder = reordered.map(
+                                                        (m: ServerProviderModel) => m.slug,
+                                                      );
+                                                      setDraftModelOrders((existing) => ({
+                                                        ...existing,
+                                                        [providerCard.provider]: newOrder,
+                                                      }));
+                                                    }
+                                                  }}
+                                                >
+                                                  <SortableContext
+                                                    items={filteredModels.map(
+                                                      (m: ServerProviderModel) => m.slug,
+                                                    )}
+                                                    strategy={verticalListSortingStrategy}
+                                                  >
+                                                    {filteredModels.map(
+                                                      (model: ServerProviderModel) => {
+                                                        const caps = model.capabilities;
+                                                        const capLabels: string[] = [];
+                                                        if (caps?.supportsFastMode)
+                                                          capLabels.push("Fast");
+                                                        if (caps?.supportsThinkingToggle)
+                                                          capLabels.push("Thinking");
+                                                        if (
+                                                          caps?.reasoningEffortLevels &&
+                                                          caps.reasoningEffortLevels.length > 0
+                                                        )
+                                                          capLabels.push("Reasoning");
+                                                        const isPinned = isPinnedModel(
+                                                          getPinnedModels(settings),
+                                                          providerCard.provider,
+                                                          model.slug,
+                                                        );
+                                                        const isHidden =
+                                                          !model.isCustom && hiddenSet.has(model.slug);
+
+                                                        return (
+                                                          <SortableModelRowItem
+                                                            key={`${providerCard.provider}:${model.slug}`}
+                                                            id={model.slug}
+                                                          >
+                                                            {(handle) => (
+                                                              <div
+                                                                className={cn(
+                                                                  "group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all",
+                                                                  isHidden && "opacity-60 bg-muted/20",
+                                                                )}
                                                               >
-                                                                {label}
-                                                              </span>
-                                                            ))}
-                                                          </div>
-
-                                                          <div className="flex items-center gap-1 shrink-0">
-                                                            <button
-                                                              type="button"
-                                                              aria-label={
-                                                                isPinned
-                                                                  ? `Unpin ${model.name}`
-                                                                  : `Pin ${model.name}`
-                                                              }
-                                                              className={cn(
-                                                                "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
-                                                                isPinned
-                                                                  ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
-                                                                  : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
-                                                              )}
-                                                              onClick={() => {
-                                                                const nextPinned =
-                                                                  togglePinnedModel(
-                                                                    settings,
-                                                                    providerCard.provider,
-                                                                    model.slug,
-                                                                  );
-                                                                updateSettings({
-                                                                  pinnedModels: nextPinned as any,
-                                                                });
-                                                              }}
-                                                            >
-                                                              <PinIcon className="size-3.5 fill-current" />
-                                                            </button>
-
-                                                            {model.name !== model.slug ? (
-                                                              <Tooltip>
-                                                                <TooltipTrigger
-                                                                  render={
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                  {!isFiltering ? (
                                                                     <button
                                                                       type="button"
-                                                                      className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
-                                                                      aria-label={`Details for ${model.name}`}
+                                                                      className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
+                                                                      aria-label={`Reorder ${model.name}`}
+                                                                      {...handle.attributes}
+                                                                      {...handle.listeners}
                                                                     >
-                                                                      <InfoIcon className="size-3.5" />
+                                                                      <GripVerticalIcon className="size-3.5" />
                                                                     </button>
-                                                                  }
-                                                                />
-                                                                <TooltipPopup
-                                                                  side="top"
-                                                                  className="max-w-56"
-                                                                >
-                                                                  <code className="text-[11px] text-foreground">
-                                                                    {model.slug}
-                                                                  </code>
-                                                                </TooltipPopup>
-                                                              </Tooltip>
-                                                            ) : null}
+                                                                  ) : null}
+                                                                  <span
+                                                                    className={cn(
+                                                                      "min-w-0 truncate text-xs font-medium",
+                                                                      isHidden
+                                                                        ? "text-muted-foreground"
+                                                                        : "text-foreground/90",
+                                                                    )}
+                                                                  >
+                                                                    {model.name}
+                                                                  </span>
+                                                                  {capLabels.map((label) => (
+                                                                    <span
+                                                                      key={label}
+                                                                      className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
+                                                                    >
+                                                                      {label}
+                                                                    </span>
+                                                                  ))}
+                                                                </div>
 
-                                                            {model.isCustom ? (
-                                                              <div className="flex items-center gap-1 pl-1">
-                                                                <Badge
-                                                                  variant="secondary"
-                                                                  className="text-[9px] px-1 py-0 font-normal"
-                                                                >
-                                                                  custom
-                                                                </Badge>
-                                                                <button
-                                                                  type="button"
-                                                                  className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                                                                  aria-label={`Remove ${model.slug}`}
-                                                                  onClick={() =>
-                                                                    removeCustomModel(
-                                                                      providerCard.provider,
-                                                                      model.slug,
-                                                                    )
-                                                                  }
-                                                                >
-                                                                  <XIcon className="size-3" />
-                                                                </button>
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                  <button
+                                                                    type="button"
+                                                                    aria-label={
+                                                                      isPinned
+                                                                        ? `Unpin ${model.name}`
+                                                                        : `Pin ${model.name}`
+                                                                    }
+                                                                    className={cn(
+                                                                      "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
+                                                                      isPinned
+                                                                        ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
+                                                                        : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
+                                                                    )}
+                                                                    onClick={() => {
+                                                                      const nextPinned =
+                                                                        togglePinnedModel(
+                                                                          settings,
+                                                                          providerCard.provider,
+                                                                          model.slug,
+                                                                        );
+                                                                      updateSettings({
+                                                                        pinnedModels: nextPinned as any,
+                                                                      });
+                                                                    }}
+                                                                  >
+                                                                    <PinIcon className="size-3.5 fill-current" />
+                                                                  </button>
+
+                                                                  {model.name !== model.slug ? (
+                                                                    <Tooltip>
+                                                                      <TooltipTrigger
+                                                                        render={
+                                                                          <button
+                                                                            type="button"
+                                                                            className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted cursor-pointer"
+                                                                            aria-label={`Details for ${model.name}`}
+                                                                          >
+                                                                            <InfoIcon className="size-3.5" />
+                                                                          </button>
+                                                                        }
+                                                                      />
+                                                                      <TooltipPopup
+                                                                        side="top"
+                                                                        className="max-w-56"
+                                                                      >
+                                                                        <code className="text-[11px] text-foreground">
+                                                                          {model.slug}
+                                                                        </code>
+                                                                      </TooltipPopup>
+                                                                    </Tooltip>
+                                                                  ) : null}
+
+                                                                  {model.isCustom ? (
+                                                                    <div className="flex items-center gap-1 pl-1">
+                                                                      <Badge
+                                                                        variant="secondary"
+                                                                        className="text-[9px] px-1 py-0 font-normal"
+                                                                      >
+                                                                        custom
+                                                                      </Badge>
+                                                                      <button
+                                                                        type="button"
+                                                                        className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                                                                        aria-label={`Remove ${model.slug}`}
+                                                                        onClick={() =>
+                                                                          removeCustomModel(
+                                                                            providerCard.provider,
+                                                                            model.slug,
+                                                                          )
+                                                                        }
+                                                                      >
+                                                                        <XIcon className="size-3" />
+                                                                      </button>
+                                                                    </div>
+                                                                  ) : (
+                                                                    <Tooltip>
+                                                                      <TooltipTrigger
+                                                                        render={
+                                                                          <span className="flex items-center pl-1">
+                                                                            <Switch
+                                                                              checked={!isHidden}
+                                                                              onCheckedChange={(checked) => {
+                                                                                const nextPrefs =
+                                                                                  toggleHiddenModel(
+                                                                                    settings.providerModelPreferences,
+                                                                                    providerCard.provider,
+                                                                                    model.slug,
+                                                                                    !checked,
+                                                                                  );
+                                                                                updateSettings({
+                                                                                  providerModelPreferences:
+                                                                                    nextPrefs as any,
+                                                                                });
+                                                                              }}
+                                                                              aria-label={`${!isHidden ? "Hide" : "Show"} ${model.name} in model picker`}
+                                                                              className="scale-75 origin-right cursor-pointer"
+                                                                            />
+                                                                          </span>
+                                                                        }
+                                                                      />
+                                                                      <TooltipPopup side="top">
+                                                                        {!isHidden
+                                                                          ? "Shown in model picker"
+                                                                          : "Hidden from model picker"}
+                                                                      </TooltipPopup>
+                                                                    </Tooltip>
+                                                                  )}
+                                                                </div>
                                                               </div>
-                                                            ) : null}
-                                                          </div>
-                                                        </div>
-                                                      )}
-                                                    </SortableModelRowItem>
-                                                  );
-                                                },
-                                              )}
-                                            </SortableContext>
-                                          </DndContext>
-                                        </div>
+                                                            )}
+                                                          </SortableModelRowItem>
+                                                        );
+                                                      },
+                                                    )}
+                                                  </SortableContext>
+                                                </DndContext>
+                                              </div>
+                                            </>
+                                          );
+                                        })()}
 
                                         {/* Copilot model identifiers are authoritative and account-scoped. */}
                                         {providerCard.provider !== "copilot" ? (

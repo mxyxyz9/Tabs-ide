@@ -199,8 +199,15 @@ export function getAppModelOptions(
     });
   }
 
-  const customOrder = settings.providerModelPreferences?.[provider as any]?.modelOrder;
-  return applyCustomModelOrdering(options, customOrder);
+  const prefs = settings.providerModelPreferences?.[provider as any];
+  const hiddenSet = new Set(prefs?.hiddenModels ?? []);
+  const visibleOptions = options.filter(
+    (option) =>
+      option.isCustom ||
+      !hiddenSet.has(option.slug) ||
+      (selectedModel && (option.slug === selectedModel || option.slug === normalizedSelectedModel)),
+  );
+  return applyCustomModelOrdering(visibleOptions, prefs?.modelOrder);
 }
 
 export function resolveAppModelSelection(

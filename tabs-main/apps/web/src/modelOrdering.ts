@@ -105,14 +105,23 @@ export function updateModelOrder<T extends ProviderModelPreferencesMap>(
   instanceId: string,
   newOrder: string[],
 ): T {
-  const currentMap = (preferences ?? {}) as T;
+  const currentMap = (preferences ?? {}) as Record<string, any>;
   const currentPref = currentMap[instanceId] ?? { hiddenModels: [], modelOrder: [] };
+  const cleanedOrder = [...new Set(newOrder.filter((s) => s.trim().length > 0))];
+
+  if (
+    cleanedOrder.length === 0 &&
+    (!currentPref.hiddenModels || currentPref.hiddenModels.length === 0)
+  ) {
+    const { [instanceId]: _, ...rest } = currentMap;
+    return rest as T;
+  }
 
   return {
     ...currentMap,
     [instanceId]: {
       ...currentPref,
-      modelOrder: newOrder,
+      modelOrder: cleanedOrder,
     },
   } as T;
 }
@@ -139,4 +148,115 @@ export function resetModelOrder<T extends ProviderModelPreferencesMap>(
     } as T;
   }
   return rest as T;
+}
+
+export interface BulkToggleOptions {
+  readonly preserveSlugs?: ReadonlySet<string> | ReadonlyArray<string>;
+}
+
+/**
+ * Checks whether all selectable built-in models in the provided list are currently hidden.
+ */
+export function isAllBuiltInModelsHidden<
+  T extends { readonly slug: string; readonly isCustom?: boolean },
+>(
+  models: ReadonlyArray<T>,
+  hiddenModels: ReadonlyArray<string> | null | undefined,
+  options?: BulkToggleOptions,
+): boolean {
+  const currentHidden = new Set(hiddenModels ?? []);
+  const preserveSet = new Set(options?.preserveSlugs ?? []);
+  const builtInSlugs = models
+    .filter((model) => !model.isCustom && !preserveSet.has(model.slug))
+    .map((model) => model.slug);
+
+  return builtInSlugs.length > 0 && builtInSlugs.every((slug) => currentHidden.has(slug));
+}
+
+/**
+ * Computes the next hiddenModels array when bulk toggling (enable all / disable all).
+ * - Preserves custom models (never hides them).
+ * - Preserves required or default models specified in `options.preserveSlugs`.
+ * - If all eligible target built-in models are hidden, unhides them.
+ * - Otherwise, hides all eligible target built-in models.
+ */
+export function nextHiddenModelsForBulkToggle<
+  T extends { readonly slug: string; readonly isCustom?: boolean },
+>(
+  targetModels: ReadonlyArray<T>,
+  hiddenModels: ReadonlyArray<string> | null | undefined,
+  options?: BulkToggleOptions,
+): string[] {
+  const currentHidden = hiddenModels ?? [];
+  const currentHiddenSet = new Set(currentHidden);
+  const preserveSet = new Set(options?.preserveSlugs ?? []);
+
+  const builtInSlugs = targetModels
+    .filter((model) => !model.isCustom && !preserveSet.has(model.slug))
+    .map((model) => model.slug);
+  const builtInSlugSet = new Set(builtInSlugs);
+
+  if (builtInSlugs.length === 0) {
+    return [...currentHidden];
+  }
+
+  const allTargetHidden = builtInSlugs.every((slug) => currentHiddenSet.has(slug));
+
+  if (allTargetHidden) {
+    return currentHidden.filter((slug) => !builtInSlugSet.has(slug));
+  }
+
+  return [...new Set([...currentHidden, ...builtInSlugs])];
+}
+
+/**
+ * Immutably updates hidden models for a provider instance, pruning redundant empty settings.
+ */
+export function updateHiddenModels<T extends ProviderModelPreferencesMap>(
+  preferences: T | null | undefined,
+  instanceId: string,
+  newHidden: string[],
+): T {
+  const currentMap = (preferences ?? {}) as Record<string, any>;
+  const currentPref = currentMap[instanceId] ?? { hiddenModels: [], modelOrder: [] };
+  const cleanedHidden = [...new Set(newHidden.filter((s) => s.trim().length > 0))];
+
+  if (
+    cleanedHidden.length === 0 &&
+    (!currentPref.modelOrder || currentPref.modelOrder.length === 0)
+  ) {
+    const { [instanceId]: _, ...rest } = currentMap;
+    return rest as T;
+  }
+
+  return {
+    ...currentMap,
+    [instanceId]: {
+      ...currentPref,
+      hiddenModels: cleanedHidden,
+    },
+  } as T;
+}
+
+/**
+ * Toggles a single model slug's hidden state for a provider instance.
+ */
+export function toggleHiddenModel<T extends ProviderModelPreferencesMap>(
+  preferences: T | null | undefined,
+  instanceId: string,
+  slug: string,
+  forceHidden?: boolean,
+): T {
+  const currentMap = (preferences ?? {}) as Record<string, any>;
+  const currentPref = currentMap[instanceId] ?? { hiddenModels: [], modelOrder: [] };
+  const currentHidden = new Set<string>(currentPref.hiddenModels ?? []);
+
+  const shouldHide = forceHidden !== undefined ? forceHidden : !currentHidden.has(slug);
+  if (shouldHide) {
+    currentHidden.add(slug);
+  } else {
+    currentHidden.delete(slug);
+  }
+
+  return updateHiddenModels(preferences, instanceId, Array.from(currentHidden));
 }
