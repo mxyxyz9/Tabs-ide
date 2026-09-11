@@ -7,12 +7,13 @@ const BLOCKING_NATIVE_SURFACE_OVERLAY_SELECTORS = [
   "[data-slot='alert-dialog-popup']",
   "[data-slot='command-dialog-backdrop']",
   "[data-slot='command-dialog-popup']",
-  // Electron WebContentsViews are composited above the React renderer. Hide
-  // the active native surface while a toast is mounted so notifications remain
-  // visible and interactive over Code, Browser, and Testing views.
-  "[data-slot='toast-root']",
-  "[data-slot='toast-popup']",
   "[data-slot='code-resize-overlay']",
+  // Interactive notifications with actions, buttons, or confirmations temporarily
+  // suspend the active native view so users can interact with them. Passive toasts
+  // do not suspend the view.
+  "[data-slot='toast-root'][data-interactive='true']",
+  "[data-slot='toast-popup'][data-interactive='true']",
+  "[data-slot='toast-action']",
 ] as const;
 
 /**
@@ -22,9 +23,15 @@ const BLOCKING_NATIVE_SURFACE_OVERLAY_SELECTORS = [
 export const NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR =
   BLOCKING_NATIVE_SURFACE_OVERLAY_SELECTORS.join(", ");
 
-export function isNativeSurfaceBlockingOverlaySlot(slot: string): boolean {
+export function isNativeSurfaceBlockingOverlaySlot(
+  slot: string,
+  options?: { interactive?: boolean },
+): boolean {
+  if (slot === "toast-root" || slot === "toast-popup") {
+    return options?.interactive ?? false;
+  }
   return BLOCKING_NATIVE_SURFACE_OVERLAY_SELECTORS.some(
-    (selector) => selector === `[data-slot='${slot}']`,
+    (selector) => selector === `[data-slot='${slot}']` || selector.startsWith(`[data-slot='${slot}']`),
   );
 }
 

@@ -2750,16 +2750,19 @@ function FallbackCodeTool(props: { project: Project }) {
   );
 }
 
+let cachedDesktopCodeHostState: DesktopCodeHostState | null = null;
+
 function DesktopCodeTool(props: { project: Project }) {
   const aiProvider = useSettings((s) => s.aiProvider ?? "copilot");
   const api = readNativeApi();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scheduleBoundsRef = useRef<(() => void) | null>(null);
-  const [codeHostState, setCodeHostState] = useState<DesktopCodeHostState>(
-    DEFAULT_DESKTOP_CODE_HOST_STATE,
+  const [codeHostState, setCodeHostState] = useState<DesktopCodeHostState | null>(
+    cachedDesktopCodeHostState,
   );
   const [hostReady, setHostReady] = useState(false);
   const [hostError, setHostError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const codeState = useAtomValue(
     workspaceShellAtom,
     (state) => state.codeStateByProjectId[props.project.id] ?? EMPTY_PROJECT_CODE_TOOL_STATE,
@@ -2960,7 +2963,8 @@ function DesktopCodeTool(props: { project: Project }) {
     if (!api) return;
     await openInPreferredEditor(api, props.project.cwd);
   }, [api, props.project.cwd]);
-  const shouldUseFallbackTool = !codeHostState.available || hostError !== null;
+  const shouldUseFallbackTool =
+    codeHostState !== null && (!codeHostState.available || hostError !== null);
 
   useEffect(() => {
     const bridge = window.desktopBridge;
@@ -2972,6 +2976,7 @@ function DesktopCodeTool(props: { project: Project }) {
     void bridge
       .getCodeHostState()
       .then((state) => {
+        cachedDesktopCodeHostState = state;
         if (!cancelled) {
           setCodeHostState(state);
         }
@@ -2984,11 +2989,11 @@ function DesktopCodeTool(props: { project: Project }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryNonce]);
 
   useEffect(() => {
     const bridge = window.desktopBridge;
-    if (!bridge || !codeHostState.available) {
+    if (!bridge || !codeHostState?.available) {
       setHostReady(false);
       return;
     }
@@ -3002,7 +3007,11 @@ function DesktopCodeTool(props: { project: Project }) {
         workspaceRoot: props.project.cwd,
       })
       .then(async () => {
-        const hostNode = hostRef.current;
+        let hostNode = hostRef.current;
+        if (!hostNode) {
+          await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+          hostNode = hostRef.current;
+        }
         if (!hostNode) {
           throw new Error("The Code workbench host is unavailable.");
         }
@@ -3043,11 +3052,11 @@ function DesktopCodeTool(props: { project: Project }) {
       // navigation and leaves an empty workbench. WorkspaceShell's active-tool
       // effect is the single owner of hiding when the user truly leaves Code.
     };
-  }, [codeHostState.available, props.project.cwd, props.project.id]);
+  }, [codeHostState?.available, props.project.cwd, props.project.id, retryNonce]);
 
   useEffect(() => {
     const bridge = window.desktopBridge;
-    if (!bridge || !codeHostState.available || !codeState.lastFocusedPath) {
+    if (!bridge || !codeHostState?.available || !codeState.lastFocusedPath) {
       return;
     }
     void bridge
@@ -3058,7 +3067,7 @@ function DesktopCodeTool(props: { project: Project }) {
       })
       .catch(() => undefined);
   }, [
-    codeHostState.available,
+    codeHostState?.available,
     codeState.lastFocusedPath,
     codeState.navigationNonce,
     props.project.id,
@@ -3067,7 +3076,7 @@ function DesktopCodeTool(props: { project: Project }) {
   useEffect(() => {
     const bridge = window.desktopBridge;
     const hostNode = hostRef.current;
-    if (!bridge || !codeHostState.available || !hostNode) {
+    if (!bridge || !codeHostState?.available || !hostNode) {
       return;
     }
 
@@ -3136,11 +3145,11 @@ function DesktopCodeTool(props: { project: Project }) {
         })
         .catch(() => undefined);
     };
-  }, [codeHostState.available, props.project.id]);
+  }, [codeHostState?.available, props.project.id]);
 
   useEffect(() => {
     const bridge = window.desktopBridge;
-    if (!bridge || !codeHostState.available) {
+    if (!bridge || !codeHostState?.available) {
       return;
     }
 
@@ -3200,7 +3209,7 @@ function DesktopCodeTool(props: { project: Project }) {
         clearTimeout(debounceTimer);
       }
     };
-  }, [codeHostState.available, hostReady, props.project.id]);
+  }, [codeHostState?.available, hostReady, props.project.id]);
 
   if (shouldUseFallbackTool) {
     return (
@@ -3212,13 +3221,28 @@ function DesktopCodeTool(props: { project: Project }) {
                 Embedded Code-OSS unavailable
               </div>
               <div className="text-xs text-muted-foreground">
-                {getCodeHostUnavailableMessage(hostError ?? codeHostState.reason)}
+                {getCodeHostUnavailableMessage(hostError ?? codeHostState?.reason ?? null)}
               </div>
             </div>
-            <Button type="button" size="sm" onClick={() => void openProjectInEditor()}>
-              <FolderSearchIcon className="size-3.5" />
-              Open In Editor
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setHostError(null);
+                  setHostReady(false);
+                  setRetryNonce((n) => n + 1);
+                }}
+              >
+                <RefreshCwIcon className="mr-1.5 size-3.5" />
+                Retry
+              </Button>
+              <Button type="button" size="sm" onClick={() => void openProjectInEditor()}>
+                <FolderSearchIcon className="size-3.5" />
+                Open In Editor
+              </Button>
+            </div>
           </div>
         </div>
         <div className="min-h-0 flex-1">
@@ -8046,7 +8070,11 @@ function DesktopBrowserTool(props: {
 
     const syncOverlayVisibility = () => {
       frameId = 0;
-      const overlayOpen = document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null;
+      const surfaceReady = !sessionState.loading && !sessionState.lastError;
+      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
+        surfaceReady,
+        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
+      );
       if (overlayOpen === suspendedForOverlay) {
         return;
       }
@@ -8959,7 +8987,11 @@ function DesktopCustomEmbedTool(props: {
 
     const syncOverlayVisibility = () => {
       frameId = 0;
-      const overlayOpen = document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null;
+      const surfaceReady = !sessionState.loading && !sessionState.lastError;
+      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
+        surfaceReady,
+        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
+      );
       if (overlayOpen === suspendedForOverlay) {
         return;
       }

@@ -14,7 +14,10 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
 import { clipTestingPreviewBounds } from "~/lib/testingPreviewBounds";
-import { NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR } from "~/nativeSurfaceOverlay";
+import {
+  NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR,
+  shouldSuspendNativeSurfaceForOverlay,
+} from "~/nativeSurfaceOverlay";
 
 export const CODE_HOST_OVERLAY_SELECTOR = NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR;
 
@@ -416,7 +419,10 @@ export function TestingApplicationPreview(props: {
     let frame = 0;
     const sync = () => {
       frame = 0;
-      const overlayOpen = document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null;
+      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
+        true,
+        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
+      );
       if (overlayOpen === hiddenForOverlay) return;
       hiddenForOverlay = overlayOpen;
       if (overlayOpen) {

@@ -26,6 +26,7 @@ type ThreadToastData = {
   tooltipStyle?: boolean;
   dismissAfterVisibleMs?: number;
   onClose?: () => void;
+  interactive?: boolean;
 };
 
 const toastManager = Toast.createToastManager<ThreadToastData>();
@@ -269,9 +270,16 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
             visibleToastLayout.items.length,
           );
 
+          const isInteractive = Boolean(
+            toast.actionProps ||
+              (toast.type === "error" && typeof toast.description === "string") ||
+              toast.data?.interactive,
+          );
+
           return (
             <Toast.Root
               data-slot="toast-root"
+              data-interactive={isInteractive ? "true" : "false"}
               className={cn(
                 "absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full select-none rounded-lg border bg-popover not-dark:bg-clip-padding text-popover-foreground shadow-lg/5 [transition:transform_.5s_cubic-bezier(.22,1,.36,1),opacity_.5s,height_.15s] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
                 // Base positioning using data-position
@@ -438,6 +446,7 @@ function AnchoredToasts() {
                       : "rounded-lg shadow-lg/5 before:rounded-[calc(var(--radius-lg)-1px)]",
                   )}
                   data-slot="toast-popup"
+                  data-interactive={Boolean(toast.actionProps || toast.data?.interactive) ? "true" : "false"}
                   toast={toast}
                 >
                   {tooltipStyle ? (
