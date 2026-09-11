@@ -204,6 +204,11 @@ import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./Compose
 import { ComposerPromptLengthValidation } from "./chat/ComposerPromptLengthValidation";
 import { getComposerPromptLengthValidationMessage } from "./chat/composerSubmission";
 import {
+  appendReviewCommentsToPrompt,
+  type ReviewCommentContext,
+} from "~/reviewCommentContext";
+import { ComposerPendingReviewComments } from "./chat/ComposerPendingReviewComments";
+import {
   appendPreviewAnnotationPrompt,
   PREVIEW_ANNOTATION_PICKED_EVENT,
   previewAnnotationScreenshotFile,
@@ -456,19 +461,21 @@ export default function ChatView({
   const composerFiles = composerDraft.files;
   const composerTerminalContexts = composerDraft.terminalContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
+  const composerReviewComments = composerDraft.reviewComments;
   const composerSendState = useMemo(
     () =>
       deriveComposerSendState({
         prompt,
         imageCount: composerImages.length,
         fileCount: composerFiles.length,
-        contextCount: composerPreviewAnnotations.length,
+        contextCount: composerPreviewAnnotations.length + composerReviewComments.length,
         terminalContexts: composerTerminalContexts,
       }),
     [
       composerFiles.length,
       composerImages.length,
       composerPreviewAnnotations.length,
+      composerReviewComments.length,
       composerTerminalContexts,
       prompt,
     ],
@@ -491,6 +498,9 @@ export default function ChatView({
     addPreviewAnnotation: addComposerDraftPreviewAnnotation,
     setPreviewAnnotations: setComposerDraftPreviewAnnotations,
     removePreviewAnnotation: removeComposerDraftPreviewAnnotation,
+    addReviewComment: addComposerDraftReviewComment,
+    setReviewComments: setComposerDraftReviewComments,
+    removeReviewComment: removeComposerDraftReviewComment,
     clearPersistedAttachments: clearComposerDraftPersistedAttachments,
     syncPersistedAttachments: syncComposerDraftPersistedAttachments,
     clearComposerContent: clearComposerDraftContent,
@@ -513,6 +523,10 @@ export default function ChatView({
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
   const composerTerminalContextsRef = useRef<TerminalContextDraft[]>(composerTerminalContexts);
+  const composerReviewCommentsRef = useRef<ReviewCommentContext[]>(composerReviewComments);
+  useEffect(() => {
+    composerReviewCommentsRef.current = composerReviewComments;
+  }, [composerReviewComments]);
   const [localDraftErrorsByThreadId, setLocalDraftErrorsByThreadId] = useState<
     Record<ThreadId, string | null>
   >({});
@@ -3409,13 +3423,18 @@ export default function ChatView({
     const composerFilesSnapshot = [...composerFiles];
     const composerTerminalContextsSnapshot = [...sendableComposerTerminalContexts];
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
+    const composerReviewCommentsSnapshot = [...composerReviewComments];
     const messageTextWithContexts = appendTerminalContextsToPrompt(
       promptForSend,
       composerTerminalContextsSnapshot,
     );
-    const messageTextForSend = composerPreviewAnnotationsSnapshot.reduce(
+    const messageTextWithPreviewAnnotations = composerPreviewAnnotationsSnapshot.reduce(
       (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
       messageTextWithContexts,
+    );
+    const messageTextForSend = appendReviewCommentsToPrompt(
+      messageTextWithPreviewAnnotations,
+      composerReviewCommentsSnapshot,
     );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
@@ -3668,6 +3687,7 @@ export default function ChatView({
         addComposerFilesToDraft(composerFilesSnapshot);
         addComposerTerminalContextsToDraft(composerTerminalContextsSnapshot);
         setComposerDraftPreviewAnnotations(activeThread.id, composerPreviewAnnotationsSnapshot);
+        setComposerDraftReviewComments(activeThread.id, composerReviewCommentsSnapshot);
         setComposerTrigger(detectComposerTrigger(promptForSend, promptForSend.length));
       }
       setThreadError(
@@ -5103,6 +5123,18 @@ export default function ChatView({
                       </div>
                     ))}
                   </div>
+                )}
+
+              {!isComposerApprovalState &&
+                pendingUserInputs.length === 0 &&
+                composerReviewComments.length > 0 && (
+                  <ComposerPendingReviewComments
+                    comments={composerReviewComments}
+                    onRemove={(commentId) =>
+                      removeComposerDraftReviewComment(threadId, commentId)
+                    }
+                    className="mb-2.5"
+                  />
                 )}
 
               <div className="flex-1 pr-11">

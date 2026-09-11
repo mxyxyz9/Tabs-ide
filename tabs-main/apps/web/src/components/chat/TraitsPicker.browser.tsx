@@ -167,6 +167,7 @@ async function mountClaudePicker(props?: {
       persistedAttachments: [],
       terminalContexts: [],
       previewAnnotations: [],
+      reviewComments: [],
       modelSelectionByProvider: props?.skipDraftModelOptions
         ? {}
         : {
@@ -368,6 +369,7 @@ async function mountCodexPicker(props: { model?: string; options?: CodexModelOpt
       persistedAttachments: [],
       terminalContexts: [],
       previewAnnotations: [],
+      reviewComments: [],
       modelSelectionByProvider: {
         codex: makeAppModelSelection("codex", model, typedOptionsToSelections(props.options)),
       },

@@ -21,6 +21,8 @@ import type {
 } from "@tabs/contracts";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { formatAssistantCitationForComposer } from "~/composer-logic";
+import type { ReviewCommentContext } from "~/reviewCommentContext";
+import { ComposerPendingReviewComments } from "./ComposerPendingReviewComments";
 import { Button } from "../ui/button";
 import { BotIcon, ListTodoIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -68,6 +70,8 @@ export interface ChatComposerProps {
   onCompact?: () => void;
   compactDisabled?: boolean;
   compactDisabledReason?: string | null;
+  reviewComments?: readonly ReviewCommentContext[];
+  onRemoveReviewComment?: (commentId: string) => void;
 }
 
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
@@ -95,6 +99,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     onCompact,
     compactDisabled = false,
     compactDisabledReason = null,
+    reviewComments = [],
+    onRemoveReviewComment,
   }: ChatComposerProps,
   ref,
 ) {
@@ -199,6 +205,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             </div>
           ))}
         </div>
+      )}
+
+      {/* Pending Review Comments */}
+      {reviewComments.length > 0 && (
+        <ComposerPendingReviewComments
+          comments={reviewComments}
+          onRemove={onRemoveReviewComment}
+          className="mb-2"
+        />
       )}
 
       {/* Main Composer Input */}

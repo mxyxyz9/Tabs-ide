@@ -44,6 +44,8 @@ import { useSettings } from "../hooks/useSettings";
 import { useWorkspaceActiveProjectId } from "../state/workspaceShell";
 import { openLinkInIntegratedBrowser, resolveBrowserLinkTarget } from "../browserLinkTarget";
 import { HighlightedCodeLines, toHtml } from "./chat/HighlightedCodeLines";
+import { basenameOfPath } from "~/vscode-icons";
+import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 
 class CodeHighlightErrorBoundary extends React.Component<
   { fallback: ReactNode; children: ReactNode },
@@ -486,7 +488,7 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
           </div>
         );
       },
-      a({ node: _node, href, ...props }) {
+      a({ node: _node, href, children, ...props }) {
         const targetPath = resolveMarkdownFileLinkTarget(href, cwd);
         if (!targetPath) {
           return (
@@ -509,25 +511,54 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
                 event.stopPropagation();
                 openLinkInIntegratedBrowser(activeProjectId, href);
               }}
-            />
+            >
+              {children}
+            </a>
           );
         }
 
+        const label =
+          typeof children === "string" && children.trim().length > 0
+            ? children.trim()
+            : basenameOfPath(targetPath);
+        const theme = resolvedTheme === "light" ? "light" : "dark";
+
         return (
-          <a
-            {...props}
-            href={href}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              const api = readNativeApi();
-              if (api) {
-                void openInPreferredEditor(api, targetPath);
-              } else {
-                console.warn("Native API not found. Unable to open file in editor.");
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <a
+                  {...props}
+                  href={href}
+                  className={cn(
+                    CHAT_FILE_TAG_CHIP_CLASS_NAME,
+                    "cursor-pointer no-underline select-text inline-flex",
+                    props.className,
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const api = readNativeApi();
+                    if (api) {
+                      void openInPreferredEditor(api, targetPath);
+                    } else {
+                      console.warn("Native API not found. Unable to open file in editor.");
+                    }
+                  }}
+                >
+                  <FileTagChipContent path={targetPath} label={label} theme={theme} selectable />
+                </a>
               }
-            }}
-          />
+            />
+            <TooltipPopup
+              side="top"
+              className="max-w-[min(40rem,calc(100vw-2rem))] font-mono text-[11px] leading-tight"
+            >
+              <div className="overflow-x-auto whitespace-nowrap [scrollbar-color:color-mix(in_srgb,var(--contrast-border)_78%,transparent)_transparent] [scrollbar-width:thin]">
+                {targetPath}
+              </div>
+            </TooltipPopup>
+          </Tooltip>
         );
       },
       pre({ node: _node, children, ...props }) {
@@ -554,7 +585,7 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
         );
       },
     }),
-    [activeProjectId, browserLinkTarget, cwd, diffThemeName, isStreaming],
+    [activeProjectId, browserLinkTarget, cwd, diffThemeName, isStreaming, resolvedTheme],
   );
 
   const incrementalParsing =

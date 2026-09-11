@@ -23,6 +23,7 @@ const emptyDraft: ComposerThreadDraftState = {
   persistedAttachments: [],
   terminalContexts: [],
   previewAnnotations: [],
+  reviewComments: [],
   modelSelectionByProvider: {},
   activeProvider: null,
   runtimeMode: null,
@@ -205,6 +206,15 @@ export const composerDraftActions = {
       ReturnType<typeof useComposerDraftStore.getState>["removePreviewAnnotation"]
     >
   ) => useComposerDraftStore.getState().removePreviewAnnotation(...args),
+  addReviewComment: (
+    ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["addReviewComment"]>
+  ) => useComposerDraftStore.getState().addReviewComment(...args),
+  setReviewComments: (
+    ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["setReviewComments"]>
+  ) => useComposerDraftStore.getState().setReviewComments(...args),
+  removeReviewComment: (
+    ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["removeReviewComment"]>
+  ) => useComposerDraftStore.getState().removeReviewComment(...args),
   clearPersistedAttachments: (
     ...args: Parameters<
       ReturnType<typeof useComposerDraftStore.getState>["clearPersistedAttachments"]

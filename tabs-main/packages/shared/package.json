@@ -12,6 +12,10 @@
       "types": "./src/composerInlineTokens.ts",
       "import": "./src/composerInlineTokens.ts"
     },
+    "./composerTrigger": {
+      "types": "./src/composerTrigger.ts",
+      "import": "./src/composerTrigger.ts"
+    },
     "./testingLocatorDom": {
       "types": "./src/testingLocatorDom.ts",
       "import": "./src/testingLocatorDom.ts"

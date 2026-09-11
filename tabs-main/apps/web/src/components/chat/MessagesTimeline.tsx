@@ -25,6 +25,16 @@ import { TaskProgressCard } from "./TaskProgressCard";
 import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
 import ChatMarkdown from "../ChatMarkdown";
+import { FileDiff } from "@pierre/diffs/react";
+import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
+import { getRenderablePatch, resolveDiffThemeName, resolveFileDiffPath } from "~/lib/diffRendering";
+import {
+  buildReviewCommentRenderablePatch,
+  formatReviewCommentFence,
+  parseReviewCommentMessageSegments,
+  type ReviewCommentContext,
+} from "~/reviewCommentContext";
+import { formatWorkspaceRelativePath } from "~/filePathDisplay";
 import {
   BotIcon,
   CheckIcon,
@@ -556,6 +566,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     <UserMessageBody
                       text={displayedUserMessage.visibleText}
                       terminalContexts={terminalContexts}
+                      workspaceRoot={workspaceRoot}
+                      resolvedTheme={resolvedTheme}
+                      markdownCwd={markdownCwd}
                     />
                   </div>
                 )}
@@ -880,10 +893,99 @@ const UserMessageTerminalContextInlineLabel = memo(
   },
 );
 
+function UserMessageReviewCommentCard(props: {
+  comment: ReviewCommentContext;
+  workspaceRoot?: string | undefined;
+  resolvedTheme?: "light" | "dark" | undefined;
+  markdownCwd?: string | undefined;
+}) {
+  const { comment, workspaceRoot, resolvedTheme, markdownCwd } = props;
+  const fenceLanguage = comment.fenceLanguage ?? "diff";
+  const renderablePatch = getRenderablePatch(
+    buildReviewCommentRenderablePatch(comment),
+    `review-comment:${comment.id}`,
+  );
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/70 bg-background/70 p-3 text-left">
+      <div className="space-y-1">
+        <div className="text-foreground text-xs font-medium">
+          {formatWorkspaceRelativePath(comment.filePath, workspaceRoot)}
+        </div>
+        <div className="text-muted-foreground text-[11px]">
+          {comment.sectionTitle} · {comment.rangeLabel}
+        </div>
+      </div>
+      {comment.text.length > 0 && (
+        <div className="whitespace-pre-wrap wrap-break-word text-sm text-foreground">
+          {comment.text}
+        </div>
+      )}
+      {fenceLanguage !== "diff" && comment.diff.trim().length > 0 && (
+        <ChatMarkdown
+          text={formatReviewCommentFence(fenceLanguage, comment.diff)}
+          cwd={markdownCwd}
+        />
+      )}
+      {renderablePatch?.kind === "files" && (
+        <DiffWorkerPoolProvider>
+          {renderablePatch.files.map((fileDiff) => (
+            <FileDiff
+              key={resolveFileDiffPath(fileDiff)}
+              fileDiff={fileDiff}
+              options={{
+                collapsed: false,
+                diffStyle: "unified",
+                theme: resolveDiffThemeName(resolvedTheme === "light" ? "light" : "dark"),
+              }}
+            />
+          ))}
+        </DiffWorkerPoolProvider>
+      )}
+      {renderablePatch?.kind === "raw" && (
+        <pre className="overflow-x-auto rounded-md bg-muted/40 p-2 text-xs">
+          {renderablePatch.text}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 const UserMessageBody = memo(function UserMessageBody(props: {
   text: string;
   terminalContexts: ParsedTerminalContextEntry[];
+  workspaceRoot?: string | undefined;
+  resolvedTheme?: "light" | "dark" | undefined;
+  markdownCwd?: string | undefined;
 }) {
+  const reviewCommentSegments = parseReviewCommentMessageSegments(props.text);
+  if (reviewCommentSegments.some((segment) => segment.kind === "review-comment")) {
+    return (
+      <div className="space-y-3 text-left">
+        {reviewCommentSegments.map((segment) =>
+          segment.kind === "text" ? (
+            segment.text.trim().length > 0 ? (
+              <div
+                key={segment.id}
+                className="wrap-break-word whitespace-pre-wrap font-sans text-lg leading-tight text-foreground"
+              >
+                {segment.text.trim()}
+              </div>
+            ) : null
+          ) : (
+            <UserMessageReviewCommentCard
+              key={segment.comment.id}
+              comment={segment.comment}
+              workspaceRoot={props.workspaceRoot}
+              resolvedTheme={props.resolvedTheme}
+              markdownCwd={props.markdownCwd}
+            />
+          ),
+        )}
+      </div>
+    );
+  }
+
   if (props.terminalContexts.length > 0) {
     const hasEmbeddedInlineLabels = textContainsInlineTerminalContextLabels(
       props.text,
