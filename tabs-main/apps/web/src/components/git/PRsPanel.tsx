@@ -28,6 +28,7 @@ import {
   PullRequestLabelsSection,
   PullRequestActivityView,
 } from "./PullRequestMetadataControls";
+import { PullRequestEditDialog } from "./PullRequestEditDialog";
 
 import {
   gitAllPullRequestsQueryOptions,
@@ -1526,84 +1527,29 @@ export function PRsPanel({
       )}
 
       {editPr ? (
-        <Dialog
-          open
+        <PullRequestEditDialog
+          open={Boolean(editPr)}
           onOpenChange={(open) => {
             if (!open) setEditPr(null);
           }}
-        >
-          <DialogPopup className="git-tool-v2 max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Edit Pull Request #{editPr.number}</DialogTitle>
-            </DialogHeader>
-            <DialogPanel className="space-y-4">
-              <div>
-                <label
-                  htmlFor="git-pr-edit-title"
-                  className="mb-1 block text-[11px] font-medium text-muted-foreground"
-                >
-                  Title
-                </label>
-                <input
-                  id="git-pr-edit-title"
-                  value={editPr.title}
-                  maxLength={1_000}
-                  autoFocus
-                  onChange={(event) =>
-                    setEditPr((current) =>
-                      current ? { ...current, title: event.target.value } : current,
-                    )
-                  }
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="git-pr-edit-description"
-                  className="mb-1 block text-[11px] font-medium text-muted-foreground"
-                >
-                  Description
-                </label>
-                <textarea
-                  id="git-pr-edit-description"
-                  value={editPr.body}
-                  maxLength={100_000}
-                  rows={10}
-                  onChange={(event) =>
-                    setEditPr((current) =>
-                      current ? { ...current, body: event.target.value } : current,
-                    )
-                  }
-                  className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-              </div>
-            </DialogPanel>
-            <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setEditPr(null)}>
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={!editPr.title.trim() || pendingAction !== null}
-                onClick={() => {
-                  const current = editPr;
-                  void mutatePullRequest(
-                    current.number,
-                    "edit_pull_request",
-                    current.body,
-                    undefined,
-                    undefined,
-                    current.title.trim(),
-                  ).then((ok) => {
-                    if (ok) setEditPr(null);
-                  });
-                }}
-              >
-                Save changes
-              </Button>
-            </DialogFooter>
-          </DialogPopup>
-        </Dialog>
+          prNumber={editPr.number}
+          initialTitle={editPr.title}
+          initialBody={editPr.body}
+          cwd={cwd}
+          isPending={pendingAction !== null}
+          onSave={async (title, body) => {
+            const current = editPr;
+            const ok = await mutatePullRequest(
+              current.number,
+              "edit_pull_request",
+              body,
+              undefined,
+              undefined,
+              title.trim(),
+            );
+            if (ok) setEditPr(null);
+          }}
+        />
       ) : null}
     </div>
   );

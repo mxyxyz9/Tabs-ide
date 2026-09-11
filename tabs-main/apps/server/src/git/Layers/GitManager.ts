@@ -363,6 +363,7 @@ const GITHUB_PULL_REQUEST_CAPABILITIES = {
     "unresolve_thread",
     "add_reaction",
     "remove_reaction",
+    "edit_pull_request",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
@@ -390,6 +391,7 @@ const GITLAB_PULL_REQUEST_CAPABILITIES = {
     "unresolve_thread",
     "add_reaction",
     "remove_reaction",
+    "edit_pull_request",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
