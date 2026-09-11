@@ -19,6 +19,7 @@ import { type TextGenerationShape, TextGeneration } from "../../textGeneration/T
 import { GitCoreLive } from "./GitCore.ts";
 import { GitCore } from "../Services/GitCore.ts";
 import { makeGitManager } from "./GitManager.ts";
+import { PullRequestReadCacheLive } from "./PullRequestReadCache.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 
@@ -520,6 +521,7 @@ function makeManager(input?: {
     Layer.succeed(TextGeneration, textGeneration),
     gitCoreLayer,
     serverSettingsLayer,
+    PullRequestReadCacheLive.pipe(Layer.provideMerge(ServerConfigLayer)),
   ).pipe(Layer.provideMerge(NodeServices.layer));
 
   return makeGitManager.pipe(

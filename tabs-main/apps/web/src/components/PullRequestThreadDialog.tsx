@@ -7,6 +7,7 @@ import {
   gitPreparePullRequestThreadMutationOptions,
   gitResolvePullRequestQueryOptions,
 } from "~/lib/gitReactQuery";
+import { readPullRequestSnapshot } from "~/lib/pullRequestSnapshot";
 import { cn } from "~/lib/utils";
 import { parsePullRequestReference } from "~/pullRequestReference";
 import { Button } from "./ui/button";
@@ -84,7 +85,11 @@ export function PullRequestThreadDialog({
       cwd,
       parsedReference,
     ]);
-    return cached?.pullRequest ?? null;
+    if (cached?.pullRequest) {
+      return cached.pullRequest;
+    }
+    const snapshot = readPullRequestSnapshot({ cwd, reference: parsedReference });
+    return snapshot?.pullRequest ?? null;
   }, [cwd, parsedReference, queryClient]);
   const preparePullRequestThreadMutation = useMutation(
     gitPreparePullRequestThreadMutationOptions({ cwd, queryClient }),

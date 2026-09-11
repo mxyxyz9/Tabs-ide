@@ -1,6 +1,7 @@
 import { type GitStackedAction } from "@tabs/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/react-query";
 import { environmentApi } from "../connection/environmentApiRegistry";
+import { readPullRequestSnapshot, writePullRequestSnapshot } from "./pullRequestSnapshot";
 
 const GIT_ENVIRONMENT_STALE_TIME_MS = 30_000;
 const GIT_STATUS_STALE_TIME_MS = 5_000;
@@ -241,8 +242,11 @@ export function gitResolvePullRequestQueryOptions(input: {
       if (!input.cwd || !input.reference) {
         throw new Error("Pull request lookup is unavailable.");
       }
-      return api.git.resolvePullRequest({ cwd: input.cwd, reference: input.reference });
+      const result = await api.git.resolvePullRequest({ cwd: input.cwd, reference: input.reference });
+      writePullRequestSnapshot(input, result);
+      return result;
     },
+    placeholderData: () => readPullRequestSnapshot(input) ?? undefined,
     enabled: input.cwd !== null && input.reference !== null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,

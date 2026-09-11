@@ -34,6 +34,7 @@ import { GitManagerLive } from "./git/Layers/GitManager";
 import { GitCoreLive } from "./git/Layers/GitCore";
 import { GitHubCliLive } from "./git/Layers/GitHubCli";
 import { GitEnvironmentLive } from "./git/Layers/GitEnvironment";
+import { PullRequestReadCacheLive } from "./git/Layers/PullRequestReadCache";
 import { PtyAdapter } from "./terminal/Services/PTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { layer as UsageServiceLive } from "./usage/UsageService.ts";
@@ -154,6 +155,7 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provideMerge(GitCoreLive),
     Layer.provideMerge(GitHubCliLive),
     Layer.provideMerge(textGenerationLayer),
+    Layer.provideMerge(PullRequestReadCacheLive),
   );
 
   // The session reaper needs ProjectionSnapshotQuery (orchestration) alongside
@@ -177,6 +179,7 @@ export function makeServerRuntimeServicesLayer() {
     GitCoreLive,
     gitManagerLayer,
     GitEnvironmentLive,
+    PullRequestReadCacheLive,
     terminalLayer,
     KeybindingsLive,
     ProviderMaintenanceRunnerLive,

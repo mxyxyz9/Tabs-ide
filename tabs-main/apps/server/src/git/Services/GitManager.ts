@@ -45,10 +45,17 @@ export interface GitRunStackedActionOptions {
   readonly progressReporter?: GitActionProgressReporter;
 }
 
+import type { PullRequestReadCacheShape } from "./PullRequestReadCache.ts";
+
 /**
  * GitManagerShape - Service API for high-level Git workflow actions.
  */
 export interface GitManagerShape {
+  /**
+   * Persistent pull request read cache.
+   */
+  readonly pullRequestReadCache: PullRequestReadCacheShape;
+
   /**
    * Read current repository Git status plus open PR metadata when available.
    */

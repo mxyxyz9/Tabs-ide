@@ -27,6 +27,8 @@ import {
 } from "../Services/GitManager.ts";
 import { GitCore } from "../Services/GitCore.ts";
 import { GitHubCli, type GitHubPullRequestSummary } from "../Services/GitHubCli.ts";
+import { PullRequestReadCache } from "../Services/PullRequestReadCache.ts";
+import { parseGitHubAuthStatus } from "../Services/GitEnvironment.ts";
 import { makeGitLabCli } from "./GitLabCli.ts";
 import { makeAzureDevOpsCli } from "./AzureDevOpsCli.ts";
 import { makeBitbucketPullRequestApi } from "./BitbucketPullRequestApi.ts";
@@ -505,6 +507,19 @@ function toPullRequestHeadRemoteInfo(pr: {
   };
 }
 
+function parseRepositoryIdentifier(remoteUrl: string, cwd: string): string {
+  if (remoteUrl && remoteUrl.trim().length > 0) {
+    const trimmed = remoteUrl.trim();
+    const match = trimmed.match(/[:/]([^/:]+\/[^/:]+?)(?:\.git)?$/);
+    if (match && match[1]) {
+      return match[1].toLowerCase();
+    }
+    return trimmed.toLowerCase();
+  }
+  const parts = cwd.split(/[/\\]/);
+  return (parts[parts.length - 1] || "default").toLowerCase();
+}
+
 export const makeGitManager = Effect.gen(function* () {
   const gitCore = yield* GitCore;
   const gitHubCli = yield* GitHubCli;
@@ -513,12 +528,13 @@ export const makeGitManager = Effect.gen(function* () {
   const bitbucketApi = yield* makeBitbucketPullRequestApi;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+  const pullRequestReadCache = yield* PullRequestReadCache;
 
-  const repositoryProvider = (cwd: string) =>
+  const repositoryRemoteUrl = (cwd: string) =>
     Effect.gen(function* () {
       const origin = yield* gitCore
         .execute({
-          operation: "repositoryProvider.origin",
+          operation: "repositoryRemoteUrl.origin",
           cwd,
           args: ["remote", "get-url", "origin"],
         })
@@ -526,18 +542,23 @@ export const makeGitManager = Effect.gen(function* () {
           Effect.map((result) => result.stdout.trim()),
           Effect.catch(() => Effect.succeed("")),
         );
-      const remoteUrl =
-        origin ||
-        (yield* gitCore
-          .execute({
-            operation: "repositoryProvider.list",
-            cwd,
-            args: ["remote", "-v"],
-          })
-          .pipe(
-            Effect.map((result) => result.stdout.split(/\r?\n/)[0]?.split(/\s+/)[1]?.trim() ?? ""),
-            Effect.catch(() => Effect.succeed("")),
-          ));
+      if (origin.length > 0) return origin;
+      const remoteList = yield* gitCore
+        .execute({
+          operation: "repositoryRemoteUrl.list",
+          cwd,
+          args: ["remote", "-v"],
+        })
+        .pipe(
+          Effect.map((result) => result.stdout.split(/\r?\n/)[0]?.split(/\s+/)[1]?.trim() ?? ""),
+          Effect.catch(() => Effect.succeed("")),
+        );
+      return remoteList;
+    });
+
+  const repositoryProvider = (cwd: string) =>
+    Effect.gen(function* () {
+      const remoteUrl = yield* repositoryRemoteUrl(cwd);
       const normalized = remoteUrl.toLowerCase();
       if (normalized.includes("github")) return "github" as const;
       if (normalized.includes("gitlab")) return "gitlab" as const;
@@ -546,6 +567,42 @@ export const makeGitManager = Effect.gen(function* () {
         return "azure-devops" as const;
       }
       return "unknown" as const;
+    });
+
+  const resolveAccountForProvider = (provider: string, cwd: string) =>
+    Effect.gen(function* () {
+      if (provider === "github") {
+        const authStatus = yield* gitHubCli.getAuthStatus({ cwd }).pipe(
+          Effect.map((out) => {
+            const parsed = parseGitHubAuthStatus(out);
+            const active = parsed.find((a) => a.active);
+            return active?.login ?? parsed[0]?.login ?? null;
+          }),
+          Effect.catch(() => Effect.succeed(null)),
+        );
+        if (authStatus) return authStatus;
+      } else if (provider === "gitlab") {
+        const authStatus = yield* gitLabCli.getAuthStatus({ cwd }).pipe(
+          Effect.map((out) => {
+            const match = out.match(/Logged in to [^\s]+ as ([^\s(]+)/i);
+            return match ? match[1] : null;
+          }),
+          Effect.catch(() => Effect.succeed(null)),
+        );
+        if (authStatus) return authStatus;
+      }
+      const email = yield* gitCore
+        .execute({
+          operation: "gitConfig.userEmail",
+          cwd,
+          args: ["config", "user.email"],
+        })
+        .pipe(
+          Effect.map((r) => r.stdout.trim()),
+          Effect.catch(() => Effect.succeed("")),
+        );
+      if (email.length > 0) return email;
+      return "anonymous";
     });
 
   const requireSupportedPullRequestProvider = (cwd: string) =>
@@ -1163,53 +1220,73 @@ export const makeGitManager = Effect.gen(function* () {
     function* (input) {
       const provider = yield* requireSupportedPullRequestProvider(input.cwd);
       const reference = normalizePullRequestReference(input.reference);
-      const pullRequest =
-        provider === "github"
-          ? yield* Effect.gen(function* () {
-              const details = yield* gitHubCli.getPullRequest({
-                cwd: input.cwd,
-                reference,
-              });
-              const files = yield* gitHubCli.getPullRequestFiles({
-                cwd: input.cwd,
-                reference: String(details.number),
-              });
-              const reviewThreads = yield* gitHubCli.getPullRequestReviewThreads({
-                cwd: input.cwd,
-                reference: String(details.number),
-              });
-              return {
-                ...toResolvedPullRequest(details),
-                ...(files.length > 0 ? { files } : {}),
-                ...(reviewThreads.length > 0 ? { reviewThreads } : {}),
-              };
-            })
-          : provider === "gitlab"
+      const remoteUrl = yield* repositoryRemoteUrl(input.cwd);
+      const repository = parseRepositoryIdentifier(remoteUrl, input.cwd);
+      const account = yield* resolveAccountForProvider(provider, input.cwd);
+      const environmentId = "local";
+
+      const scope = {
+        provider,
+        account,
+        environmentId,
+        repository,
+        prIdentity: reference,
+      };
+
+      const fetchPullRequest = Effect.gen(function* () {
+        const pullRequest =
+          provider === "github"
             ? yield* Effect.gen(function* () {
-                const details = yield* gitLabCli.getPullRequest({
+                const details = yield* gitHubCli.getPullRequest({
                   cwd: input.cwd,
                   reference,
                 });
-                const reviewThreads = yield* gitLabCli.getPullRequestReviewThreads({
+                const files = yield* gitHubCli.getPullRequestFiles({
+                  cwd: input.cwd,
+                  reference: String(details.number),
+                });
+                const reviewThreads = yield* gitHubCli.getPullRequestReviewThreads({
                   cwd: input.cwd,
                   reference: String(details.number),
                 });
                 return {
-                  ...details,
+                  ...toResolvedPullRequest(details),
+                  ...(files.length > 0 ? { files } : {}),
                   ...(reviewThreads.length > 0 ? { reviewThreads } : {}),
                 };
               })
-            : provider === "azure-devops"
-              ? yield* azureDevOpsCli.getPullRequest({
-                  cwd: input.cwd,
-                  reference,
+            : provider === "gitlab"
+              ? yield* Effect.gen(function* () {
+                  const details = yield* gitLabCli.getPullRequest({
+                    cwd: input.cwd,
+                    reference,
+                  });
+                  const reviewThreads = yield* gitLabCli.getPullRequestReviewThreads({
+                    cwd: input.cwd,
+                    reference: String(details.number),
+                  });
+                  return {
+                    ...details,
+                    ...(reviewThreads.length > 0 ? { reviewThreads } : {}),
+                  };
                 })
-              : yield* bitbucketApi.getPullRequest({
-                  cwd: input.cwd,
-                  reference,
-                });
+              : provider === "azure-devops"
+                ? yield* azureDevOpsCli.getPullRequest({
+                    cwd: input.cwd,
+                    reference,
+                  })
+                : yield* bitbucketApi.getPullRequest({
+                    cwd: input.cwd,
+                    reference,
+                  });
 
-      return { pullRequest, capabilities: pullRequestCapabilities(provider) };
+        return { pullRequest, capabilities: pullRequestCapabilities(provider) };
+      });
+
+      return yield* pullRequestReadCache.readOrFetch(scope, fetchPullRequest, {
+        ttlMs: 60_000,
+        allowStaleOnFailure: true,
+      });
     },
   );
 
@@ -1348,6 +1425,30 @@ export const makeGitManager = Effect.gen(function* () {
                   cwd: input.cwd,
                   reference,
                 });
+
+      const remoteUrl = yield* repositoryRemoteUrl(input.cwd);
+      const repository = parseRepositoryIdentifier(remoteUrl, input.cwd);
+      const account = yield* resolveAccountForProvider(provider, input.cwd);
+
+      yield* pullRequestReadCache.invalidate({
+        provider,
+        account,
+        repository,
+        prIdentity: reference,
+      });
+
+      yield* pullRequestReadCache.set(
+        {
+          provider,
+          account,
+          environmentId: "local",
+          repository,
+          prIdentity: reference,
+        },
+        { pullRequest, capabilities },
+        60_000,
+      );
+
       return { pullRequest };
     },
   );
@@ -1409,6 +1510,30 @@ export const makeGitManager = Effect.gen(function* () {
             : provider === "azure-devops"
               ? azureCreated!
               : bitbucketCreated!;
+
+      const remoteUrl = yield* repositoryRemoteUrl(input.cwd);
+      const repository = parseRepositoryIdentifier(remoteUrl, input.cwd);
+      const account = yield* resolveAccountForProvider(provider, input.cwd);
+
+      yield* pullRequestReadCache.invalidate({
+        provider,
+        repository,
+      });
+
+      if (created) {
+        yield* pullRequestReadCache.set(
+          {
+            provider,
+            account,
+            environmentId: "local",
+            repository,
+            prIdentity: String(created.number),
+          },
+          { pullRequest: created, capabilities: pullRequestCapabilities(provider) },
+          60_000,
+        );
+      }
+
       return { pullRequest: created };
     },
   );
@@ -2386,6 +2511,7 @@ export const makeGitManager = Effect.gen(function* () {
   );
 
   return {
+    pullRequestReadCache,
     status,
     resolvePullRequest,
     listPullRequests,

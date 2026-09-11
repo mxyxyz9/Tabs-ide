@@ -29,6 +29,7 @@ export interface ServerDerivedPaths {
   readonly providerLogsDir: string;
   readonly providerEventLogPath: string;
   readonly providerStatusCacheDir: string;
+  readonly pullRequestsCacheDir: string;
   readonly terminalLogsDir: string;
   readonly anonymousIdPath: string;
   readonly environmentIdPath: string;
@@ -77,6 +78,7 @@ export const deriveServerPaths = Effect.fn(function* (
     providerLogsDir,
     providerEventLogPath: join(providerLogsDir, "events.log"),
     providerStatusCacheDir: join(stateDir, "provider-status-cache"),
+    pullRequestsCacheDir: join(stateDir, "pull-request-cache"),
     terminalLogsDir: join(logsDir, "terminals"),
     anonymousIdPath: join(stateDir, "anonymous-id"),
     environmentIdPath: join(stateDir, "environment-id"),
