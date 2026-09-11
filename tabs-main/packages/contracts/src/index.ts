@@ -37,5 +37,7 @@ export * from "./testing.ts";
 export * from "./rpc.ts";
 export * from "./usage.ts";
 export * from "./resourceTelemetry.ts";
+export * from "./usageLimitSourceId.ts";
+export * from "./providerUsageLimits.ts";
 export * from "./ws.ts";
 export { WS_METHODS } from "./ws.ts";

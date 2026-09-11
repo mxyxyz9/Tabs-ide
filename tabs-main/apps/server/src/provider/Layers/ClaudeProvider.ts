@@ -11,6 +11,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import {
@@ -38,9 +39,16 @@ import {
   spawnAndCollect,
   type ServerProviderDraft,
 } from "../providerSnapshot";
+import { makeUnavailableUsageLimits } from "../providerUsageLimits";
 import { parseClaudeAuthStatusFromOutput } from "../claudeAuthStatus";
 import { acquireClaudeAuthStatusLock } from "../claudeAuthStatusLock";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome";
+import {
+  type ClaudeScopedLimitNames,
+  type ClaudeUsageResponse,
+  claudeUsageResponseToLimits,
+  recordClaudeUsageResponse,
+} from "./claudeUsageLimits";
 
 const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
@@ -535,6 +543,7 @@ type ClaudeCapabilitiesProbe = {
   readonly subscriptionType: string | undefined;
   readonly tokenSource: string | undefined;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
+  readonly usage?: ClaudeUsageResponse | undefined;
 };
 
 function parseClaudeInitializationCommands(
@@ -648,32 +657,45 @@ const probeClaudeCapabilities = (
         },
       });
       const init = await q.initializationResult();
-      const account = init.account as
-        | {
-            readonly email?: string;
-            readonly subscriptionType?: string;
-            readonly tokenSource?: string;
-          }
-        | undefined;
-      return {
-        email: account?.email,
-        subscriptionType: account?.subscriptionType,
-        tokenSource: account?.tokenSource,
-        slashCommands: parseClaudeInitializationCommands(init.commands),
-      } satisfies ClaudeCapabilitiesProbe;
+      return { q, init };
     });
   }).pipe(
+    Effect.timeout(CAPABILITIES_PROBE_TIMEOUT_MS),
+    Effect.flatMap(({ q, init }) =>
+      Effect.gen(function* () {
+        // Usage has its own deadline so a slow optional request cannot discard initialization.
+        const usageResult = yield* Effect.tryPromise(() =>
+          (q as any).usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(),
+        ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result);
+        const usage = Result.isSuccess(usageResult)
+          ? {
+              rate_limits_available: (usageResult.success as any)?.rate_limits_available,
+              rate_limits: (usageResult.success as any)?.rate_limits,
+            }
+          : undefined;
+        const account = init.account as
+          | {
+              readonly email?: string;
+              readonly subscriptionType?: string;
+              readonly tokenSource?: string;
+            }
+          | undefined;
+        return {
+          email: account?.email,
+          subscriptionType: account?.subscriptionType,
+          tokenSource: account?.tokenSource,
+          slashCommands: parseClaudeInitializationCommands(init.commands),
+          ...(usage ? { usage } : {}),
+        } satisfies ClaudeCapabilitiesProbe;
+      }),
+    ),
     Effect.ensuring(
       Effect.sync(() => {
         if (!abort.signal.aborted) abort.abort();
       }),
     ),
-    Effect.timeoutOption(CAPABILITIES_PROBE_TIMEOUT_MS),
     Effect.result,
-    Effect.map((result) => {
-      if (Result.isFailure(result)) return undefined;
-      return Option.isSome(result.success) ? result.success.value : undefined;
-    }),
+    Effect.map((result) => (Result.isSuccess(result) ? result.success : undefined)),
   );
 };
 
@@ -697,6 +719,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     claudeSettings: ClaudeSettings,
   ) => Effect.Effect<ClaudeCapabilitiesProbe | undefined>,
   environment: NodeJS.ProcessEnv = process.env,
+  scopedLimitNames?: Ref.Ref<ClaudeScopedLimitNames>,
 ): Effect.fn.Return<
   ServerProviderDraft,
   never,
@@ -722,6 +745,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         status: "warning",
         auth: { status: "unknown" },
         message: "Claude is disabled in T3 Code settings.",
+        usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
       },
     });
   }
@@ -746,6 +770,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         message: isCommandMissingCause(error)
           ? "Claude Agent CLI (`claude`) is not installed or not on PATH."
           : `Failed to execute Claude Agent CLI health check: ${error instanceof Error ? error.message : String(error)}.`,
+        usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
       },
     });
   }
@@ -763,6 +788,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         auth: { status: "unknown" },
         message:
           "Claude Agent CLI is installed but failed to run. Timed out while running command.",
+        usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
       },
     });
   }
@@ -784,6 +810,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         message: detail
           ? `Claude Agent CLI is installed but failed to run. ${detail}`
           : "Claude Agent CLI is installed but failed to run.",
+        usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
       },
     });
   }
@@ -814,6 +841,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
           status: "error",
           auth: { status: "unauthenticated" },
           message: "Claude is not authenticated. Run `claude auth login --claudeai`, then retry.",
+          usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
         },
       });
     }
@@ -859,6 +887,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         status: "warning",
         auth: { status: "unknown" },
         message: "Could not verify Claude authentication status from initialization result.",
+        usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
       },
     });
   }
@@ -867,6 +896,14 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     subscriptionType: capabilities.subscriptionType,
     authMethod: capabilities.tokenSource,
   });
+  const usageLimits = !capabilities.usage
+    ? makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" })
+    : scopedLimitNames
+      ? yield* recordClaudeUsageResponse(scopedLimitNames, {
+          response: capabilities.usage,
+          checkedAt,
+        })
+      : claudeUsageResponseToLimits({ response: capabilities.usage, checkedAt }).limits;
   return buildServerProvider({
     presentation: CLAUDE_PRESENTATION,
     enabled: claudeSettings.enabled,
@@ -882,6 +919,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         ...(capabilities.email ? { email: capabilities.email } : {}),
         ...(authMetadata ? authMetadata : {}),
       },
+      usageLimits,
       ...(versionUpgradeMessage ? { message: versionUpgradeMessage } : {}),
     },
   });
@@ -913,6 +951,7 @@ export const makePendingClaudeProvider = (
           status: "warning",
           auth: { status: "unknown" },
           message: "Claude is disabled in T3 Code settings.",
+          usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
         },
       });
     }
@@ -928,6 +967,7 @@ export const makePendingClaudeProvider = (
         status: "warning",
         auth: { status: "unknown" },
         message: "Claude provider status has not been checked in this session yet.",
+        usageLimits: makeUnavailableUsageLimits({ checkedAt, reason: "probeFailed" }),
       },
     });
   });

@@ -126,6 +126,7 @@ import {
 } from "effect";
 import { discoverClaudeSkills } from "../Drivers/ClaudeSkills";
 import { planClaudeSkillDispatch } from "../Drivers/ClaudeSkillDispatch";
+import { type ClaudeScopedLimitNames, claudeRateLimitEventToUpdate } from "./claudeUsageLimits.ts";
 
 // Stubs for disabled agentGateway handoff proxying
 const buildClaudeMcpServers = (_: any) => undefined;
@@ -603,6 +604,7 @@ async function readInstalledClaudeCliVersion(input: {
 export interface ClaudeAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
   readonly environment?: NodeJS.ProcessEnv;
+  readonly scopedLimitNames?: Ref.Ref<ClaudeScopedLimitNames>;
   // Async because the default implementation lazily imports the Claude Agent
   // SDK; test doubles may still return a runtime synchronously.
   readonly createQuery?: (input: {
@@ -1769,6 +1771,7 @@ export function makeClaudeAdapter(
       "nativeEventLogger" in claudeSettingsOrOptions ||
       "nativeEventLogPath" in claudeSettingsOrOptions ||
       "instanceId" in claudeSettingsOrOptions ||
+      "scopedLimitNames" in claudeSettingsOrOptions ||
       "spawnClaudeCodeProcess" in claudeSettingsOrOptions)
       ? (claudeSettingsOrOptions as ClaudeAdapterLiveOptions)
       : undefined);
@@ -4480,13 +4483,19 @@ export function makeClaudeAdapter(
         }
 
         if (message.type === "rate_limit_event") {
-          yield* offerRuntimeEvent(context, {
-            ...base,
-            type: "account.rate-limits.updated",
-            payload: {
-              rateLimits: message,
-            },
-          });
+          const rateLimitInfo = (message as any).rate_limit_info;
+          if (!rateLimitInfo) return;
+          const names = options?.scopedLimitNames
+            ? yield* Ref.get(options.scopedLimitNames)
+            : { overageIncluded: undefined };
+          const limits = claudeRateLimitEventToUpdate(rateLimitInfo, names);
+          if (limits) {
+            yield* offerRuntimeEvent(context, {
+              ...base,
+              type: "account.rate-limits.updated",
+              payload: { limits },
+            });
+          }
           return;
         }
       });

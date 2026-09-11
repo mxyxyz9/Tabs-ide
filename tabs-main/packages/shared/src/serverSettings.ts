@@ -66,6 +66,22 @@ function mergeModelSelectionOptionsById(input: {
   return [...merged.entries()].map(([id, value]) => ({ id, value }));
 }
 
+/** Upsert each patched entry; `null` removes it. Entries the patch omits are untouched. */
+function mergeSettingsEntries<Value>(
+  current: Readonly<Record<string, Value>>,
+  patch: Readonly<Record<string, Value | null>>,
+): Record<string, Value> {
+  const next = new Map(Object.entries(current));
+  for (const [id, config] of Object.entries(patch)) {
+    if (config === null) {
+      next.delete(id);
+    } else {
+      next.set(id, config);
+    }
+  }
+  return Object.fromEntries(next) as Record<string, Value>;
+}
+
 /**
  * Applies a server settings patch while treating textGenerationModelSelection as
  * replace-on-provider/model updates. This prevents stale nested options from
@@ -76,12 +92,24 @@ export function applyServerSettingsPatch(
   patch: ServerSettingsPatch,
 ): ServerSettings {
   const selectionPatch = patch.textGenerationModelSelection;
-  const { automaticGitFetchInterval, ...patchForMerge } = patch;
+  const {
+    automaticGitFetchInterval,
+    usageLimitSources: usageLimitSourcesPatch,
+    ...patchForMerge
+  } = patch;
   const next = deepMerge(current, patchForMerge);
   const nextWithReplacements = {
     ...next,
     ...(patch.providerInstances !== undefined
       ? { providerInstances: patch.providerInstances }
+      : {}),
+    ...(usageLimitSourcesPatch !== undefined
+      ? {
+          usageLimitSources: mergeSettingsEntries(
+            current.usageLimitSources,
+            usageLimitSourcesPatch,
+          ),
+        }
       : {}),
     ...(automaticGitFetchInterval !== undefined ? { automaticGitFetchInterval } : {}),
   };

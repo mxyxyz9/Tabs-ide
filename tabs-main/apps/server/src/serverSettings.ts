@@ -38,6 +38,7 @@ import {
 import * as Semaphore from "effect/Semaphore";
 import { ServerConfig } from "./config";
 import { type DeepPartial, deepMerge } from "@tabs/shared/Struct";
+import { applyServerSettingsPatch } from "@tabs/shared/serverSettings";
 import { fromLenientJson } from "@tabs/shared/schemaJson";
 import { setProviderSecret, type ProviderSecretName } from "./provider/ProviderSecretStore";
 
@@ -134,41 +135,7 @@ function mergeServerSettingsPatch(
   current: typeof DEFAULT_SERVER_SETTINGS,
   patch: ServerSettingsPatch,
 ): typeof DEFAULT_SERVER_SETTINGS {
-  const next = deepMerge(current, patch);
-  const selectionPatch = patch.textGenerationModelSelection;
-  if (!selectionPatch) {
-    return next;
-  }
-
-  const hasInstance = "instanceId" in selectionPatch && selectionPatch.instanceId !== undefined;
-  const hasModel = "model" in selectionPatch && selectionPatch.model !== undefined;
-  const hasOptions = "options" in selectionPatch;
-
-  if (hasInstance || hasModel) {
-    return {
-      ...next,
-      textGenerationModelSelection: {
-        instanceId: selectionPatch.instanceId ?? current.textGenerationModelSelection.instanceId,
-        model: selectionPatch.model ?? current.textGenerationModelSelection.model,
-        ...(hasOptions && selectionPatch.options ? { options: selectionPatch.options } : {}),
-      } as ModelSelection,
-    };
-  }
-
-  if (hasOptions) {
-    return {
-      ...next,
-      textGenerationModelSelection: {
-        ...current.textGenerationModelSelection,
-        // Provider option selections are a fully-formed array sent by the UI;
-        // replace rather than deep-merge (the legacy object-merge no longer
-        // applies to the canonical `ProviderOptionSelections` array shape).
-        ...(selectionPatch.options ? { options: selectionPatch.options } : {}),
-      } as ModelSelection,
-    };
-  }
-
-  return next;
+  return applyServerSettingsPatch(current, patch);
 }
 
 /**

@@ -35,6 +35,7 @@ import {
   makePendingClaudeProvider,
   probeClaudeCapabilities,
 } from "../Layers/ClaudeProvider";
+import { makeClaudeScopedLimitNames } from "../Layers/claudeUsageLimits";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import {
@@ -138,9 +139,11 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         continuationGroupKey,
       });
 
+      const scopedLimitNames = yield* makeClaudeScopedLimitNames;
       const adapterOptions = {
         instanceId,
         environment: processEnv,
+        scopedLimitNames,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       };
       const adapter = yield* makeClaudeAdapter(effectiveConfig, adapterOptions);
@@ -162,6 +165,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         effectiveConfig,
         () => Cache.get(capabilitiesProbeCache, capabilitiesCacheKey),
         processEnv,
+        scopedLimitNames,
       ).pipe(
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),

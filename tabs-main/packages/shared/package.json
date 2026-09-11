@@ -96,6 +96,10 @@
       "types": "./src/usageMerge.ts",
       "import": "./src/usageMerge.ts"
     },
+    "./usageLimits": {
+      "types": "./src/usageLimits.ts",
+      "import": "./src/usageLimits.ts"
+    },
     "./hostProcess": {
       "types": "./src/hostProcess.ts",
       "import": "./src/hostProcess.ts"

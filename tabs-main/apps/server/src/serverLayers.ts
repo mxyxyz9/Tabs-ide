@@ -17,6 +17,7 @@ import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRun
 import { RuntimeReceiptBusLive } from "./orchestration/Layers/RuntimeReceiptBus";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry";
+import { ProviderUsageLimitsIngestionLive } from "./provider/Layers/ProviderUsageLimitsIngestion";
 import { layer as ProviderMaintenanceRunnerLive } from "./provider/providerMaintenanceRunner";
 import { ProviderServiceLive } from "./provider/Layers/ProviderService";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory";
@@ -95,10 +96,14 @@ export function makeServerProviderLayer() {
   const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
     Layer.provide(ProviderSessionRuntimeRepositoryLive),
   );
-  return Layer.mergeAll(
+  const baseProviders = Layer.mergeAll(
     ProviderServiceLive.pipe(Layer.provide(ProviderAdapterRegistryLive)),
     ProviderRegistryLive,
-  ).pipe(Layer.provideMerge(providerSessionDirectoryLayer));
+  );
+  return ProviderUsageLimitsIngestionLive.pipe(
+    Layer.provideMerge(baseProviders),
+    Layer.provideMerge(providerSessionDirectoryLayer),
+  );
 }
 
 export function makeServerRuntimeServicesLayer() {

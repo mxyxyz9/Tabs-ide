@@ -28,6 +28,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Random from "effect/Random";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -38,6 +39,7 @@ import { ServerSettingsService } from "../../serverSettings";
 import { ProviderAdapterValidationError } from "../Errors";
 import type { ClaudeAdapterShape } from "../Services/ClaudeAdapter";
 import { makeClaudeAdapter, type ClaudeAdapterLiveOptions } from "./ClaudeAdapter";
+import type { ClaudeScopedLimitNames } from "./claudeUsageLimits";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 // Test-local service tag so the rest of the file can keep using `yield* ClaudeAdapter`.
@@ -152,6 +154,7 @@ class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
 function makeHarness(config?: {
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: ClaudeAdapterLiveOptions["nativeEventLogger"];
+  readonly scopedLimitNames?: ClaudeAdapterLiveOptions["scopedLimitNames"];
   readonly cwd?: string;
   readonly baseDir?: string;
   readonly claudeConfig?: Partial<ClaudeSettings>;
@@ -167,6 +170,7 @@ function makeHarness(config?: {
 
   const adapterOptions: ClaudeAdapterLiveOptions = {
     ...(config?.instanceId ? { instanceId: config.instanceId } : {}),
+    ...(config?.scopedLimitNames ? { scopedLimitNames: config.scopedLimitNames } : {}),
     createQuery: (input) => {
       createInput = input;
       return query as any;
@@ -1295,6 +1299,84 @@ describe("ClaudeAdapterLive", () => {
         assert.equal(turnCompleted.payload.errorMessage, "Error: Request was aborted.");
         assert.equal(turnCompleted.payload.stopReason, "tool_use");
       }
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("places overage-included rate-limit events on the bucket the probe named", () => {
+    const scopedLimitNames = Ref.makeUnsafe<ClaudeScopedLimitNames>({ overageIncluded: undefined });
+    const harness = makeHarness({ scopedLimitNames });
+    const rateLimitEvent = (utilization: number): SDKMessage =>
+      ({
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: "allowed",
+          rateLimitType: "seven_day_overage_included",
+          utilization,
+        },
+        uuid: `rate-limit-${utilization}`,
+        session_id: "sdk-session-1",
+      }) as unknown as SDKMessage;
+    const resultMessage = (uuid: string): SDKMessage =>
+      ({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        errors: [],
+        num_turns: 1,
+        session_id: "sdk-session-1",
+        uuid,
+      }) as unknown as SDKMessage;
+    const limitsUpdates = (events: Iterable<ProviderRuntimeEvent>) =>
+      Array.from(events).flatMap((event) =>
+        event.type === "account.rate-limits.updated" ? [event.payload.limits] : [],
+      );
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent" as ProviderDriverKind,
+        runtimeMode: "full-access",
+      });
+
+      // Before any probe names the bucket the event has nowhere to land.
+      // Collecting through the turn's completion proves the SDK message was
+      // handled, not merely still queued.
+      const firstTurnFiber = yield* adapter.streamEvents.pipe(
+        Stream.takeUntil((event) => event.type === "turn.completed"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
+      harness.query.emit(rateLimitEvent(0.2));
+      harness.query.emit(resultMessage("result-1"));
+      assert.deepStrictEqual(limitsUpdates(yield* Fiber.join(firstTurnFiber)), []);
+
+      // The status probe reads `get_usage` and records the model it saw.
+      yield* Ref.set(scopedLimitNames, { overageIncluded: "Fable" });
+      const secondTurnFiber = yield* adapter.streamEvents.pipe(
+        Stream.takeUntil((event) => event.type === "turn.completed"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.sendTurn({ threadId: session.threadId, input: "again", attachments: [] });
+      harness.query.emit(rateLimitEvent(0.4));
+      harness.query.emit(resultMessage("result-2"));
+      assert.deepStrictEqual(limitsUpdates(yield* Fiber.join(secondTurnFiber)), [
+        {
+          windows: [
+            {
+              id: "seven_day_fable",
+              kind: "weekly",
+              label: "Weekly · Fable",
+              usedPercent: 40,
+              windowDurationMins: 10080,
+            },
+          ],
+        },
+      ]);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

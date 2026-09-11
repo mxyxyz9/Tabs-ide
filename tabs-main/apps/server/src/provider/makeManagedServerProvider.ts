@@ -11,10 +11,22 @@ import * as Semaphore from "effect/Semaphore";
 
 import type { ServerProviderShape } from "./Services/ServerProvider";
 import { ServerSettingsError } from "@tabs/contracts";
+import { applyUsageLimitsUpdate, resolveUsageLimitsAfterProbe } from "./providerUsageLimits.ts";
 
 interface ProviderSnapshotState {
   readonly snapshot: ServerProvider;
   readonly enrichmentGeneration: number;
+}
+
+function withUsageLimits(
+  snapshot: ServerProvider,
+  usageLimits: ServerProvider["usageLimits"],
+): ServerProvider {
+  if (snapshot.usageLimits === usageLimits) {
+    return snapshot;
+  }
+  const { usageLimits: _previous, ...rest } = snapshot;
+  return usageLimits ? { ...rest, usageLimits } : rest;
 }
 
 export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(function* <
@@ -54,14 +66,18 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     nextSnapshot: ServerProvider,
   ) {
     const snapshotToPublish = yield* Ref.modify(snapshotStateRef, (state) => {
-      if (state.enrichmentGeneration !== generation || Equal.equals(state.snapshot, nextSnapshot)) {
+      if (state.enrichmentGeneration !== generation) {
+        return [null, state] as const;
+      }
+      const merged = withUsageLimits(nextSnapshot, state.snapshot.usageLimits);
+      if (Equal.equals(state.snapshot, merged)) {
         return [null, state] as const;
       }
       return [
-        nextSnapshot,
+        merged,
         {
           ...state,
-          snapshot: nextSnapshot,
+          snapshot: merged,
         },
       ] as const;
     });
@@ -108,19 +124,26 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
       return yield* Ref.get(snapshotStateRef).pipe(Effect.map((state) => state.snapshot));
     }
 
-    const nextSnapshot = yield* input.checkProvider;
-    const nextGeneration = yield* Ref.modify(snapshotStateRef, (state) => {
-      const generation = input.enrichSnapshot
-        ? state.enrichmentGeneration + 1
-        : state.enrichmentGeneration;
-      return [
-        generation,
-        {
-          snapshot: nextSnapshot,
-          enrichmentGeneration: generation,
-        },
-      ] as const;
-    });
+    const probedSnapshot = yield* input.checkProvider;
+    const { snapshot: nextSnapshot, generation: nextGeneration } = yield* Ref.modify(
+      snapshotStateRef,
+      (state) => {
+        const generation = input.enrichSnapshot
+          ? state.enrichmentGeneration + 1
+          : state.enrichmentGeneration;
+        const snapshot = withUsageLimits(
+          probedSnapshot,
+          resolveUsageLimitsAfterProbe({
+            published: state.snapshot.usageLimits,
+            probed: probedSnapshot.usageLimits,
+          }),
+        );
+        return [
+          { snapshot, generation },
+          { snapshot, enrichmentGeneration: generation },
+        ] as const;
+      },
+    );
     yield* Ref.set(settingsRef, nextSettings);
     yield* PubSub.publish(changesPubSub, nextSnapshot);
     yield* restartSnapshotEnrichment(nextSettings, nextSnapshot, nextGeneration);
@@ -128,6 +151,25 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
   });
   const applySnapshot = (nextSettings: Settings, options?: { readonly forceRefresh?: boolean }) =>
     refreshSemaphore.withPermits(1)(applySnapshotBase(nextSettings, options));
+
+  const applyUsageLimits: ServerProviderShape["applyUsageLimits"] = (update) =>
+    Effect.gen(function* () {
+      const snapshotToPublish = yield* Ref.modify(snapshotStateRef, (state) => {
+        const usageLimits = applyUsageLimitsUpdate({
+          previous: state.snapshot.usageLimits,
+          update,
+          checkedAt: update.checkedAt,
+        });
+        if (usageLimits === state.snapshot.usageLimits) {
+          return [null, state] as const;
+        }
+        const snapshot = withUsageLimits(state.snapshot, usageLimits);
+        return [snapshot, { ...state, snapshot }] as const;
+      });
+      if (snapshotToPublish !== null) {
+        yield* PubSub.publish(changesPubSub, snapshotToPublish);
+      }
+    });
 
   const refreshSnapshot = Effect.fn("refreshSnapshot")(function* () {
     const nextSettings = yield* input.getSettings;
@@ -157,5 +199,6 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     get streamChanges() {
       return Stream.fromPubSub(changesPubSub);
     },
+    applyUsageLimits,
   } satisfies ServerProviderShape;
 });
