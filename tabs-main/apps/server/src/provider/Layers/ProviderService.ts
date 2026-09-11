@@ -34,6 +34,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import * as Stream from "effect/Stream";
+import { expandAssistantCitationsForProvider } from "@tabs/shared/assistantCitations";
 
 import {
   increment,
@@ -643,8 +644,19 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       payload: rawInput,
     });
 
+    const inputTextWithCitations =
+      parsed.input === undefined ? undefined : expandAssistantCitationsForProvider(parsed.input);
+    if (inputTextWithCitations !== parsed.input) {
+      yield* decodeInputOrValidationError({
+        operation: "ProviderService.sendTurn",
+        schema: ProviderSendTurnInput.fields.input,
+        payload: inputTextWithCitations,
+      });
+    }
+
     const input = {
       ...parsed,
+      ...(inputTextWithCitations !== undefined ? { input: inputTextWithCitations } : {}),
       attachments: parsed.attachments ?? [],
     };
     yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);

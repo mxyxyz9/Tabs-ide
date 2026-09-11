@@ -27,6 +27,7 @@ import {
   KEY_BACKSPACE_COMMAND,
   PASTE_COMMAND,
   $getRoot,
+  $getNodeByKey,
   DecoratorNode,
   type ElementNode,
   type LexicalNode,
@@ -48,6 +49,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type ClipboardEventHandler,
   type ReactElement,
   type Ref,
@@ -81,6 +83,14 @@ import {
   type ComposerPromptHistoryMessage,
   type ComposerPromptHistoryPosition,
 } from "./chat/composerPromptHistory";
+import {
+  $consumeComposerCitationCommentRequest,
+  $createComposerCitationNode,
+  ComposerCitationCommentContext,
+  ComposerCitationNode,
+  type ComposerCitationCommentRequest,
+  type ComposerCitationCommentTarget,
+} from "./ComposerCitationNode";
 
 export type { ComposerPromptHistoryMessage };
 
@@ -246,11 +256,16 @@ function $createComposerTerminalContextNode(
   return $applyNodeReplacement(new ComposerTerminalContextNode(context));
 }
 
-type ComposerInlineTokenNode = ComposerMentionNode | ComposerTerminalContextNode;
+type ComposerInlineTokenNode =
+  | ComposerMentionNode
+  | ComposerCitationNode
+  | ComposerTerminalContextNode;
 
 function isComposerInlineTokenNode(candidate: unknown): candidate is ComposerInlineTokenNode {
   return (
-    candidate instanceof ComposerMentionNode || candidate instanceof ComposerTerminalContextNode
+    candidate instanceof ComposerMentionNode ||
+    candidate instanceof ComposerCitationNode ||
+    candidate instanceof ComposerTerminalContextNode
   );
 }
 
@@ -403,12 +418,12 @@ function getAbsoluteOffsetForPoint(node: LexicalNode, pointOffset: number): numb
   }
 
   if ($isTextNode(node)) {
-    if (node instanceof ComposerMentionNode) {
+    if (isComposerInlineTokenNode(node)) {
       return getAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
     }
     return offset + Math.min(pointOffset, node.getTextContentSize());
   }
-  if (node instanceof ComposerTerminalContextNode) {
+  if (isComposerInlineTokenNode(node)) {
     return getAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
   }
 
@@ -450,12 +465,12 @@ function getExpandedAbsoluteOffsetForPoint(node: LexicalNode, pointOffset: numbe
   }
 
   if ($isTextNode(node)) {
-    if (node instanceof ComposerMentionNode) {
+    if (isComposerInlineTokenNode(node)) {
       return getExpandedAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
     }
     return offset + Math.min(pointOffset, node.getTextContentSize());
   }
-  if (node instanceof ComposerTerminalContextNode) {
+  if (isComposerInlineTokenNode(node)) {
     return getExpandedAbsoluteOffsetForInlineTokenPoint(node, offset, pointOffset);
   }
 
@@ -481,10 +496,7 @@ function findSelectionPointAtOffset(
   node: LexicalNode,
   remainingRef: { value: number },
 ): { key: string; offset: number; type: "text" | "element" } | null {
-  if (node instanceof ComposerMentionNode) {
-    return findSelectionPointForInlineToken(node, remainingRef);
-  }
-  if (node instanceof ComposerTerminalContextNode) {
+  if (isComposerInlineTokenNode(node)) {
     return findSelectionPointForInlineToken(node, remainingRef);
   }
 
@@ -609,7 +621,7 @@ function appendTextNodes(nodes: LexicalNode[], text: string): void {
   }
 }
 
-function ComposerMentionPastePlugin() {
+function ComposerInlineTokenPastePlugin() {
   const [editor] = useLexicalComposerContext();
   useEffect(
     () =>
@@ -623,22 +635,31 @@ function ComposerMentionPastePlugin() {
           if (!clipboardData || clipboardData.files.length > 0) return false;
           const text = clipboardData.getData("text/plain");
           const segments = splitPastedPromptIntoComposerSegments(text);
-          if (!segments.some((segment) => segment.type === "mention")) return false;
+          if (!segments.some((segment) => segment.type === "mention" || segment.type === "citation")) {
+            return false;
+          }
           const selection = $getSelection();
           if (!$isRangeSelection(selection)) return false;
 
           const nodes: LexicalNode[] = [];
-          if (segments[0]?.type === "mention") {
+          if (segments[0]?.type === "mention" || segments[0]?.type === "citation") {
             const start = selection.isBackward() ? selection.focus : selection.anchor;
             const offset = getExpandedAbsoluteOffsetForPoint(start.getNode(), start.offset);
             const preceding = $getRoot().getTextContent().slice(offset - 1, offset);
             if (preceding && !/\s/.test(preceding)) nodes.push($createTextNode(" "));
           }
           for (const segment of segments) {
-            if (segment.type === "mention") nodes.push($createComposerMentionNode(segment.path));
-            else if (segment.type === "text") appendTextNodes(nodes, segment.text);
+            if (segment.type === "citation") {
+              nodes.push($createComposerCitationNode(segment.citation, segment.source));
+            } else if (segment.type === "mention") {
+              nodes.push($createComposerMentionNode(segment.path));
+            } else if (segment.type === "text") {
+              appendTextNodes(nodes, segment.text);
+            }
           }
-          if (segments.at(-1)?.type === "mention") nodes.push($createTextNode(" "));
+          if (segments.at(-1)?.type === "mention" || segments.at(-1)?.type === "citation") {
+            nodes.push($createTextNode(" "));
+          }
           selection.insertNodes(nodes);
           event.preventDefault();
           return true;
@@ -661,6 +682,10 @@ function $setComposerEditorPrompt(
 
   const segments = splitPromptIntoComposerSegments(prompt, terminalContexts);
   for (const segment of segments) {
+    if (segment.type === "citation") {
+      paragraph.append($createComposerCitationNode(segment.citation, segment.source));
+      continue;
+    }
     if (segment.type === "mention") {
       paragraph.append($createComposerMentionNode(segment.path));
       continue;
@@ -671,7 +696,14 @@ function $setComposerEditorPrompt(
       }
       continue;
     }
-    $appendTextWithLineBreaks(paragraph, segment.text);
+    if (segment.type === "skill") {
+      $appendTextWithLineBreaks(paragraph, `@${segment.name} `);
+      continue;
+    }
+    if (segment.type === "text") {
+      $appendTextWithLineBreaks(paragraph, segment.text);
+      continue;
+    }
   }
 }
 
@@ -689,6 +721,7 @@ export interface ComposerPromptEditorHandle {
   focus: () => void;
   focusAt: (cursor: number) => void;
   focusAtEnd: () => void;
+  requestCitationComment: (request: ComposerCitationCommentRequest) => void;
   readSnapshot: () => {
     value: string;
     cursor: number;
@@ -717,6 +750,7 @@ interface ComposerPromptEditorProps {
     key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
   ) => boolean;
+  onCitationSubmitAndSend?: () => void;
   onPaste: ClipboardEventHandler<HTMLElement>;
 }
 
@@ -1036,6 +1070,7 @@ function ComposerPromptEditorInner({
   onRemoveTerminalContext,
   onChange,
   onCommandKeyDown,
+  onCitationSubmitAndSend,
   onPaste,
   editorRef,
 }: ComposerPromptEditorInnerProps) {
@@ -1051,6 +1086,21 @@ function ComposerPromptEditorInner({
     terminalContextIds: terminalContexts.map((context) => context.id),
   });
   const isApplyingControlledUpdateRef = useRef(false);
+  const citationCommentRequestRef = useRef<ComposerCitationCommentRequest | null>(null);
+  const [openCitationComment, setOpenCitationComment] =
+    useState<ComposerCitationCommentTarget | null>(null);
+  const citationCommentActions = useMemo(
+    () => ({
+      openComment: openCitationComment,
+      onOpenChange: (nodeKey: NodeKey, open: boolean) => {
+        setOpenCitationComment((current: ComposerCitationCommentTarget | null) =>
+          open ? { nodeKey } : current?.nodeKey === nodeKey ? null : current,
+        );
+      },
+      onSubmitAndSend: onCitationSubmitAndSend ?? (() => {}),
+    }),
+    [onCitationSubmitAndSend, openCitationComment],
+  );
   const terminalContextActions = useMemo(
     () => ({ onRemoveTerminalContext }),
     [onRemoveTerminalContext],
@@ -1063,6 +1113,22 @@ function ComposerPromptEditorInner({
   useEffect(() => {
     editor.setEditable(!disabled);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    const openCitationNodeKey = openCitationComment?.nodeKey;
+    if (!openCitationNodeKey) return;
+    return editor.registerUpdateListener(({ editorState }) => {
+      const isAttached = editorState.read(() => {
+        const node = $getNodeByKey(openCitationNodeKey);
+        return node instanceof ComposerCitationNode && node.isAttached();
+      });
+      if (!isAttached) {
+        setOpenCitationComment((current: ComposerCitationCommentTarget | null) =>
+          current?.nodeKey === openCitationNodeKey ? null : current,
+        );
+      }
+    });
+  }, [editor, openCitationComment?.nodeKey]);
 
   useLayoutEffect(() => {
     const normalizedCursor = clampCollapsedComposerCursor(value, cursor);
@@ -1091,15 +1157,24 @@ function ComposerPromptEditorInner({
     }
 
     isApplyingControlledUpdateRef.current = true;
-    editor.update(() => {
-      const shouldRewriteEditorState = previousSnapshot.value !== value || contextsChanged;
-      if (shouldRewriteEditorState) {
-        $setComposerEditorPrompt(value, terminalContexts);
-      }
-      if (shouldRewriteEditorState || isFocused) {
-        $setSelectionAtComposerOffset(normalizedCursor);
-      }
-    });
+    let citationToOpen: ComposerCitationCommentTarget | null = null;
+    editor.update(
+      () => {
+        const shouldRewriteEditorState = previousSnapshot.value !== value || contextsChanged;
+        if (shouldRewriteEditorState) {
+          $setComposerEditorPrompt(value, terminalContexts);
+        }
+        if (shouldRewriteEditorState || isFocused) {
+          $setSelectionAtComposerOffset(normalizedCursor);
+        }
+        citationToOpen = $consumeComposerCitationCommentRequest(citationCommentRequestRef);
+      },
+      {
+        onUpdate: () => {
+          if (citationToOpen) setOpenCitationComment(citationToOpen);
+        },
+      },
+    );
     queueMicrotask(() => {
       isApplyingControlledUpdateRef.current = false;
     });
@@ -1180,6 +1255,13 @@ function ComposerPromptEditorInner({
           ),
         );
       },
+      requestCitationComment: (request) => {
+        citationCommentRequestRef.current = request;
+        const target = editor
+          .getEditorState()
+          .read(() => $consumeComposerCitationCommentRequest(citationCommentRequestRef));
+        if (target) setOpenCitationComment(target);
+      },
       readSnapshot,
     }),
     [focusAt, readSnapshot],
@@ -1236,43 +1318,45 @@ function ComposerPromptEditorInner({
 
   return (
     <ComposerTerminalContextActionsContext.Provider value={terminalContextActions}>
-      <div className="relative">
-        <PlainTextPlugin
-          contentEditable={
-            <ContentEditable
-              className={cn(
-                "block max-h-[200px] min-h-17.5 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent text-[14px] leading-relaxed text-foreground focus:outline-none",
-                className,
-              )}
-              data-testid="composer-editor"
-              aria-placeholder={placeholder}
-              placeholder={<span />}
-              onPaste={onPaste}
-            />
-          }
-          placeholder={
-            terminalContexts.length > 0 ? null : (
-              <div className="pointer-events-none absolute inset-0 text-[14px] leading-relaxed text-muted-foreground/35">
-                {placeholder}
-              </div>
-            )
-          }
-          ErrorBoundary={LexicalErrorBoundary}
-        />
-        <OnChangePlugin onChange={handleEditorChange} />
-        <ComposerCommandKeyPlugin
-          value={value}
-          terminalContexts={terminalContexts}
-          {...(historyMessages !== undefined ? { historyMessages } : {})}
-          onChange={onChange}
-          {...(onCommandKeyDown ? { onCommandKeyDown } : {})}
-        />
-        <ComposerInlineTokenArrowPlugin />
-        <ComposerInlineTokenSelectionNormalizePlugin />
-        <ComposerInlineTokenBackspacePlugin />
-        <ComposerMentionPastePlugin />
-        <HistoryPlugin />
-      </div>
+      <ComposerCitationCommentContext.Provider value={citationCommentActions}>
+        <div className="relative">
+          <PlainTextPlugin
+            contentEditable={
+              <ContentEditable
+                className={cn(
+                  "block max-h-[200px] min-h-17.5 w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent text-[14px] leading-relaxed text-foreground focus:outline-none",
+                  className,
+                )}
+                data-testid="composer-editor"
+                aria-placeholder={placeholder}
+                placeholder={<span />}
+                onPaste={onPaste}
+              />
+            }
+            placeholder={
+              terminalContexts.length > 0 ? null : (
+                <div className="pointer-events-none absolute inset-0 text-[14px] leading-relaxed text-muted-foreground/35">
+                  {placeholder}
+                </div>
+              )
+            }
+            ErrorBoundary={LexicalErrorBoundary}
+          />
+          <OnChangePlugin onChange={handleEditorChange} />
+          <ComposerCommandKeyPlugin
+            value={value}
+            terminalContexts={terminalContexts}
+            {...(historyMessages !== undefined ? { historyMessages } : {})}
+            onChange={onChange}
+            {...(onCommandKeyDown ? { onCommandKeyDown } : {})}
+          />
+          <ComposerInlineTokenArrowPlugin />
+          <ComposerInlineTokenSelectionNormalizePlugin />
+          <ComposerInlineTokenBackspacePlugin />
+          <ComposerInlineTokenPastePlugin />
+          <HistoryPlugin />
+        </div>
+      </ComposerCitationCommentContext.Provider>
     </ComposerTerminalContextActionsContext.Provider>
   );
 }
@@ -1292,6 +1376,7 @@ export const ComposerPromptEditor = forwardRef<
     onRemoveTerminalContext,
     onChange,
     onCommandKeyDown,
+    onCitationSubmitAndSend,
     onPaste,
   },
   ref,
@@ -1302,7 +1387,7 @@ export const ComposerPromptEditor = forwardRef<
     () => ({
       namespace: "tabs-composer-editor",
       editable: true,
-      nodes: [ComposerMentionNode, ComposerTerminalContextNode],
+      nodes: [ComposerMentionNode, ComposerCitationNode, ComposerTerminalContextNode],
       editorState: () => {
         $setComposerEditorPrompt(initialValueRef.current, initialTerminalContextsRef.current);
       },
@@ -1325,6 +1410,7 @@ export const ComposerPromptEditor = forwardRef<
         onRemoveTerminalContext={onRemoveTerminalContext}
         onChange={onChange}
         onPaste={onPaste}
+        {...(onCitationSubmitAndSend ? { onCitationSubmitAndSend } : {})}
         editorRef={ref}
         {...(onCommandKeyDown ? { onCommandKeyDown } : {})}
         {...(className ? { className } : {})}

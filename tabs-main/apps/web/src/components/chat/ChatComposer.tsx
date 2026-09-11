@@ -8,7 +8,7 @@
  * ChatView component while maintaining compatibility.
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import type {
   ProviderKind,
   ModelSelection,
@@ -17,12 +17,23 @@ import type {
   ResolvedKeybindingsConfig,
   ServerProvider,
   ApprovalRequestId,
+  AssistantCitation,
 } from "@tabs/contracts";
+import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
+import { formatAssistantCitationForComposer } from "~/composer-logic";
 import { Button } from "../ui/button";
 import { BotIcon, ListTodoIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+
+export interface ChatComposerHandle {
+  citeAssistantText: (
+    citation: AssistantCitation,
+    sourceAnchor: AssistantCitationSourceAnchor,
+  ) => boolean;
+}
+
 export interface ChatComposerProps {
   threadId: ThreadId;
   className?: string;
@@ -59,33 +70,48 @@ export interface ChatComposerProps {
   compactDisabledReason?: string | null;
 }
 
-export function ChatComposer({
-  threadId,
-  className,
-  provider = "codex",
-  modelSelection,
-  availableProviders = [],
-  keybindings = [],
-  isDisabled = false,
-  isLoading = false,
-  error = null,
-  pendingApprovals = [],
-  pendingUserInputs = [],
-  proposedPlans = [],
-  placeholder = "Type your message...",
-  onSendMessage,
-  onProviderChange,
-  onCommandSelect,
-  onApprovalAction,
-  onUserInputSubmit,
-  onPlanFollowUp,
-  onCompactContext,
-  onCompact,
-  compactDisabled = false,
-  compactDisabledReason = null,
-}: ChatComposerProps) {
+export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
+  {
+    threadId,
+    className,
+    provider = "codex",
+    modelSelection,
+    availableProviders = [],
+    keybindings = [],
+    isDisabled = false,
+    isLoading = false,
+    error = null,
+    pendingApprovals = [],
+    pendingUserInputs = [],
+    proposedPlans = [],
+    placeholder = "Type your message...",
+    onSendMessage,
+    onProviderChange,
+    onCommandSelect,
+    onApprovalAction,
+    onUserInputSubmit,
+    onPlanFollowUp,
+    onCompactContext,
+    onCompact,
+    compactDisabled = false,
+    compactDisabledReason = null,
+  }: ChatComposerProps,
+  ref,
+) {
   const [message, setMessage] = useState("");
   const [showCommands, setShowCommands] = useState(false);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      citeAssistantText: (citation, _sourceAnchor) => {
+        const text = formatAssistantCitationForComposer(citation, citation.comment);
+        setMessage((prev) => (prev ? `${prev} ${text}` : text));
+        return true;
+      },
+    }),
+    [],
+  );
 
   const isSendDisabled = useMemo(() => {
     return isDisabled || isLoading || !message.trim();
@@ -237,6 +263,6 @@ export function ChatComposer({
       </div>
     </div>
   );
-}
+});
 
 ChatComposer.displayName = "ChatComposer";

@@ -26,6 +26,7 @@ import {
   type ProviderOptionSelection,
   type PreviewAnnotationPayload,
   type ServerProviderSkill,
+  type AssistantCitation,
 } from "@tabs/contracts";
 import {
   formatProviderSkillDisplayName,
@@ -48,12 +49,14 @@ import {
   useMemo,
   useRef,
   useState,
+  type Dispatch,
+  type SetStateAction,
   type ReactNode,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { projectUiStateKey, useProjectAgentsState } from "~/state/scopedStateStore";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch, useLocation } from "@tanstack/react-router";
 import { gitBranchesQueryOptions, gitCreateWorktreeMutationOptions } from "~/lib/gitReactQuery";
 import { projectSearchEntriesQueryOptions } from "~/lib/projectReactQuery";
 import { serverConfigQueryOptions, serverQueryKeys } from "~/lib/serverReactQuery";
@@ -208,6 +211,10 @@ import {
 } from "../lib/previewAnnotation";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
+import { assistantCitationFromLocation } from "~/lib/assistantCitationNavigation";
+import { type AssistantCitationRequest } from "./chat/AssistantCitationSource";
+import { formatAssistantCitationForComposer } from "~/composer-logic";
 import { ChatHeader } from "./chat/ChatHeader";
 import { ContextWindowMeter } from "./chat/ContextWindowMeter";
 import {
@@ -834,6 +841,26 @@ export default function ChatView({
     [activeThread?.activities],
   );
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
+
+  const citationLocation = useLocation({
+    select: (location) => ({
+      href: location.href,
+      key:
+        (location.state as unknown as Record<string, unknown> | undefined)
+          ?.assistantCitationActivation ??
+        (location.state as unknown as Record<string, unknown> | undefined)?.__TSR_key,
+    }),
+  });
+  const resolvedEnvironmentId =
+    environmentId ?? activeThread?.environmentId ?? EnvironmentId.make("local");
+  const citationRequest = useMemo<AssistantCitationRequest | null>(() => {
+    const citation = assistantCitationFromLocation(citationLocation.href);
+    return citation &&
+      citation.environmentId === resolvedEnvironmentId &&
+      citation.threadId === activeThread?.id
+      ? { citation, key: String(citationLocation.key ?? citationLocation.href) }
+      : null;
+  }, [citationLocation.href, citationLocation.key, resolvedEnvironmentId, activeThread?.id]);
   const activeProject = projects.find(
     (project) =>
       project.id === activeThread?.projectId &&
@@ -4168,12 +4195,27 @@ export default function ChatView({
     [isLocalDraftThread, scheduleComposerFocus, setDraftThreadContext, threadId],
   );
 
+  const extendReplacementRangeForTrailingSpace = (
+    text: string,
+    rangeEnd: number,
+    replacement: string,
+  ): number => {
+    if (!replacement.endsWith(" ")) {
+      return rangeEnd;
+    }
+    return text[rangeEnd] === " " ? rangeEnd + 1 : rangeEnd;
+  };
+
   const applyPromptReplacement = useCallback(
     (
       rangeStart: number,
       rangeEnd: number,
       replacement: string,
-      options?: { expectedText?: string },
+      options?: {
+        expectedText?: string;
+        focusEditorAfterReplace?: boolean;
+        citationComment?: { start: number; sourceAnchor: AssistantCitationSourceAnchor };
+      },
     ): boolean => {
       const currentText = promptRef.current;
       const safeStart = Math.max(0, Math.min(currentText.length, rangeStart));
@@ -4186,6 +4228,15 @@ export default function ChatView({
       }
       const next = replaceTextRange(promptRef.current, rangeStart, rangeEnd, replacement);
       const nextCursor = collapseExpandedComposerCursor(next.text, next.cursor);
+      const nextExpandedCursor = expandCollapsedComposerCursor(next.text, nextCursor);
+      if (options?.citationComment) {
+        composerEditorRef.current?.requestCitationComment({
+          previousValue: currentText,
+          value: next.text,
+          citationStart: options.citationComment.start,
+          sourceAnchor: options.citationComment.sourceAnchor,
+        });
+      }
       promptRef.current = next.text;
       const activePendingQuestion = activePendingProgress?.activeQuestion;
       if (activePendingQuestion && activePendingUserInput) {
@@ -4204,11 +4255,14 @@ export default function ChatView({
       }
       setComposerCursor(nextCursor);
       setComposerTrigger(
-        detectComposerTrigger(next.text, expandCollapsedComposerCursor(next.text, nextCursor)),
+        detectComposerTrigger(next.text, nextExpandedCursor),
       );
-      window.requestAnimationFrame(() => {
-        composerEditorRef.current?.focusAt(nextCursor);
-      });
+      if (options?.focusEditorAfterReplace !== false) {
+        window.requestAnimationFrame(() => {
+          if (promptRef.current !== next.text) return;
+          composerEditorRef.current?.focusAt(nextCursor);
+        });
+      }
       return true;
     },
     [activePendingProgress?.activeQuestion, activePendingUserInput, setPrompt],
@@ -4231,6 +4285,45 @@ export default function ChatView({
       terminalContextIds: composerTerminalContexts.map((context) => context.id),
     };
   }, [composerCursor, composerTerminalContexts]);
+
+  const citeAssistantText = useCallback(
+    (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor): boolean => {
+      if (
+        isComposerApprovalState ||
+        pendingUserInputs.length > 0 ||
+        !composerEditorRef.current
+      ) {
+        toastManager.add({
+          type: "warning",
+          title: "The composer is not ready",
+          description:
+            "Try citing the selection after the connection or pending input is resolved.",
+        });
+        return false;
+      }
+
+      const text = formatAssistantCitationForComposer(citation, citation.comment);
+      const prompt = promptRef.current;
+      const cursor = readComposerSnapshot().expandedCursor;
+      const needsLeadingSpace = cursor > 0 && !/\s/.test(prompt[cursor - 1] ?? "");
+      const replacement = needsLeadingSpace ? ` ${text}` : text;
+      const rangeEnd = extendReplacementRangeForTrailingSpace(prompt, cursor, text);
+
+      return applyPromptReplacement(cursor, rangeEnd, replacement, {
+        citationComment: {
+          start: cursor + (needsLeadingSpace ? 1 : 0),
+          sourceAnchor,
+        },
+        focusEditorAfterReplace: false,
+      });
+    },
+    [
+      applyPromptReplacement,
+      isComposerApprovalState,
+      pendingUserInputs.length,
+      readComposerSnapshot,
+    ],
+  );
 
   const resolveActiveComposerTrigger = useCallback((): {
     snapshot: { value: string; cursor: number; expandedCursor: number };
@@ -5032,6 +5125,7 @@ export default function ChatView({
                   historyMessages={activeThread?.messages ?? []}
                   onChange={onPromptChange}
                   onCommandKeyDown={onComposerCommandKey}
+                  onCitationSubmitAndSend={() => void onSend()}
                   onPaste={onComposerPaste}
                   placeholder={
                     isComposerApprovalState
@@ -5341,6 +5435,9 @@ export default function ChatView({
                       : activeProject?.cwd) ?? undefined
                   }
                   environmentId={environmentId ?? undefined}
+                  threadId={activeThread.id}
+                  citationRequest={citationRequest}
+                  onCiteAssistantText={citeAssistantText}
                   latestTaskDescription={
                     paintOnlyDisplayedTimeline ? null : latestTaskDescription
                   }

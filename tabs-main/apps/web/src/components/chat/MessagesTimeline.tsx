@@ -1,4 +1,10 @@
-import { type EnvironmentId, type MessageId, type TurnId } from "@tabs/contracts";
+import {
+  type EnvironmentId,
+  type MessageId,
+  type TurnId,
+  type AssistantCitation,
+  type ThreadId,
+} from "@tabs/contracts";
 import {
   memo,
   useCallback,
@@ -55,6 +61,11 @@ import {
   formatInlineTerminalContextLabel,
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
+import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
+import { parseScopedThreadKey } from "@tabs/client-runtime/environment";
+import { AssistantCitationSource, type AssistantCitationRequest } from "./AssistantCitationSource";
+import { useAssistantCitationTarget } from "./useAssistantCitationTarget";
+import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
 import {
   ClaudeAI,
   OpenAI,
@@ -103,6 +114,13 @@ interface MessagesTimelineProps {
   latestTaskDescription: string | null;
   /** Provider instanceId for the active thread (e.g. "claudeAgent", "codex", "grok") */
   providerInstanceId?: string;
+  citationRequest?: AssistantCitationRequest | null;
+  onCiteAssistantText?: (
+    citation: AssistantCitation,
+    sourceAnchor: AssistantCitationSourceAnchor,
+  ) => boolean;
+  threadId?: ThreadId;
+  routeThreadKey?: string;
 }
 
 export const MessagesTimeline = memo(function MessagesTimeline({
@@ -130,7 +148,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   environmentId,
   latestTaskDescription,
   providerInstanceId,
+  citationRequest,
+  onCiteAssistantText,
+  threadId,
+  routeThreadKey,
 }: MessagesTimelineProps) {
+  const citationThreadRef = useMemo(() => {
+    if (routeThreadKey) return parseScopedThreadKey(routeThreadKey);
+    if (environmentId && threadId) return { environmentId, threadId };
+    return null;
+  }, [routeThreadKey, environmentId, threadId]);
+
   const rows = useMemo<TimelineRow[]>(() => {
     const nextRows: TimelineRow[] = [];
     const durationStartByMessageId = computeMessageDurationStart(
@@ -211,6 +239,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
     return positionedRows;
   }, [timelineEntries, completionDividerBeforeEntryId, isWorking, activeTurnStartedAt]);
+
+  const { target: citationTarget } = useAssistantCitationTarget({
+    request: citationRequest ?? null,
+    entries: timelineEntries as any,
+    rows: rows as any,
+    viewport: scrollContainer,
+    historyLoading: false,
+    onExpandTurn: () => {},
+    onManualNavigation: () => {},
+  });
   const [allDirectoriesExpandedByTurnId, setAllDirectoriesExpandedByTurnId] = useState<
     Record<string, boolean>
   >({});
@@ -555,11 +593,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 </div>
                 {/* Body text */}
                 <div className="text-base font-sans leading-relaxed text-foreground/85">
-                  <ChatMarkdown
-                    text={messageText}
-                    cwd={markdownCwd}
-                    isStreaming={Boolean(row.message.streaming)}
-                  />
+                  <AssistantCitationSource
+                    messageId={row.message.id}
+                    {...(citationThreadRef ? { threadRef: citationThreadRef } : {})}
+                    itemKey={row.id}
+                    request={citationTarget}
+                  >
+                    <ChatMarkdown
+                      text={messageText}
+                      cwd={markdownCwd}
+                      isStreaming={Boolean(row.message.streaming)}
+                    />
+                  </AssistantCitationSource>
                 </div>
                 {/* Action footer: copy + timestamp (visible on hover, focus-within, and touch/pointer-coarse) */}
                 <div className="-ml-1.5 mt-1 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none">
@@ -708,7 +753,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   }
 
   return (
-    <div data-timeline-root="true" className="mx-auto w-full min-w-0 max-w-3xl overflow-x-hidden">
+    <div
+      data-timeline-root="true"
+      data-assistant-citation-viewport="true"
+      className="mx-auto w-full min-w-0 max-w-3xl overflow-x-hidden"
+    >
+      {onCiteAssistantText && citationThreadRef ? (
+        <AssistantSelectionToolbar
+          viewport={scrollContainer}
+          threadRef={citationThreadRef}
+          onCite={onCiteAssistantText}
+        />
+      ) : null}
       {rows.map((row, index) => (
         <RenderErrorBoundary
           key={`timeline-row-boundary:${row.id}`}
