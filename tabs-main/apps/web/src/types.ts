@@ -15,6 +15,7 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
   ThreadLinkedPullRequest,
+  ThreadPullRequestLink,
   ThreadTitleRegeneration,
 } from "@tabs/contracts";
 
@@ -126,6 +127,7 @@ export interface Thread {
   pinnedAt?: string | null;
   pinOrderKey?: string | null;
   linkedPullRequest?: ThreadLinkedPullRequest | null;
+  pullRequests?: ThreadPullRequestLink[];
   titleRegeneration?: ThreadTitleRegeneration | null;
   branch: string | null;
   worktreePath: string | null;

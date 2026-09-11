@@ -52,6 +52,7 @@ function makeSnapshot(input: {
         runtimeMode: "full-access",
         branch: null,
         worktreePath: input.worktreePath,
+        pullRequests: [],
         latestTurn: {
           turnId: "turn-1" as TurnId,
           state: "completed",

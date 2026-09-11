@@ -48,6 +48,10 @@ import {
   scopedThreadKey,
   scopeThreadRef,
 } from "@tabs/client-runtime/environment";
+import {
+  resolveThreadCurrentPullRequest,
+  type ThreadCurrentPullRequest,
+} from "@tabs/shared/threadPullRequests";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
   type SidebarProjectSortOrder,
@@ -168,7 +172,7 @@ interface TerminalStatusIndicator {
 }
 
 interface PrStatusIndicator {
-  label: "PR open" | "PR closed" | "PR merged";
+  label: "PR open" | "PR closed" | "PR merged" | `PR stack (${number})`;
   colorClass: string;
   tooltip: string;
   url: string;
@@ -214,6 +218,46 @@ function prStatusIndicator(pr: ThreadPr): PrStatusIndicator | null {
       colorClass: "text-violet-600 dark:text-violet-300/90",
       tooltip: `#${pr.number} PR merged: ${pr.title}`,
       url: pr.url,
+    };
+  }
+  return null;
+}
+
+function threadPrStatusIndicator(
+  currentPr: ThreadCurrentPullRequest | null,
+  gitPr: ThreadPr | null,
+): PrStatusIndicator | null {
+  if (gitPr) {
+    return prStatusIndicator(gitPr);
+  }
+  if (!currentPr) return null;
+  const link = currentPr.kind === "stack" ? currentPr.top : currentPr.link;
+  const state = link.snapshot?.state ?? "open";
+  const title = link.snapshot?.title ?? "";
+  const isStack = currentPr.kind === "stack" && currentPr.open.length > 1;
+  const stackSuffix = isStack ? ` (${currentPr.open.length} in stack)` : "";
+  if (state === "open") {
+    return {
+      label: isStack ? `PR stack (${currentPr.open.length})` : "PR open",
+      colorClass: "text-emerald-600 dark:text-emerald-300/90",
+      tooltip: `#${link.number} PR open${stackSuffix}${title ? `: ${title}` : ""}`,
+      url: link.url,
+    };
+  }
+  if (state === "closed") {
+    return {
+      label: "PR closed",
+      colorClass: "text-zinc-500 dark:text-zinc-400/80",
+      tooltip: `#${link.number} PR closed${title ? `: ${title}` : ""}`,
+      url: link.url,
+    };
+  }
+  if (state === "merged") {
+    return {
+      label: "PR merged",
+      colorClass: "text-violet-600 dark:text-violet-300/90",
+      tooltip: `#${link.number} PR merged${title ? `: ${title}` : ""}`,
+      url: link.url,
     };
   }
   return null;
@@ -1405,7 +1449,8 @@ export default function Sidebar() {
         hasPendingApprovals: derivePendingApprovals(thread.activities).length > 0,
         hasPendingUserInput: derivePendingUserInputs(thread.activities).length > 0,
       });
-      const prStatus = prStatusIndicator(prByThreadId.get(threadKey) ?? null);
+      const currentPr = resolveThreadCurrentPullRequest(thread.pullRequests ?? []);
+      const prStatus = threadPrStatusIndicator(currentPr, prByThreadId.get(threadKey) ?? null);
       const terminalStatus = terminalStatusFromRunningIds(
         selectThreadTerminalState(terminalStateByThreadId, thread.id).runningTerminalIds,
       );

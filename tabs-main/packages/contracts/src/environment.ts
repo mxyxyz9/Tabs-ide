@@ -48,6 +48,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadPinReorder: Schema.optionalKey(Schema.Boolean),
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
   threadPullRequestLinking: Schema.optionalKey(Schema.Boolean),
+  threadPullRequests: Schema.optionalKey(Schema.Boolean),
   serverSelfUpdate: Schema.optionalKey(ServerSelfUpdateCapability),
   serverSelfUpdateProgress: Schema.optionalKey(Schema.Boolean),
   agentActivityPublishing: Schema.optionalKey(Schema.Boolean),

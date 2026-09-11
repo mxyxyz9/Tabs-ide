@@ -41,6 +41,7 @@ import {
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
 } from "@tabs/shared/model";
+import { resolveThreadCurrentPullRequest } from "@tabs/shared/threadPullRequests";
 import { useAtomValue } from "@effect/atom-react";
 import {
   useCallback,
@@ -2910,8 +2911,14 @@ export default function ChatView({
         event.preventDefault();
         event.stopPropagation();
         if (!isServerThread || !activeThread || event.repeat) return;
-        const reference = activeThread.linkedPullRequest?.url ?? activeThread.id;
-        const label = activeThread.linkedPullRequest?.url ? "PR link" : "Thread ID";
+        const currentPr = resolveThreadCurrentPullRequest(activeThread.pullRequests ?? []);
+        const prUrl = currentPr
+          ? currentPr.kind === "stack"
+            ? currentPr.top.url
+            : currentPr.link.url
+          : activeThread.linkedPullRequest?.url;
+        const reference = prUrl ?? activeThread.id;
+        const label = prUrl ? "PR link" : "Thread ID";
         void navigator.clipboard.writeText(reference).then(
           () => {
             toastManager.add({

@@ -350,6 +350,7 @@ export function syncServerReadModel(
         pinnedAt: thread.pinnedAt ?? null,
         pinOrderKey: thread.pinOrderKey ?? null,
         linkedPullRequest: thread.linkedPullRequest ?? null,
+        pullRequests: thread.pullRequests ? thread.pullRequests.map((link) => ({ ...link })) : [],
         titleRegeneration: thread.titleRegeneration ?? null,
         branch: thread.branch,
         worktreePath: thread.worktreePath,

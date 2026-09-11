@@ -289,7 +289,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           updatedAt: "2026-02-24T00:00:03.000Z",
           deletedAt: null,
           archivedAt: null,
-          linkedPullRequest: null,
+          pullRequests: [],
           settledOverride: null,
           settledAt: null,
           unsettledAt: null,

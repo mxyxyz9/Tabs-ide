@@ -1,10 +1,23 @@
-import type { OrchestrationEvent, OrchestrationReadModel, ThreadId } from "@tabs/contracts";
+import type {
+  OrchestrationEvent,
+  OrchestrationProject,
+  OrchestrationReadModel,
+  ThreadId,
+  ThreadLinkedPullRequest,
+  ThreadPullRequestKey,
+  ThreadPullRequestLink,
+} from "@tabs/contracts";
 import {
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
   OrchestrationSession,
   OrchestrationThread,
 } from "@tabs/contracts";
+import {
+  legacyLinkedPullRequestOf,
+  legacyThreadPullRequestKey,
+  threadPullRequestKeysEqual,
+} from "@tabs/shared/threadPullRequests";
 import { Effect, Schema } from "effect";
 
 import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "./Errors.ts";
@@ -28,6 +41,9 @@ import {
   ThreadUnarchivedPayload,
   ThreadMetaUpdatedPayload,
   ThreadProposedPlanUpsertedPayload,
+  ThreadPullRequestLinkedPayload,
+  ThreadPullRequestSyncedPayload,
+  ThreadPullRequestUnlinkedPayload,
   ThreadRuntimeModeSetPayload,
   ThreadRevertedPayload,
   ThreadSessionSetPayload,
@@ -38,6 +54,71 @@ type ThreadPatch = Partial<Omit<OrchestrationThread, "id" | "projectId">>;
 const MAX_THREAD_MESSAGES = 2_000;
 const MAX_THREAD_CHECKPOINTS = 500;
 
+function upsertPullRequestLink(
+  pullRequests: ReadonlyArray<ThreadPullRequestLink>,
+  link: ThreadPullRequestLink,
+): ReadonlyArray<ThreadPullRequestLink> {
+  const index = pullRequests.findIndex((entry) => threadPullRequestKeysEqual(entry, link));
+  return index === -1
+    ? [...pullRequests, link]
+    : pullRequests.map((entry, entryIndex) => (entryIndex === index ? link : entry));
+}
+
+function removePullRequestLink(
+  pullRequests: ReadonlyArray<ThreadPullRequestLink>,
+  key: ThreadPullRequestKey,
+): ReadonlyArray<ThreadPullRequestLink> {
+  return pullRequests.filter((entry) => !threadPullRequestKeysEqual(entry, key));
+}
+
+function legacyPullRequestHost(
+  project: OrchestrationProject | undefined,
+  linked: ThreadLinkedPullRequest,
+): string {
+  const canonicalHost = project?.repositoryIdentity?.canonicalKey.split("/")[0];
+  if (canonicalHost) return canonicalHost.toLowerCase();
+  try {
+    return new URL(linked.url).hostname.toLowerCase();
+  } catch {
+    return "unknown";
+  }
+}
+
+function pullRequestsPatch(
+  thread: OrchestrationThread,
+  pullRequests: ReadonlyArray<ThreadPullRequestLink>,
+  projects: ReadonlyArray<OrchestrationProject>,
+): Pick<OrchestrationThread, "pullRequests" | "linkedPullRequest"> {
+  const project = projects.find((candidate) => candidate.id === thread.projectId);
+  const linkedPullRequest = legacyLinkedPullRequestOf(
+    pullRequests,
+    thread.projectId,
+    project?.repositoryIdentity,
+  );
+  return {
+    pullRequests,
+    linkedPullRequest: linkedPullRequest ?? null,
+  };
+}
+
+function legacyLinkToPullRequests(
+  thread: Pick<OrchestrationThread, "pullRequests">,
+  project: OrchestrationProject | undefined,
+  linked: ThreadLinkedPullRequest | null,
+  linkedAt: string,
+): ReadonlyArray<ThreadPullRequestLink> {
+  const withoutManual = (thread.pullRequests ?? []).filter((entry) => entry.source !== "manual");
+  if (linked === null) return withoutManual;
+  return upsertPullRequestLink(withoutManual, {
+    ...legacyThreadPullRequestKey(linked, legacyPullRequestHost(project, linked)),
+    url: linked.url,
+    source: "manual",
+    linkedAt,
+    snapshot: null,
+    stack: null,
+  });
+}
+
 function checkpointStatusToLatestTurnState(status: "ready" | "missing" | "error") {
   if (status === "error") return "error" as const;
   if (status === "missing") return "interrupted" as const;
@@ -47,9 +128,13 @@ function checkpointStatusToLatestTurnState(status: "ready" | "missing" | "error"
 function updateThread(
   threads: ReadonlyArray<OrchestrationThread>,
   threadId: ThreadId,
-  patch: ThreadPatch,
+  patch: ThreadPatch | ((thread: OrchestrationThread) => ThreadPatch),
 ): OrchestrationThread[] {
-  return threads.map((thread) => (thread.id === threadId ? { ...thread, ...patch } : thread));
+  return threads.map((thread) => {
+    if (thread.id !== threadId) return thread;
+    const resolved = typeof patch === "function" ? patch(thread) : patch;
+    return { ...thread, ...resolved };
+  });
 }
 
 function decodeForEvent<A>(
@@ -417,7 +502,7 @@ export function projectEvent(
       return decodeForEvent(ThreadMetaUpdatedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => ({
           ...nextBase,
-          threads: updateThread(nextBase.threads, payload.threadId, {
+          threads: updateThread(nextBase.threads, payload.threadId, (thread) => ({
             ...(payload.title !== undefined ? { title: payload.title } : {}),
             ...(payload.modelSelection !== undefined
               ? { modelSelection: payload.modelSelection }
@@ -425,12 +510,85 @@ export function projectEvent(
             ...(payload.branch !== undefined ? { branch: payload.branch } : {}),
             ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
             ...(payload.linkedPullRequest !== undefined
-              ? { linkedPullRequest: payload.linkedPullRequest }
+              ? {
+                  ...pullRequestsPatch(
+                    thread,
+                    legacyLinkToPullRequests(
+                      thread,
+                      nextBase.projects.find((project) => project.id === thread.projectId),
+                      payload.linkedPullRequest,
+                      payload.updatedAt,
+                    ),
+                    nextBase.projects,
+                  ),
+                }
               : {}),
             ...(payload.titleRegeneration !== undefined
               ? { titleRegeneration: payload.titleRegeneration }
               : {}),
             updatedAt: payload.updatedAt,
+          })),
+        })),
+      );
+
+    case "thread.pull-request-linked":
+      return decodeForEvent(ThreadPullRequestLinkedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, (thread) => ({
+            ...pullRequestsPatch(
+              thread,
+              upsertPullRequestLink(thread.pullRequests ?? [], payload.link),
+              nextBase.projects,
+            ),
+            updatedAt: payload.updatedAt,
+          })),
+        })),
+      );
+
+    case "thread.pull-request-unlinked":
+      return decodeForEvent(
+        ThreadPullRequestUnlinkedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, (thread) => ({
+            ...pullRequestsPatch(
+              thread,
+              (thread.pullRequests ?? []).filter(
+                (candidate) => !threadPullRequestKeysEqual(candidate, payload),
+              ),
+              nextBase.projects,
+            ),
+            updatedAt: payload.updatedAt,
+          })),
+        })),
+      );
+
+    case "thread.pull-request-synced":
+      return decodeForEvent(ThreadPullRequestSyncedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, (thread) => {
+            const existing = (thread.pullRequests ?? []).find((candidate) =>
+              threadPullRequestKeysEqual(candidate, payload),
+            );
+            if (existing === undefined) return {};
+            return {
+              ...pullRequestsPatch(
+                thread,
+                upsertPullRequestLink(thread.pullRequests ?? [], {
+                  ...existing,
+                  snapshot: payload.snapshot,
+                  stack: payload.stack,
+                }),
+                nextBase.projects,
+              ),
+              updatedAt: payload.updatedAt,
+            };
           }),
         })),
       );
