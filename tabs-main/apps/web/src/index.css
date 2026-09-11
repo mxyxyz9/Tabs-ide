@@ -1131,6 +1131,19 @@ label:has(> select#reasoning-effort) select {
   pointer-events: auto;
 }
 
+@media (pointer: coarse) {
+  .chat-markdown .chat-markdown-copy-button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-markdown .chat-markdown-copy-button {
+    transition: none;
+  }
+}
+
 .chat-markdown .chat-markdown-copy-button:hover {
   color: var(--foreground);
   border-color: color-mix(in srgb, var(--border) 70%, var(--foreground));

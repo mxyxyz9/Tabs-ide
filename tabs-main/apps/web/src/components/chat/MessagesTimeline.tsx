@@ -309,7 +309,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     <button
                       type="button"
                       onClick={() => onToggleWorkGroup(groupId)}
-                      className="flex items-center gap-2 group/header"
+                      aria-expanded={isExpanded}
+                      className="flex items-center gap-2 group/header rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                     >
                       {onlyToolEntries ? (
                         <WrenchIcon className="size-3.5 text-muted-foreground/60 shrink-0" />
@@ -321,17 +322,19 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                       </span>
                     </button>
                     <div className="flex items-center gap-1.5">
-                      <MessageCopyButton text={allLogsText} />
+                      <MessageCopyButton text={allLogsText} variant="ghost" size="icon-xs" />
                       {hasOverflow && (
                         <button
                           type="button"
-                          className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground/40 hover:text-foreground/60 transition-colors"
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? `Hide details for ${groupLabel}` : `View details for ${groupLabel}`}
+                          className="flex items-center gap-1 rounded-sm text-[11px] font-mono text-muted-foreground/40 hover:text-foreground/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 motion-reduce:transition-none"
                           onClick={() => onToggleWorkGroup(groupId)}
                         >
                           <span>{isExpanded ? "Hide details" : `View details`}</span>
                           <ChevronDownIcon
                             className={cn(
-                              "size-3 transition-transform duration-200",
+                              "size-3 transition-transform duration-200 motion-reduce:transition-none",
                               isExpanded && "rotate-180",
                             )}
                           />
@@ -422,11 +425,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             // Prototype-style: right-aligned, no bubble, right-border accent + large text
             <div className="flex justify-end">
               <div className="group relative max-w-[80%]">
-                {/* Hover-reveal row: timestamp + copy + revert */}
-                <div className="mb-1.5 flex items-center justify-end gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+                {/* Action row: timestamp + copy + revert (visible on hover, focus-within, and touch/pointer-coarse) */}
+                <div className="mb-1.5 flex items-center justify-end gap-2 opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none">
                   <div className="flex items-center gap-1.5">
                     {displayedUserMessage.copyText && (
-                      <MessageCopyButton text={displayedUserMessage.copyText} />
+                      <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" size="icon-xs" />
                     )}
                     {canRevertAgentWork && (
                       <button
@@ -434,9 +437,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                         disabled={isRevertingCheckpoint || isWorking}
                         onClick={() => onRevertUserMessage(row.message.id)}
                         title="Revert to this message"
+                        aria-label="Revert to this message"
                         className={cn(
-                          "flex size-6 items-center justify-center rounded-md transition-colors",
+                          "relative flex size-6 items-center justify-center rounded-md transition-colors",
                           "text-muted-foreground/40 hover:bg-muted/60 hover:text-foreground/70",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                          "pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
+                          "motion-reduce:transition-none",
                           (isRevertingCheckpoint || isWorking) && "cursor-not-allowed opacity-40",
                         )}
                       >
@@ -554,9 +561,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     isStreaming={Boolean(row.message.streaming)}
                   />
                 </div>
-                {/* Hover-reveal copy + timestamp footer */}
-                <div className="-ml-1.5 mt-1 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
-                  <MessageCopyButton text={messageText} />
+                {/* Action footer: copy + timestamp (visible on hover, focus-within, and touch/pointer-coarse) */}
+                <div className="-ml-1.5 mt-1 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none">
+                  <MessageCopyButton text={messageText} variant="ghost" size="icon-xs" />
                   <p className="text-[10px] text-muted-foreground/30 transition-colors duration-150 hover:text-foreground/60 cursor-default">
                     {formatMessageMeta(
                       row.message.createdAt,
