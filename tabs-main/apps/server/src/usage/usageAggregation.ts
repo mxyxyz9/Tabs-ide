@@ -50,6 +50,7 @@ export interface AggregateOptions {
   readonly sinceDay: string;
   readonly untilDay: string;
   readonly rates: RateTable;
+  readonly overrides?: RateTable | undefined;
   readonly sinceTimeMs?: number;
   readonly untilTimeMs?: number;
 }
@@ -64,6 +65,7 @@ export class UsageAggregator {
   private readonly sinceDay: string;
   private readonly untilDay: string;
   private readonly rates: RateTable;
+  private readonly overrides?: RateTable | undefined;
   private readonly buckets = new Map<string, MutableBucket>();
   private readonly seen = new Set<string>();
   private readonly sessions = new Set<string>();
@@ -73,6 +75,7 @@ export class UsageAggregator {
     this.sinceDay = options.sinceDay;
     this.untilDay = options.untilDay;
     this.rates = options.rates;
+    this.overrides = options.overrides;
   }
 
   add(record: UsageRecord): boolean {
@@ -128,10 +131,21 @@ export class UsageAggregator {
       this.sessions.add(record.sessionId);
     }
 
-    const priced = priceUsage(this.rates, record.model, record.totals, record.reportedCostUsd);
+    const priced = priceUsage(
+      this.rates,
+      record.model,
+      record.totals,
+      record.reportedCostUsd,
+      this.overrides,
+    );
     const recordTokens = inputTokens + outputTokens;
     bucket.estimatedCostUsd += priced.costUsd;
-    bucket.cacheSavingsUsd += cacheSavingsUsd(this.rates, record.model, record.totals);
+    bucket.cacheSavingsUsd += cacheSavingsUsd(
+      this.rates,
+      record.model,
+      record.totals,
+      this.overrides,
+    );
     bucket.records += 1;
     if (priced.costSource === "unpriced") {
       bucket.unpricedTokens += recordTokens;
@@ -139,9 +153,14 @@ export class UsageAggregator {
     } else {
       bucket.pricedTokens += recordTokens;
     }
-    if (priced.costSource === "providerReported") {
+    if (
+      priced.costSource === "providerReported" ||
+      (this.overrides !== undefined && this.overrides.has(record.model.trim()))
+    ) {
       bucket.hasCustomPrice = true;
-      bucket.providerReportedRecords += 1;
+      if (priced.costSource === "providerReported") {
+        bucket.providerReportedRecords += 1;
+      }
     }
 
     return true;

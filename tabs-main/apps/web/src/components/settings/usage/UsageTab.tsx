@@ -25,8 +25,18 @@ import {
   type Icon,
 } from "../../Icons";
 import { UsageDailyChart } from "./UsageDailyChart";
+import { Button } from "../../ui/button";
+import { UsagePriceOverrides } from "../../usage/UsagePriceOverrides";
 import { cn } from "../../../lib/utils";
-import { LoaderIcon, SparklesIcon, LayersIcon, ZapIcon, CpuIcon, DatabaseIcon } from "lucide-react";
+import {
+  CpuIcon,
+  DatabaseIcon,
+  LayersIcon,
+  LoaderIcon,
+  SlidersHorizontalIcon,
+  SparklesIcon,
+  ZapIcon,
+} from "lucide-react";
 
 const PROVIDER_ICONS: Record<string, Icon> = {
   codex: OpenAI,
@@ -122,6 +132,7 @@ export function UsageTab() {
   const summaryState = useAtomValue(usageSummaryStateAtom);
   const [metric, setMetric] = useState<"cost" | "tokens">("cost");
   const [breakdownView, setBreakdownView] = useState<"model" | "provider">("model");
+  const [showPriceOverrides, setShowPriceOverrides] = useState(false);
 
   const summary = summaryState.data;
   const merged = useMemo(() => mergeUsage(summary), [summary]);
@@ -162,35 +173,55 @@ export function UsageTab() {
           ))}
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1 border border-border/40">
-          <button
-            type="button"
-            onClick={() => setMetric("cost")}
-            aria-pressed={metric === "cost"}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              metric === "cost"
-                ? "bg-background text-foreground shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground",
-            )}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1 border border-border/40">
+            <button
+              type="button"
+              onClick={() => setMetric("cost")}
+              aria-pressed={metric === "cost"}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                metric === "cost"
+                  ? "bg-background text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Cost (USD)
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetric("tokens")}
+              aria-pressed={metric === "tokens"}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                metric === "tokens"
+                  ? "bg-background text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Tokens
+            </button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shadow-xs border-border/80 text-xs"
+            onClick={() => setShowPriceOverrides(true)}
+            aria-label="Configure custom model prices"
           >
-            Cost (USD)
-          </button>
-          <button
-            type="button"
-            onClick={() => setMetric("tokens")}
-            aria-pressed={metric === "tokens"}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              metric === "tokens"
-                ? "bg-background text-foreground shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Tokens
-          </button>
+            <SlidersHorizontalIcon className="size-3.5" aria-hidden />
+            <span>Custom prices</span>
+          </Button>
         </div>
       </div>
+
+      {showPriceOverrides ? (
+        <UsagePriceOverrides
+          usage={summary ? [{ summary }] : []}
+          onOpenChange={setShowPriceOverrides}
+        />
+      ) : null}
 
       {summaryState.loading && !summary ? (
         <div className="flex h-64 flex-col items-center justify-center gap-3 text-muted-foreground">

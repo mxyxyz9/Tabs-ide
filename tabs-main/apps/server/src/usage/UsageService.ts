@@ -27,7 +27,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
-import { parseRateTable, type RateTable } from "./usagePricing.ts";
+import { createOverrideRateTable, parseRateTable, type RateTable } from "./usagePricing.ts";
 import { listTranscriptFiles, readTranscriptRecords } from "./usageTranscriptReader.ts";
 import {
   decodeScanCache,
@@ -214,11 +214,19 @@ export const make = Effect.gen(function* () {
         ? startedAtMs - 30 * 86_400_000
         : startTimestamp - MTIME_SLACK_MS;
 
+      const settings = yield* settingsService.getSettings.pipe(
+        Effect.catchCause(() => Effect.succeed(null)),
+      );
+      const overrideTable = settings?.usagePriceOverrides
+        ? createOverrideRateTable(settings.usagePriceOverrides)
+        : undefined;
+
       const aggregator = new UsageAggregator({
         timeZone: input.timeZone,
         sinceDay: input.sinceDay,
         untilDay: input.untilDay,
         rates,
+        overrides: overrideTable,
       });
 
       const sources: UsageSource[] = [];

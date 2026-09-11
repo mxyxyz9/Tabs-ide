@@ -53,7 +53,11 @@ function mergeServerSettingsPatch(
   current: ServerSettings,
   patch: ServerSettingsPatch,
 ): ServerSettings {
-  const { usageLimitSources: usageLimitSourcesPatch, ...restPatch } = patch;
+  const {
+    usageLimitSources: usageLimitSourcesPatch,
+    usagePriceOverrides: usagePriceOverridesPatch,
+    ...restPatch
+  } = patch;
   let next = deepMerge(current, restPatch as any);
 
   if (usageLimitSourcesPatch) {
@@ -68,6 +72,21 @@ function mergeServerSettingsPatch(
     next = {
       ...next,
       usageLimitSources: updatedSources as any,
+    };
+  }
+
+  if (usagePriceOverridesPatch) {
+    const updatedOverrides = { ...(next.usagePriceOverrides ?? {}) };
+    for (const [id, value] of Object.entries(usagePriceOverridesPatch)) {
+      if (value === null) {
+        delete (updatedOverrides as any)[id];
+      } else if (value !== undefined) {
+        (updatedOverrides as any)[id] = value;
+      }
+    }
+    next = {
+      ...next,
+      usagePriceOverrides: updatedOverrides as any,
     };
   }
 

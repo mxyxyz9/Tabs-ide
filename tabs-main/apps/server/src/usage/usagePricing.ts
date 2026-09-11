@@ -1,5 +1,5 @@
 /** Model rate lookup and accurate cached-token cost arithmetic. */
-import type { UsageTokenTotals } from "@tabs/contracts";
+import type { UsageModelPriceOverride, UsageTokenTotals } from "@tabs/contracts";
 
 export interface ModelRate {
   readonly inputCostPerToken: number;
@@ -9,6 +9,24 @@ export interface ModelRate {
 }
 
 export type RateTable = ReadonlyMap<string, ModelRate>;
+
+export function createOverrideRateTable(
+  overrides: Readonly<Record<string, UsageModelPriceOverride>>,
+): RateTable {
+  return new Map(
+    Object.entries(overrides).map(([model, prices]) => [
+      model.trim(),
+      {
+        inputCostPerToken: prices.inputCostPerMillionTokens / 1_000_000,
+        outputCostPerToken: prices.outputCostPerMillionTokens / 1_000_000,
+        cacheReadCostPerToken:
+          (prices.cacheReadCostPerMillionTokens ?? prices.inputCostPerMillionTokens) / 1_000_000,
+        cacheCreationCostPerToken:
+          (prices.cacheWriteCostPerMillionTokens ?? prices.inputCostPerMillionTokens) / 1_000_000,
+      },
+    ]),
+  );
+}
 
 interface LiteLlmEntry {
   readonly input_cost_per_token?: unknown;
@@ -28,6 +46,11 @@ function normalizeRateKey(model: string): string {
 function bareModelName(key: string): string {
   const slash = key.lastIndexOf("/");
   return slash === -1 ? key : key.slice(slash + 1);
+}
+
+function stripVariantSuffix(key: string): string {
+  const bracket = key.indexOf("[");
+  return bracket === -1 ? key : key.slice(0, bracket);
 }
 
 function sameRate(left: ModelRate, right: ModelRate): boolean {
@@ -89,7 +112,7 @@ const UNPRICEABLE_MODELS = new Set([
 ]);
 
 export function lookupRate(table: RateTable, model: string): ModelRate | null {
-  const key = normalizeRateKey(model);
+  const key = stripVariantSuffix(normalizeRateKey(model));
   const bare = bareModelName(key);
   if (!bare || UNPRICEABLE_MODELS.has(bare)) return null;
   if (key.includes("/")) return table.get(key) ?? null;
@@ -103,12 +126,14 @@ export function priceUsage(
   model: string,
   totals: UsageTokenTotals,
   reportedCostUsd: number | null,
+  overrides?: RateTable,
 ): { readonly costUsd: number; readonly costSource: UsageCostSource } {
-  if (reportedCostUsd !== null && Number.isFinite(reportedCostUsd) && reportedCostUsd >= 0) {
+  const override = overrides?.get(model.trim());
+  if (override === undefined && reportedCostUsd !== null && Number.isFinite(reportedCostUsd) && reportedCostUsd >= 0) {
     return { costUsd: reportedCostUsd, costSource: "providerReported" };
   }
 
-  const rate = lookupRate(table, model);
+  const rate = override ?? lookupRate(table, model);
   if (rate === null) return { costUsd: 0, costSource: "unpriced" };
 
   return {
@@ -121,8 +146,13 @@ export function priceUsage(
   };
 }
 
-export function cacheSavingsUsd(table: RateTable, model: string, totals: UsageTokenTotals): number {
-  const rate = lookupRate(table, model);
+export function cacheSavingsUsd(
+  table: RateTable,
+  model: string,
+  totals: UsageTokenTotals,
+  overrides?: RateTable,
+): number {
+  const rate = overrides?.get(model.trim()) ?? lookupRate(table, model);
   if (rate === null) return 0;
   return Math.max(
     0,

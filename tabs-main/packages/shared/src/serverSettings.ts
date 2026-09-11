@@ -95,6 +95,7 @@ export function applyServerSettingsPatch(
   const {
     automaticGitFetchInterval,
     usageLimitSources: usageLimitSourcesPatch,
+    usagePriceOverrides: usagePriceOverridesPatch,
     ...patchForMerge
   } = patch;
   const next = deepMerge(current, patchForMerge);
@@ -108,6 +109,14 @@ export function applyServerSettingsPatch(
           usageLimitSources: mergeSettingsEntries(
             current.usageLimitSources,
             usageLimitSourcesPatch,
+          ),
+        }
+      : {}),
+    ...(usagePriceOverridesPatch !== undefined
+      ? {
+          usagePriceOverrides: mergeSettingsEntries(
+            current.usagePriceOverrides,
+            usagePriceOverridesPatch,
           ),
         }
       : {}),
