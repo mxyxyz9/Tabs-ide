@@ -451,9 +451,15 @@ export function createWsNativeApi(options?: {
       signalProcess: (input) => transport.request(WS_METHODS.serverSignalProcess, input),
       createSupportBundle: () => transport.request(WS_METHODS.serverCreateSupportBundle),
       reportClientActivity: (input) =>
-        transport.request(WS_METHODS.serverReportClientActivity, input),
+        transport.request(WS_METHODS.serverReportClientActivity, input, {
+          timeoutMs: 10_000,
+          coalesceKey: `clientActivity:${input.clientId}`,
+        }),
       reportHostPowerState: (input) =>
-        transport.request(WS_METHODS.serverReportHostPowerState, input),
+        transport.request(WS_METHODS.serverReportHostPowerState, input, {
+          timeoutMs: 10_000,
+          coalesceKey: "hostPowerState",
+        }),
       getBackgroundPolicy: () => transport.request(WS_METHODS.serverGetBackgroundPolicy, {}),
       onBackgroundPolicy: (callback) =>
         transport.subscribe(WS_CHANNELS.backgroundPolicyUpdated, (message) =>

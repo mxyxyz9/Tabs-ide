@@ -30,10 +30,17 @@ describe("RPC latency tracking", () => {
     expect(getSlowRpcRequests()).toEqual([]);
   });
 
-  it("does not surface background lease heartbeats as slow user requests", () => {
-    trackRpcRequest("activity", "server.reportClientActivity");
-    trackRpcRequest("power", "server.reportHostPowerState");
+  it("tracks phase when request exceeds threshold", () => {
+    trackRpcRequest("activity", "server.reportClientActivity", () => "transport-queued");
     vi.advanceTimersByTime(SLOW_RPC_THRESHOLD_MS);
-    expect(getSlowRpcRequests()).toEqual([]);
+    expect(getSlowRpcRequests()).toEqual([
+      {
+        requestId: "activity",
+        method: "server.reportClientActivity",
+        startedAt: expect.any(Number),
+        thresholdMs: SLOW_RPC_THRESHOLD_MS,
+        phase: "transport-queued",
+      },
+    ]);
   });
 });

@@ -1,69 +1,53 @@
-import { ThreadId, type BackgroundScope, type HostPowerSnapshot } from "@tabs/contracts";
+import { type HostPowerSnapshot } from "@tabs/contracts";
 import * as DateTime from "effect/DateTime";
 import { useEffect } from "react";
 
 import { ensureNativeApi } from "../nativeApi";
-
-const CLIENT_ID_KEY = "tabs-background-client-id";
-
-function clientId(): string {
-  const existing = sessionStorage.getItem(CLIENT_ID_KEY);
-  if (existing) return existing;
-  const created = crypto.randomUUID();
-  sessionStorage.setItem(CLIENT_ID_KEY, created);
-  return created;
-}
-
-function currentScopes(): BackgroundScope[] {
-  const scopes: BackgroundScope[] = [{ type: "server-config" }, { type: "provider-status" }];
-  const match = /\/chat\/([^/?#]+)/u.exec(window.location.pathname);
-  if (match?.[1]) scopes.push({ type: "thread", threadId: ThreadId.make(match[1]) });
-  return scopes;
-}
+import {
+  createActivityReporterQueue,
+  getOrCreateClientId,
+  LEASE_TTL_MS,
+  REPORT_INTERVAL_MS,
+  resolveCurrentScopes,
+} from "./BackgroundActivityReporter.logic";
 
 export function BackgroundActivityReporter() {
   useEffect(() => {
-    let recentlyInteracted = true;
-    let lastInteraction = Date.now();
-    let reportInFlight = false;
-    const markInteraction = () => {
-      lastInteraction = Date.now();
-      recentlyInteracted = true;
-    };
-    const report = () => {
-      if (reportInFlight) return;
-      recentlyInteracted = Date.now() - lastInteraction < 60_000;
-      reportInFlight = true;
-      void ensureNativeApi()
-        .server.reportClientActivity({
-          clientId: clientId(),
-          clientKind: window.desktopBridge ? "desktop-renderer" : "web",
-          visible: document.visibilityState === "visible",
-          focused: document.hasFocus(),
-          recentlyInteracted,
-          appState: document.visibilityState === "visible" ? "active" : "background",
-          networkType: navigator.onLine ? "online" : "offline",
-          scopes: currentScopes(),
-          ttlMs: 45_000,
-          observedAt: DateTime.nowUnsafe(),
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          reportInFlight = false;
-        });
-    };
+    const queue = createActivityReporterQueue({
+      sendReport: (report) => ensureNativeApi().server.reportClientActivity(report),
+      getReportInput: (recentlyInteracted) => ({
+        clientId: getOrCreateClientId(sessionStorage),
+        clientKind: window.desktopBridge ? "desktop-renderer" : "web",
+        visible: document.visibilityState === "visible",
+        focused: document.hasFocus(),
+        recentlyInteracted,
+        appState: document.visibilityState === "visible" ? "active" : "background",
+        networkType: navigator.onLine ? "online" : "offline",
+        scopes: resolveCurrentScopes(window.location.pathname),
+        ttlMs: LEASE_TTL_MS,
+        observedAt: DateTime.nowUnsafe(),
+      }),
+    });
+
+    const handleInteraction = () => queue.recordInteraction();
+    const handleVisibilityOrState = () => queue.requestReport(false);
+
     for (const event of ["pointerdown", "keydown", "focus", "online", "offline"] as const) {
-      window.addEventListener(event, markInteraction, { passive: true });
+      window.addEventListener(event, handleInteraction, { passive: true });
     }
-    document.addEventListener("visibilitychange", report);
-    const interval = window.setInterval(report, 30_000);
-    report();
+    document.addEventListener("visibilitychange", handleVisibilityOrState);
+    const interval = window.setInterval(() => queue.requestReport(false), REPORT_INTERVAL_MS);
+
+    // Initial immediate report
+    queue.requestReport(true);
+
     return () => {
       window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", report);
+      document.removeEventListener("visibilitychange", handleVisibilityOrState);
       for (const event of ["pointerdown", "keydown", "focus", "online", "offline"] as const) {
-        window.removeEventListener(event, markInteraction);
+        window.removeEventListener(event, handleInteraction);
       }
+      queue.dispose();
     };
   }, []);
 

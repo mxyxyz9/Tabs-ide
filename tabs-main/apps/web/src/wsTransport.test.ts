@@ -305,4 +305,90 @@ describe("WsTransport", () => {
     await expect(requestPromise).rejects.toThrow("WebSocket connection closed.");
     transport.dispose();
   });
+
+  it("coalesces outbound requests with the same coalesceKey while disconnected", async () => {
+    const transport = new WsTransport("ws://localhost:3020");
+    const socket = getSocket();
+
+    const first = transport.request(
+      "server.reportClientActivity",
+      { step: 1 },
+      { coalesceKey: "client-1" },
+    );
+    const second = transport.request(
+      "server.reportClientActivity",
+      { step: 2 },
+      { coalesceKey: "client-1" },
+    );
+    const third = transport.request(
+      "server.reportClientActivity",
+      { step: 3 },
+      { coalesceKey: "client-1" },
+    );
+
+    // Superseded requests resolve cleanly without hanging
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+
+    // Socket opens
+    socket.open();
+    expect(socket.sent).toHaveLength(1);
+
+    const sent = JSON.parse(socket.sent[0]!) as { body: { step: number }; id: string };
+    expect(sent.body.step).toBe(3);
+
+    socket.serverMessage(
+      JSON.stringify({
+        id: sent.id,
+        result: { ok: true },
+      }),
+    );
+
+    await expect(third).resolves.toEqual({ ok: true });
+    transport.dispose();
+  });
+
+  it("supports request cancellation via AbortSignal without leaking pending requests", async () => {
+    const transport = new WsTransport("ws://localhost:3020");
+    const socket = getSocket();
+    const controller = new AbortController();
+
+    const requestPromise = transport.request(
+      "server.reportClientActivity",
+      {},
+      { signal: controller.signal },
+    );
+
+    controller.abort();
+    await expect(requestPromise).rejects.toThrow("Request aborted");
+
+    socket.open();
+    expect(socket.sent).toHaveLength(0);
+
+    transport.dispose();
+  });
+
+  it("times out slow requests at bounded timeoutMs and removes them from queue", async () => {
+    vi.useFakeTimers();
+    const transport = new WsTransport("ws://localhost:3020");
+    const socket = getSocket();
+
+    const requestPromise = transport.request(
+      "server.reportClientActivity",
+      {},
+      { timeoutMs: 5_000 },
+    );
+
+    const assertion = expect(requestPromise).rejects.toThrow(
+      "Request timed out: server.reportClientActivity",
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+    await assertion;
+
+    socket.open();
+    expect(socket.sent).toHaveLength(0);
+
+    transport.dispose();
+    vi.useRealTimers();
+  });
 });

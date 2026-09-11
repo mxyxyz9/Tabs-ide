@@ -74,3 +74,57 @@ it.effect("removes every lease owned by a disconnected RPC client", () =>
     expect((yield* policy.snapshot).leases).toHaveLength(0);
   }),
 );
+
+it.effect("bounds client-id churn for one websocket connection", () =>
+  Effect.gen(function* () {
+    const policy = yield* makePolicy;
+    const sessionId = AuthSessionId.make("session-1");
+    const rpcClientId = RpcClientId.make(1);
+    const now = yield* DateTime.now;
+    for (let index = 0; index <= 20; index += 1) {
+      yield* policy.reportClientActivity(sessionId, rpcClientId, {
+        clientId: `client-${index}`,
+        clientKind: "web",
+        visible: true,
+        focused: true,
+        recentlyInteracted: true,
+        scopes: [{ type: "provider-status" }],
+        observedAt: now,
+      });
+    }
+
+    const snapshot = yield* policy.snapshot;
+    expect(snapshot.leases).toHaveLength(16);
+    expect(snapshot.leases.some((lease) => lease.clientId === "client-20")).toBe(true);
+    // Oldest should have been pruned
+    expect(snapshot.leases.some((lease) => lease.clientId === "client-0")).toBe(false);
+  }),
+);
+
+it.effect("coalesces and handles concurrent activity reports safely", () =>
+  Effect.gen(function* () {
+    const policy = yield* makePolicy;
+    const sessionId = AuthSessionId.make("session-1");
+    const rpcClientId = RpcClientId.make(1);
+    const now = yield* DateTime.now;
+
+    yield* Effect.all(
+      Array.from({ length: 10 }, (_, index) =>
+        policy.reportClientActivity(sessionId, rpcClientId, {
+          clientId: `concurrent-client`,
+          clientKind: "web",
+          visible: true,
+          focused: index % 2 === 0,
+          recentlyInteracted: true,
+          scopes: [{ type: "provider-status" }],
+          observedAt: now,
+        }),
+      ),
+      { concurrency: "unbounded" },
+    );
+
+    const snapshot = yield* policy.snapshot;
+    expect(snapshot.leases).toHaveLength(1);
+    expect(snapshot.leases[0]?.clientId).toBe("concurrent-client");
+  }),
+);

@@ -16,14 +16,28 @@ interface PendingRequest {
   resolve: (result: unknown) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout> | null;
+  method: string;
+  queuedAt: number;
+  sentAt: number | null;
+  coalesceKey?: string | undefined;
+  onAbort?: (() => void) | undefined;
 }
 
 interface SubscribeOptions {
-  readonly replayLatest?: boolean;
+  readonly replayLatest?: boolean | undefined;
 }
 
-interface RequestOptions {
-  readonly timeoutMs?: number | null;
+export interface RequestOptions {
+  readonly timeoutMs?: number | null | undefined;
+  readonly coalesceKey?: string | undefined;
+  readonly signal?: AbortSignal | undefined;
+}
+
+interface QueuedOutboundMessage {
+  readonly id: string;
+  readonly method: string;
+  readonly encoded: string;
+  readonly coalesceKey?: string | undefined;
 }
 
 export interface WsTransportOptions {
@@ -77,7 +91,7 @@ export class WsTransport {
   private readonly listeners = new Map<string, Set<(message: WsPush) => void>>();
   private readonly latestPushByChannel = new Map<string, WsPush>();
   private readonly openListeners = new Set<() => void>();
-  private readonly outboundQueue: string[] = [];
+  private readonly outboundQueue: QueuedOutboundMessage[] = [];
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectionTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,6 +144,10 @@ export class WsTransport {
       throw new Error("Request method is required");
     }
 
+    if (options?.signal?.aborted) {
+      throw new Error("Request aborted");
+    }
+
     const id = String(this.nextId++);
     const body = params != null ? { ...params, _tag: method } : { _tag: method };
     const message: WsRequestEnvelope = { id, body };
@@ -142,19 +160,44 @@ export class WsTransport {
           ? null
           : setTimeout(() => {
               this.pending.delete(id);
+              this.removeFromOutboundQueue(id);
               acknowledgeRpcRequest(id);
               reject(new Error(`Request timed out: ${method}`));
             }, timeoutMs);
 
-      this.pending.set(id, {
+      const pendingEntry: PendingRequest = {
         resolve: resolve as (result: unknown) => void,
         reject,
         timeout,
+        method,
+        queuedAt: Date.now(),
+        sentAt: null,
+      };
+
+      if (options?.signal) {
+        const onAbort = () => {
+          if (timeout !== null) clearTimeout(timeout);
+          this.pending.delete(id);
+          this.removeFromOutboundQueue(id);
+          acknowledgeRpcRequest(id);
+          reject(new Error("Request aborted"));
+        };
+        options.signal.addEventListener("abort", onAbort, { once: true });
+        pendingEntry.onAbort = () => options.signal?.removeEventListener("abort", onAbort);
+      }
+
+      this.pending.set(id, pendingEntry);
+
+      if (timeoutMs !== null) {
+        trackRpcRequest(id, method, () => (pendingEntry.sentAt ? "in-flight" : "transport-queued"));
+      }
+
+      this.send({
+        id,
+        method,
+        encoded,
+        coalesceKey: options?.coalesceKey,
       });
-
-      if (timeoutMs !== null) trackRpcRequest(id, method);
-
-      this.send(encoded);
     });
   }
 
@@ -234,6 +277,7 @@ export class WsTransport {
       if (pending.timeout !== null) {
         clearTimeout(pending.timeout);
       }
+      pending.onAbort?.();
       pending.reject(new Error("Transport disposed"));
     }
     for (const id of this.pending.keys()) acknowledgeRpcRequest(id);
@@ -337,6 +381,7 @@ export class WsTransport {
           if (pending.timeout !== null) {
             clearTimeout(pending.timeout);
           }
+          pending.onAbort?.();
           this.pending.delete(id);
           acknowledgeRpcRequest(id);
           pending.reject(new Error("WebSocket connection closed."));
@@ -398,6 +443,7 @@ export class WsTransport {
     if (pending.timeout !== null) {
       clearTimeout(pending.timeout);
     }
+    pending.onAbort?.();
     this.pending.delete(message.id);
     acknowledgeRpcRequest(message.id);
 
@@ -416,16 +462,41 @@ export class WsTransport {
     pending.resolve(message.result);
   }
 
-  private send(encodedMessage: string) {
+  private send(queuedMessage: QueuedOutboundMessage) {
     if (this.disposed) {
       return;
     }
 
-    this.outboundQueue.push(encodedMessage);
+    if (queuedMessage.coalesceKey) {
+      const existingIdx = this.outboundQueue.findIndex(
+        (msg) => msg.coalesceKey === queuedMessage.coalesceKey,
+      );
+      if (existingIdx !== -1) {
+        const existing = this.outboundQueue[existingIdx]!;
+        this.outboundQueue.splice(existingIdx, 1);
+        const oldPending = this.pending.get(existing.id);
+        if (oldPending) {
+          if (oldPending.timeout !== null) clearTimeout(oldPending.timeout);
+          oldPending.onAbort?.();
+          this.pending.delete(existing.id);
+          acknowledgeRpcRequest(existing.id);
+          oldPending.resolve(undefined);
+        }
+      }
+    }
+
+    this.outboundQueue.push(queuedMessage);
     try {
       this.flushQueue();
     } catch {
       // Swallow: flushQueue has queued the message for retry on reconnect
+    }
+  }
+
+  private removeFromOutboundQueue(id: string) {
+    const idx = this.outboundQueue.findIndex((item) => item.id === id);
+    if (idx !== -1) {
+      this.outboundQueue.splice(idx, 1);
     }
   }
 
@@ -440,7 +511,11 @@ export class WsTransport {
         continue;
       }
       try {
-        this.ws.send(message);
+        const pending = this.pending.get(message.id);
+        if (pending) {
+          pending.sentAt = Date.now();
+        }
+        this.ws.send(message.encoded);
       } catch (error) {
         this.outboundQueue.unshift(message);
         throw asError(error, "Failed to send WebSocket request.");

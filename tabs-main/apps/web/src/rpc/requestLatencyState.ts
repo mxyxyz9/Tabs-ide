@@ -9,16 +9,13 @@ export interface SlowRpcRequest {
   readonly method: string;
   readonly startedAt: number;
   readonly thresholdMs: number;
+  readonly phase?: "transport-queued" | "in-flight";
 }
 
 const longRunningMethods = new Set([
   "server.updateProvider",
   "server.refreshProviders",
   "server.updateServer",
-]);
-const backgroundHeartbeatMethods = new Set([
-  "server.reportClientActivity",
-  "server.reportHostPowerState",
 ]);
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
 let slowRequests: ReadonlyArray<SlowRpcRequest> = [];
@@ -28,13 +25,12 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
-export function trackRpcRequest(requestId: string, method: string): void {
-  if (
-    method.includes("subscribe") ||
-    method.startsWith("pullRequests.") ||
-    backgroundHeartbeatMethods.has(method)
-  )
-    return;
+export function trackRpcRequest(
+  requestId: string,
+  method: string,
+  getPhase?: () => "transport-queued" | "in-flight",
+): void {
+  if (method.includes("subscribe") || method.startsWith("pullRequests.")) return;
   acknowledgeRpcRequest(requestId);
   while (pending.size >= MAX_TRACKED_REQUESTS) {
     const oldest = pending.keys().next().value;
@@ -49,8 +45,14 @@ export function trackRpcRequest(requestId: string, method: string): void {
     requestId,
     setTimeout(() => {
       pending.delete(requestId);
-      slowRequests = [...slowRequests, { requestId, method, startedAt, thresholdMs }].slice(
-        -MAX_TRACKED_REQUESTS,
+      const phase = getPhase ? getPhase() : undefined;
+      slowRequests = [
+        ...slowRequests,
+        { requestId, method, startedAt, thresholdMs, ...(phase ? { phase } : {}) },
+      ].slice(-MAX_TRACKED_REQUESTS);
+      console.warn(
+        `[RPC Latency] Request ${method} (${requestId}) waiting longer than ${Math.round(thresholdMs / 1000)}s`,
+        { phase, startedAt },
       );
       emit();
     }, thresholdMs),

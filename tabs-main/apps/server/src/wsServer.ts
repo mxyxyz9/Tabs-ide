@@ -148,6 +148,7 @@ import { PreviewAutomationBroker } from "./mcp/PreviewAutomationBroker.ts";
 import { handleMcpHttpRequest } from "./mcp/McpHttpServer.ts";
 import { resolveActiveMcpCredential } from "./mcp/McpSessionRegistry.ts";
 import { SessionStore } from "./auth/SessionStore.ts";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import { verifyDpopRequestFields } from "./auth/dpop.ts";
 import { ServerSecretStore } from "./auth/ServerSecretStore.ts";
@@ -2510,7 +2511,18 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       });
     }
 
+    const startedAt = yield* Clock.currentTimeNanos;
     const result = yield* Effect.exit(routeRequest(ws, request.success));
+    const endedAt = yield* Clock.currentTimeNanos;
+    const elapsedNanos = endedAt > startedAt ? endedAt - startedAt : 0n;
+    const durationMs = Number(elapsedNanos / 1_000_000n);
+    const methodTag = (request.success.body as { _tag?: string })?._tag ?? "unknown";
+
+    if (durationMs > 5_000) {
+      yield* Effect.logWarning(
+        `Slow RPC handler: ${methodTag} took ${durationMs}ms (id: ${request.success.id})`,
+      );
+    }
     if (Exit.isFailure(result)) {
       const failure = Cause.findErrorOption(result.cause);
       const errVal: any =
