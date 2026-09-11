@@ -1716,9 +1716,9 @@ describe("ProviderCommandReactor", () => {
     await waitFor(async () => {
       const rm = await Effect.runPromise(harness.engine.getReadModel());
       const t = rm.threads.find((entry) => entry.id === threadId);
-      return (
+      return Boolean(
         t?.activities.some((a) => a.summary === "Context compaction failed") &&
-        t?.activities.some((a) => a.summary === "Queued message was not sent")
+        t?.activities.some((a) => a.summary === "Queued message was not sent"),
       );
     });
     await harness.drain();

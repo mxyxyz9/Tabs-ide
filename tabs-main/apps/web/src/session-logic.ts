@@ -60,6 +60,7 @@ export interface WorkLogEntry {
   toolTitle?: string;
   itemType?: ToolLifecycleItemType;
   requestKind?: PendingApproval["requestKind"];
+  toolCallId?: string;
   // Task lifecycle fields
   taskId?: string;
   taskStatus?: "started" | "running" | "completed" | "failed" | "stopped";
@@ -525,6 +526,18 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
   return typeof payload?.detail === "string" && payload.detail.startsWith("ExitPlanMode:");
 }
 
+const MAX_WORK_LOG_DETAIL_LENGTH = 32_768;
+
+function boundToolDetail(detail: string): string {
+  if (detail.length <= MAX_WORK_LOG_DETAIL_LENGTH) {
+    return detail;
+  }
+  const headLength = 16_384;
+  const tailLength = 8_192;
+  const omittedChars = detail.length - headLength - tailLength;
+  return `${detail.slice(0, headLength)}\n\n... [${omittedChars.toLocaleString()} characters omitted for performance] ...\n\n${detail.slice(-tailLength)}`;
+}
+
 function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
   const payload =
     activity.payload && typeof activity.payload === "object"
@@ -545,7 +558,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   if (payload && typeof payload.detail === "string" && payload.detail.length > 0) {
     const detail = stripTrailingExitCode(payload.detail).output;
     if (detail) {
-      entry.detail = detail;
+      entry.detail = boundToolDetail(detail);
     }
   }
   if (command) {
@@ -584,6 +597,17 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   if (payload && payload.usage !== undefined) {
     entry.usage = payload.usage;
   }
+  const payloadData =
+    payload && typeof payload.data === "object" && payload.data !== null
+      ? (payload.data as Record<string, unknown>)
+      : null;
+  const toolCallId =
+    (typeof payload?.toolCallId === "string" && payload.toolCallId.trim()) ||
+    (typeof payloadData?.toolCallId === "string" && payloadData.toolCallId.trim()) ||
+    undefined;
+  if (toolCallId) {
+    entry.toolCallId = toolCallId;
+  }
   const collapseKey = deriveToolLifecycleCollapseKey(entry);
   if (collapseKey) {
     entry.collapseKey = collapseKey;
@@ -595,13 +619,37 @@ function collapseDerivedWorkLogEntries(
   entries: ReadonlyArray<DerivedWorkLogEntry>,
 ): DerivedWorkLogEntry[] {
   const collapsed: DerivedWorkLogEntry[] = [];
+  const inFlightIndexByKey = new Map<string, number>();
+
   for (const entry of entries) {
+    // 1. Check if an active in-flight tool entry with the same collapseKey exists
+    if (entry.collapseKey && inFlightIndexByKey.has(entry.collapseKey)) {
+      const existingIndex = inFlightIndexByKey.get(entry.collapseKey)!;
+      const existing = collapsed[existingIndex]!;
+      if (existing.activityKind !== "tool.completed") {
+        collapsed[existingIndex] = mergeDerivedWorkLogEntries(existing, entry);
+        if (entry.activityKind === "tool.completed") {
+          inFlightIndexByKey.delete(entry.collapseKey);
+        }
+        continue;
+      }
+    }
+
+    // 2. Check if the immediately preceding entry can be collapsed
     const previous = collapsed.at(-1);
     if (previous && shouldCollapseToolLifecycleEntries(previous, entry)) {
       collapsed[collapsed.length - 1] = mergeDerivedWorkLogEntries(previous, entry);
+      if (entry.activityKind === "tool.completed" && previous.collapseKey) {
+        inFlightIndexByKey.delete(previous.collapseKey);
+      }
       continue;
     }
+
+    // 3. Otherwise append entry and track if in-flight
     collapsed.push(entry);
+    if (entry.collapseKey && entry.activityKind !== "tool.completed") {
+      inFlightIndexByKey.set(entry.collapseKey, collapsed.length - 1);
+    }
   }
   return collapsed;
 }
@@ -619,6 +667,12 @@ function shouldCollapseToolLifecycleEntries(
   if (previous.activityKind === "tool.completed") {
     return false;
   }
+  if (previous.toolCallId && next.toolCallId) {
+    return previous.toolCallId === next.toolCallId;
+  }
+  if (previous.taskId && next.taskId) {
+    return previous.taskId === next.taskId;
+  }
   return previous.collapseKey !== undefined && previous.collapseKey === next.collapseKey;
 }
 
@@ -633,6 +687,12 @@ function mergeDerivedWorkLogEntries(
   const itemType = next.itemType ?? previous.itemType;
   const requestKind = next.requestKind ?? previous.requestKind;
   const collapseKey = next.collapseKey ?? previous.collapseKey;
+  const toolCallId = next.toolCallId ?? previous.toolCallId;
+  const taskId = next.taskId ?? previous.taskId;
+  const taskStatus = next.taskStatus ?? previous.taskStatus;
+  const taskType = next.taskType ?? previous.taskType;
+  const toolName = next.toolName ?? previous.toolName;
+  const usage = next.usage ?? previous.usage;
   return {
     ...previous,
     ...next,
@@ -643,6 +703,12 @@ function mergeDerivedWorkLogEntries(
     ...(itemType ? { itemType } : {}),
     ...(requestKind ? { requestKind } : {}),
     ...(collapseKey ? { collapseKey } : {}),
+    ...(toolCallId ? { toolCallId } : {}),
+    ...(taskId ? { taskId } : {}),
+    ...(taskStatus ? { taskStatus } : {}),
+    ...(taskType ? { taskType } : {}),
+    ...(toolName ? { toolName } : {}),
+    ...(usage !== undefined ? { usage } : {}),
   };
 }
 
@@ -660,6 +726,12 @@ function mergeChangedFiles(
 function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | undefined {
   if (entry.activityKind !== "tool.updated" && entry.activityKind !== "tool.completed") {
     return undefined;
+  }
+  if (entry.toolCallId) {
+    return `call:${entry.toolCallId}`;
+  }
+  if (entry.taskId) {
+    return `task:${entry.taskId}`;
   }
   const normalizedLabel = normalizeCompactToolLabel(entry.toolTitle ?? entry.label);
   const detail = entry.detail?.trim() ?? "";

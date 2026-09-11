@@ -926,6 +926,97 @@ describe("deriveWorkLogEntries", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.id).toBe("a-complete-same-timestamp");
   });
+
+  it("collapses interleaved parallel tool updates by stable toolCallId without fragmenting rows", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "tool-a-1",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "tool.updated",
+        summary: "Tool A running",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "Tool A",
+          toolCallId: "call-a",
+          detail: "step 1",
+        },
+      }),
+      makeActivity({
+        id: "tool-b-1",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "tool.updated",
+        summary: "Tool B running",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "Tool B",
+          toolCallId: "call-b",
+          detail: "fetching",
+        },
+      }),
+      makeActivity({
+        id: "tool-a-2",
+        createdAt: "2026-02-23T00:00:03.000Z",
+        kind: "tool.updated",
+        summary: "Tool A progress",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "Tool A",
+          toolCallId: "call-a",
+          detail: "step 2",
+        },
+      }),
+      makeActivity({
+        id: "tool-b-complete",
+        createdAt: "2026-02-23T00:00:04.000Z",
+        kind: "tool.completed",
+        summary: "Tool B complete",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "Tool B",
+          toolCallId: "call-b",
+          detail: "fetched",
+        },
+      }),
+      makeActivity({
+        id: "tool-a-complete",
+        createdAt: "2026-02-23T00:00:05.000Z",
+        kind: "tool.completed",
+        summary: "Tool A complete",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "Tool A",
+          toolCallId: "call-a",
+          detail: "done",
+        },
+      }),
+    ];
+
+    const entries = deriveWorkLogEntries(activities, undefined);
+    expect(entries).toHaveLength(2);
+    expect(entries.map((e) => e.id)).toEqual(["tool-a-complete", "tool-b-complete"]);
+    expect(entries[0]?.detail).toBe("done");
+    expect(entries[1]?.detail).toBe("fetched");
+  });
+
+  it("bounds enormous tool output to retain responsiveness during large streaming output", () => {
+    const hugeOutput = "x".repeat(50_000);
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "tool-huge",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "tool.completed",
+        summary: "Command execution",
+        payload: {
+          itemType: "command_execution",
+          detail: hugeOutput,
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry?.detail?.length).toBeLessThan(hugeOutput.length);
+    expect(entry?.detail).toContain("characters omitted for performance");
+  });
 });
 
 describe("deriveTimelineEntries", () => {
