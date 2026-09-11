@@ -483,6 +483,10 @@ export const makeBitbucketPullRequestApi = Effect.sync(() => {
             return request("resolve", `${root}/comments/${input.threadId ?? ""}/resolve`, {
               method: "POST",
             }).pipe(Effect.asVoid);
+          case "unresolve_thread":
+            return request("unresolve", `${root}/comments/${input.threadId ?? ""}/resolve`, {
+              method: "DELETE",
+            }).pipe(Effect.asVoid);
           default:
             return Effect.fail(
               new BitbucketApiError({

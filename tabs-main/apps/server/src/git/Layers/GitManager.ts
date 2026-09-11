@@ -360,6 +360,7 @@ const GITHUB_PULL_REQUEST_CAPABILITIES = {
     "inline_comment",
     "reply_to_thread",
     "resolve_thread",
+    "unresolve_thread",
     "add_reaction",
     "remove_reaction",
   ] as const,
@@ -386,6 +387,7 @@ const GITLAB_PULL_REQUEST_CAPABILITIES = {
     "inline_comment",
     "reply_to_thread",
     "resolve_thread",
+    "unresolve_thread",
     "add_reaction",
     "remove_reaction",
   ] as const,
@@ -427,6 +429,7 @@ const BITBUCKET_PULL_REQUEST_CAPABILITIES = {
     "inline_comment",
     "reply_to_thread",
     "resolve_thread",
+    "unresolve_thread",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
@@ -1375,7 +1378,7 @@ export const makeGitManager = Effect.gen(function* () {
           "Inline comments require a file path and positive line number.",
         );
       }
-      if (["reply_to_thread", "resolve_thread"].includes(input.action) && !input.threadId?.trim()) {
+      if (["reply_to_thread", "resolve_thread", "unresolve_thread"].includes(input.action) && !input.threadId?.trim()) {
         return yield* gitManagerError("mutatePullRequest", `${input.action} requires a thread id.`);
       }
       if (

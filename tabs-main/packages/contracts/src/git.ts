@@ -857,6 +857,7 @@ export const GitPullRequestAction = Schema.Literals([
   "inline_comment",
   "reply_to_thread",
   "resolve_thread",
+  "unresolve_thread",
   "add_reaction",
   "remove_reaction",
 ]);

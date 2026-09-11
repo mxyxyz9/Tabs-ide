@@ -769,6 +769,18 @@ const makeGitHubCli = Effect.sync(() => {
               `threadId=${input.threadId ?? ""}`,
             ],
           }).pipe(Effect.asVoid);
+        case "unresolve_thread":
+          return execute({
+            cwd: input.cwd,
+            args: [
+              "api",
+              "graphql",
+              "-f",
+              "query=mutation($threadId: ID!) { unresolveReviewThread(input: {threadId: $threadId}) { thread { id isResolved } } }",
+              "-F",
+              `threadId=${input.threadId ?? ""}`,
+            ],
+          }).pipe(Effect.asVoid);
         case "add_reaction":
         case "remove_reaction":
           return execute({

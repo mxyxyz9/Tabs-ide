@@ -503,13 +503,14 @@ export const makeGitLabCli = Effect.sync(() => {
           ];
           break;
         case "resolve_thread":
+        case "unresolve_thread":
           args = [
             "api",
             "--method",
             "PUT",
             `projects/:fullpath/merge_requests/${reference}/discussions/${input.threadId ?? ""}`,
             "--field",
-            "resolved=true",
+            `resolved=${input.action === "resolve_thread"}`,
           ];
           break;
         case "add_reaction":

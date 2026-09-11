@@ -1,7 +1,9 @@
 import {
+  ArrowUpDown,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Filter,
   GitCommit,
   FileDiff,
   GitMerge,
@@ -9,12 +11,14 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  Search,
   Sparkles,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
-import type { GitPullRequestAction } from "@tabs/contracts";
+import type { GitPullRequestAction, GitPullRequestReviewThread } from "@tabs/contracts";
+import { PullRequestReviewThreadCard } from "./PullRequestReviewThreadCard";
 
 import {
   gitAllPullRequestsQueryOptions,
@@ -163,6 +167,8 @@ export function PRsPanel({
   const [listLimit, setListLimit] = useState(50);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [fileSearchQuery, setFileSearchQuery] = useState("");
+  const [fileSortMode, setFileSortMode] = useState<"path" | "additions" | "deletions" | "status">("path");
 
   // Query 1: Branch PR query
   const branchPrQuery = useQuery(
@@ -183,6 +189,42 @@ export function PRsPanel({
       reference: expandedPrNumber === null ? null : String(expandedPrNumber),
       environmentId,
     }),
+  );
+
+  const handleFixInThread = useCallback(
+    (thread: GitPullRequestReviewThread) => {
+      const firstComment = thread.comments[0]?.body ?? "";
+      const prompt = `Please fix the issue identified in this pull request review comment on ${thread.path} line ${thread.line}:\n\n> ${firstComment}`;
+      void navigator.clipboard?.writeText(prompt);
+      const pr = detailQuery.data?.pullRequest;
+      if (pr) {
+        const linked = findThreadsForPullRequest(threads, {
+          number: pr.number,
+          url: pr.url,
+        });
+        const target = linked[0];
+        if (target) {
+          if (target.environmentId) {
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: {
+                environmentId: target.environmentId,
+                threadId: target.id,
+              },
+            });
+            return;
+          } else {
+            void navigate({
+              to: "/$threadId",
+              params: { threadId: target.id },
+            });
+            return;
+          }
+        }
+      }
+      void navigate({ to: "/" });
+    },
+    [detailQuery.data?.pullRequest, threads, navigate],
   );
 
   const activeQuery = viewMode === "branch" ? branchPrQuery : allPrsQuery;
@@ -959,18 +1001,41 @@ export function PRsPanel({
                                 ))}
                               </div>
                             ) : null}
-                          </div>
-                        ) : detailTab === "code" ? (
+                            </div>
+                          ) : detailTab === "code" ? (
                           (() => {
-                            const files = detailQuery.data.pullRequest.files ?? [];
+                            const allFiles = detailQuery.data.pullRequest.files ?? [];
+                            const reviewThreads = detailQuery.data.pullRequest.reviewThreads ?? [];
+
+                            // Filter and sort changed files
+                            const filteredAndSortedFiles = (() => {
+                              let result = allFiles;
+                              if (fileSearchQuery.trim()) {
+                                const q = fileSearchQuery.toLowerCase();
+                                result = result.filter((f) => f.path.toLowerCase().includes(q));
+                              }
+                              return [...result].sort((a, b) => {
+                                if (fileSortMode === "additions") return (b.additions ?? 0) - (a.additions ?? 0);
+                                if (fileSortMode === "deletions") return (b.deletions ?? 0) - (a.deletions ?? 0);
+                                if (fileSortMode === "status") return a.status.localeCompare(b.status);
+                                return a.path.localeCompare(b.path);
+                              });
+                            })();
+
                             const selectedFile =
-                              files.find((file) => file.path === selectedFilePath) ?? files[0];
-                            const selectedThreads = (
-                              detailQuery.data.pullRequest.reviewThreads ?? []
-                            ).filter((thread) => thread.path === selectedFile?.path);
+                              filteredAndSortedFiles.find((file) => file.path === selectedFilePath) ??
+                              allFiles.find((file) => file.path === selectedFilePath) ??
+                              filteredAndSortedFiles[0] ??
+                              allFiles[0];
+
+                            const selectedThreads = reviewThreads.filter(
+                              (thread) => thread.path === selectedFile?.path,
+                            );
+
                             const patchLines = selectedFile?.patch
                               ? parseUnifiedDiff(selectedFile.patch)
                               : [];
+
                             if (!selectedFile) {
                               return (
                                 <p className="text-muted-foreground">
@@ -978,46 +1043,128 @@ export function PRsPanel({
                                 </p>
                               );
                             }
+
+                            // Keep track of which thread IDs were rendered against specific diff lines
+                            const renderedThreadIds = new Set<string>();
+
                             return (
-                              <div className="grid min-h-72 gap-3 md:grid-cols-[minmax(12rem,0.32fr)_minmax(0,1fr)]">
+                              <div className="grid min-h-72 gap-3 md:grid-cols-[minmax(13rem,0.32fr)_minmax(0,1fr)]">
+                                {/* Changed Files Sidebar with Search & Sort */}
                                 <div
-                                  className="max-h-96 overflow-auto rounded-md border border-border/70 bg-background"
+                                  className="flex max-h-[32rem] flex-col overflow-hidden rounded-md border border-border/70 bg-background"
                                   aria-label="Changed files"
                                 >
-                                  {files.map((file) => (
-                                    <button
-                                      key={file.path}
-                                      type="button"
-                                      aria-current={
-                                        selectedFile.path === file.path ? "true" : undefined
-                                      }
-                                      className={`flex w-full items-start justify-between gap-2 border-b border-border/50 px-2.5 py-2 text-left last:border-b-0 ${
-                                        selectedFile.path === file.path
-                                          ? "bg-accent text-accent-foreground"
-                                          : "hover:bg-muted/40"
-                                      }`}
-                                      onClick={() => {
-                                        setSelectedFilePath(file.path);
-                                        setInlineLine("");
-                                      }}
-                                    >
-                                      <span className="min-w-0 break-all font-mono text-[11px]">
-                                        {file.path}
-                                      </span>
-                                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                                        <span className="text-emerald-600">+{file.additions}</span>{" "}
-                                        <span className="text-red-600">−{file.deletions}</span>
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                                <div className="min-w-0 overflow-hidden rounded-md border border-border/70 bg-background">
-                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
-                                    <span className="break-all font-mono text-[11px] font-medium">
-                                      {selectedFile.path}
-                                    </span>
-                                    <Badge variant="outline">{selectedFile.status}</Badge>
+                                  {/* Filter & Sort Bar */}
+                                  <div className="border-b border-border/60 bg-muted/20 p-2 space-y-1.5">
+                                    <div className="relative">
+                                      <Search className="pointer-events-none absolute left-2 top-2 size-3 text-muted-foreground" />
+                                      <input
+                                        type="text"
+                                        value={fileSearchQuery}
+                                        onChange={(e) => setFileSearchQuery(e.target.value)}
+                                        placeholder="Filter files…"
+                                        aria-label="Filter changed files"
+                                        className="h-7 w-full rounded border border-border/70 bg-background pl-7 pr-2 text-[11px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+                                      <div className="flex items-center gap-1">
+                                        <ArrowUpDown className="size-3" />
+                                        <span>Sort:</span>
+                                      </div>
+                                      <select
+                                        value={fileSortMode}
+                                        onChange={(e) => setFileSortMode(e.target.value as any)}
+                                        aria-label="Sort changed files"
+                                        className="rounded border border-border/60 bg-background px-1 py-0.5 text-[10px]"
+                                      >
+                                        <option value="path">Path (A-Z)</option>
+                                        <option value="additions">Most additions</option>
+                                        <option value="deletions">Most deletions</option>
+                                        <option value="status">Status</option>
+                                      </select>
+                                    </div>
                                   </div>
+
+                                  {/* Files List */}
+                                  <div className="flex-1 overflow-auto">
+                                    {filteredAndSortedFiles.length === 0 ? (
+                                      <p className="p-3 text-center text-[11px] text-muted-foreground">
+                                        No files match &quot;{fileSearchQuery}&quot;
+                                      </p>
+                                    ) : (
+                                      filteredAndSortedFiles.map((file) => {
+                                        const fileThreads = reviewThreads.filter((t) => t.path === file.path);
+                                        const unresolvedThreads = fileThreads.filter((t) => !t.resolved);
+                                        const isSelected = selectedFile.path === file.path;
+
+                                        return (
+                                          <button
+                                            key={file.path}
+                                            type="button"
+                                            aria-current={isSelected ? "true" : undefined}
+                                            className={`flex w-full items-start justify-between gap-2 border-b border-border/40 px-2.5 py-2 text-left last:border-b-0 transition-colors ${
+                                              isSelected
+                                                ? "bg-accent text-accent-foreground font-medium"
+                                                : "hover:bg-muted/40 text-foreground"
+                                            }`}
+                                            onClick={() => {
+                                              setSelectedFilePath(file.path);
+                                              setInlineLine("");
+                                            }}
+                                          >
+                                            <div className="min-w-0 flex-1">
+                                              <p className="break-all font-mono text-[11px] leading-tight">
+                                                {file.path}
+                                              </p>
+                                              <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                                                <Badge
+                                                  variant="outline"
+                                                  className="px-1 py-0 text-[9px] font-normal"
+                                                >
+                                                  {file.status}
+                                                </Badge>
+                                                {fileThreads.length > 0 ? (
+                                                  <span
+                                                    className={`flex items-center gap-0.5 rounded px-1 text-[9px] font-medium ${
+                                                      unresolvedThreads.length > 0
+                                                        ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                                                        : "bg-muted text-muted-foreground"
+                                                    }`}
+                                                    title={`${fileThreads.length} discussion${fileThreads.length === 1 ? "" : "s"} (${unresolvedThreads.length} unresolved)`}
+                                                  >
+                                                    <MessageSquare className="size-2.5" />
+                                                    {fileThreads.length}
+                                                  </span>
+                                                ) : null}
+                                              </div>
+                                            </div>
+                                            <span className="shrink-0 text-[10px]">
+                                              <span className="text-emerald-600">+{file.additions}</span>{" "}
+                                              <span className="text-red-600">−{file.deletions}</span>
+                                            </span>
+                                          </button>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Diff and In-place Annotations View */}
+                                <div className="min-w-0 overflow-hidden rounded-md border border-border/70 bg-background">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-muted/20 px-3 py-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="break-all font-mono text-[11px] font-semibold">
+                                        {selectedFile.path}
+                                      </span>
+                                      <Badge variant="outline">{selectedFile.status}</Badge>
+                                    </div>
+                                    <span className="text-[11px] text-muted-foreground">
+                                      <span className="text-emerald-600 font-medium">+{selectedFile.additions}</span>{" "}
+                                      <span className="text-red-600 font-medium">−{selectedFile.deletions}</span>
+                                    </span>
+                                  </div>
+
                                   {selectedFile.patch === null ? (
                                     <p className="p-4 text-muted-foreground">
                                       No textual patch is available. The file may be binary or the
@@ -1027,285 +1174,237 @@ export function PRsPanel({
                                     <div
                                       tabIndex={0}
                                       aria-label={`Patch for ${selectedFile.path}`}
-                                      className="max-h-96 overflow-auto font-mono text-[11px] leading-5"
+                                      className="max-h-[32rem] overflow-auto font-mono text-[11px] leading-5"
                                     >
-                                      {patchLines.map((line) => (
-                                        <div
-                                          key={line.key}
-                                          className={`grid grid-cols-[2.5rem_2.5rem_minmax(max-content,1fr)] whitespace-pre ${
-                                            line.kind === "addition"
-                                              ? "bg-emerald-500/10"
-                                              : line.kind === "deletion"
-                                                ? "bg-red-500/10"
-                                                : line.kind === "header"
-                                                  ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                                                  : ""
-                                          }`}
-                                        >
-                                          {(["left", "right"] as const).map((side) => {
-                                            const lineNumber =
-                                              side === "left" ? line.oldLine : line.newLine;
-                                            return lineNumber &&
-                                              supportsAction("inline_comment") ? (
-                                              <button
-                                                key={side}
-                                                type="button"
-                                                className="border-r border-border/40 px-1 text-right text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:z-10"
-                                                aria-label={`Comment on ${side === "left" ? "original" : "new"} line ${lineNumber}`}
-                                                onClick={() => {
-                                                  setInlineSide(side);
-                                                  setInlineLine(String(lineNumber));
-                                                }}
-                                              >
-                                                {lineNumber}
-                                              </button>
-                                            ) : (
-                                              <span
-                                                key={side}
-                                                aria-hidden="true"
-                                                className="border-r border-border/40 px-1 text-right text-muted-foreground"
-                                              >
-                                                {lineNumber ?? ""}
-                                              </span>
-                                            );
-                                          })}
-                                          <span className="px-2">{line.text || " "}</span>
-                                        </div>
-                                      ))}
+                                      {patchLines.map((line) => {
+                                        const isInlineCommentOpen =
+                                          inlineLine &&
+                                          ((inlineSide === "right" && line.newLine && String(line.newLine) === inlineLine) ||
+                                            (inlineSide === "left" && line.oldLine && String(line.oldLine) === inlineLine));
+
+                                        // Find threads that attach directly to this line
+                                        const lineThreads = selectedThreads.filter((t) => {
+                                          if (t.side === "right" && line.newLine && t.line === line.newLine) {
+                                            renderedThreadIds.add(t.id);
+                                            return true;
+                                          }
+                                          if (t.side === "left" && line.oldLine && t.line === line.oldLine) {
+                                            renderedThreadIds.add(t.id);
+                                            return true;
+                                          }
+                                          return false;
+                                        });
+
+                                        return (
+                                          <div key={line.key} className="border-b border-border/20 last:border-b-0">
+                                            {/* Code line row */}
+                                            <div
+                                              className={`grid grid-cols-[2.5rem_2.5rem_minmax(max-content,1fr)] whitespace-pre ${
+                                                line.kind === "addition"
+                                                  ? "bg-emerald-500/10"
+                                                  : line.kind === "deletion"
+                                                    ? "bg-red-500/10"
+                                                    : line.kind === "header"
+                                                      ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold"
+                                                      : ""
+                                              }`}
+                                            >
+                                              {(["left", "right"] as const).map((side) => {
+                                                const lineNumber = side === "left" ? line.oldLine : line.newLine;
+                                                return lineNumber && supportsAction("inline_comment") ? (
+                                                  <button
+                                                    key={side}
+                                                    type="button"
+                                                    className="border-r border-border/40 px-1 text-right text-muted-foreground hover:bg-primary/20 hover:text-primary focus-visible:z-10 cursor-pointer"
+                                                    aria-label={`Comment on ${side === "left" ? "original" : "new"} line ${lineNumber}`}
+                                                    title={`Click to comment on line ${lineNumber}`}
+                                                    onClick={() => {
+                                                      if (inlineLine === String(lineNumber) && inlineSide === side) {
+                                                        setInlineLine("");
+                                                        setInlineBody("");
+                                                      } else {
+                                                        setInlineSide(side);
+                                                        setInlineLine(String(lineNumber));
+                                                      }
+                                                    }}
+                                                  >
+                                                    {lineNumber}
+                                                  </button>
+                                                ) : (
+                                                  <span
+                                                    key={side}
+                                                    aria-hidden="true"
+                                                    className="border-r border-border/40 px-1 text-right text-muted-foreground select-none"
+                                                  >
+                                                    {lineNumber ?? ""}
+                                                  </span>
+                                                );
+                                              })}
+                                              <span className="px-2">{line.text || " "}</span>
+                                            </div>
+
+                                            {/* In-place Comment Composer below clicked line */}
+                                            {isInlineCommentOpen ? (
+                                              <div className="border-y border-primary/30 bg-primary/5 p-2.5">
+                                                <form
+                                                  className="space-y-2"
+                                                  onSubmit={(e) => {
+                                                    e.preventDefault();
+                                                    const lineNum = Number(inlineLine);
+                                                    if (!Number.isSafeInteger(lineNum) || lineNum <= 0 || !inlineBody.trim()) return;
+                                                    void mutatePullRequest(
+                                                      pr.n,
+                                                      "inline_comment",
+                                                      inlineBody.trim(),
+                                                      undefined,
+                                                      {
+                                                        path: selectedFile.path,
+                                                        line: lineNum,
+                                                        side: inlineSide,
+                                                      },
+                                                    ).then((ok) => {
+                                                      if (ok) {
+                                                        setInlineBody("");
+                                                        setInlineLine("");
+                                                      }
+                                                    });
+                                                  }}
+                                                >
+                                                  <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-foreground">
+                                                    <span>
+                                                      Add review comment on line {inlineLine} ({inlineSide === "right" ? "new" : "original"})
+                                                    </span>
+                                                    <Button
+                                                      type="button"
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      className="h-5 px-1.5 text-[10px]"
+                                                      onClick={() => {
+                                                        setInlineLine("");
+                                                        setInlineBody("");
+                                                      }}
+                                                    >
+                                                      Cancel
+                                                    </Button>
+                                                  </div>
+                                                  <textarea
+                                                    autoFocus
+                                                    required
+                                                    value={inlineBody}
+                                                    onChange={(e) => setInlineBody(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                      if (e.key === "Escape") {
+                                                        e.preventDefault();
+                                                        setInlineLine("");
+                                                        setInlineBody("");
+                                                      } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        const lineNum = Number(inlineLine);
+                                                        if (Number.isSafeInteger(lineNum) && lineNum > 0 && inlineBody.trim()) {
+                                                          void mutatePullRequest(
+                                                            pr.n,
+                                                            "inline_comment",
+                                                            inlineBody.trim(),
+                                                            undefined,
+                                                            {
+                                                              path: selectedFile.path,
+                                                              line: lineNum,
+                                                              side: inlineSide,
+                                                            },
+                                                          ).then((ok) => {
+                                                            if (ok) {
+                                                              setInlineBody("");
+                                                              setInlineLine("");
+                                                            }
+                                                          });
+                                                        }
+                                                      }
+                                                    }}
+                                                    placeholder="Write your review comment… (⌘+Enter to submit, Esc to cancel)"
+                                                    className="min-h-16 w-full rounded-md border border-border bg-background p-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                                  />
+                                                  <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-[10px] text-muted-foreground">⌘+Enter to submit</span>
+                                                    <Button
+                                                      type="submit"
+                                                      size="sm"
+                                                      className="h-7 text-xs"
+                                                      disabled={!inlineBody.trim() || pendingAction !== null}
+                                                    >
+                                                      Comment
+                                                    </Button>
+                                                  </div>
+                                                </form>
+                                              </div>
+                                            ) : null}
+
+                                            {/* In-place Review Threads on this exact line */}
+                                            {lineThreads.map((thread) => (
+                                              <div key={thread.id} className="bg-background/80 px-3 py-1">
+                                                <PullRequestReviewThreadCard
+                                                  thread={thread}
+                                                  prNumber={pr.n}
+                                                  cwd={cwd}
+                                                  supportsAction={supportsAction}
+                                                  onMutate={(action, body, value, inline) =>
+                                                    mutatePullRequest(pr.n, action, body, value, inline)
+                                                  }
+                                                  onFixInThread={handleFixInThread}
+                                                  isPending={pendingAction !== null}
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   )}
+
                                   {selectedFile.patchTruncated ? (
                                     <p
                                       role="status"
-                                      className="border-t border-border/60 px-3 py-2 text-amber-700 dark:text-amber-400"
+                                      className="border-t border-border/60 px-3 py-2 text-amber-700 dark:text-amber-400 text-xs"
                                     >
                                       This patch was truncated to keep the review responsive. Open
                                       the pull request on the provider for the complete diff.
                                     </p>
                                   ) : null}
-                                  {supportsAction("inline_comment") ? (
-                                    <form
-                                      className="space-y-2 border-t border-border/60 p-3"
-                                      onSubmit={(event) => {
-                                        event.preventDefault();
-                                        const line = Number(inlineLine);
-                                        if (!Number.isSafeInteger(line) || line <= 0) return;
-                                        void mutatePullRequest(
-                                          pr.n,
-                                          "inline_comment",
-                                          inlineBody.trim(),
-                                          undefined,
-                                          {
-                                            path: selectedFile.path,
-                                            line,
-                                            side: inlineSide,
-                                          },
-                                        ).then((ok) => {
-                                          if (ok) {
-                                            setInlineBody("");
-                                            setInlineLine("");
-                                          }
-                                        });
-                                      }}
-                                    >
-                                      <p className="font-medium">Comment on a changed line</p>
-                                      <div className="flex gap-2">
-                                        <input
-                                          type="number"
-                                          min={1}
-                                          required
-                                          value={inlineLine}
-                                          onChange={(event) => setInlineLine(event.target.value)}
-                                          aria-label={`${inlineSide === "right" ? "New" : "Original"} file line number`}
-                                          placeholder="Line"
-                                          className="w-20 rounded-md border border-border bg-background px-2"
-                                        />
-                                        <textarea
-                                          required
-                                          value={inlineBody}
-                                          onChange={(event) => setInlineBody(event.target.value)}
-                                          aria-label="Inline review comment"
-                                          placeholder="Review this line…"
-                                          className="min-h-16 flex-1 rounded-md border border-border bg-background p-2"
-                                        />
-                                      </div>
-                                      <p className="text-[10px] text-muted-foreground">
-                                        Target: {inlineSide === "right" ? "new" : "original"} side
-                                        {inlineLine ? `, line ${inlineLine}` : ""}. Select a line
-                                        number in the diff or enter one directly.
-                                      </p>
-                                      <Button
-                                        type="submit"
-                                        size="sm"
-                                        disabled={
-                                          !inlineBody.trim() ||
-                                          !inlineLine ||
-                                          pendingAction !== null
-                                        }
+
+                                  {/* Outdated / File-level Discussions (threads not mapped to a visible line in this patch) */}
+                                  {(() => {
+                                    const unmappedThreads = selectedThreads.filter(
+                                      (t) => !renderedThreadIds.has(t.id),
+                                    );
+                                    if (unmappedThreads.length === 0) return null;
+
+                                    return (
+                                      <section
+                                        aria-label={`Unmapped or outdated discussions for ${selectedFile.path}`}
+                                        className="space-y-2 border-t border-border/60 bg-muted/10 p-3"
                                       >
-                                        Add inline comment
-                                      </Button>
-                                    </form>
-                                  ) : null}
-                                  {selectedThreads.length > 0 ? (
-                                    <section
-                                      aria-label={`Review discussions for ${selectedFile.path}`}
-                                      className="space-y-2 border-t border-border/60 p-3"
-                                    >
-                                      <h4 className="font-medium">
-                                        Inline discussions ({selectedThreads.length})
-                                      </h4>
-                                      {selectedThreads.map((thread) => (
-                                        <article
-                                          key={thread.id}
-                                          className="rounded-md border border-border/70 bg-muted/20 p-2"
-                                        >
-                                          <p className="mb-2 text-[10px] text-muted-foreground">
-                                            {thread.side === "right" ? "New" : "Original"} line{" "}
-                                            {thread.line}
-                                            {thread.resolved ? " · Resolved" : ""}
-                                            {thread.outdated ? " · Outdated" : ""}
-                                          </p>
-                                          <div className="space-y-2">
-                                            {thread.comments.map((comment) => (
-                                              <div key={comment.id}>
-                                                <p className="font-medium">
-                                                  {comment.author
-                                                    ? `@${comment.author.login}`
-                                                    : "Unknown author"}
-                                                </p>
-                                                <ChatMarkdown text={comment.body} cwd={cwd} />
-                                                {supportsAction("add_reaction") ? (
-                                                  <div
-                                                    className="mt-1 flex flex-wrap gap-1"
-                                                    aria-label="Comment reactions"
-                                                  >
-                                                    {REACTION_OPTIONS.map(([content, symbol]) => {
-                                                      const reaction = comment.reactions?.find(
-                                                        (entry) => entry.content === content,
-                                                      );
-                                                      return (
-                                                        <Button
-                                                          key={content}
-                                                          type="button"
-                                                          size="sm"
-                                                          variant={
-                                                            reaction?.viewerHasReacted
-                                                              ? "secondary"
-                                                              : "ghost"
-                                                          }
-                                                          disabled={pendingAction !== null}
-                                                          aria-label={`${reaction?.viewerHasReacted ? "Remove" : "Add"} ${content.toLowerCase().replaceAll("_", " ")} reaction`}
-                                                          aria-pressed={
-                                                            reaction?.viewerHasReacted ?? false
-                                                          }
-                                                          onClick={() =>
-                                                            void mutatePullRequest(
-                                                              pr.n,
-                                                              reaction?.viewerHasReacted
-                                                                ? "remove_reaction"
-                                                                : "add_reaction",
-                                                              undefined,
-                                                              undefined,
-                                                              {
-                                                                subjectId: comment.id,
-                                                                reaction: content,
-                                                              },
-                                                            )
-                                                          }
-                                                        >
-                                                          {symbol}
-                                                          {reaction ? ` ${reaction.count}` : ""}
-                                                        </Button>
-                                                      );
-                                                    })}
-                                                  </div>
-                                                ) : null}
-                                              </div>
-                                            ))}
-                                          </div>
-                                          {replyThreadId === thread.id ? (
-                                            <form
-                                              className="mt-2 space-y-2"
-                                              onSubmit={(event) => {
-                                                event.preventDefault();
-                                                void mutatePullRequest(
-                                                  pr.n,
-                                                  "reply_to_thread",
-                                                  replyBody.trim(),
-                                                  undefined,
-                                                  { threadId: thread.id },
-                                                ).then((ok) => {
-                                                  if (ok) {
-                                                    setReplyBody("");
-                                                    setReplyThreadId(null);
-                                                  }
-                                                });
-                                              }}
-                                            >
-                                              <textarea
-                                                autoFocus
-                                                required
-                                                value={replyBody}
-                                                onChange={(event) =>
-                                                  setReplyBody(event.target.value)
-                                                }
-                                                aria-label={`Reply to discussion on line ${thread.line}`}
-                                                className="min-h-16 w-full rounded-md border border-border bg-background p-2"
-                                              />
-                                              <div className="flex gap-2">
-                                                <Button
-                                                  type="submit"
-                                                  size="sm"
-                                                  disabled={!replyBody.trim()}
-                                                >
-                                                  Reply
-                                                </Button>
-                                                <Button
-                                                  type="button"
-                                                  size="sm"
-                                                  variant="ghost"
-                                                  onClick={() => setReplyThreadId(null)}
-                                                >
-                                                  Cancel
-                                                </Button>
-                                              </div>
-                                            </form>
-                                          ) : (
-                                            <div className="mt-2 flex gap-2">
-                                              {supportsAction("reply_to_thread") ? (
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  onClick={() => setReplyThreadId(thread.id)}
-                                                >
-                                                  Reply
-                                                </Button>
-                                              ) : null}
-                                              {!thread.resolved &&
-                                              supportsAction("resolve_thread") ? (
-                                                <Button
-                                                  size="sm"
-                                                  variant="ghost"
-                                                  onClick={() =>
-                                                    void mutatePullRequest(
-                                                      pr.n,
-                                                      "resolve_thread",
-                                                      undefined,
-                                                      undefined,
-                                                      { threadId: thread.id },
-                                                    )
-                                                  }
-                                                >
-                                                  Resolve
-                                                </Button>
-                                              ) : null}
-                                            </div>
-                                          )}
-                                        </article>
-                                      ))}
-                                    </section>
-                                  ) : null}
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                          <MessageSquare className="size-3.5" />
+                                          <span>
+                                            Outdated or File Discussions ({unmappedThreads.length})
+                                          </span>
+                                        </div>
+                                        {unmappedThreads.map((thread) => (
+                                          <PullRequestReviewThreadCard
+                                            key={thread.id}
+                                            thread={thread}
+                                            prNumber={pr.n}
+                                            cwd={cwd}
+                                            supportsAction={supportsAction}
+                                            onMutate={(action, body, value, inline) =>
+                                              mutatePullRequest(pr.n, action, body, value, inline)
+                                            }
+                                            onFixInThread={handleFixInThread}
+                                            isPending={pendingAction !== null}
+                                          />
+                                        ))}
+                                      </section>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             );
