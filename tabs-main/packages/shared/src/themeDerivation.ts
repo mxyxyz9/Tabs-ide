@@ -10,6 +10,7 @@ export interface CustomThemeConfig {
   baseVariant: "dark" | "light";
   colors: CustomThemeColors;
   tokenOverrides?: Record<string, string>;
+  diffColorScheme?: "red-green" | "blue-orange";
   fonts: {
     uiFont: string;
     editorFont: string;
@@ -1051,8 +1052,13 @@ export function getDerivedTokenValue(
  * Explicit overrides in config.tokenOverrides take precedence over derived defaults.
  * Automatic contrast clamping is systematically applied across all foreground tokens.
  */
-export function evaluateThemeTokens(config: CustomThemeConfig): Record<string, string> {
+export function evaluateThemeTokens(
+  config: CustomThemeConfig,
+  diffColorSchemeOverride?: "red-green" | "blue-orange",
+): Record<string, string> {
   const isDark = config.baseVariant === "dark";
+  const diffColorScheme = diffColorSchemeOverride ?? config.diffColorScheme ?? "red-green";
+  const isBlueOrange = diffColorScheme === "blue-orange";
   const colors: CustomThemeColors = {
     ...config.colors,
     foreground: ensureMinContrast(config.colors.foreground, config.colors.background, 4.5),
@@ -1066,6 +1072,36 @@ export function evaluateThemeTokens(config: CustomThemeConfig): Record<string, s
     const overrideVal = overrides[token.id];
     if (overrideVal && typeof overrideVal === "string" && overrideVal.trim().length > 0) {
       result[token.id] = overrideVal.trim();
+    } else if (isBlueOrange && token.id.startsWith("diffEditor")) {
+      switch (token.id) {
+        case "diffEditor.insertedTextBackground":
+          result[token.id] = isDark ? "#60a5fa33" : "#2563eb33";
+          break;
+        case "diffEditor.removedTextBackground":
+          result[token.id] = isDark ? "#fb923c40" : "#ea580c33";
+          break;
+        case "diffEditor.insertedLineBackground":
+          result[token.id] = isDark ? "#60a5fa1f" : "#2563eb1a";
+          break;
+        case "diffEditor.removedLineBackground":
+          result[token.id] = isDark ? "#fb923c1f" : "#ea580c1a";
+          break;
+        case "diffEditorGutter.insertedLineBackground":
+          result[token.id] = isDark ? "#60a5fa4d" : "#2563eb4d";
+          break;
+        case "diffEditorGutter.removedLineBackground":
+          result[token.id] = isDark ? "#fb923c4d" : "#ea580c4d";
+          break;
+        case "diffEditorOverview.insertedForeground":
+          result[token.id] = isDark ? "#60a5fab3" : "#2563ebb3";
+          break;
+        case "diffEditorOverview.removedForeground":
+          result[token.id] = isDark ? "#fb923cb3" : "#ea580cb3";
+          break;
+        default:
+          result[token.id] = token.deriveDefault(colors, isDark);
+          break;
+      }
     } else {
       result[token.id] = token.deriveDefault(colors, isDark);
     }

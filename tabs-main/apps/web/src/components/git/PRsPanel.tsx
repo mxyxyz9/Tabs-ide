@@ -623,10 +623,10 @@ export function PRsPanel({
                     ) : null}
                     {pr.changedFiles !== undefined ? <span>{pr.changedFiles} files</span> : null}
                     {pr.additions !== undefined ? (
-                      <span className="text-emerald-600">+{pr.additions}</span>
+                      <span className="text-diff-addition font-medium">+{pr.additions}</span>
                     ) : null}
                     {pr.deletions !== undefined ? (
-                      <span className="text-red-600">−{pr.deletions}</span>
+                      <span className="text-diff-deletion font-medium">−{pr.deletions}</span>
                     ) : null}
                     {pr.labels.slice(0, 3).map((label) => (
                       <Badge key={label.name} variant="secondary">
@@ -1164,8 +1164,8 @@ export function PRsPanel({
                                               </div>
                                             </div>
                                             <span className="shrink-0 text-[10px]">
-                                              <span className="text-emerald-600">+{file.additions}</span>{" "}
-                                              <span className="text-red-600">−{file.deletions}</span>
+                                              <span className="text-diff-addition font-medium">+{file.additions}</span>{" "}
+                                              <span className="text-diff-deletion font-medium">−{file.deletions}</span>
                                             </span>
                                           </button>
                                         );
@@ -1184,8 +1184,8 @@ export function PRsPanel({
                                       <Badge variant="outline">{selectedFile.status}</Badge>
                                     </div>
                                     <span className="text-[11px] text-muted-foreground">
-                                      <span className="text-emerald-600 font-medium">+{selectedFile.additions}</span>{" "}
-                                      <span className="text-red-600 font-medium">−{selectedFile.deletions}</span>
+                                      <span className="text-diff-addition font-medium">+{selectedFile.additions}</span>{" "}
+                                      <span className="text-diff-deletion font-medium">−{selectedFile.deletions}</span>
                                     </span>
                                   </div>
 
@@ -1225,9 +1225,9 @@ export function PRsPanel({
                                             <div
                                               className={`grid grid-cols-[2.5rem_2.5rem_minmax(max-content,1fr)] whitespace-pre ${
                                                 line.kind === "addition"
-                                                  ? "bg-emerald-500/10"
+                                                  ? "bg-diff-addition-line"
                                                   : line.kind === "deletion"
-                                                    ? "bg-red-500/10"
+                                                    ? "bg-diff-deletion-line"
                                                     : line.kind === "header"
                                                       ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold"
                                                       : ""

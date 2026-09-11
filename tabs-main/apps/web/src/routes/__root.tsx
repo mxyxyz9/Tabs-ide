@@ -107,6 +107,12 @@ function FullAppRootView() {
   const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
+    if (typeof document !== "undefined" && document.documentElement) {
+      document.documentElement.dataset.diffColorScheme = settings.diffColorScheme;
+    }
+  }, [settings.diffColorScheme]);
+
+  useEffect(() => {
     if (bootstrapReady) return;
     const timer = setTimeout(() => {
       console.warn(

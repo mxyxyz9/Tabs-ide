@@ -44,6 +44,29 @@ function getSystemDark(): boolean {
   return window.matchMedia(MEDIA_QUERY).matches;
 }
 
+export function getStoredDiffColorScheme(): "red-green" | "blue-orange" {
+  if (typeof document !== "undefined" && document.documentElement?.dataset?.diffColorScheme) {
+    const ds = document.documentElement.dataset.diffColorScheme;
+    if (ds === "blue-orange" || ds === "red-green") return ds;
+  }
+  try {
+    if (typeof localStorage !== "undefined") {
+      const raw = localStorage.getItem("tabs:client-settings:v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.diffColorScheme === "blue-orange" || parsed?.diffColorScheme === "red-green") {
+          return parsed.diffColorScheme;
+        }
+      }
+    }
+  } catch {}
+  return "red-green";
+}
+
+export function refreshTheme() {
+  applyTheme(getStoredPreference(), false);
+}
+
 export function getStoredFontPreferences(): FontPreferences {
   try {
     if (typeof localStorage === "undefined") return DEFAULT_FONT_PREFERENCES;
@@ -183,7 +206,8 @@ function applyTheme(
   }
 
   const isDark = config.baseVariant === "dark";
-  const evaluatedTokens = evaluateThemeTokens(config);
+  const diffColorScheme = getStoredDiffColorScheme();
+  const evaluatedTokens = evaluateThemeTokens(config, diffColorScheme);
 
   const background = evaluatedTokens["editor.background"] || config.colors.background;
   const cardBg = evaluatedTokens["app.cardBackground"] || config.colors.card;
@@ -319,9 +343,11 @@ function syncDesktopTheme(
   }
 
   const fonts = fontPreferences ?? getStoredFontPreferences();
+  const diffColorScheme = getStoredDiffColorScheme();
+  const enhancedConfig = customConfig ? { ...customConfig, diffColorScheme } : undefined;
   const payload =
-    (themeId === "custom" || themeId.startsWith("environment:")) && customConfig
-      ? { themeId, preference, customConfig, fontPreferences: fonts }
+    (themeId === "custom" || themeId.startsWith("environment:")) && enhancedConfig
+      ? { themeId, preference, customConfig: enhancedConfig, fontPreferences: fonts }
       : { themeId, preference, fontPreferences: fonts };
   lastDesktopTheme = themeId;
   void bridge.setTheme(payload as any).catch(() => {

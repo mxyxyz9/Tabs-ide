@@ -3513,6 +3513,61 @@ function SettingsRouteView() {
                           />
                         }
                       />
+                      <SettingsRow
+                        title="Diff colors"
+                        description="Choose colors for additions and deletions across Git, pull requests, and file comparisons."
+                        resetAction={
+                          settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme ? (
+                            <SettingResetButton
+                              label="diff colors"
+                              onClick={() =>
+                                updateSettings({
+                                  diffColorScheme: DEFAULT_UNIFIED_SETTINGS.diffColorScheme,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <SegmentedControl
+                            value={settings.diffColorScheme}
+                            onValueChange={(val) => {
+                              if (val === "red-green" || val === "blue-orange") {
+                                updateSettings({ diffColorScheme: val });
+                              }
+                            }}
+                            options={[
+                              {
+                                value: "red-green",
+                                label: (
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="flex shrink-0 gap-1" aria-hidden="true">
+                                      <span className="size-2 rounded-full bg-emerald-500" />
+                                      <span className="size-2 rounded-full bg-red-500" />
+                                    </span>
+                                    <span>Red & green</span>
+                                  </span>
+                                ),
+                                ariaLabel: "Diff colors: Red and green (default)",
+                              },
+                              {
+                                value: "blue-orange",
+                                label: (
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="flex shrink-0 gap-1" aria-hidden="true">
+                                      <span className="size-2 rounded-full bg-blue-500" />
+                                      <span className="size-2 rounded-full bg-orange-500" />
+                                    </span>
+                                    <span>Blue & orange</span>
+                                  </span>
+                                ),
+                                ariaLabel: "Diff colors: Blue and orange",
+                              },
+                            ]}
+                            aria-label="Diff colors"
+                          />
+                        }
+                      />
                     </SettingsSection>
 
                     {/* Group 2: Assistant & Code Generation */}

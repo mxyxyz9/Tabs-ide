@@ -16,7 +16,7 @@ import { Atom } from "@tabs/client-runtime/state";
 import { useEffect } from "react";
 
 import { getLocalStorageItem, setLocalStorageItem } from "../hooks/useLocalStorage";
-import { setEnvironmentThemes } from "../hooks/useTheme";
+import { setEnvironmentThemes, refreshTheme } from "../hooks/useTheme";
 import { ensureNativeApi } from "../nativeApi";
 import { appAtomRegistry } from "./atomRegistry";
 
@@ -95,6 +95,9 @@ export function hydrateClientSettings(force = false) {
     const persisted = getLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, ClientSettingsSchema);
     const settings = persisted ?? DEFAULT_CLIENT_SETTINGS;
     appAtomRegistry.set(clientSettingsAtom, settings);
+    if (typeof document !== "undefined" && document.documentElement) {
+      document.documentElement.dataset.diffColorScheme = settings.diffColorScheme;
+    }
     if (settings.aiProvider && typeof window !== "undefined") {
       void window.desktopBridge?.setAiProvider?.(settings.aiProvider);
     }
@@ -108,6 +111,12 @@ export function updateClientSettings(update: (current: ClientSettings) => Client
   hydrateClientSettings();
   appAtomRegistry.update(clientSettingsAtom, (current) => {
     const next = update(current);
+    if (typeof document !== "undefined" && document.documentElement) {
+      document.documentElement.dataset.diffColorScheme = next.diffColorScheme;
+    }
+    if (next.diffColorScheme && next.diffColorScheme !== current.diffColorScheme) {
+      refreshTheme();
+    }
     if (
       next.aiProvider &&
       next.aiProvider !== current.aiProvider &&

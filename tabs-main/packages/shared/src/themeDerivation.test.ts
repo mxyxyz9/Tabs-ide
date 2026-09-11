@@ -164,4 +164,34 @@ describe("themeDerivation shared module", () => {
     expect(getOptimalPrimaryForeground("#2563eb")).toBe("#ffffff");
     expect(getOptimalPrimaryForeground("#ffcc00")).toBe("#0f172a");
   });
+
+  it("derives blue and orange diffEditor tokens when diffColorScheme is blue-orange", () => {
+    const darkTokens = evaluateThemeTokens(baseConfig, "blue-orange");
+    expect(darkTokens["diffEditor.insertedTextBackground"]).toBe("#60a5fa33");
+    expect(darkTokens["diffEditor.removedTextBackground"]).toBe("#fb923c40");
+    expect(darkTokens["diffEditor.insertedLineBackground"]).toBe("#60a5fa1f");
+    expect(darkTokens["diffEditor.removedLineBackground"]).toBe("#fb923c1f");
+    expect(darkTokens["diffEditorOverview.insertedForeground"]).toBe("#60a5fab3");
+    expect(darkTokens["diffEditorOverview.removedForeground"]).toBe("#fb923cb3");
+
+    const lightConfig: CustomThemeConfig = { ...baseConfig, baseVariant: "light" };
+    const lightTokens = evaluateThemeTokens(lightConfig, "blue-orange");
+    expect(lightTokens["diffEditor.insertedTextBackground"]).toBe("#2563eb33");
+    expect(lightTokens["diffEditor.removedTextBackground"]).toBe("#ea580c33");
+    expect(lightTokens["diffEditor.insertedLineBackground"]).toBe("#2563eb1a");
+    expect(lightTokens["diffEditor.removedLineBackground"]).toBe("#ea580c1a");
+  });
+
+  it("preserves explicit user tokenOverrides even when blue-orange is active", () => {
+    const overrideConfig: CustomThemeConfig = {
+      ...baseConfig,
+      tokenOverrides: {
+        "diffEditor.insertedTextBackground": "#00ffff80",
+      },
+    };
+    const tokens = evaluateThemeTokens(overrideConfig, "blue-orange");
+    expect(tokens["diffEditor.insertedTextBackground"]).toBe("#00ffff80");
+    expect(tokens["diffEditor.removedTextBackground"]).toBe("#fb923c40");
+  });
 });
+

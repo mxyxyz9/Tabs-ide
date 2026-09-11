@@ -64,6 +64,10 @@ export const ToolbarStyle = Schema.Literals([
 export type ToolbarStyle = typeof ToolbarStyle.Type;
 export const DEFAULT_TOOLBAR_STYLE: ToolbarStyle = "solid";
 
+export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
+export type DiffColorScheme = typeof DiffColorScheme.Type;
+export const DEFAULT_DIFF_COLOR_SCHEME: DiffColorScheme = "red-green";
+
 export const SplashLoaderStyle = Schema.Literals(["glass", "solari"]);
 export type SplashLoaderStyle = typeof SplashLoaderStyle.Type;
 export const DEFAULT_SPLASH_LOADER_STYLE: SplashLoaderStyle = "glass";
@@ -138,6 +142,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   diffWordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  diffColorScheme: DiffColorScheme.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DIFF_COLOR_SCHEME)),
+  ),
   // Model pinned state. Keyed by ProviderInstanceId.
   // Preserves decoding fallback for legacy `favorites` array.
   pinnedModels: Schema.Array(PinnedModelEntry).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
@@ -1188,6 +1195,7 @@ export const ClientSettingsPatch = Schema.Struct({
   confirmTabClose: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
   diffWordWrap: Schema.optionalKey(Schema.Boolean),
+  diffColorScheme: Schema.optionalKey(DiffColorScheme),
   favorites: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({

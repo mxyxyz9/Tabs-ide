@@ -539,9 +539,9 @@ export default function GitCommitComposer(props: GitCommitComposerProps) {
                 ) : null}
                 {stagedFiles.length > 0 ? (
                   <span className="rounded-md bg-muted/40 px-2 py-1 font-mono text-xs font-medium">
-                    <span className="text-emerald-500/90">+{stagedInsertions}</span>
+                    <span className="text-diff-addition font-medium">+{stagedInsertions}</span>
                     <span className="px-1 text-muted-foreground/40">/</span>
-                    <span className="text-rose-500/90">-{stagedDeletions}</span>
+                    <span className="text-diff-deletion font-medium">-{stagedDeletions}</span>
                   </span>
                 ) : null}
               </div>

@@ -6922,10 +6922,10 @@ function GitChangeSection(props: {
               </button>
               <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
                 {file.insertions > 0 ? (
-                  <span className="text-emerald-500/90">+{file.insertions}</span>
+                  <span className="text-diff-addition">+{file.insertions}</span>
                 ) : null}
                 {file.deletions > 0 ? (
-                  <span className="text-rose-500/90">-{file.deletions}</span>
+                  <span className="text-diff-deletion">-{file.deletions}</span>
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">

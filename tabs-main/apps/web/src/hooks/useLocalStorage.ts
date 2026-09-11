@@ -2,22 +2,29 @@ import * as Schema from "effect/Schema";
 import * as Record from "effect/Record";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const isomorphicLocalStorage: Storage =
-  typeof window !== "undefined"
-    ? window.localStorage
-    : (function () {
-        const store = new Map<string, string>();
-        return {
-          clear: () => store.clear(),
-          getItem: (_) => store.get(_) ?? null,
-          key: (_) => Record.keys(store).at(_) ?? null,
-          get length() {
-            return store.size;
-          },
-          removeItem: (_) => store.delete(_),
-          setItem: (_, value) => store.set(_, value),
-        };
-      })();
+const fallbackStorage: Storage = (function () {
+  const store = new Map<string, string>();
+  return {
+    clear: () => store.clear(),
+    getItem: (_) => store.get(_) ?? null,
+    key: (_) => Record.keys(store).at(_) ?? null,
+    get length() {
+      return store.size;
+    },
+    removeItem: (_) => store.delete(_),
+    setItem: (_, value) => store.set(_, value),
+  };
+})();
+
+function getIsomorphicLocalStorage(): Storage {
+  if (typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage;
+  }
+  if (typeof localStorage !== "undefined") {
+    return localStorage;
+  }
+  return fallbackStorage;
+}
 
 const decode = <T, E>(schema: Schema.Codec<T, E>, value: string) =>
   Schema.decodeSync(Schema.fromJsonString(schema))(value);
@@ -26,17 +33,17 @@ const encode = <T, E>(schema: Schema.Codec<T, E>, value: T) =>
   Schema.encodeSync(Schema.fromJsonString(schema))(value);
 
 export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E>): T | null => {
-  const item = isomorphicLocalStorage.getItem(key);
+  const item = getIsomorphicLocalStorage().getItem(key);
   return item ? decode(schema, item) : null;
 };
 
 export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.Codec<T, E>) => {
   const valueToSet = encode(schema, value);
-  isomorphicLocalStorage.setItem(key, valueToSet);
+  getIsomorphicLocalStorage().setItem(key, valueToSet);
 };
 
 export const removeLocalStorageItem = (key: string) => {
-  isomorphicLocalStorage.removeItem(key);
+  getIsomorphicLocalStorage().removeItem(key);
 };
 
 const LOCAL_STORAGE_CHANGE_EVENT = "tabs:local_storage_change";
