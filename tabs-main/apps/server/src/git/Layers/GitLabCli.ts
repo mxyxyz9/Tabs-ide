@@ -423,6 +423,8 @@ export const makeGitLabCli = Effect.sync(() => {
         case "enable_auto_merge":
         case "disable_auto_merge":
         case "edit_pull_request":
+        case "stack_rebase":
+        case "stack_merge":
           return Effect.fail(
             new GitLabCliError({
               operation: "mutatePullRequest",

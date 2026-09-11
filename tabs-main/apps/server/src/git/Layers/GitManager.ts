@@ -35,6 +35,7 @@ import { makeBitbucketPullRequestApi } from "./BitbucketPullRequestApi.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { runStaticAnalysis } from "../../staticAnalysis/StaticAnalysisService.ts";
+import { runGitHubStackAction } from "../githubStackActions.ts";
 import {
   buildStaticAnalysisContext,
   extractChangedFilesFromPatch,
@@ -364,6 +365,8 @@ const GITHUB_PULL_REQUEST_CAPABILITIES = {
     "add_reaction",
     "remove_reaction",
     "edit_pull_request",
+    "stack_rebase",
+    "stack_merge",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
@@ -1254,10 +1257,26 @@ export const makeGitManager = Effect.gen(function* () {
                   cwd: input.cwd,
                   reference: String(details.number),
                 });
+                const stack = yield* gitHubCli.getPullRequestStack({
+                  cwd: input.cwd,
+                  reference: String(details.number),
+                  repository,
+                });
+                const targetIndex = stack ? stack.layers.findIndex((layer) => layer.number === details.number) : -1;
+                const stackMembership = stack
+                  ? {
+                      number: stack.number,
+                      position: targetIndex >= 0 ? targetIndex + 1 : 1,
+                      size: stack.layers.length,
+                      base: stack.base,
+                    }
+                  : undefined;
                 return {
                   ...toResolvedPullRequest(details),
                   ...(files.length > 0 ? { files } : {}),
                   ...(reviewThreads.length > 0 ? { reviewThreads } : {}),
+                  ...(stack ? { stack } : {}),
+                  ...(stackMembership ? { stackMembership } : {}),
                 };
               })
             : provider === "gitlab"
@@ -1408,7 +1427,31 @@ export const makeGitManager = Effect.gen(function* () {
         ...(input.subjectId !== undefined ? { subjectId: input.subjectId } : {}),
         ...(input.reaction !== undefined ? { reaction: input.reaction } : {}),
       } satisfies typeof input;
-      if (provider === "github") {
+      if (input.action === "stack_rebase" || input.action === "stack_merge") {
+        if (provider !== "github") {
+          return yield* gitManagerError("mutatePullRequest", "Stacks are only supported for GitHub.");
+        }
+        const remoteUrl = yield* repositoryRemoteUrl(input.cwd);
+        const repository = parseRepositoryIdentifier(remoteUrl, input.cwd);
+        yield* runGitHubStackAction({
+          gitHubCli,
+          cwd: input.cwd,
+          repository,
+          host: "github.com",
+          number: Number(reference),
+          stackNumber: input.stackNumber ?? 0,
+          expectedStackHeads: input.expectedStackHeads,
+          action: input.action,
+          mergeMethod: input.mergeMethod,
+        }).pipe(
+          Effect.catch((err: any) =>
+            gitManagerError(
+              "mutatePullRequest",
+              err?.message || (err instanceof Error ? err.message : String(err)),
+            ),
+          ),
+        );
+      } else if (provider === "github") {
         yield* gitHubCli.mutatePullRequest({
           ...mutation,
           action: mutation.action,
@@ -1418,7 +1461,30 @@ export const makeGitManager = Effect.gen(function* () {
       else yield* bitbucketApi.mutatePullRequest(mutation);
       const pullRequest =
         provider === "github"
-          ? toResolvedPullRequest(yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference }))
+          ? yield* Effect.gen(function* () {
+              const details = yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference });
+              const remoteUrl = yield* repositoryRemoteUrl(input.cwd);
+              const repository = parseRepositoryIdentifier(remoteUrl, input.cwd);
+              const stack = yield* gitHubCli.getPullRequestStack({
+                cwd: input.cwd,
+                reference: String(details.number),
+                repository,
+              });
+              const targetIndex = stack ? stack.layers.findIndex((layer) => layer.number === details.number) : -1;
+              const stackMembership = stack
+                ? {
+                    number: stack.number,
+                    position: targetIndex >= 0 ? targetIndex + 1 : 1,
+                    size: stack.layers.length,
+                    base: stack.base,
+                  }
+                : undefined;
+              return {
+                ...toResolvedPullRequest(details),
+                ...(stack ? { stack } : {}),
+                ...(stackMembership ? { stackMembership } : {}),
+              };
+            })
           : provider === "gitlab"
             ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference })
             : provider === "azure-devops"

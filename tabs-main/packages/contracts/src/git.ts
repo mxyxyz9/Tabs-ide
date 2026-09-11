@@ -175,6 +175,39 @@ export const GitPullRequestFile = Schema.Struct({
 });
 export type GitPullRequestFile = typeof GitPullRequestFile.Type;
 
+export const GitPullRequestStackMembership = Schema.Struct({
+  number: PositiveInt,
+  position: PositiveInt,
+  size: PositiveInt,
+  base: TrimmedNonEmptyStringSchema,
+});
+export type GitPullRequestStackMembership = typeof GitPullRequestStackMembership.Type;
+
+export const GitPullRequestStackLayer = Schema.Struct({
+  number: PositiveInt,
+  title: Schema.optional(Schema.String),
+  isDraft: Schema.optional(Schema.Boolean),
+  headSha: Schema.optional(TrimmedNonEmptyStringSchema),
+  headBranch: TrimmedNonEmptyStringSchema,
+  state: GitPullRequestState,
+});
+export type GitPullRequestStackLayer = typeof GitPullRequestStackLayer.Type;
+
+export const GitPullRequestStack = Schema.Struct({
+  id: TrimmedNonEmptyStringSchema,
+  number: PositiveInt,
+  url: TrimmedNonEmptyStringSchema,
+  base: TrimmedNonEmptyStringSchema,
+  layers: Schema.Array(GitPullRequestStackLayer),
+});
+export type GitPullRequestStack = typeof GitPullRequestStack.Type;
+
+export const GitPullRequestStackHead = Schema.Struct({
+  number: PositiveInt,
+  headSha: TrimmedNonEmptyStringSchema,
+});
+export type GitPullRequestStackHead = typeof GitPullRequestStackHead.Type;
+
 const GitResolvedPullRequest = Schema.Struct({
   provider: Schema.optional(SourceControlProviderKind),
   number: PositiveInt,
@@ -204,6 +237,8 @@ const GitResolvedPullRequest = Schema.Struct({
   reviewThreads: Schema.optional(Schema.Array(GitPullRequestReviewThread)),
   autoMergeEnabled: Schema.optional(Schema.Boolean),
   autoMergeMethod: Schema.optional(Schema.Literals(["merge", "squash", "rebase"])),
+  stack: Schema.optional(GitPullRequestStack),
+  stackMembership: Schema.optional(GitPullRequestStackMembership),
 });
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 
@@ -860,6 +895,8 @@ export const GitPullRequestAction = Schema.Literals([
   "unresolve_thread",
   "add_reaction",
   "remove_reaction",
+  "stack_rebase",
+  "stack_merge",
 ]);
 export type GitPullRequestAction = typeof GitPullRequestAction.Type;
 
@@ -890,6 +927,8 @@ export const GitMutatePullRequestInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   reference: GitPullRequestReference,
   action: GitPullRequestAction,
+  stackNumber: Schema.optional(PositiveInt),
+  expectedStackHeads: Schema.optional(Schema.Array(GitPullRequestStackHead)),
   mergeMethod: Schema.optional(Schema.Literals(["merge", "squash", "rebase"])),
   deleteBranch: Schema.optional(Schema.Boolean),
   title: Schema.optional(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(1_000))),

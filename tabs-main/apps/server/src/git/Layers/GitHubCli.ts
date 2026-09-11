@@ -9,6 +9,7 @@ import {
   type GitHubCliShape,
   type GitHubPullRequestSummary,
 } from "../Services/GitHubCli.ts";
+import { decodePullRequestStacksJson } from "../githubStackActions.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_PULL_REQUEST_FILE_PATCH_CHARS = 200_000;
@@ -658,6 +659,21 @@ const makeGitHubCli = Effect.sync(() => {
         }
         return threads;
       }),
+    getPullRequestStack: (input) => {
+      const args = ["api"];
+      if (input.host) {
+        args.push("--hostname", input.host);
+      }
+      const endpoint = input.repository ? `repos/${input.repository}` : "repos/{owner}/{repo}";
+      args.push(`${endpoint}/stacks?pull_request=${input.reference}`);
+      return execute({
+        cwd: input.cwd,
+        args,
+      }).pipe(
+        Effect.map((result) => decodePullRequestStacksJson(result.stdout)),
+        Effect.catch(() => Effect.succeed(null)),
+      );
+    },
     mutatePullRequest: (input) => {
       const args: string[] = ["pr"];
       switch (input.action) {
@@ -686,6 +702,8 @@ const makeGitHubCli = Effect.sync(() => {
         case "enable_auto_merge":
         case "disable_auto_merge":
         case "edit_pull_request":
+        case "stack_rebase":
+        case "stack_merge":
           return Effect.fail(
             new GitHubCliError({
               operation: "mutatePullRequest",

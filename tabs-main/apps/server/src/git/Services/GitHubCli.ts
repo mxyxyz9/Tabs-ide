@@ -10,7 +10,7 @@ import type { Effect } from "effect";
 
 import type { ProcessRunResult } from "../../processRunner";
 import type { GitHubCliError } from "../Errors.ts";
-import type { GitMutatePullRequestInput } from "@tabs/contracts";
+import type { GitMutatePullRequestInput, GitPullRequestStack } from "@tabs/contracts";
 
 export interface GitHubPullRequestSummary {
   readonly number: number;
@@ -156,6 +156,13 @@ export interface GitHubCliShape {
     readonly cwd: string;
     readonly reference: string;
   }) => Effect.Effect<NonNullable<GitHubPullRequestSummary["reviewThreads"]>, GitHubCliError>;
+
+  readonly getPullRequestStack: (input: {
+    readonly cwd: string;
+    readonly reference: string;
+    readonly repository?: string;
+    readonly host?: string;
+  }) => Effect.Effect<GitPullRequestStack | null, GitHubCliError>;
 
   readonly mutatePullRequest: (input: {
     readonly cwd: string;

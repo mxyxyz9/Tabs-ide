@@ -8,6 +8,7 @@ import {
   FileDiff,
   GitMerge,
   GitPullRequest,
+  Layers,
   MessageSquare,
   Pencil,
   Plus,
@@ -21,6 +22,9 @@ import type {
   EnvironmentId,
   GitPullRequestAction,
   GitPullRequestReviewThread,
+  GitPullRequestStackMembership,
+  GitPullRequestStackHead,
+  GitPullRequestStack,
 } from "@tabs/contracts";
 import { PullRequestReviewThreadCard } from "./PullRequestReviewThreadCard";
 import {
@@ -34,6 +38,7 @@ import {
 } from "./PullRequestMetadataControls";
 import { PullRequestEditDialog } from "./PullRequestEditDialog";
 import { PullRequestThreadIntegration } from "./PullRequestThreadIntegration";
+import { PullRequestStackView } from "./PullRequestStackView";
 import { environmentApi } from "../../connection/environmentApiRegistry";
 import { newCommandId } from "../../lib/utils";
 
@@ -83,6 +88,8 @@ interface PullRequestRow {
   changedFiles?: number;
   autoMergeEnabled?: boolean;
   autoMergeMethod?: "merge" | "squash" | "rebase";
+  stackMembership?: GitPullRequestStackMembership;
+  stack?: GitPullRequestStack;
 }
 
 const REACTION_OPTIONS = [
@@ -276,6 +283,8 @@ export function PRsPanel({
           ...(pr.changedFiles !== undefined ? { changedFiles: pr.changedFiles } : {}),
           ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
           ...(pr.autoMergeMethod ? { autoMergeMethod: pr.autoMergeMethod } : {}),
+          ...(pr.stackMembership ? { stackMembership: pr.stackMembership } : {}),
+          ...(pr.stack ? { stack: pr.stack } : {}),
         },
       ];
     } else {
@@ -298,6 +307,8 @@ export function PRsPanel({
         ...(pr.changedFiles !== undefined ? { changedFiles: pr.changedFiles } : {}),
         ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
         ...(pr.autoMergeMethod ? { autoMergeMethod: pr.autoMergeMethod } : {}),
+        ...(pr.stackMembership ? { stackMembership: pr.stackMembership } : {}),
+        ...(pr.stack ? { stack: pr.stack } : {}),
       }));
       if (!searchQuery.trim()) return mapped;
       const q = searchQuery.trim().toLowerCase();
@@ -332,6 +343,11 @@ export function PRsPanel({
       reaction?: (typeof REACTION_OPTIONS)[number][0];
     },
     title?: string,
+    stackParams?: {
+      stackNumber?: number | undefined;
+      expectedStackHeads?: ReadonlyArray<GitPullRequestStackHead> | undefined;
+      mergeMethod?: "merge" | "squash" | "rebase" | undefined;
+    },
   ) => {
     if (!api) return false;
     setPendingAction(action);
@@ -342,6 +358,19 @@ export function PRsPanel({
         action,
         ...(action === "merge" || action === "enable_auto_merge"
           ? { mergeMethod, ...(action === "merge" ? { deleteBranch } : {}) }
+          : {}),
+        ...(action === "stack_merge"
+          ? {
+              stackNumber: stackParams?.stackNumber,
+              expectedStackHeads: stackParams?.expectedStackHeads,
+              mergeMethod: stackParams?.mergeMethod ?? mergeMethod,
+            }
+          : {}),
+        ...(action === "stack_rebase"
+          ? {
+              stackNumber: stackParams?.stackNumber,
+              expectedStackHeads: stackParams?.expectedStackHeads,
+            }
           : {}),
         ...(body !== undefined ? { body } : {}),
         ...(title !== undefined ? { title } : {}),
@@ -574,6 +603,21 @@ export function PRsPanel({
                     {pr.reviewDecision ? (
                       <Badge variant="outline">{pr.reviewDecision.replaceAll("_", " ")}</Badge>
                     ) : null}
+                    {pr.stackMembership ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 text-[11px] font-normal cursor-pointer hover:bg-muted/60"
+                        title={`Stack #${pr.stackMembership.number} · Layer ${pr.stackMembership.position} of ${pr.stackMembership.size}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedPrNumber(pr.n);
+                          setDetailTab("summary");
+                        }}
+                      >
+                        <Layers className="size-3 text-primary" aria-hidden="true" />
+                        {pr.stackMembership.position}/{pr.stackMembership.size}
+                      </Badge>
+                    ) : null}
                     {pr.mergeability === "conflicting" ? (
                       <Badge variant="destructive">Conflicts</Badge>
                     ) : null}
@@ -800,7 +844,37 @@ export function PRsPanel({
                         className="rounded-lg bg-muted/20 p-3 text-xs"
                       >
                         {detailTab === "summary" ? (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
+                            {detailQuery.data.pullRequest.stack && (
+                              <PullRequestStackView
+                                stack={detailQuery.data.pullRequest.stack}
+                                currentNumber={detailQuery.data.pullRequest.number}
+                                cwd={cwd}
+                                canMerge={supportsAction("stack_merge")}
+                                canRebase={supportsAction("stack_rebase")}
+                                mergeMethod={mergeMethod}
+                                onSelectPullRequest={(prNumber) => {
+                                  setExpandedPrNumber(prNumber);
+                                  setDetailTab("summary");
+                                  setSelectedFilePath(null);
+                                }}
+                                onMutatePullRequest={async (prNumber, action, params) => {
+                                  return await mutatePullRequest(
+                                    prNumber,
+                                    action,
+                                    undefined,
+                                    undefined,
+                                    undefined,
+                                    undefined,
+                                    {
+                                      stackNumber: params.stackNumber,
+                                      expectedStackHeads: params.expectedStackHeads,
+                                      mergeMethod: params.mergeMethod,
+                                    },
+                                  );
+                                }}
+                              />
+                            )}
                             {detailQuery.data.pullRequest.state === "open" &&
                             supportsAction(
                               detailQuery.data.pullRequest.isDraft ? "ready" : "draft",
