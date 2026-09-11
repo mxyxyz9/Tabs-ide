@@ -17,7 +17,11 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
-import type { GitPullRequestAction, GitPullRequestReviewThread } from "@tabs/contracts";
+import type {
+  EnvironmentId,
+  GitPullRequestAction,
+  GitPullRequestReviewThread,
+} from "@tabs/contracts";
 import { PullRequestReviewThreadCard } from "./PullRequestReviewThreadCard";
 import {
   PullRequestChecksView,
@@ -29,6 +33,9 @@ import {
   PullRequestActivityView,
 } from "./PullRequestMetadataControls";
 import { PullRequestEditDialog } from "./PullRequestEditDialog";
+import { PullRequestThreadIntegration } from "./PullRequestThreadIntegration";
+import { environmentApi } from "../../connection/environmentApiRegistry";
+import { newCommandId } from "../../lib/utils";
 
 import {
   gitAllPullRequestsQueryOptions,
@@ -830,63 +837,90 @@ export function PRsPanel({
                                 <Pencil /> Edit title and description
                               </Button>
                             ) : null}
-                            {(() => {
-                              const detailThreads = findThreadsForPullRequest(threads, {
+                            <PullRequestThreadIntegration
+                              pr={{
                                 number: pr.n,
+                                title: detailQuery.data.pullRequest.title,
                                 url: detailQuery.data.pullRequest.url || pr.url,
-                              }).filter((t) => !environmentId || t.environmentId === environmentId);
-                              if (detailThreads.length === 0) return null;
-                              return (
-                                <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-2">
-                                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                                    <Sparkles size={14} className="text-primary" />
-                                    <span>Linked Agent Threads ({detailThreads.length})</span>
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    {detailThreads.map((thread) => (
-                                      <div
-                                        key={thread.id}
-                                        className="flex items-center justify-between gap-2 p-2 rounded-md bg-card/80 border border-border/50 hover:border-primary/40 transition-all"
-                                      >
-                                        <div className="min-w-0 flex-1 truncate">
-                                          <span className="font-medium text-foreground">
-                                            {thread.title}
-                                          </span>
-                                          {thread.branch && (
-                                            <span className="ml-2 font-mono text-[10px] text-muted-foreground">
-                                              #{thread.branch}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-6 px-2.5 text-xs shrink-0"
-                                          onClick={() => {
-                                            if (thread.environmentId) {
-                                              void navigate({
-                                                to: "/$environmentId/$threadId",
-                                                params: {
-                                                  environmentId: thread.environmentId,
-                                                  threadId: thread.id,
-                                                },
-                                              });
-                                            } else {
-                                              void navigate({
-                                                to: "/$threadId",
-                                                params: { threadId: thread.id },
-                                              });
-                                            }
-                                          }}
-                                        >
-                                          Open thread
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })()}
+                                provider: pr.provider,
+                              }}
+                              reviewThreads={detailQuery.data.pullRequest.reviewThreads ?? []}
+                              threads={threads}
+                              environmentId={environmentId}
+                              onOpenThread={(target) => {
+                                if (target.environmentId) {
+                                  void navigate({
+                                    to: "/$environmentId/$threadId",
+                                    params: {
+                                      environmentId: target.environmentId,
+                                      threadId: target.id,
+                                    },
+                                  });
+                                } else {
+                                  void navigate({
+                                    to: "/$threadId",
+                                    params: { threadId: target.id },
+                                  });
+                                }
+                              }}
+                              onLinkThread={async (targetThreadId, targetEnvId) => {
+                                const envId = (targetEnvId ?? environmentId) as EnvironmentId;
+                                const api = await environmentApi(envId);
+                                let parsedHost = "github.com";
+                                let repository = "";
+                                try {
+                                  const parsed = new URL(detailQuery.data.pullRequest.url || pr.url);
+                                  parsedHost = parsed.hostname;
+                                  repository = parsed.pathname.replace(/^\//, "").split("/pull/")[0] ?? "";
+                                } catch {}
+                                await api.orchestration.dispatchCommand({
+                                  type: "thread.pull-request.link",
+                                  commandId: newCommandId(),
+                                  threadId: targetThreadId,
+                                  host: parsedHost,
+                                  repository,
+                                  number: pr.n,
+                                  url: detailQuery.data.pullRequest.url || pr.url,
+                                  source: "manual",
+                                });
+                                toastManager.add({
+                                  type: "success",
+                                  title: `Linked thread to PR #${pr.n}`,
+                                });
+                              }}
+                              onUnlinkThread={async (targetThreadId, targetEnvId) => {
+                                const envId = (targetEnvId ?? environmentId) as EnvironmentId;
+                                const api = await environmentApi(envId);
+                                let parsedHost = "github.com";
+                                let repository = "";
+                                try {
+                                  const parsed = new URL(detailQuery.data.pullRequest.url || pr.url);
+                                  parsedHost = parsed.hostname;
+                                  repository = parsed.pathname.replace(/^\//, "").split("/pull/")[0] ?? "";
+                                } catch {}
+                                await api.orchestration.dispatchCommand({
+                                  type: "thread.pull-request.unlink",
+                                  commandId: newCommandId(),
+                                  threadId: targetThreadId,
+                                  host: parsedHost,
+                                  repository,
+                                  number: pr.n,
+                                });
+                                toastManager.add({
+                                  type: "success",
+                                  title: `Unlinked thread from PR #${pr.n}`,
+                                });
+                              }}
+                              onCreateFixThread={(prompt) => {
+                                void navigator.clipboard?.writeText(prompt);
+                                toastManager.add({
+                                  type: "success",
+                                  title: "Review remarks copied to clipboard",
+                                  description: "Prompt copied to clipboard. Ready to create a new thread or paste into an existing thread.",
+                                });
+                                void navigate({ to: "/" });
+                              }}
+                            />
                             {detailQuery.data.pullRequest.body ? (
                               <ChatMarkdown text={detailQuery.data.pullRequest.body} cwd={cwd} />
                             ) : (
