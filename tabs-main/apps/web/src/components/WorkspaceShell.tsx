@@ -112,7 +112,10 @@ import {
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
 import { useBrowserHistoryStore } from "../browserHistoryStore";
 import { BrowserViewportResizeFrame } from "./browser/BrowserViewportResizeFrame";
-import { NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR } from "../nativeSurfaceOverlay";
+import {
+  NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR,
+  shouldSuspendNativeSurfaceForOverlay,
+} from "../nativeSurfaceOverlay";
 import {
   PREVIEW_ANNOTATION_PICKED_EVENT,
   type PreviewAnnotationPickedDetail,
@@ -3146,7 +3149,10 @@ function DesktopCodeTool(props: { project: Project }) {
 
     const syncOverlayVisibility = () => {
       debounceTimer = null;
-      const overlayOpen = document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null;
+      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
+        hostReady,
+        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
+      );
       // Guard: only act when the overlay-open state actually changed, so a burst
       // of unrelated DOM mutations during layout settling can't thrash the view
       // by detaching/reattaching it.
@@ -3194,7 +3200,7 @@ function DesktopCodeTool(props: { project: Project }) {
         clearTimeout(debounceTimer);
       }
     };
-  }, [codeHostState.available, props.project.id]);
+  }, [codeHostState.available, hostReady, props.project.id]);
 
   if (shouldUseFallbackTool) {
     return (
@@ -8197,46 +8203,46 @@ function DesktopBrowserTool(props: {
           })
         }
       >
-          <div ref={hostRef} className="absolute inset-0 bg-background" />
-          {sessionState.loading ? (
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
-              <Spinner className="mr-2 size-4" />
-              Loading page...
-            </div>
-          ) : null}
-          {sessionState.lastError ? (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
-              <Card className="pointer-events-auto max-w-lg">
-                <CardHeader>
-                  <CardTitle>Page load failed</CardTitle>
-                  <CardDescription>{sessionState.lastError}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      void bridge.reloadBrowserSession({
-                        projectId: props.project.id,
-                      })
-                    }
-                  >
-                    <RefreshCwIcon className="size-3.5" />
-                    Retry
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
-                    }
-                  >
-                    <ExternalLinkIcon className="size-3.5" />
-                    Open In Browser
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
+        <div ref={hostRef} className="absolute inset-0 bg-background" />
+        {sessionState.loading ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
+            <Spinner className="mr-2 size-4" />
+            Loading page...
+          </div>
+        ) : null}
+        {sessionState.lastError ? (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
+            <Card className="pointer-events-auto max-w-lg">
+              <CardHeader>
+                <CardTitle>Page load failed</CardTitle>
+                <CardDescription>{sessionState.lastError}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    void bridge.reloadBrowserSession({
+                      projectId: props.project.id,
+                    })
+                  }
+                >
+                  <RefreshCwIcon className="size-3.5" />
+                  Retry
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
+                  }
+                >
+                  <ExternalLinkIcon className="size-3.5" />
+                  Open In Browser
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
       </BrowserViewportResizeFrame>
     </DesktopBrowserChrome>
   );
@@ -9066,47 +9072,47 @@ function DesktopCustomEmbedTool(props: {
           )
         }
       >
-          <div ref={hostRef} className="absolute inset-0 bg-background" />
-          {sessionState.loading ? (
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
-              <Spinner className="mr-2 size-4" />
-              Loading page...
-            </div>
-          ) : null}
-          {sessionState.lastError ? (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
-              <Card className="pointer-events-auto max-w-lg">
-                <CardHeader>
-                  <CardTitle>Page load failed</CardTitle>
-                  <CardDescription>{sessionState.lastError}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      void bridge.reloadBrowserSession({
-                        projectId: props.project.id,
-                        sessionId: props.sessionId,
-                      })
-                    }
-                  >
-                    <RefreshCwIcon className="size-3.5" />
-                    Retry
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
-                    }
-                  >
-                    <ExternalLinkIcon className="size-3.5" />
-                    Open In Browser
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
+        <div ref={hostRef} className="absolute inset-0 bg-background" />
+        {sessionState.loading ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
+            <Spinner className="mr-2 size-4" />
+            Loading page...
+          </div>
+        ) : null}
+        {sessionState.lastError ? (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
+            <Card className="pointer-events-auto max-w-lg">
+              <CardHeader>
+                <CardTitle>Page load failed</CardTitle>
+                <CardDescription>{sessionState.lastError}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    void bridge.reloadBrowserSession({
+                      projectId: props.project.id,
+                      sessionId: props.sessionId,
+                    })
+                  }
+                >
+                  <RefreshCwIcon className="size-3.5" />
+                  Retry
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
+                  }
+                >
+                  <ExternalLinkIcon className="size-3.5" />
+                  Open In Browser
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
       </BrowserViewportResizeFrame>
     </DesktopBrowserChrome>
   );

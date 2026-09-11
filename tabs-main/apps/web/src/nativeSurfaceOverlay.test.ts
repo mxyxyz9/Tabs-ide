@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { isNativeSurfaceBlockingOverlaySlot } from "./nativeSurfaceOverlay";
+import {
+  isNativeSurfaceBlockingOverlaySlot,
+  shouldSuspendNativeSurfaceForOverlay,
+} from "./nativeSurfaceOverlay";
 
 describe("native surface overlay policy", () => {
   it("suspends native surfaces for blocking menus and dialogs", () => {
@@ -12,5 +15,11 @@ describe("native surface overlay policy", () => {
   it("suspends native surfaces while notifications are visible", () => {
     expect(isNativeSurfaceBlockingOverlaySlot("toast-root")).toBe(true);
     expect(isNativeSurfaceBlockingOverlaySlot("toast-popup")).toBe(true);
+  });
+
+  it("does not abort a native surface that is still starting", () => {
+    expect(shouldSuspendNativeSurfaceForOverlay(false, true)).toBe(false);
+    expect(shouldSuspendNativeSurfaceForOverlay(true, true)).toBe(true);
+    expect(shouldSuspendNativeSurfaceForOverlay(true, false)).toBe(false);
   });
 });

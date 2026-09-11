@@ -27,3 +27,10 @@ export function isNativeSurfaceBlockingOverlaySlot(slot: string): boolean {
     (selector) => selector === `[data-slot='${slot}']`,
   );
 }
+
+export function shouldSuspendNativeSurfaceForOverlay(
+  surfaceReady: boolean,
+  overlayOpen: boolean,
+): boolean {
+  return surfaceReady && overlayOpen;
+}
