@@ -252,6 +252,9 @@ export const ClientSettingsSchema = Schema.Struct({
     TrimmedNonEmptyString,
     TrimmedNonEmptyString,
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  onboardingCompletedAt: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -1297,6 +1300,7 @@ export const ClientSettingsPatch = Schema.Struct({
   environmentThemeOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
   ),
+  onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;
 

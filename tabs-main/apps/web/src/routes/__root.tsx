@@ -35,6 +35,7 @@ import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
 import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
 import { CommandPalette } from "../components/CommandPalette";
+import { FirstRunGate } from "../components/onboarding/FirstRunGate";
 import { NativePreviewAutomationHost } from "../components/NativePreviewAutomationHost";
 import { BackgroundActivityReporter } from "../components/BackgroundActivityReporter";
 import { ProviderUpdateNotification } from "../components/ProviderUpdateNotification";
@@ -167,9 +168,11 @@ function FullAppRootView() {
           <ProviderUpdateNotification />
           <SlowRpcRequestToastCoordinator />
           <DesktopProjectBootstrap />
-          <CommandPalette>
-            <Outlet />
-          </CommandPalette>
+          <FirstRunGate enabled={!isPopoutMode()}>
+            <CommandPalette>
+              <Outlet />
+            </CommandPalette>
+          </FirstRunGate>
           <GlobalConfirmDialog />
         </AnchoredToastProvider>
       </ToastProvider>

@@ -52,6 +52,7 @@ import { BrowserProfilesSettings } from "../components/settings/BrowserProfilesS
 import { DiagnosticsSettings } from "../components/settings/DiagnosticsSettings";
 import { DocumentationSettings } from "../components/settings/DocumentationSettings";
 import { RedactedSensitiveText } from "../components/settings/RedactedSensitiveText";
+import { useResetOnboarding } from "../onboarding/firstRun";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnifiedSettings } from "@tabs/contracts/settings";
 import {
@@ -2318,6 +2319,7 @@ function ToolbarPreview({ styleId }: { styleId: string }) {
 }
 
 function SettingsRouteView() {
+  const resetOnboarding = useResetOnboarding();
   const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
   const {
@@ -4149,6 +4151,22 @@ function SettingsRouteView() {
                             }}
                           >
                             Reload Browser Preview
+                          </Button>
+                        }
+                      />
+
+                      <SettingsRow
+                        title="First-Run Setup Wizard"
+                        description="Revisit the welcome wizard to review Tabs' core architecture (Code, Agents, Server, Git, Browser, Testing), check AI provider configuration, and setup workspaces."
+                        control={
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={() => {
+                              void resetOnboarding();
+                            }}
+                          >
+                            Re-run Setup Wizard
                           </Button>
                         }
                       />

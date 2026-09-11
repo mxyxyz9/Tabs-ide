@@ -421,3 +421,28 @@ describe("Browser Session Partitioning", () => {
     expect(customSettings.browserProfiles[0]?.color).toBe("#8b5cf6");
   });
 });
+
+describe("ClientSettings onboardingCompletedAt", () => {
+  it("defaults to null", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.onboardingCompletedAt).toBeNull();
+  });
+
+  it("decodes valid ISO timestamp string", () => {
+    const timestamp = "2026-09-12T00:00:00.000Z";
+    const settings = decodeClientSettings({ onboardingCompletedAt: timestamp });
+    expect(settings.onboardingCompletedAt).toBe(timestamp);
+  });
+
+  it("allows setting and resetting via ClientSettingsPatch", () => {
+    const patch = decodeClientSettingsPatch({
+      onboardingCompletedAt: "2026-09-12T00:00:00.000Z",
+    });
+    expect(patch.onboardingCompletedAt).toBe("2026-09-12T00:00:00.000Z");
+
+    const resetPatch = decodeClientSettingsPatch({
+      onboardingCompletedAt: null,
+    });
+    expect(resetPatch.onboardingCompletedAt).toBeNull();
+  });
+});
