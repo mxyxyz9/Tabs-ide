@@ -36,6 +36,7 @@ import { fnv1a32 } from "../lib/diffRendering";
 import { LRUCache } from "../lib/lruCache";
 import { useTheme } from "../hooks/useTheme";
 import { remarkGithubAlerts } from "../markdown-github-alerts";
+import { createIncrementalMarkdownPlugin } from "../markdown-incremental";
 import { resolveMarkdownFileLinkTarget } from "../markdown-links";
 import { readNativeApi } from "../nativeApi";
 import { useSettings } from "../hooks/useSettings";
@@ -505,9 +506,21 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
     [activeProjectId, browserLinkTarget, cwd, diffThemeName, isStreaming],
   );
 
+  const incrementalParsing =
+    isStreaming === true && /(?:^|\n) {0,3}(?:`{3}|~{3})/.test(text);
+
+  const remarkPlugins = useMemo(
+    () => [
+      remarkGfm,
+      remarkGithubAlerts,
+      ...(incrementalParsing ? [createIncrementalMarkdownPlugin()] : []),
+    ],
+    [incrementalParsing],
+  );
+
   return (
     <div className="chat-markdown w-full min-w-0 text-sm leading-relaxed text-foreground/80">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkGithubAlerts]} components={markdownComponents}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>
         {text}
       </ReactMarkdown>
     </div>
