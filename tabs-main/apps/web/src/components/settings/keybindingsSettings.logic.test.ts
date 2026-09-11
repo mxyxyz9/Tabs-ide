@@ -2,12 +2,17 @@ import type { ResolvedKeybindingsConfig } from "@tabs/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildKeybindingCommandOptions,
   buildKeybindingRows,
+  buildWhenVariableOptions,
   commandLabel,
+  keybindingConflictLabels,
   keybindingFromKeyboardEvent,
   parseWhenExpressionDraft,
   shortcutToKeybindingInput,
+  unknownWhenVariables,
   whenAstToExpression,
+  whenNodeRemoveLabel,
 } from "./keybindingsSettings.logic";
 
 const shortcut = (key: string, mods: Partial<Record<"modKey" | "shiftKey", boolean>> = {}) => ({
@@ -83,6 +88,55 @@ describe("keybindingsSettings.logic", () => {
     ).toBe("mod+k");
   });
 
+  it.each([
+    ["@", "Digit2", "mod+shift+2"],
+    ['"', "Digit2", "mod+shift+2"],
+    ["@", "Quote", "mod+shift+'"],
+  ])("captures %s at %s by physical key", (key, code, expected) => {
+    expect(
+      keybindingFromKeyboardEvent(
+        {
+          key,
+          code,
+          metaKey: true,
+          ctrlKey: false,
+          altKey: false,
+          shiftKey: true,
+        },
+        "MacIntel",
+      ),
+    ).toBe(expected);
+  });
+
+  it("captures Latin layout keys instead of their punctuation position", () => {
+    expect(
+      keybindingFromKeyboardEvent(
+        {
+          key: "m",
+          code: "Semicolon",
+          metaKey: true,
+          ctrlKey: false,
+          altKey: false,
+          shiftKey: false,
+        },
+        "MacIntel",
+      ),
+    ).toBe("mod+m");
+  });
+
+  it("describes the scope of each visual expression removal", () => {
+    const condition = { type: "identifier", name: "terminalFocus" } as const;
+    const negatedCondition = { type: "not", node: condition } as const;
+    const group = { type: "and", left: condition, right: negatedCondition } as const;
+    const negatedGroup = { type: "not", node: group } as const;
+
+    expect(whenNodeRemoveLabel(group, 0)).toBe("Clear all conditions");
+    expect(whenNodeRemoveLabel(condition, 1)).toBe("Remove condition");
+    expect(whenNodeRemoveLabel(negatedCondition, 1)).toBe("Remove condition");
+    expect(whenNodeRemoveLabel(group, 1)).toBe("Remove group and its conditions");
+    expect(whenNodeRemoveLabel(negatedGroup, 1)).toBe("Remove group and its conditions");
+  });
+
   it("validates when-expression drafts", () => {
     expect(parseWhenExpressionDraft("")).toEqual({ ok: true, value: undefined });
     expect(parseWhenExpressionDraft("a && (b || !c)").ok).toBe(true);
@@ -95,6 +149,43 @@ describe("keybindingsSettings.logic", () => {
     expect(commandLabel("script.setup-db.run")).toBe("Run Script: Setup Db");
   });
 
+  it("builds known when variable options", () => {
+    const options = buildWhenVariableOptions();
+    expect(options).toEqual(
+      expect.arrayContaining(["terminalFocus", "terminalOpen", "shellChromeFocus", "true", "false"]),
+    );
+  });
+
+  it("builds command options from defaults and resolved project bindings", () => {
+    const options = buildKeybindingCommandOptions([
+      {
+        command: "script.setup-db.run",
+        shortcut: {
+          key: "r",
+          modKey: true,
+          metaKey: false,
+          ctrlKey: false,
+          altKey: false,
+          shiftKey: false,
+        },
+      },
+    ] satisfies ResolvedKeybindingsConfig);
+
+    expect(options).toEqual(
+      expect.arrayContaining([
+        "terminal.toggle",
+        "chat.new",
+        "script.setup-db.run",
+      ]),
+    );
+  });
+
+  it("reports unknown when variables without rejecting parseable expressions", () => {
+    const parsed = parseWhenExpressionDraft("!terminalFocus && customVar");
+    expect(parsed.ok).toBe(true);
+    expect(unknownWhenVariables(parsed.ok ? parsed.value : undefined)).toEqual(["customVar"]);
+  });
+
   it("reports conflicting shortcuts that share an active when context", () => {
     const rows = buildKeybindingRows(
       [
@@ -105,5 +196,13 @@ describe("keybindingsSettings.logic", () => {
     );
     expect(rows[0]?.conflicts).toEqual(["Chat: New Local"]);
     expect(rows[1]?.conflicts).toEqual(["Chat: New"]);
+
+    expect(
+      keybindingConflictLabels(rows, {
+        rowId: rows[0]?.id ?? "",
+        key: "mod+p",
+        when: "",
+      }),
+    ).toEqual(["Chat: New Local"]);
   });
 });

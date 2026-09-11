@@ -39,6 +39,7 @@ import { NativePreviewAutomationHost } from "../components/NativePreviewAutomati
 import { BackgroundActivityReporter } from "../components/BackgroundActivityReporter";
 import { ProviderUpdateNotification } from "../components/ProviderUpdateNotification";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
+import { createKeybindingsUpdateToastController } from "../components/KeybindingsUpdateToast.logic";
 import {
   removeEnvironmentReadModelFromAtoms,
   setProjectExpandedInAtoms,
@@ -500,7 +501,7 @@ function EventRouter() {
     // during subscribe. Skip the toast for that replay so effect re-runs
     // don't produce duplicate toasts.
     let subscribed = false;
-    let lastKeybindingsPayloadHash: string | null = null;
+    const keybindingsToastController = createKeybindingsUpdateToastController({});
     const unsubServerConfigUpdated = onServerConfigUpdated((payload) => {
       if (payload.settings) {
         applyServerConfigUpdate(payload);
@@ -510,21 +511,15 @@ function EventRouter() {
       void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
 
       if (!subscribed) {
-        lastKeybindingsPayloadHash = JSON.stringify(payload.issues);
         return;
       }
 
-      // Only show keybindings toasts for keybindings changes (no settings in payload)
-      if (payload.settings) return;
-
-      const currentHash = JSON.stringify(payload.issues);
-      if (currentHash === lastKeybindingsPayloadHash) {
+      const decision = keybindingsToastController.handle(payload);
+      if (!decision) {
         return;
       }
-      lastKeybindingsPayloadHash = currentHash;
 
-      const issue = payload.issues.find((entry) => entry.kind.startsWith("keybindings."));
-      if (!issue) {
+      if (decision._tag === "Success") {
         toastManager.add({
           type: "success",
           title: "Keybindings updated",
@@ -536,7 +531,7 @@ function EventRouter() {
       toastManager.add({
         type: "warning",
         title: "Invalid keybindings configuration",
-        description: issue.message,
+        description: decision.message,
         actionProps: {
           children: "Open keybindings.json",
           onClick: () => {

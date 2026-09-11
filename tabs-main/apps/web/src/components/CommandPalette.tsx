@@ -38,6 +38,7 @@ import { readModelStateAtom } from "../state/readModel";
 import { useKeybindings } from "../state/settings";
 import { useThreadTerminalState } from "../state/terminal";
 import { newCommandId, newProjectId } from "../lib/utils";
+import { isTerminalFocused } from "../lib/terminalFocus";
 import { makeAppModelSelection } from "../modelSelection";
 import { resolveShortcutCommand } from "../keybindings";
 import {
@@ -90,10 +91,12 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented) return;
+      if (!document.hasFocus()) return;
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
-          terminalFocus: false, // Default context fallback
+          terminalFocus: isTerminalFocused(),
           terminalOpen,
+          shellChromeFocus: true,
         },
       });
       if (command !== "commandPalette.toggle") {

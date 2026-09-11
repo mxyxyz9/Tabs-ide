@@ -944,7 +944,7 @@ function getActiveAccelerator(command: string): string | undefined {
   }
 
   const binding =
-    userBindings.find((b: any) => b.command === command) ||
+    [...userBindings].reverse().find((b: any) => b.command === command) ||
     DEFAULT_KEYBINDINGS.find((b: any) => b.command === command);
 
   if (!binding) return undefined;
@@ -988,7 +988,7 @@ function configureApplicationMenu(): void {
         { type: "separator" },
         {
           label: "Settings...",
-          accelerator: "CmdOrCtrl+,",
+          accelerator: getActiveAccelerator("window.settings") ?? "CmdOrCtrl+,",
           click: () => dispatchMenuAction("open-settings"),
         },
         { type: "separator" },
@@ -1012,7 +1012,7 @@ function configureApplicationMenu(): void {
           : [
               {
                 label: "Settings...",
-                accelerator: "CmdOrCtrl+,",
+                accelerator: getActiveAccelerator("window.settings") ?? "CmdOrCtrl+,",
                 click: () => dispatchMenuAction("open-settings"),
               },
               { type: "separator" as const },
@@ -1020,7 +1020,10 @@ function configureApplicationMenu(): void {
         process.platform === "darwin"
           ? // cmd+W closes the active tab (see Tabs menu); window close moves to
             // cmd+shift+W, matching the browser convention.
-            { role: "close" as const, accelerator: "CmdOrCtrl+Shift+W" }
+            {
+              role: "close" as const,
+              accelerator: getActiveAccelerator("window.close") ?? "CmdOrCtrl+Shift+W",
+            }
           : { role: "quit" as const },
       ],
     },
@@ -1030,18 +1033,18 @@ function configureApplicationMenu(): void {
       submenu: [
         {
           label: "Close Tab",
-          accelerator: "CmdOrCtrl+W",
+          accelerator: getActiveAccelerator("tab.close") ?? "CmdOrCtrl+W",
           click: () => dispatchMenuAction("tab-close"),
         },
         { type: "separator" },
         {
           label: "Next Tab",
-          accelerator: "CmdOrCtrl+Shift+]",
+          accelerator: getActiveAccelerator("tab.next") ?? "CmdOrCtrl+Shift+]",
           click: () => dispatchMenuAction("tab-next"),
         },
         {
           label: "Previous Tab",
-          accelerator: "CmdOrCtrl+Shift+[",
+          accelerator: getActiveAccelerator("tab.prev") ?? "CmdOrCtrl+Shift+[",
           click: () => dispatchMenuAction("tab-prev"),
         },
         // Hidden duplicates so Ctrl+Tab / Ctrl+Shift+Tab also cycle tabs.

@@ -10,6 +10,7 @@ import {
   parseKeybindingWhenExpression,
 } from "@tabs/shared/keybindings";
 
+import { shortcutKeyFromEvent } from "../../keybindings";
 import { isMacPlatform } from "../../lib/utils";
 
 export type KeybindingSource = "Default" | "Custom" | "Project";
@@ -57,6 +58,14 @@ export function shortcutToKeybindingInput(shortcut: KeybindingShortcut): string 
   if (shortcut.shiftKey) parts.push("shift");
   parts.push(shortcut.key === " " ? "space" : shortcut.key === "escape" ? "esc" : shortcut.key);
   return parts.join("+");
+}
+
+export function whenNodeRemoveLabel(node: KeybindingWhenNode, depth: number): string {
+  if (depth === 0) return "Clear all conditions";
+  if (node.type === "identifier" || (node.type === "not" && node.node.type === "identifier")) {
+    return "Remove condition";
+  }
+  return "Remove group and its conditions";
 }
 
 export function whenAstToExpression(node: KeybindingWhenNode | undefined): string {
@@ -331,10 +340,12 @@ export function normalizeShortcutKeyToken(key: string): string | null {
 }
 
 export function keybindingFromKeyboardEvent(
-  event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+  event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey"> & {
+    readonly code?: string;
+  },
   platform: string,
 ): string | null {
-  const keyToken = normalizeShortcutKeyToken(event.key);
+  const keyToken = normalizeShortcutKeyToken(shortcutKeyFromEvent(event));
   if (!keyToken) return null;
 
   const parts: string[] = [];

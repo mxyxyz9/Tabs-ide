@@ -1,4 +1,5 @@
-import { assert, it } from "@effect/vitest";
+import { assert } from "chai";
+import { it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 

@@ -1,4 +1,5 @@
-import { assert, describe, it } from "vitest";
+import { assert } from "chai";
+import { describe, it } from "vitest";
 
 import {
   type KeybindingCommand,

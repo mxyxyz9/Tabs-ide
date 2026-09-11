@@ -1,6 +1,7 @@
 import { KeybindingCommand, KeybindingRule, KeybindingsConfig } from "@tabs/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, it } from "@effect/vitest";
+import { assert } from "chai";
+import { it } from "@effect/vitest";
 import { assertFailure } from "@effect/vitest/utils";
 import { Effect, FileSystem, Layer, Logger, Path, Schema } from "effect";
 import { ServerConfig } from "./config";
