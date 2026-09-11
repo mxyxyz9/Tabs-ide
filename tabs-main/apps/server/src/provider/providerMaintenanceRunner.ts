@@ -60,6 +60,9 @@ const PROVIDER_INSTALL_COMMANDS: Readonly<Record<string, ProviderInstallCommand>
     lockKey: "npm-global",
   },
   opencode: { executable: "npm", args: ["install", "-g", "opencode-ai"], lockKey: "npm-global" },
+  kilo: { executable: "npm", args: ["install", "-g", "@kilocode/cli"], lockKey: "npm-global" },
+  droid: { executable: "npm", args: ["install", "-g", "droid"], lockKey: "npm-global" },
+  copilot: { executable: "npm", args: ["install", "-g", "@github/copilot"], lockKey: "npm-global" },
 };
 
 function resolveInstallCommand(provider: ProviderDriverKind): ProviderInstallCommand | null {
@@ -219,6 +222,10 @@ function failureMessage(result: ProviderMaintenanceCommandResult): string {
 
 function isOutdatedProvider(provider: ServerProvider | undefined): boolean {
   return provider?.versionAdvisory?.status === "behind_latest";
+}
+
+function isStillInstalled(provider: ServerProvider): boolean {
+  return provider.installed;
 }
 
 function makeUpdateState(input: {
@@ -399,19 +406,21 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
               capabilities,
               instanceId,
             );
-            const couldNotVerify = verifiedProviders.length === 0;
-            const stillOutdated =
-              couldNotVerify ||
-              verifiedProviders.some((verifiedProvider) => isOutdatedProvider(verifiedProvider));
+            const couldNotVerify =
+              verifiedProviders.length === 0 ||
+              verifiedProviders.some((verifiedProvider) => !isStillInstalled(verifiedProvider));
+            const stillOutdated = verifiedProviders.some((verifiedProvider) =>
+              isOutdatedProvider(verifiedProvider),
+            );
             return yield* finish(
               makeUpdateState({
-                status: stillOutdated ? "unchanged" : "succeeded",
+                status: couldNotVerify || stillOutdated ? "unchanged" : "succeeded",
                 startedAt,
                 finishedAt,
                 message: couldNotVerify
-                  ? "Update command completed, but T3 Code could not verify the provider version."
+                  ? "Update command completed, but Tabs could not verify the provider."
                   : stillOutdated
-                    ? "Update command completed, but T3 Code still detects an outdated provider version."
+                    ? "Update command completed, but Tabs still detects an outdated provider version."
                     : "Provider updated.",
                 output: commandOutput(result),
               }),
@@ -569,7 +578,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
                 finishedAt,
                 message: installed
                   ? "Provider installed."
-                  : "Install command completed, but T3 Code could not detect the provider. You may need to restart.",
+                  : "Install command completed, but Tabs could not detect the provider. You may need to restart.",
                 output: commandOutput(result),
               }),
             );

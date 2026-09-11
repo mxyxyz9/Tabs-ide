@@ -430,7 +430,7 @@ const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
   grok: "grok login",
   opencode: "opencode auth login",
   kilo: "kilo auth login",
-  droid: "droid",
+  droid: "droid auth login",
   antigravity: "agy",
 };
 
