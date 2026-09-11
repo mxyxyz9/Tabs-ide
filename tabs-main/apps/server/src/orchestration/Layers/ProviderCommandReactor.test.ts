@@ -97,6 +97,7 @@ describe("ProviderCommandReactor", () => {
     readonly baseDir?: string;
     readonly threadModelSelection?: ModelSelection;
     readonly sessionModelSwitch?: "unsupported" | "in-session";
+    readonly compactThreadEffect?: () => Effect.Effect<void, any>;
   }) {
     const now = new Date().toISOString();
     const baseDir = input?.baseDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "tabs-reactor-"));
@@ -186,10 +187,12 @@ describe("ProviderCommandReactor", () => {
       ),
     );
 
+    const compactThread = vi.fn((_: ThreadId) => input?.compactThreadEffect?.() ?? Effect.void);
     const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
     const service: ProviderServiceShape = {
       startSession: startSession as ProviderServiceShape["startSession"],
       sendTurn: sendTurn as ProviderServiceShape["sendTurn"],
+      compactThread,
       interruptTurn: interruptTurn as ProviderServiceShape["interruptTurn"],
       respondToRequest: respondToRequest as ProviderServiceShape["respondToRequest"],
       respondToUserInput: respondToUserInput as ProviderServiceShape["respondToUserInput"],
@@ -258,8 +261,10 @@ describe("ProviderCommandReactor", () => {
 
     return {
       engine,
+      readModel: () => Effect.runPromise(engine.getReadModel()),
       startSession,
       sendTurn,
+      compactThread,
       interruptTurn,
       respondToRequest,
       respondToUserInput,
@@ -1358,5 +1363,510 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.status).toBe("stopped");
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.activeTurnId).toBeNull();
+  });
+
+  it("rejects /compact without conversation context", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: "cmd-empty-compact" as CommandId,
+        threadId: "thread-1" as ThreadId,
+        message: {
+          messageId: asMessageId("user-message-empty-compact"),
+          role: "user",
+          text: "/compact",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await harness.drain();
+    expect(harness.compactThread).not.toHaveBeenCalled();
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
+    const failure = thread?.activities.find((a) => a.summary === "Context compaction failed");
+    expect(failure).toBeDefined();
+    expect((failure?.payload as Record<string, unknown>)?.detail).toContain(
+      "Context compaction requires an existing conversation",
+    );
+  });
+
+  it("queues messages until compaction restores the session and replays in deterministic order", async () => {
+    let releaseCompaction: () => void = () => {};
+    const compactionGate = new Promise<void>((resolve) => {
+      releaseCompaction = resolve;
+    });
+
+    const harness = await createHarness({
+      compactThreadEffect: () => Effect.promise(() => compactionGate),
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = "thread-1" as ThreadId;
+
+    const dispatchTurn = (id: string, text: string, createdAt: string) =>
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: `cmd-${id}` as CommandId,
+          threadId,
+          message: {
+            messageId: asMessageId(`user-message-${id}`),
+            role: "user",
+            text,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        }),
+      );
+
+    // Initial conversation context
+    await dispatchTurn("before-compact", "hello world", now);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await harness.drain();
+
+    // Set session to ready
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: "cmd-session-ready" as CommandId,
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    // Start compaction (will block on compactionGate)
+    await dispatchTurn("compact-cmd", "/compact", "2026-01-01T00:00:01.000Z");
+    await waitFor(() => harness.compactThread.mock.calls.length === 1);
+
+    // Send messages while compaction is active
+    await dispatchTurn("during-compact-1", "first queued turn", "2026-01-01T00:00:02.000Z");
+    await dispatchTurn("during-compact-2", "second queued turn", "2026-01-01T00:00:03.000Z");
+    await harness.drain();
+
+    // Still only 1 turn sent so far; the other 2 are queued
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+
+    // Release compaction
+    releaseCompaction();
+    await waitFor(() => harness.sendTurn.mock.calls.length === 3);
+    await harness.drain();
+
+    // Verify deterministic replay order
+    expect(harness.sendTurn.mock.calls[1]?.[0]).toMatchObject({
+      threadId,
+      input: "first queued turn",
+    });
+    expect(harness.sendTurn.mock.calls[2]?.[0]).toMatchObject({
+      threadId,
+      input: "second queued turn",
+    });
+
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    expect(thread?.session?.status).toBe("ready");
+    expect(
+      thread?.activities.filter((a) => a.kind === "provider.turn.start.failed"),
+    ).toEqual([]);
+  });
+
+  it("cancels queued messages if session is stopped during compaction", async () => {
+    let releaseCompaction: () => void = () => {};
+    const compactionGate = new Promise<void>((resolve) => {
+      releaseCompaction = resolve;
+    });
+
+    const harness = await createHarness({
+      compactThreadEffect: () => Effect.promise(() => compactionGate),
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = "thread-1" as ThreadId;
+
+    const dispatchTurn = (id: string, text: string, createdAt: string) =>
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: `cmd-${id}` as CommandId,
+          threadId,
+          message: {
+            messageId: asMessageId(`user-message-${id}`),
+            role: "user",
+            text,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        }),
+      );
+
+    await dispatchTurn("init", "hello", now);
+    await harness.drain();
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: "cmd-session-ready" as CommandId,
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await dispatchTurn("compact", "/compact", "2026-01-01T00:00:01.000Z");
+    await waitFor(() => harness.compactThread.mock.calls.length === 1);
+
+    await dispatchTurn("queued", "queued turn to be canceled", "2026-01-01T00:00:02.000Z");
+    await harness.drain();
+
+    // Stop session during compaction
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.stop",
+        commandId: "cmd-stop" as CommandId,
+        threadId,
+        createdAt: "2026-01-01T00:00:03.000Z",
+      }),
+    );
+    await harness.drain();
+
+    releaseCompaction();
+    await harness.drain();
+
+    // Queued turn was never sent to provider
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    expect(thread?.session?.status).toBe("stopped");
+    const failure = thread?.activities.find((a) => a.summary === "Queued message was not sent");
+    expect(failure).toBeDefined();
+    expect((failure?.payload as Record<string, unknown>)?.detail).toContain(
+      "The session was stopped during context compaction",
+    );
+    expect((failure?.payload as Record<string, unknown>)?.requestId).toBe("user-message-queued");
+  });
+
+  it("cancels queued messages if turn is interrupted during compaction", async () => {
+    let releaseCompaction: () => void = () => {};
+    const compactionGate = new Promise<void>((resolve) => {
+      releaseCompaction = resolve;
+    });
+
+    const harness = await createHarness({
+      compactThreadEffect: () => Effect.promise(() => compactionGate),
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = "thread-1" as ThreadId;
+
+    const dispatchTurn = (id: string, text: string, createdAt: string) =>
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: `cmd-${id}` as CommandId,
+          threadId,
+          message: {
+            messageId: asMessageId(`user-message-${id}`),
+            role: "user",
+            text,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        }),
+      );
+
+    await dispatchTurn("init", "hello", now);
+    await harness.drain();
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: "cmd-session-ready" as CommandId,
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await dispatchTurn("compact", "/compact", "2026-01-01T00:00:01.000Z");
+    await waitFor(() => harness.compactThread.mock.calls.length === 1);
+
+    await dispatchTurn("queued", "queued turn to be interrupted", "2026-01-01T00:00:02.000Z");
+    await harness.drain();
+
+    // Interrupt requested
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.interrupt",
+        commandId: "cmd-interrupt" as CommandId,
+        threadId,
+        createdAt: "2026-01-01T00:00:03.000Z",
+      }),
+    );
+    await harness.drain();
+
+    releaseCompaction();
+    await harness.drain();
+
+    // Queued turn was never sent to provider
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    const failure = thread?.activities.find((a) => a.summary === "Queued message was not sent");
+    expect(failure).toBeDefined();
+    expect((failure?.payload as Record<string, unknown>)?.detail).toContain(
+      "Context compaction was interrupted",
+    );
+  });
+
+  it("cancels queued messages if context compaction fails", async () => {
+    let rejectCompaction: (error: Error) => void = () => {};
+    const compactionGate = new Promise<void>((_, reject) => {
+      rejectCompaction = reject;
+    });
+
+    const harness = await createHarness({
+      compactThreadEffect: () => Effect.tryPromise(() => compactionGate),
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = "thread-1" as ThreadId;
+
+    const dispatchTurn = (id: string, text: string, createdAt: string) =>
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: `cmd-${id}` as CommandId,
+          threadId,
+          message: {
+            messageId: asMessageId(`user-message-${id}`),
+            role: "user",
+            text,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt,
+        }),
+      );
+
+    await dispatchTurn("init", "hello", now);
+    await harness.drain();
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: "cmd-session-ready" as CommandId,
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await dispatchTurn("compact", "/compact", "2026-01-01T00:00:01.000Z");
+    await waitFor(() => harness.compactThread.mock.calls.length === 1);
+
+    await dispatchTurn("queued", "queued turn during failed compact", "2026-01-01T00:00:02.000Z");
+    await harness.drain();
+
+    // Trigger compaction failure
+    rejectCompaction(new Error("Provider internal compaction timeout"));
+    await waitFor(async () => {
+      const rm = await Effect.runPromise(harness.engine.getReadModel());
+      const t = rm.threads.find((entry) => entry.id === threadId);
+      return (
+        t?.activities.some((a) => a.summary === "Context compaction failed") &&
+        t?.activities.some((a) => a.summary === "Queued message was not sent")
+      );
+    });
+    await harness.drain();
+
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    const compactFailure = thread?.activities.find((a) => a.summary === "Context compaction failed");
+    expect(compactFailure).toBeDefined();
+
+    const queuedFailure = thread?.activities.find((a) => a.summary === "Queued message was not sent");
+    expect(queuedFailure).toBeDefined();
+    expect((queuedFailure?.payload as Record<string, unknown>)?.detail).toContain(
+      "Context compaction failed. Send this message again to continue.",
+    );
+  });
+
+  it("maintains strict queue isolation between multiple concurrent threads and environments", async () => {
+    let releaseCompaction1: () => void = () => {};
+    let releaseCompaction2: () => void = () => {};
+    const gate1 = new Promise<void>((r) => {
+      releaseCompaction1 = r;
+    });
+    const gate2 = new Promise<void>((r) => {
+      releaseCompaction2 = r;
+    });
+
+    const thread1 = "thread-1" as ThreadId;
+    const thread2 = "thread-2" as ThreadId;
+
+    const harness = await createHarness({
+      compactThreadEffect: () => Effect.void,
+    });
+
+    // Custom mock for compactThread that gates based on threadId
+    harness.compactThread.mockImplementation((targetId: ThreadId) => {
+      if (targetId === thread1) {
+        return Effect.promise(() => gate1);
+      }
+      return Effect.promise(() => gate2);
+    });
+
+    const now = "2026-01-01T00:00:00.000Z";
+
+    // Setup second project and thread (representing isolated environment)
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "project.create",
+        commandId: "cmd-project-create-2" as CommandId,
+        projectId: asProjectId("project-2"),
+        title: "Remote Environment Project",
+        workspaceRoot: "/tmp/remote-project",
+        defaultModelSelection: { instanceId: "codex" as ProviderInstanceId, model: "gpt-5-codex" },
+        createdAt: now,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.create",
+        commandId: "cmd-thread-create-2" as CommandId,
+        threadId: thread2,
+        projectId: asProjectId("project-2"),
+        title: "Thread 2",
+        modelSelection: { instanceId: "codex" as ProviderInstanceId, model: "gpt-5-codex" },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      }),
+    );
+
+    const dispatchTurn = (tId: ThreadId, id: string, text: string) =>
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: `cmd-${id}` as CommandId,
+          threadId: tId,
+          message: {
+            messageId: asMessageId(`user-message-${id}`),
+            role: "user",
+            text,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
+
+    // Initial turns
+    await dispatchTurn(thread1, "init-t1", "hello t1");
+    await dispatchTurn(thread2, "init-t2", "hello t2");
+    await harness.drain();
+
+    // Mark both ready
+    for (const tId of [thread1, thread2]) {
+      await Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.session.set",
+          commandId: `cmd-session-ready-${tId}` as CommandId,
+          threadId: tId,
+          session: {
+            threadId: tId,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "approval-required",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+          createdAt: now,
+        }),
+      );
+    }
+
+    // Both start compaction concurrently
+    await dispatchTurn(thread1, "compact-1", "/compact");
+    await dispatchTurn(thread2, "compact-2", "/compact");
+    await waitFor(() => harness.compactThread.mock.calls.length === 2);
+
+    // Queue turns for both threads
+    await dispatchTurn(thread1, "t1-queued", "turn for thread 1");
+    await dispatchTurn(thread2, "t2-queued", "turn for thread 2");
+    await harness.drain();
+
+    // Only initial turns sent so far
+    expect(harness.sendTurn).toHaveBeenCalledTimes(2);
+
+    // Release thread2 compaction FIRST
+    releaseCompaction2();
+    await waitFor(() => harness.sendTurn.mock.calls.length === 3);
+    await harness.drain();
+
+    // Thread 2 received its queued turn, Thread 1 did NOT yet
+    expect(harness.sendTurn.mock.calls[2]?.[0]).toMatchObject({
+      threadId: thread2,
+      input: "turn for thread 2",
+    });
+
+    // Now release thread1 compaction
+    releaseCompaction1();
+    await waitFor(() => harness.sendTurn.mock.calls.length === 4);
+    await harness.drain();
+
+    // Thread 1 received its queued turn
+    expect(harness.sendTurn.mock.calls[3]?.[0]).toMatchObject({
+      threadId: thread1,
+      input: "turn for thread 1",
+    });
   });
 });

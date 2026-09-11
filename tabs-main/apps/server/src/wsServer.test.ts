@@ -1348,6 +1348,7 @@ describe("WebSocket Server", () => {
           threadId,
           turnId: asTurnId("provider-turn-1"),
         }),
+      compactThread: () => unsupported(),
       interruptTurn: () => unsupported(),
       respondToRequest: () => unsupported(),
       respondToUserInput: () => unsupported(),
