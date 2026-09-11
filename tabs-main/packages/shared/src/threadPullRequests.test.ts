@@ -9,6 +9,8 @@ import {
   legacyLinkedPullRequestOf,
   legacyThreadPullRequestKey,
   threadPullRequestSearchTerms,
+  matchThreadByPullRequestSearch,
+  findThreadsForPullRequest,
   resolveThreadCurrentPullRequest,
   resolveThreadPullRequestChains,
   resolveThreadPullRequestBadge,
@@ -423,4 +425,122 @@ it("searches the legacy projection when old environments decode to an empty link
   expect(
     threadPullRequestSearchTerms({ pullRequests: [link(34)], linkedPullRequest }),
   ).not.toContain("#12");
+});
+
+describe("advanced pull request search and thread lookup", () => {
+  const gitlabLink: ThreadPullRequestLink = {
+    host: "gitlab.com",
+    repository: "group/nested/project",
+    number: 77,
+    url: "https://gitlab.com/group/nested/project/-/merge_requests/77",
+    source: "created",
+    linkedAt: "2026-01-01T00:00:00.000Z",
+    snapshot: snapshot({
+      title: "Improve caching strategy",
+      headBranch: "perf/cache-v2",
+      baseBranch: "develop",
+      state: "open",
+    }),
+    stack: null,
+  };
+
+  const azureLink: ThreadPullRequestLink = {
+    host: "dev.azure.com",
+    repository: "org/team/_git/repo",
+    number: 105,
+    url: "https://dev.azure.com/org/team/_git/repo/pullrequest/105",
+    source: "manual",
+    linkedAt: "2026-01-02T00:00:00.000Z",
+    snapshot: snapshot({
+      title: "Fix deployment pipeline",
+      headBranch: "fix/ci-pipeline",
+      baseBranch: "main",
+      state: "merged",
+    }),
+    stack: null,
+  };
+
+  const threadA = {
+    id: "thread-a",
+    pullRequests: [gitlabLink, azureLink],
+  };
+
+  const threadB = {
+    id: "thread-b",
+    pullRequests: [link(999, { snapshot: snapshot({ title: "Unrelated work" }) })],
+  };
+
+  const threadLegacy = {
+    id: "thread-c",
+    pullRequests: [],
+    linkedPullRequest: {
+      projectId: ProjectId.make("project-1"),
+      repository: "bitbucket.org/workspace/repo",
+      number: 44,
+      url: "https://bitbucket.org/workspace/repo/pull-requests/44",
+    },
+  };
+
+  it("extracts comprehensive search terms including provider, MR number, branches, and titles", () => {
+    const terms = threadPullRequestSearchTerms(threadA);
+    expect(terms).toContain("#77");
+    expect(terms).toContain("!77");
+    expect(terms).toContain("77");
+    expect(terms).toContain("group/nested/project#77");
+    expect(terms).toContain("group/nested/project!77");
+    expect(terms).toContain("gitlab");
+    expect(terms).toContain("glab");
+    expect(terms).toContain("mr");
+    expect(terms).toContain("perf/cache-v2");
+    expect(terms).toContain("develop");
+    expect(terms).toContain("Improve caching strategy");
+
+    expect(terms).toContain("#105");
+    expect(terms).toContain("azure");
+    expect(terms).toContain("azure-devops");
+    expect(terms).toContain("fix/ci-pipeline");
+    expect(terms).toContain("Fix deployment pipeline");
+  });
+
+  it("matches threads by various search queries", () => {
+    expect(matchThreadByPullRequestSearch(threadA, "https://gitlab.com")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadA, "!77")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadA, "77")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadA, "cache-v2")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadA, "azure-devops")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadA, "105")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadA, "Fix deployment")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadA, "unrelated")).toBe(false);
+
+    expect(matchThreadByPullRequestSearch(threadLegacy, "bitbucket")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadLegacy, "#44")).toBe(true);
+    expect(matchThreadByPullRequestSearch(threadLegacy, "44")).toBe(true);
+  });
+
+  it("finds threads matching a pull request identity", () => {
+    const threads = [threadA, threadB, threadLegacy];
+
+    const match77 = findThreadsForPullRequest(threads, {
+      number: 77,
+      url: "https://gitlab.com/group/nested/project/-/merge_requests/77",
+    });
+    expect(match77.map((t) => t.id)).toEqual(["thread-a"]);
+
+    const match105 = findThreadsForPullRequest(threads, {
+      number: 105,
+      repository: "org/team/_git/repo",
+    });
+    expect(match105.map((t) => t.id)).toEqual(["thread-a"]);
+
+    const match44 = findThreadsForPullRequest(threads, {
+      number: 44,
+      repository: "bitbucket.org/workspace/repo",
+    });
+    expect(match44.map((t) => t.id)).toEqual(["thread-c"]);
+
+    const noMatch = findThreadsForPullRequest(threads, {
+      number: 12345,
+    });
+    expect(noMatch).toEqual([]);
+  });
 });

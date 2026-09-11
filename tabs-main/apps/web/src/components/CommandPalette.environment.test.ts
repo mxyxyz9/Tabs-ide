@@ -186,4 +186,137 @@ describe("buildThreadActionItems environment disambiguation", () => {
     await items[1]?.run();
     expect(runThread).toHaveBeenCalledWith(remoteThread);
   });
+
+  it("includes linked pull request search terms, URLs, numbers, and stack indicators", () => {
+    const threadWithPrs = {
+      id: "thread-pr-1",
+      projectId: "proj-1",
+      title: "Feature branch work",
+      environmentId: "local",
+      messages: [],
+      archivedAt: null,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      pullRequests: [
+        {
+          host: "github.com",
+          repository: "tabs/ide",
+          number: 240,
+          url: "https://github.com/tabs/ide/pull/240",
+          source: "created",
+          linkedAt: "2026-03-01T00:00:00.000Z",
+          snapshot: {
+            state: "open",
+            title: "Add tabs support",
+            headBranch: "feat/tabs",
+            baseBranch: "main",
+            isDraft: false,
+            updatedAt: "2026-03-01T00:00:00.000Z",
+            syncedAt: "2026-03-01T00:00:00.000Z",
+          },
+          stack: null,
+        },
+      ],
+    } as unknown as Thread;
+
+    const threadWithStack = {
+      id: "thread-pr-2",
+      projectId: "proj-1",
+      title: "Stack branch work",
+      environmentId: "remote-cluster",
+      messages: [],
+      archivedAt: null,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      pullRequests: [
+        {
+          host: "github.com",
+          repository: "tabs/ide",
+          number: 241,
+          url: "https://github.com/tabs/ide/pull/241",
+          source: "created",
+          linkedAt: "2026-03-01T00:00:00.000Z",
+          snapshot: {
+            state: "open",
+            title: "Layer 1",
+            headBranch: "feat/layer-1",
+            baseBranch: "main",
+            isDraft: false,
+            updatedAt: "2026-03-01T00:00:00.000Z",
+            syncedAt: "2026-03-01T00:00:00.000Z",
+          },
+          stack: {
+            kind: "native",
+            id: "stack-1",
+            number: 1,
+            url: "https://github.com/tabs/ide/stacks/1",
+            base: "main",
+            layers: [
+              { number: 241, headBranch: "feat/layer-1", state: "open" },
+              { number: 242, headBranch: "feat/layer-2", state: "open" },
+            ],
+          },
+        },
+        {
+          host: "github.com",
+          repository: "tabs/ide",
+          number: 242,
+          url: "https://github.com/tabs/ide/pull/242",
+          source: "created",
+          linkedAt: "2026-03-01T01:00:00.000Z",
+          snapshot: {
+            state: "open",
+            title: "Layer 2",
+            headBranch: "feat/layer-2",
+            baseBranch: "feat/layer-1",
+            isDraft: false,
+            updatedAt: "2026-03-01T01:00:00.000Z",
+            syncedAt: "2026-03-01T01:00:00.000Z",
+          },
+          stack: {
+            kind: "native",
+            id: "stack-1",
+            number: 1,
+            url: "https://github.com/tabs/ide/stacks/1",
+            base: "main",
+            layers: [
+              { number: 241, headBranch: "feat/layer-1", state: "open" },
+              { number: 242, headBranch: "feat/layer-2", state: "open" },
+            ],
+          },
+        },
+      ],
+    } as unknown as Thread;
+
+    const items = buildThreadActionItems({
+      threads: [threadWithPrs, threadWithStack],
+      projectTitleById: new Map([["proj-1", "Tabs Repo"]]),
+      sortOrder: "updated_at",
+      icon: null,
+      locationByEnvironmentId: new Map([
+        ["local", { label: "Local" }],
+        ["remote-cluster", { label: "Cloud Cluster" }],
+      ]),
+      runThread: vi.fn(),
+    });
+
+    expect(items).toHaveLength(2);
+    const item1 = items.find((i) => i.value.includes("thread-pr-1"));
+    const item2 = items.find((i) => i.value.includes("thread-pr-2"));
+    expect(item1).toBeDefined();
+    expect(item2).toBeDefined();
+
+    // Verify threadWithPrs search terms and description
+    expect(item1?.searchTerms).toContain("#240");
+    expect(item1?.searchTerms).toContain("240");
+    expect(item1?.searchTerms).toContain("https://github.com/tabs/ide/pull/240");
+    expect(item1?.searchTerms).toContain("github");
+    expect(item1?.searchTerms).toContain("tabs/ide");
+    expect(item1?.searchTerms).toContain("feat/tabs");
+    expect(item1?.searchTerms).toContain("Add tabs support");
+    expect(item1?.description).toContain("#240");
+
+    // Verify stack search terms and description
+    expect(item2?.searchTerms).toContain("#242");
+    expect(item2?.searchTerms).toContain("#241");
+    expect(item2?.description).toContain("#242 (2 in stack)");
+  });
 });

@@ -3,6 +3,10 @@ import {
   type FilesystemBrowseEntry,
   type SidebarThreadSortOrder,
 } from "@tabs/contracts";
+import {
+  threadPullRequestSearchTerms,
+  resolveThreadCurrentPullRequest,
+} from "@tabs/shared/threadPullRequests";
 import { type ReactNode } from "react";
 import { type Project, type Thread } from "../types";
 
@@ -304,6 +308,17 @@ export function buildThreadActionItems(input: {
     if (thread.branch) {
       descriptionParts.push(`#${thread.branch}`);
     }
+    const currentPr = resolveThreadCurrentPullRequest(thread.pullRequests ?? []);
+    if (currentPr) {
+      const top = currentPr.kind === "stack" ? currentPr.top : currentPr.link;
+      const isStack = currentPr.kind === "stack" && currentPr.open.length > 1;
+      const prText = isStack
+        ? `#${top.number} (${currentPr.open.length} in stack)`
+        : `#${top.number}`;
+      descriptionParts.push(prText);
+    } else if (thread.linkedPullRequest) {
+      descriptionParts.push(`#${thread.linkedPullRequest.number}`);
+    }
     if (isAmbiguous) {
       descriptionParts.push(envLabel);
     }
@@ -340,7 +355,13 @@ export function buildThreadActionItems(input: {
       {
         kind: "action" as const,
         value: `thread:${envId}:${thread.id}`,
-        searchTerms: [thread.title, projectTitle ?? "", thread.branch ?? "", envLabel],
+        searchTerms: [
+          thread.title,
+          ...threadPullRequestSearchTerms(thread),
+          projectTitle ?? "",
+          thread.branch ?? "",
+          envLabel,
+        ],
         title: thread.title,
         description: customDescription ?? defaultDescription,
         timestamp: formatRelativeTimeLabel(

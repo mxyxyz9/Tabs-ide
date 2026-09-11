@@ -274,19 +274,109 @@ export function resolveThreadPullRequestBadge(
   return { kind: "pull-request", others: visible.length - 1, state };
 }
 
+function providerKeywordsForHostOrUrl(hostOrUrl: string): string[] {
+  const lower = hostOrUrl.toLowerCase();
+  const keywords: string[] = [];
+  if (lower.includes("github")) {
+    keywords.push("github", "gh");
+  } else if (lower.includes("gitlab")) {
+    keywords.push("gitlab", "glab", "mr");
+  } else if (lower.includes("azure") || lower.includes("visualstudio")) {
+    keywords.push("azure", "azure-devops", "az");
+  } else if (lower.includes("bitbucket")) {
+    keywords.push("bitbucket");
+  }
+  return keywords;
+}
+
 /** Search terms for visible PR links, including the legacy single-link projection. */
 export function threadPullRequestSearchTerms(thread: {
   readonly pullRequests?: ReadonlyArray<ThreadPullRequestLink> | undefined;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;
 }): string[] {
   if (thread.pullRequests !== undefined && thread.pullRequests.length > 0) {
-    return visibleThreadPullRequests(thread.pullRequests).flatMap((link) => [
-      `#${link.number}`,
-      `${link.repository}#${link.number}`,
-      link.url,
-      link.snapshot?.title ?? "",
-    ]);
+    return visibleThreadPullRequests(thread.pullRequests).flatMap((link) => {
+      const terms: string[] = [
+        `#${link.number}`,
+        `!${link.number}`,
+        String(link.number),
+        `${link.repository}#${link.number}`,
+        `${link.repository}!${link.number}`,
+        link.repository,
+        link.host,
+        link.url,
+        ...providerKeywordsForHostOrUrl(link.host),
+        ...providerKeywordsForHostOrUrl(link.url),
+      ];
+      if (link.snapshot?.title) {
+        terms.push(link.snapshot.title);
+      }
+      if (link.snapshot?.headBranch) {
+        terms.push(link.snapshot.headBranch);
+      }
+      if (link.snapshot?.baseBranch) {
+        terms.push(link.snapshot.baseBranch);
+      }
+      return terms;
+    });
   }
   const legacy = thread.linkedPullRequest;
-  return legacy ? [`#${legacy.number}`, `${legacy.repository}#${legacy.number}`, legacy.url] : [];
+  if (!legacy) return [];
+  return [
+    `#${legacy.number}`,
+    `!${legacy.number}`,
+    String(legacy.number),
+    `${legacy.repository}#${legacy.number}`,
+    legacy.repository,
+    legacy.url,
+    ...providerKeywordsForHostOrUrl(legacy.url),
+  ];
+}
+
+/** Determines if a thread matches a search query against its linked pull requests. */
+export function matchThreadByPullRequestSearch(
+  thread: {
+    readonly pullRequests?: ReadonlyArray<ThreadPullRequestLink> | undefined;
+    readonly linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;
+  },
+  query: string,
+): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (normalized.length === 0) return false;
+  const terms = threadPullRequestSearchTerms(thread);
+  return terms.some((term) => term.toLowerCase().includes(normalized));
+}
+
+/** Finds all threads that link to a specific pull request by number and repository/url. */
+export function findThreadsForPullRequest<
+  T extends {
+    readonly id: string;
+    readonly pullRequests?: ReadonlyArray<ThreadPullRequestLink> | undefined;
+    readonly linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;
+  },
+>(
+  threads: ReadonlyArray<T>,
+  pr: {
+    readonly number: number;
+    readonly repository?: string | undefined;
+    readonly url?: string | undefined;
+  },
+): ReadonlyArray<T> {
+  const targetRepo = pr.repository?.trim().toLowerCase();
+  const targetUrl = pr.url?.trim().toLowerCase();
+  return threads.filter((thread) => {
+    if (thread.pullRequests !== undefined && thread.pullRequests.length > 0) {
+      return visibleThreadPullRequests(thread.pullRequests).some((link) => {
+        if (link.number !== pr.number) return false;
+        if (targetUrl && link.url.trim().toLowerCase() === targetUrl) return true;
+        if (targetRepo && link.repository.trim().toLowerCase() === targetRepo) return true;
+        return !targetRepo && !targetUrl;
+      });
+    }
+    const legacy = thread.linkedPullRequest;
+    if (!legacy || legacy.number !== pr.number) return false;
+    if (targetUrl && legacy.url.trim().toLowerCase() === targetUrl) return true;
+    if (targetRepo && legacy.repository.trim().toLowerCase() === targetRepo) return true;
+    return !targetRepo && !targetUrl;
+  });
 }

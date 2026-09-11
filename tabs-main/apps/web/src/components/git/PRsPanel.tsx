@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  Sparkles,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
@@ -38,6 +39,10 @@ import { useProjectGitState } from "../../state/scopedStateStore";
 import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import ChatMarkdown from "../ChatMarkdown";
 import { parseUnifiedDiff } from "./unifiedDiff";
+import { useAtomValue } from "@effect/atom-react";
+import { useNavigate } from "@tanstack/react-router";
+import { threadsAtom } from "../../state/threads";
+import { findThreadsForPullRequest } from "@tabs/shared/threadPullRequests";
 
 interface PullRequestRow {
   n: number;
@@ -113,6 +118,8 @@ export function PRsPanel({
   onOpenCreatePR: () => void;
 }) {
   const api = useGitApi();
+  const threads = useAtomValue(threadsAtom);
+  const navigate = useNavigate();
   const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const viewMode = gitState.prViewMode;
   const setViewMode = useCallback(
@@ -214,7 +221,7 @@ export function PRsPanel({
       ];
     } else {
       const list = allPrsQuery.data?.pullRequests || [];
-      return list.map((pr) => ({
+      const mapped = list.map((pr) => ({
         n: pr.number,
         title: pr.title,
         state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
@@ -233,8 +240,24 @@ export function PRsPanel({
         ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
         ...(pr.autoMergeMethod ? { autoMergeMethod: pr.autoMergeMethod } : {}),
       }));
+      if (!searchQuery.trim()) return mapped;
+      const q = searchQuery.trim().toLowerCase();
+      return mapped.filter((pr) => {
+        if (
+          pr.title.toLowerCase().includes(q) ||
+          pr.branch.toLowerCase().includes(q) ||
+          String(pr.n).includes(q) ||
+          `#${pr.n}`.includes(q)
+        ) {
+          return true;
+        }
+        const prThreads = findThreadsForPullRequest(threads, { number: pr.n, url: pr.url });
+        return prThreads.some(
+          (t) => t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q),
+        );
+      });
     }
-  }, [viewMode, branchPrQuery.data, allPrsQuery.data, branchName]);
+  }, [viewMode, branchPrQuery.data, allPrsQuery.data, branchName, searchQuery, threads]);
 
   const mutatePullRequest = async (
     reference: number,
@@ -510,6 +533,50 @@ export function PRsPanel({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {(() => {
+                    const linkedThreads = findThreadsForPullRequest(threads, {
+                      number: pr.n,
+                      url: pr.url,
+                    }).filter((t) => !environmentId || t.environmentId === environmentId);
+                    if (linkedThreads.length === 0) return null;
+                    return (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs text-primary border-primary/30 bg-primary/5 hover:bg-primary/10 h-7 px-2 shrink-0"
+                        title={
+                          linkedThreads.length === 1
+                            ? `Open linked agent thread: ${linkedThreads[0]!.title}`
+                            : `${linkedThreads.length} linked agent threads`
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const target = linkedThreads[0]!;
+                          if (target.environmentId) {
+                            void navigate({
+                              to: "/$environmentId/$threadId",
+                              params: {
+                                environmentId: target.environmentId,
+                                threadId: target.id,
+                              },
+                            });
+                          } else {
+                            void navigate({
+                              to: "/$threadId",
+                              params: { threadId: target.id },
+                            });
+                          }
+                        }}
+                      >
+                        <Sparkles className="size-3 text-primary" />
+                        <span className="truncate max-w-32">
+                          {linkedThreads.length === 1
+                            ? linkedThreads[0]!.title
+                            : `${linkedThreads.length} threads`}
+                        </span>
+                      </Button>
+                    );
+                  })()}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -711,6 +778,63 @@ export function PRsPanel({
                                 <Pencil /> Edit title and description
                               </Button>
                             ) : null}
+                            {(() => {
+                              const detailThreads = findThreadsForPullRequest(threads, {
+                                number: pr.n,
+                                url: detailQuery.data.pullRequest.url || pr.url,
+                              }).filter((t) => !environmentId || t.environmentId === environmentId);
+                              if (detailThreads.length === 0) return null;
+                              return (
+                                <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-2">
+                                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                                    <Sparkles size={14} className="text-primary" />
+                                    <span>Linked Agent Threads ({detailThreads.length})</span>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {detailThreads.map((thread) => (
+                                      <div
+                                        key={thread.id}
+                                        className="flex items-center justify-between gap-2 p-2 rounded-md bg-card/80 border border-border/50 hover:border-primary/40 transition-all"
+                                      >
+                                        <div className="min-w-0 flex-1 truncate">
+                                          <span className="font-medium text-foreground">
+                                            {thread.title}
+                                          </span>
+                                          {thread.branch && (
+                                            <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                                              #{thread.branch}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 px-2.5 text-xs shrink-0"
+                                          onClick={() => {
+                                            if (thread.environmentId) {
+                                              void navigate({
+                                                to: "/$environmentId/$threadId",
+                                                params: {
+                                                  environmentId: thread.environmentId,
+                                                  threadId: thread.id,
+                                                },
+                                              });
+                                            } else {
+                                              void navigate({
+                                                to: "/$threadId",
+                                                params: { threadId: thread.id },
+                                              });
+                                            }
+                                          }}
+                                        >
+                                          Open thread
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             {detailQuery.data.pullRequest.body ? (
                               <ChatMarkdown text={detailQuery.data.pullRequest.body} cwd={cwd} />
                             ) : (
