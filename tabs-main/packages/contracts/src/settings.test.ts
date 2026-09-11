@@ -66,6 +66,59 @@ describe("ClientSettings diffColorScheme", () => {
   });
 });
 
+describe("ClientSettings motion and panel animations", () => {
+  it("defaults panelAnimationDurationMs to 150 and reducedMotion to system", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.panelAnimationDurationMs).toBe(150);
+    expect(settings.reducedMotion).toBe("system");
+  });
+
+  it("accepts valid panelAnimationDurationMs within 0-400ms", () => {
+    const settings = decodeClientSettings({ panelAnimationDurationMs: 250 });
+    expect(settings.panelAnimationDurationMs).toBe(250);
+    expect(decodeClientSettingsPatch({ panelAnimationDurationMs: 0 }).panelAnimationDurationMs).toBe(0);
+  });
+
+  it("rejects panelAnimationDurationMs out of bounds", () => {
+    expect(() => decodeClientSettings({ panelAnimationDurationMs: -1 })).toThrow();
+    expect(() => decodeClientSettings({ panelAnimationDurationMs: 450 })).toThrow();
+  });
+
+  it.each(["system", "always", "never"] as const)("accepts reducedMotion mode %s", (mode) => {
+    expect(decodeClientSettings({ reducedMotion: mode }).reducedMotion).toBe(mode);
+    expect(decodeClientSettingsPatch({ reducedMotion: mode }).reducedMotion).toBe(mode);
+  });
+});
+
+describe("ClientSettings typography and environment themes", () => {
+  it("defaults font sizes and empty font families", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.fontSizeInterface).toBe(13);
+    expect(settings.fontSizeCode).toBe(12);
+    expect(settings.fontSizePrompt).toBe(13);
+    expect(settings.fontFamilySans).toBe("");
+    expect(settings.fontFamilyCode).toBe("");
+    expect(settings.fontFamilyComposer).toBe("");
+    expect(settings.environmentThemeOverrides).toEqual({});
+  });
+
+  it("accepts custom font settings and environment theme overrides", () => {
+    const patch = {
+      fontFamilySans: "Inter",
+      fontFamilyCode: "JetBrains Mono",
+      fontSizeInterface: 14,
+      fontSizeCode: 13,
+      environmentThemeOverrides: { "env-prod": "tabs-dark" },
+    };
+    const settings = decodeClientSettings(patch);
+    expect(settings.fontFamilySans).toBe("Inter");
+    expect(settings.fontFamilyCode).toBe("JetBrains Mono");
+    expect(settings.fontSizeInterface).toBe(14);
+    expect(settings.fontSizeCode).toBe(13);
+    expect(settings.environmentThemeOverrides).toEqual({ "env-prod": "tabs-dark" });
+  });
+});
+
 describe("ClientSettings startup animation", () => {
   it("defaults the legacy startup hold preference to two seconds", () => {
     expect(decodeClientSettings({}).splashMinimumHoldSeconds).toBe(2);

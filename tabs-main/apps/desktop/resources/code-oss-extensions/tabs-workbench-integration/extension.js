@@ -1130,7 +1130,11 @@ function startCodeControlChannel(context) {
               const CUSTOM_THEME_COLOR_KEYS = VSCODE_TOKEN_REGISTRY.map((t) => t.id);
 
               const activeConfig =
-                themeId === "custom" && parsed.customConfig && parsed.customConfig.colors
+                (themeId === "custom" ||
+                  themeId.startsWith("environment:") ||
+                  Boolean(parsed.customConfig && parsed.customConfig.colors)) &&
+                parsed.customConfig &&
+                parsed.customConfig.colors
                   ? parsed.customConfig
                   : BUILTIN_THEMES[themeId] || BUILTIN_THEMES["tabs-dark"];
 
@@ -1143,7 +1147,11 @@ function startCodeControlChannel(context) {
                 vscode.ConfigurationTarget.Global,
               );
 
-              const themeOverrides = generateVsCodeColorCustomizations(activeConfig);
+              const diffColorScheme =
+                (parsed.customConfig && parsed.customConfig.diffColorScheme) ||
+                parsed.diffColorScheme ||
+                "red-green";
+              const themeOverrides = evaluateThemeTokens(activeConfig, diffColorScheme);
               const currentCustomizations = {
                 ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
               };
@@ -1183,6 +1191,17 @@ function startCodeControlChannel(context) {
                 await workspaceConfig.update(
                   "editor.fontFamily",
                   editorFont,
+                  vscode.ConfigurationTarget.Global,
+                );
+              }
+
+              const fontSizeCode =
+                (parsed.fontPreferences && parsed.fontPreferences.fontSizeCode) ||
+                (parsed.customConfig && parsed.customConfig.fontSizeCode);
+              if (fontSizeCode && typeof fontSizeCode === "number" && fontSizeCode >= 10 && fontSizeCode <= 24) {
+                await workspaceConfig.update(
+                  "editor.fontSize",
+                  fontSizeCode,
                   vscode.ConfigurationTarget.Global,
                 );
               }

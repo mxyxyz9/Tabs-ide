@@ -18,6 +18,11 @@ beforeAll(() => {
     contains: () => false,
   };
 
+  vi.stubGlobal("self", {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    postMessage: () => {},
+  });
   vi.stubGlobal("navigator", {
     userAgent: "node",
   });

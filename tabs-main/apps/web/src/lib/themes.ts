@@ -624,12 +624,18 @@ export interface FontPreferences {
   uiFont: string;
   headingFont: string;
   editorFont: string;
+  fontSizeInterface?: number | undefined;
+  fontSizeCode?: number | undefined;
+  fontSizePrompt?: number | undefined;
 }
 
 export const DEFAULT_FONT_PREFERENCES: FontPreferences = {
   uiFont: "system-ui",
   headingFont: "system-ui",
   editorFont: "Menlo, Monaco, 'Courier New', monospace",
+  fontSizeInterface: 13,
+  fontSizeCode: 12,
+  fontSizePrompt: 13,
 };
 
 export const UI_FONT_OPTIONS = [

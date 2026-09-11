@@ -1,4 +1,5 @@
 import { CustomThemeStudioModal } from "../components/CustomThemeStudioModal";
+import { ThemeImportExportModal } from "../components/ThemeImportExportModal";
 import { useSettingsViewState } from "~/state/scopedStateStore";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +13,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   DownloadIcon,
+  UploadIcon,
   FolderIcon,
   GripVerticalIcon,
   InfoIcon,
@@ -212,7 +214,18 @@ import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import {
   type AiProvider,
   DEFAULT_DESKTOP_ICON_THEME,
+  DEFAULT_PANEL_ANIMATION_DURATION_MS,
+  DEFAULT_REDUCED_MOTION_MODE,
   DEFAULT_UNIFIED_SETTINGS,
+  DEFAULT_INTERFACE_FONT_SIZE,
+  DEFAULT_CODE_FONT_SIZE,
+  DEFAULT_PROMPT_FONT_SIZE,
+  MIN_INTERFACE_FONT_SIZE,
+  MAX_INTERFACE_FONT_SIZE,
+  MIN_CODE_FONT_SIZE,
+  MAX_CODE_FONT_SIZE,
+  MIN_PROMPT_FONT_SIZE,
+  MAX_PROMPT_FONT_SIZE,
 } from "@tabs/contracts/settings";
 import { SourceControlSettingsPanel } from "../components/settings/SourceControlSettings";
 import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
@@ -1315,6 +1328,7 @@ function ThemePickerGrid({
   savedPresets,
   onSelectTheme,
   onOpenStudio,
+  onOpenImport,
   onDeletePreset,
   onRenamePreset,
   onEditPresetInStudio,
@@ -1325,6 +1339,7 @@ function ThemePickerGrid({
   savedPresets: SavedCustomPreset[];
   onSelectTheme: (theme: ThemePreference, customOverride?: CustomThemeConfig) => void;
   onOpenStudio: () => void;
+  onOpenImport?: () => void;
   onDeletePreset: (presetId: string) => void;
   onRenamePreset: (presetId: string, newName: string) => void;
   onEditPresetInStudio?: (preset: SavedCustomPreset) => void;
@@ -1656,6 +1671,36 @@ function ThemePickerGrid({
             </span>
           </div>
         </button>
+
+        {/* Option C: Import Theme Card */}
+        {onOpenImport && (
+          <button
+            type="button"
+            onClick={onOpenImport}
+            className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-dashed border-border/70 bg-card/20 p-3.5 text-left transition-all duration-300 hover:border-foreground/40 hover:bg-card/40 cursor-pointer select-none"
+          >
+            <div className="relative flex h-24 w-full flex-col items-center justify-center rounded-xl border border-border/40 bg-muted/20 gap-2 group-hover:bg-muted/40 transition-colors">
+              <DownloadIcon className="size-5 text-foreground transition-transform group-hover:scale-110" />
+              <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">
+                Import Theme JSON
+              </span>
+            </div>
+
+            <div className="mt-3.5 flex items-end justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold tracking-tight text-foreground block truncate">
+                  Import Theme
+                </span>
+                <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5 font-normal">
+                  Drop VS Code or Tabs theme JSON
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-muted-foreground border border-border/40">
+                IMPORT
+              </span>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -2521,10 +2566,37 @@ function SettingsRouteView() {
   const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
   const [fullscreenStartupPreview, setFullscreenStartupPreview] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [isImportExportOpen, setIsImportExportOpen] = useState(false);
+  const [importExportTab, setImportExportTab] = useState<"import" | "export">("import");
   const [isCustomFontMode, setIsCustomFontMode] = useState(false);
   const [editingStudioPresetName, setEditingStudioPresetName] = useState("");
   const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() =>
     getStoredSavedPresets(),
+  );
+
+  const handleImportTheme = useCallback(
+    (name: string, config: CustomThemeConfig) => {
+      const newPreset: SavedCustomPreset = {
+        id: `custom-saved-${Date.now()}`,
+        name,
+        config,
+        createdAt: Date.now(),
+      };
+      setSavedPresets((prev) => {
+        const next = [newPreset, ...prev];
+        saveSavedPresetsToStorage(next);
+        return next;
+      });
+      setCustomThemeConfig(config);
+      setTheme("custom");
+      setIsImportExportOpen(false);
+      toastManager.add({
+        type: "success",
+        title: "Theme Imported",
+        description: `Imported "${name}" successfully.`,
+      });
+    },
+    [setCustomThemeConfig, setTheme],
   );
 
   const handleSavePreset = useCallback(
@@ -3568,6 +3640,96 @@ function SettingsRouteView() {
                           />
                         }
                       />
+
+                      <SettingsRow
+                        title="Panel animations"
+                        description="Set how fast workspace panels open and close (0 ms suppresses panel transitions)."
+                        resetAction={
+                          (settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS) !==
+                          DEFAULT_PANEL_ANIMATION_DURATION_MS ? (
+                            <SettingResetButton
+                              label="panel animations"
+                              onClick={() =>
+                                updateSettings({
+                                  panelAnimationDurationMs: DEFAULT_PANEL_ANIMATION_DURATION_MS,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <div className="flex items-center gap-3 w-full sm:w-72">
+                            <output
+                              htmlFor="panel-animation-duration"
+                              className="min-w-16 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground border border-border/50"
+                            >
+                              {settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS} ms
+                            </output>
+                            <input
+                              id="panel-animation-duration"
+                              type="range"
+                              min={0}
+                              max={400}
+                              step={25}
+                              value={settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                if (Number.isInteger(val) && val >= 0 && val <= 400) {
+                                  updateSettings({ panelAnimationDurationMs: val });
+                                }
+                              }}
+                              aria-label="Panel animation duration slider"
+                              className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
+                            />
+                          </div>
+                        }
+                      />
+
+                      <SettingsRow
+                        title="Reduced motion"
+                        description="Control whether decorative animations and interface transitions are reduced or suppressed."
+                        resetAction={
+                          (settings.reducedMotion ?? DEFAULT_REDUCED_MOTION_MODE) !==
+                          DEFAULT_REDUCED_MOTION_MODE ? (
+                            <SettingResetButton
+                              label="reduced motion"
+                              onClick={() =>
+                                updateSettings({
+                                  reducedMotion: DEFAULT_REDUCED_MOTION_MODE,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <SegmentedControl
+                            value={settings.reducedMotion ?? DEFAULT_REDUCED_MOTION_MODE}
+                            onValueChange={(val) => {
+                              if (val === "system" || val === "always" || val === "never") {
+                                updateSettings({ reducedMotion: val });
+                              }
+                            }}
+                            options={[
+                              {
+                                value: "system",
+                                label: "System",
+                                ariaLabel: "System (follow OS reduced motion preference)",
+                              },
+                              {
+                                value: "always",
+                                label: "Always reduce",
+                                ariaLabel: "Always reduce motion",
+                              },
+                              {
+                                value: "never",
+                                label: "Never reduce",
+                                ariaLabel: "Never reduce motion",
+                              },
+                            ]}
+                            aria-label="Reduced motion"
+                          />
+                        }
+                      />
                     </SettingsSection>
 
                     {/* Group 2: Assistant & Code Generation */}
@@ -4035,6 +4197,30 @@ function SettingsRouteView() {
                           <Button
                             size="sm"
                             variant="outline"
+                            onClick={() => {
+                              setImportExportTab("import");
+                              setIsImportExportOpen(true);
+                            }}
+                            className="gap-2 rounded-xl text-xs px-3.5 py-2 font-medium shadow-xs"
+                          >
+                            <DownloadIcon className="size-4 text-foreground" />
+                            Import Theme
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setImportExportTab("export");
+                              setIsImportExportOpen(true);
+                            }}
+                            className="gap-2 rounded-xl text-xs px-3.5 py-2 font-medium shadow-xs"
+                          >
+                            <UploadIcon className="size-4 text-foreground" />
+                            Export Theme
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => setIsStudioOpen(true)}
                             className="gap-2 rounded-xl text-xs px-3.5 py-2 font-medium shadow-xs"
                           >
@@ -4076,6 +4262,10 @@ function SettingsRouteView() {
                           setEditingStudioPresetName("");
                           setIsStudioOpen(true);
                         }}
+                        onOpenImport={() => {
+                          setImportExportTab("import");
+                          setIsImportExportOpen(true);
+                        }}
                         onDeletePreset={handleDeletePreset}
                         onRenamePreset={handleRenamePreset}
                         onEditPresetInStudio={(preset) => {
@@ -4095,6 +4285,14 @@ function SettingsRouteView() {
                           variant="ghost"
                           onClick={() => {
                             setFontPreferences(DEFAULT_FONT_PREFERENCES);
+                            updateSettings({
+                              fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
+                              fontFamilyCode: DEFAULT_UNIFIED_SETTINGS.fontFamilyCode,
+                              fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
+                              fontSizeInterface: DEFAULT_INTERFACE_FONT_SIZE,
+                              fontSizeCode: DEFAULT_CODE_FONT_SIZE,
+                              fontSizePrompt: DEFAULT_PROMPT_FONT_SIZE,
+                            });
                             toastManager.add({
                               type: "info",
                               title: "Fonts Reset",
@@ -4468,6 +4666,190 @@ function SettingsRouteView() {
                                 </div>
                               </div>
                             )}
+                            {/* Font Sizes & Proportions */}
+                            <div className="border-t border-border/60 px-4 py-4 space-y-4">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+                                  Font Sizes &amp; Proportions
+                                </h4>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setFontPreferences((prev) => ({
+                                      ...prev,
+                                      fontSizeInterface: DEFAULT_INTERFACE_FONT_SIZE,
+                                      fontSizeCode: DEFAULT_CODE_FONT_SIZE,
+                                      fontSizePrompt: DEFAULT_PROMPT_FONT_SIZE,
+                                    }));
+                                    updateSettings({
+                                      fontSizeInterface: DEFAULT_INTERFACE_FONT_SIZE,
+                                      fontSizeCode: DEFAULT_CODE_FONT_SIZE,
+                                      fontSizePrompt: DEFAULT_PROMPT_FONT_SIZE,
+                                    });
+                                  }}
+                                  className="text-[11px] h-6 px-2 text-muted-foreground hover:text-foreground"
+                                >
+                                  <RotateCcwIcon className="size-3 mr-1" />
+                                  Reset Sizes
+                                </Button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Interface Font Size */}
+                                <div className="space-y-2 rounded-xl border border-border/60 bg-card/40 p-3.5">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <label className="text-xs font-semibold text-foreground block">
+                                        Interface Size
+                                      </label>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        UI, tabs, sidebar, dialogs
+                                      </p>
+                                    </div>
+                                    <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
+                                      {fontPreferences.fontSizeInterface ?? settings.fontSizeInterface ?? DEFAULT_INTERFACE_FONT_SIZE} px
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min={MIN_INTERFACE_FONT_SIZE}
+                                    max={MAX_INTERFACE_FONT_SIZE}
+                                    step={1}
+                                    value={fontPreferences.fontSizeInterface ?? settings.fontSizeInterface ?? DEFAULT_INTERFACE_FONT_SIZE}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setFontPreferences((prev) => ({ ...prev, fontSizeInterface: val }));
+                                      updateSettings({ fontSizeInterface: val });
+                                    }}
+                                    aria-label="Interface font size slider"
+                                    className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
+                                  />
+                                  <div className="flex justify-between text-[10px] font-mono text-muted-foreground/60">
+                                    <span>{MIN_INTERFACE_FONT_SIZE}px</span>
+                                    <span>Default ({DEFAULT_INTERFACE_FONT_SIZE}px)</span>
+                                    <span>{MAX_INTERFACE_FONT_SIZE}px</span>
+                                  </div>
+                                </div>
+
+                                {/* Code / Editor Font Size */}
+                                <div className="space-y-2 rounded-xl border border-border/60 bg-card/40 p-3.5">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <label className="text-xs font-semibold text-foreground block">
+                                        Code &amp; Diffs Size
+                                      </label>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        Editor, code blocks, diffs
+                                      </p>
+                                    </div>
+                                    <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
+                                      {fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE} px
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min={MIN_CODE_FONT_SIZE}
+                                    max={MAX_CODE_FONT_SIZE}
+                                    step={1}
+                                    value={fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setFontPreferences((prev) => ({ ...prev, fontSizeCode: val }));
+                                      updateSettings({ fontSizeCode: val });
+                                    }}
+                                    aria-label="Code font size slider"
+                                    className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
+                                  />
+                                  <div className="flex justify-between text-[10px] font-mono text-muted-foreground/60">
+                                    <span>{MIN_CODE_FONT_SIZE}px</span>
+                                    <span>Default ({DEFAULT_CODE_FONT_SIZE}px)</span>
+                                    <span>{MAX_CODE_FONT_SIZE}px</span>
+                                  </div>
+                                </div>
+
+                                {/* Prompt / Composer Font Size */}
+                                <div className="space-y-2 rounded-xl border border-border/60 bg-card/40 p-3.5">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <label className="text-xs font-semibold text-foreground block">
+                                        Prompt Composer Size
+                                      </label>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        Message input area
+                                      </p>
+                                    </div>
+                                    <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
+                                      {fontPreferences.fontSizePrompt ?? settings.fontSizePrompt ?? DEFAULT_PROMPT_FONT_SIZE} px
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min={MIN_PROMPT_FONT_SIZE}
+                                    max={MAX_PROMPT_FONT_SIZE}
+                                    step={1}
+                                    value={fontPreferences.fontSizePrompt ?? settings.fontSizePrompt ?? DEFAULT_PROMPT_FONT_SIZE}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setFontPreferences((prev) => ({ ...prev, fontSizePrompt: val }));
+                                      updateSettings({ fontSizePrompt: val });
+                                    }}
+                                    aria-label="Prompt font size slider"
+                                    className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
+                                  />
+                                  <div className="flex justify-between text-[10px] font-mono text-muted-foreground/60">
+                                    <span>{MIN_PROMPT_FONT_SIZE}px</span>
+                                    <span>Default ({DEFAULT_PROMPT_FONT_SIZE}px)</span>
+                                    <span>{MAX_PROMPT_FONT_SIZE}px</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Prompt Composer Font Family */}
+                            <div className="border-t border-border/60 px-4 py-4">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-sm font-medium text-foreground">
+                                    Prompt Composer Font
+                                  </h4>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Font family for the chat message composer (defaults to interface font).
+                                  </p>
+                                </div>
+                                <div className="shrink-0 w-full sm:w-52">
+                                  <Select
+                                    value={settings.fontFamilyComposer || "inherit"}
+                                    onValueChange={(val) =>
+                                      updateSettings({
+                                        fontFamilyComposer: val === "inherit" ? "" : val,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
+                                      <SelectValue placeholder="Inherit Interface Font" />
+                                    </SelectTrigger>
+                                    <SelectPopup align="end">
+                                      <SelectItem value="inherit" className="text-xs">
+                                        Inherit Interface Font
+                                      </SelectItem>
+                                      <SelectItem value="monospace" className="text-xs">
+                                        Monospace (Same as Editor)
+                                      </SelectItem>
+                                      {UI_FONT_OPTIONS.map((f) => (
+                                        <SelectItem
+                                          key={f.value}
+                                          value={f.value}
+                                          className="text-xs"
+                                        >
+                                          {f.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectPopup>
+                                  </Select>
+                                </div>
+                              </div>
+                            </div>
                           </>
                         );
                       })()}
@@ -4557,6 +4939,16 @@ function SettingsRouteView() {
                         }
                       }}
                       onSavePreset={handleSavePreset}
+                    />
+
+                    {/* Theme Import / Export Modal */}
+                    <ThemeImportExportModal
+                      isOpen={isImportExportOpen}
+                      onClose={() => setIsImportExportOpen(false)}
+                      currentConfig={customThemeConfig}
+                      currentName={editingStudioPresetName || "Custom Theme"}
+                      initialTab={importExportTab}
+                      onImportTheme={handleImportTheme}
                     />
                   </div>
                 ) : null}

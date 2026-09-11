@@ -69,15 +69,45 @@ export function refreshTheme() {
 
 export function getStoredFontPreferences(): FontPreferences {
   try {
-    if (typeof localStorage === "undefined") return DEFAULT_FONT_PREFERENCES;
-    const raw = localStorage.getItem(FONT_PREFERENCES_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
+    if (typeof localStorage !== "undefined") {
+      const clientSettingsRaw = localStorage.getItem("tabs:client-settings:v1");
+      const clientFontSettings: Partial<FontPreferences> = {};
+      if (clientSettingsRaw) {
+        try {
+          const parsed = JSON.parse(clientSettingsRaw);
+          if (parsed) {
+            if (parsed.fontFamilySans) clientFontSettings.uiFont = parsed.fontFamilySans;
+            if (parsed.fontFamilyCode) clientFontSettings.editorFont = parsed.fontFamilyCode;
+            if (typeof parsed.fontSizeInterface === "number") clientFontSettings.fontSizeInterface = parsed.fontSizeInterface;
+            if (typeof parsed.fontSizeCode === "number") clientFontSettings.fontSizeCode = parsed.fontSizeCode;
+            if (typeof parsed.fontSizePrompt === "number") clientFontSettings.fontSizePrompt = parsed.fontSizePrompt;
+          }
+        } catch {}
+      }
+
+      const raw = localStorage.getItem(FONT_PREFERENCES_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return {
+            uiFont: clientFontSettings.uiFont || parsed.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
+            headingFont: parsed.headingFont || clientFontSettings.uiFont || parsed.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
+            editorFont: clientFontSettings.editorFont || parsed.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
+            fontSizeInterface: clientFontSettings.fontSizeInterface ?? parsed.fontSizeInterface ?? DEFAULT_FONT_PREFERENCES.fontSizeInterface,
+            fontSizeCode: clientFontSettings.fontSizeCode ?? parsed.fontSizeCode ?? DEFAULT_FONT_PREFERENCES.fontSizeCode,
+            fontSizePrompt: clientFontSettings.fontSizePrompt ?? parsed.fontSizePrompt ?? DEFAULT_FONT_PREFERENCES.fontSizePrompt,
+          };
+        }
+      }
+
+      if (Object.keys(clientFontSettings).length > 0) {
         return {
-          uiFont: parsed.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
-          headingFont: parsed.headingFont || parsed.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
-          editorFont: parsed.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
+          uiFont: clientFontSettings.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
+          headingFont: clientFontSettings.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
+          editorFont: clientFontSettings.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
+          fontSizeInterface: clientFontSettings.fontSizeInterface ?? DEFAULT_FONT_PREFERENCES.fontSizeInterface,
+          fontSizeCode: clientFontSettings.fontSizeCode ?? DEFAULT_FONT_PREFERENCES.fontSizeCode,
+          fontSizePrompt: clientFontSettings.fontSizePrompt ?? DEFAULT_FONT_PREFERENCES.fontSizePrompt,
         };
       }
     }
@@ -87,6 +117,9 @@ export function getStoredFontPreferences(): FontPreferences {
         uiFont: customConfig.fonts.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
         headingFont: customConfig.fonts.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
         editorFont: customConfig.fonts.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
+        fontSizeInterface: DEFAULT_FONT_PREFERENCES.fontSizeInterface,
+        fontSizeCode: DEFAULT_FONT_PREFERENCES.fontSizeCode,
+        fontSizePrompt: DEFAULT_FONT_PREFERENCES.fontSizePrompt,
       };
     }
   } catch (err) {
@@ -165,6 +198,17 @@ function applyTheme(
     rootStyle.setProperty("--font-sans", fonts.uiFont);
     rootStyle.setProperty("--font-display", fonts.headingFont || fonts.uiFont);
     rootStyle.setProperty("--font-mono", fonts.editorFont);
+    if (typeof fonts.fontSizeInterface === "number") {
+      rootStyle.setProperty("--font-size-interface", `${fonts.fontSizeInterface}px`);
+      rootStyle.fontSize = `${fonts.fontSizeInterface}px`;
+    }
+    if (typeof fonts.fontSizeCode === "number") {
+      rootStyle.setProperty("--font-size-code", `${fonts.fontSizeCode}px`);
+      rootStyle.setProperty("--diffs-font-size", `${fonts.fontSizeCode}px`);
+    }
+    if (typeof fonts.fontSizePrompt === "number") {
+      rootStyle.setProperty("--font-size-prompt", `${fonts.fontSizePrompt}px`);
+    }
   }
 
   const activeThemeId = resolveActiveThemeId(preference);
@@ -345,10 +389,15 @@ function syncDesktopTheme(
   const fonts = fontPreferences ?? getStoredFontPreferences();
   const diffColorScheme = getStoredDiffColorScheme();
   const enhancedConfig = customConfig ? { ...customConfig, diffColorScheme } : undefined;
-  const payload =
-    (themeId === "custom" || themeId.startsWith("environment:")) && enhancedConfig
-      ? { themeId, preference, customConfig: enhancedConfig, fontPreferences: fonts }
-      : { themeId, preference, fontPreferences: fonts };
+  const payload = {
+    themeId,
+    preference,
+    diffColorScheme,
+    fontPreferences: fonts,
+    ...((themeId === "custom" || themeId.startsWith("environment:")) && enhancedConfig
+      ? { customConfig: enhancedConfig }
+      : {}),
+  };
   lastDesktopTheme = themeId;
   void bridge.setTheme(payload as any).catch(() => {
     if (lastDesktopTheme === themeId) {

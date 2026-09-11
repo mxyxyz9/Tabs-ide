@@ -68,6 +68,33 @@ export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
 export type DiffColorScheme = typeof DiffColorScheme.Type;
 export const DEFAULT_DIFF_COLOR_SCHEME: DiffColorScheme = "red-green";
 
+export const MIN_PANEL_ANIMATION_DURATION_MS = 0;
+export const MAX_PANEL_ANIMATION_DURATION_MS = 400;
+export const PanelAnimationDurationMs = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_PANEL_ANIMATION_DURATION_MS,
+    maximum: MAX_PANEL_ANIMATION_DURATION_MS,
+  }),
+);
+export type PanelAnimationDurationMs = typeof PanelAnimationDurationMs.Type;
+export const DEFAULT_PANEL_ANIMATION_DURATION_MS: PanelAnimationDurationMs = 150;
+
+export const ReducedMotionMode = Schema.Literals(["system", "always", "never"]);
+export type ReducedMotionMode = typeof ReducedMotionMode.Type;
+export const DEFAULT_REDUCED_MOTION_MODE: ReducedMotionMode = "system";
+
+export const MIN_INTERFACE_FONT_SIZE = 10;
+export const MAX_INTERFACE_FONT_SIZE = 22;
+export const DEFAULT_INTERFACE_FONT_SIZE = 13;
+
+export const MIN_CODE_FONT_SIZE = 10;
+export const MAX_CODE_FONT_SIZE = 24;
+export const DEFAULT_CODE_FONT_SIZE = 12;
+
+export const MIN_PROMPT_FONT_SIZE = 10;
+export const MAX_PROMPT_FONT_SIZE = 24;
+export const DEFAULT_PROMPT_FONT_SIZE = 13;
+
 export const SplashLoaderStyle = Schema.Literals(["glass", "solari"]);
 export type SplashLoaderStyle = typeof SplashLoaderStyle.Type;
 export const DEFAULT_SPLASH_LOADER_STYLE: SplashLoaderStyle = "glass";
@@ -203,6 +230,28 @@ export const ClientSettingsSchema = Schema.Struct({
   closeLoaderTheme: SplashLoaderTheme.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLOSE_LOADER_THEME)),
   ),
+  panelAnimationDurationMs: PanelAnimationDurationMs.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PANEL_ANIMATION_DURATION_MS)),
+  ),
+  reducedMotion: ReducedMotionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_REDUCED_MOTION_MODE)),
+  ),
+  fontFamilySans: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  fontFamilyCode: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  fontFamilyComposer: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  fontSizeInterface: Schema.Int.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_INTERFACE_FONT_SIZE)),
+  ),
+  fontSizeCode: Schema.Int.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODE_FONT_SIZE)),
+  ),
+  fontSizePrompt: Schema.Int.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROMPT_FONT_SIZE)),
+  ),
+  environmentThemeOverrides: Schema.Record(
+    TrimmedNonEmptyString,
+    TrimmedNonEmptyString,
+  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -1237,6 +1286,17 @@ export const ClientSettingsPatch = Schema.Struct({
   closeLoaderStyle: Schema.optionalKey(SplashLoaderStyle),
   closeLoaderPalette: Schema.optionalKey(SplashLoaderPalette),
   closeLoaderTheme: Schema.optionalKey(SplashLoaderTheme),
+  panelAnimationDurationMs: Schema.optionalKey(PanelAnimationDurationMs),
+  reducedMotion: Schema.optionalKey(ReducedMotionMode),
+  fontFamilySans: Schema.optionalKey(Schema.String),
+  fontFamilyCode: Schema.optionalKey(Schema.String),
+  fontFamilyComposer: Schema.optionalKey(Schema.String),
+  fontSizeInterface: Schema.optionalKey(Schema.Int),
+  fontSizeCode: Schema.optionalKey(Schema.Int),
+  fontSizePrompt: Schema.optionalKey(Schema.Int),
+  environmentThemeOverrides: Schema.optionalKey(
+    Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
+  ),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;
 

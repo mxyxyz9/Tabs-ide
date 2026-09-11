@@ -2,12 +2,14 @@ import React, { useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  Download,
   Maximize2,
   Moon,
   Palette,
   RefreshCw,
   Shuffle,
   Sun,
+  Upload,
   Wand2,
   X,
 } from "lucide-react";
@@ -31,6 +33,7 @@ import {
 } from "../lib/themes";
 import { CustomColorPicker } from "./ui/CustomColorPicker";
 import { WorkbenchMiniPreview } from "./WorkbenchMiniPreview";
+import { ThemeImportExportModal } from "./ThemeImportExportModal";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
@@ -55,6 +58,8 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
   const [presetNameInput, setPresetNameInput] = useState(initialPresetName);
   const [randomStyle, setRandomStyle] = useState<RandomStyleMode>("pastel");
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isImportExportOpen, setIsImportExportOpen] = useState(false);
+  const [importExportTab, setImportExportTab] = useState<"import" | "export">("import");
   const [autoTuneFeedback, setAutoTuneFeedback] = useState<string | null>(null);
 
   // Extended driver state for extra granular controls
@@ -188,6 +193,32 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setImportExportTab("import");
+                setIsImportExportOpen(true);
+              }}
+              className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-muted/50 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+              title="Import theme from JSON or VS Code color theme file"
+            >
+              <Upload className="size-3.5" />
+              <span>Import</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setImportExportTab("export");
+                setIsImportExportOpen(true);
+              }}
+              className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-muted/50 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+              title="Export theme to JSON file or clipboard"
+            >
+              <Download className="size-3.5" />
+              <span>Export</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsPreviewModalOpen(true)}
@@ -480,6 +511,21 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {isImportExportOpen && (
+        <ThemeImportExportModal
+          isOpen={isImportExportOpen}
+          onClose={() => setIsImportExportOpen(false)}
+          currentConfig={config}
+          currentName={presetNameInput || "Custom Theme"}
+          initialTab={importExportTab}
+          onImportTheme={(name, importedConfig) => {
+            onChange(importedConfig);
+            setPresetNameInput(name);
+            onSavePreset(name, importedConfig);
+          }}
+        />
       )}
     </div>
   );
