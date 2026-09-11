@@ -128,6 +128,7 @@ import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   ArchiveIcon,
+  BookmarkIcon,
   BotIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -148,7 +149,7 @@ import {
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
-import { cn, randomUUID } from "~/lib/utils";
+import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { toastManager } from "./ui/toast";
 import { isSettled } from "../state/threadLifecycle";
@@ -186,7 +187,13 @@ import {
   useComposerDraft,
   useDraftThread,
 } from "../state/composerDrafts";
-import { promptStashSnippet, usePromptStashStore } from "../promptStashStore";
+import {
+  partitionStashAttachments,
+  promptStashSnippet,
+  usePromptStashStore,
+} from "../promptStashStore";
+import { ComposerStashBadge } from "./chat/ComposerStashBadge";
+import { ComposerStashMenu } from "./chat/ComposerStashMenu";
 import { appAtomRegistry } from "../state/atomRegistry";
 import {
   appendTerminalContextsToPrompt,
@@ -681,14 +688,48 @@ export default function ChatView({
     },
     [setComposerDraftPrompt, threadId],
   );
+  const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
+  const [stashPulsing, setStashPulsing] = useState(false);
+  const stashPulseTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (stashPulseTimeoutRef.current !== null) {
+        window.clearTimeout(stashPulseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const pulseStashBadge = useCallback(() => {
+    setStashPulsing(true);
+    if (stashPulseTimeoutRef.current !== null) {
+      window.clearTimeout(stashPulseTimeoutRef.current);
+    }
+    stashPulseTimeoutRef.current = window.setTimeout(() => {
+      stashPulseTimeoutRef.current = null;
+      setStashPulsing(false);
+    }, 1200);
+  }, []);
+
   const promptStashEntries = usePromptStashStore((state) => state.entries);
-  const stashPrompt = usePromptStashStore((state) => state.stash);
+  const stashPrompt = usePromptStashStore((state) => state.stashEntry);
   const takeStashedPrompt = usePromptStashStore((state) => state.take);
   const removeStashedPrompt = usePromptStashStore((state) => state.remove);
+  const clearPromptStash = usePromptStashStore((state) => state.clear);
+
   const stashCurrentPrompt = useCallback(async () => {
-    if (!prompt.trim() && composerImages.length === 0) return false;
+    const trimmed = prompt.trim();
+    if (!trimmed && composerImages.length === 0 && composerFiles.length === 0) {
+      if (promptStashEntries.length === 1 && promptStashEntries[0]) {
+        await restoreStashedPrompt(promptStashEntries[0].id);
+      } else {
+        setIsStashMenuOpen((open) => !open);
+      }
+      return false;
+    }
+
     try {
-      const attachments = await Promise.all(
+      const candidateAttachments = await Promise.all(
         composerImages.map(async (image) => ({
           id: image.id,
           name: image.name,
@@ -697,16 +738,52 @@ export default function ChatView({
           dataUrl: await readFileAsDataUrl(image.file),
         })),
       );
-      const evicted = stashPrompt({
-        id: randomUUID(),
+
+      const { kept, droppedNames } = partitionStashAttachments(candidateAttachments);
+
+      const stashedFiles = composerFiles.map((file) => ({
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        ...(environmentId ? { environmentId } : {}),
+      }));
+
+      const entryId = randomUUID();
+      const { evicted, written, durable } = stashPrompt({
+        id: entryId,
         createdAt: new Date().toISOString(),
         prompt,
-        attachments,
+        attachments: kept,
+        ...(stashedFiles.length > 0 ? { files: stashedFiles } : {}),
+        ...(environmentId ? { environmentId } : {}),
+        threadId,
+        droppedImageNames: droppedNames,
       });
+
+      if (!written) {
+        toastManager.add({
+          type: "error",
+          title: "Could not stash prompt",
+          description: "Storage quota exceeded or browser storage blocked.",
+        });
+        return false;
+      }
+
+      if (!durable) {
+        toastManager.add({
+          type: "warning",
+          title: "Stashed prompt will not survive a reload",
+          description: "Browser storage is unavailable; stash is kept in memory for this session.",
+        });
+      }
+
       clearComposerDraftContent(threadId);
       promptRef.current = "";
       setComposerCursor(0);
       setComposerTrigger(null);
+      pulseStashBadge();
+
       toastManager.add({
         type: "success",
         title: "Prompt stashed",
@@ -723,12 +800,42 @@ export default function ChatView({
       });
       return false;
     }
-  }, [clearComposerDraftContent, composerImages, prompt, stashPrompt, threadId]);
+  }, [
+    clearComposerDraftContent,
+    composerFiles,
+    composerImages,
+    environmentId,
+    prompt,
+    promptStashEntries,
+    pulseStashBadge,
+    stashPrompt,
+    threadId,
+  ]);
+
   const restoreStashedPrompt = useCallback(
     async (entryId: string) => {
-      if ((prompt.trim() || composerImages.length > 0) && !(await stashCurrentPrompt())) return;
+      const targetEntry = promptStashEntries.find((candidate) => candidate.id === entryId);
+      if (
+        targetEntry?.environmentId &&
+        environmentId &&
+        targetEntry.environmentId !== environmentId
+      ) {
+        toastManager.add({
+          type: "warning",
+          title: "Stashed prompt belongs to another environment",
+          description: `This prompt was stashed under environment "${targetEntry.environmentId}".`,
+        });
+      }
+
+      if (prompt.trim() || composerImages.length > 0 || composerFiles.length > 0) {
+        const stashed = await stashCurrentPrompt();
+        if (!stashed) return;
+      }
+
       const entry = takeStashedPrompt(entryId);
       if (!entry) return;
+
+      setIsStashMenuOpen(false);
       clearComposerDraftContent(threadId);
       setPrompt(entry.prompt);
       const restoredImages = hydrateImagesFromPersisted(entry.attachments);
@@ -742,14 +849,27 @@ export default function ChatView({
     [
       addComposerDraftImages,
       clearComposerDraftContent,
+      composerFiles.length,
       composerImages.length,
+      environmentId,
       prompt,
+      promptStashEntries,
       setPrompt,
       stashCurrentPrompt,
       takeStashedPrompt,
       threadId,
     ],
   );
+
+  const clearAllStashedPrompts = useCallback(() => {
+    clearPromptStash(environmentId ?? undefined);
+    setIsStashMenuOpen(false);
+    toastManager.add({
+      type: "info",
+      title: "Stash cleared",
+      description: "All stashed prompts have been removed.",
+    });
+  }, [clearPromptStash, environmentId]);
   const addComposerImage = useCallback(
     (image: ComposerImageAttachment) => {
       addComposerDraftImage(threadId, image);
@@ -2763,6 +2883,19 @@ export default function ChatView({
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       if (!activeThreadId || event.defaultPrevented) return;
+
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "s" &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        void stashCurrentPrompt();
+        return;
+      }
+
       const shortcutContext = {
         terminalFocus: isTerminalFocused(),
         terminalOpen: Boolean(terminalState.terminalOpen),
@@ -2918,6 +3051,7 @@ export default function ChatView({
     splitTerminal,
     keybindings,
     onToggleDiff,
+    stashCurrentPrompt,
     toggleTerminalVisibility,
     isServerThread,
     threadApi,
@@ -4895,62 +5029,46 @@ export default function ChatView({
                     compactDisabledReason={compactDisabledReason}
                   />
                 ) : null}
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
-                        disabled={!prompt.trim() && composerImages.length === 0}
-                        onClick={() => void stashCurrentPrompt()}
-                        aria-label="Stash current prompt"
-                      >
-                        <ArchiveIcon className="size-4" />
-                      </Button>
-                    }
+                <div className="relative flex items-center">
+                  <ComposerStashBadge
+                    count={promptStashEntries.length}
+                    menuOpen={isStashMenuOpen}
+                    pulsing={stashPulsing}
+                    onToggleMenu={() => setIsStashMenuOpen((open) => !open)}
                   />
-                  <TooltipPopup side="top">Stash current prompt</TooltipPopup>
-                </Tooltip>
-                {promptStashEntries.length > 0 ? (
-                  <Menu>
-                    <MenuTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="shrink-0 gap-1 px-2 text-xs text-muted-foreground/70 hover:text-foreground/80"
-                          aria-label={`${promptStashEntries.length} stashed prompts`}
-                        >
-                          {promptStashEntries.length}
-                          <ChevronDownIcon className="size-3" />
-                        </Button>
-                      }
-                    />
-                    <MenuPopup align="end" side="top" className="max-h-80 w-80 overflow-y-auto">
-                      {promptStashEntries.flatMap((entry) => [
-                        <MenuItem
-                          key={`restore:${entry.id}`}
-                          onClick={() => void restoreStashedPrompt(entry.id)}
-                        >
-                          <span className="min-w-0 flex-1 truncate">
-                            {promptStashSnippet(entry)}
-                          </span>
-                        </MenuItem>,
-                        <MenuItem
-                          key={`delete:${entry.id}`}
-                          onClick={() => removeStashedPrompt(entry.id)}
-                          className="text-muted-foreground"
-                        >
-                          <Trash2Icon className="size-3.5" />
-                          Delete the prompt above
-                        </MenuItem>,
-                      ])}
-                    </MenuPopup>
-                  </Menu>
-                ) : null}
+                  {promptStashEntries.length === 0 ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
+                            disabled={!prompt.trim() && composerImages.length === 0 && composerFiles.length === 0}
+                            onClick={() => void stashCurrentPrompt()}
+                            aria-label={`Stash current prompt (${typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"})`}
+                          >
+                            <BookmarkIcon className="size-4" />
+                          </Button>
+                        }
+                      />
+                      <TooltipPopup side="top">
+                        Stash current prompt ({typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"})
+                      </TooltipPopup>
+                    </Tooltip>
+                  ) : null}
+                  <ComposerStashMenu
+                    entries={promptStashEntries}
+                    isOpen={isStashMenuOpen}
+                    currentEnvironmentId={environmentId}
+                    stashShortcutLabel={typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"}
+                    onRestore={(entry) => void restoreStashedPrompt(entry.id)}
+                    onDelete={(entry) => removeStashedPrompt(entry.id)}
+                    onClearAll={clearAllStashedPrompts}
+                    onClose={() => setIsStashMenuOpen(false)}
+                  />
+                </div>
                 <Tooltip>
                   <TooltipTrigger
                     render={
