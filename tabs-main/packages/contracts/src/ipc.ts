@@ -207,6 +207,11 @@ import {
   PreviewAutomationWaitForInput,
 } from "./previewAutomation.ts";
 import type {
+  DesktopCaptureOptions,
+  DesktopCaptureResult,
+  DesktopCapturePermissionStatus,
+} from "./desktopCapture.ts";
+import type {
   ClientOrchestrationCommand,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetFullThreadDiffResult,
@@ -1117,6 +1122,9 @@ export interface BrowserProfileDomainInfo {
 export interface DesktopBridge {
   writeClipboardText: (text: string) => Promise<void>;
   readClipboardText?: (type?: "clipboard" | "selection") => Promise<string>;
+  getDesktopCapturePermissionStatus?: () => Promise<DesktopCapturePermissionStatus>;
+  requestDesktopCapturePermission?: () => Promise<boolean>;
+  captureDesktopScreen?: (options?: DesktopCaptureOptions) => Promise<DesktopCaptureResult>;
   getClientPlatform?: () => string;
   getLocalEnvironmentBootstraps: () => readonly DesktopEnvironmentBootstrap[];
   getConnectionCatalog?: () => Promise<string | null>;

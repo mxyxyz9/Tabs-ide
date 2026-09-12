@@ -8,6 +8,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  CameraIcon,
   FolderIcon,
   FolderPlusIcon,
   SettingsIcon,
@@ -15,6 +16,7 @@ import {
   GitBranchIcon,
   LoaderCircleIcon,
 } from "lucide-react";
+import { captureDesktopToComposer } from "~/lib/desktopCapture";
 import {
   useCallback,
   useEffect,
@@ -807,6 +809,19 @@ function OpenCommandPaletteDialog(props: {
       void navigate({ to: "/settings" });
     },
   });
+
+  if (currentThreadId && typeof window !== "undefined" && window.desktopBridge?.captureDesktopScreen) {
+    actionItems.push({
+      kind: "action",
+      value: "action:capture-screen",
+      searchTerms: ["capture", "screenshot", "screen", "composer", "snapshot"],
+      title: "Capture screen to composer",
+      icon: <CameraIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await captureDesktopToComposer(currentThreadId);
+      },
+    });
+  }
 
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems });
 

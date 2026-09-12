@@ -69,6 +69,8 @@ import {
   resolveInstalledRuntimeDir,
   type RuntimeInstallProgress,
 } from "./codeOssRuntimeInstaller";
+import { DesktopCaptureCoordinator } from "./capture/DesktopCaptureCoordinator";
+import type { DesktopCaptureOptions } from "@tabs/contracts";
 import { CodeControlChannel } from "./codeControlChannel";
 import { getTailscaleStatus } from "./tailscale";
 import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
@@ -142,6 +144,9 @@ const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
 const WRITE_CLIPBOARD_TEXT_CHANNEL = "desktop:clipboard:write-text";
 const READ_CLIPBOARD_TEXT_CHANNEL = "desktop:clipboard:read-text";
+const DESKTOP_CAPTURE_SCREEN_CHANNEL = "desktop:capture:screen";
+const DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL = "desktop:capture:get-permission";
+const DESKTOP_CAPTURE_REQUEST_PERMISSION_CHANNEL = "desktop:capture:request-permission";
 const BROWSER_HOST_GET_SESSION_STATE_CHANNEL = "desktop:browser-host:get-session-state";
 const BROWSER_HOST_ENSURE_SESSION_CHANNEL = "desktop:browser-host:ensure-session";
 const BROWSER_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:browser-host:activate-session";
@@ -360,6 +365,7 @@ if (persistedDesktopTheme) {
   codeHostManager.setTheme(persistedDesktopTheme.themeId, persistedDesktopTheme.customConfig);
 }
 const browserHostManager = new BrowserHostManager(() => mainWindow);
+const desktopCaptureCoordinator = new DesktopCaptureCoordinator();
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
 
 let destructiveMenuIconCache: Electron.NativeImage | null | undefined;
@@ -2296,6 +2302,21 @@ function registerIpcHandlers(): void {
     const clipboardType = type === "selection" ? "selection" : "clipboard";
     return (clipboard as unknown as { readText: (type?: string) => string }).readText(clipboardType);
   });
+
+  ipcMain.removeHandler(DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL);
+  ipcMain.handle(DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL, async () =>
+    desktopCaptureCoordinator.getPermissionStatus(),
+  );
+
+  ipcMain.removeHandler(DESKTOP_CAPTURE_REQUEST_PERMISSION_CHANNEL);
+  ipcMain.handle(DESKTOP_CAPTURE_REQUEST_PERMISSION_CHANNEL, async () =>
+    desktopCaptureCoordinator.requestPermission(),
+  );
+
+  ipcMain.removeHandler(DESKTOP_CAPTURE_SCREEN_CHANNEL);
+  ipcMain.handle(DESKTOP_CAPTURE_SCREEN_CHANNEL, async (_event, options: unknown) =>
+    desktopCaptureCoordinator.captureScreen((options as DesktopCaptureOptions) ?? {}),
+  );
 
   ipcMain.removeHandler(BROWSER_HOST_GET_STATE_CHANNEL);
   ipcMain.handle(BROWSER_HOST_GET_STATE_CHANNEL, async () => browserHostManager.getState());

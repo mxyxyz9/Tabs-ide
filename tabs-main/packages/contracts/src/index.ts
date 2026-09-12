@@ -43,5 +43,6 @@ export * from "./providerUsageLimits.ts";
 export * from "./agentSessions.ts";
 export * from "./tabsProjectFile.ts";
 export * from "./browserImport.ts";
+export * from "./desktopCapture.ts";
 export * from "./ws.ts";
 export { WS_METHODS } from "./ws.ts";
