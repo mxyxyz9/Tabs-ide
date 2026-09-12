@@ -117,6 +117,8 @@ import {
 } from "./sourceControl";
 import { ReviewProgressEvent } from "./review";
 import {
+  ConfiguredLocalServerUrls,
+  DiscoveredLocalServerList,
   PreviewCloseInput,
   PreviewEvent,
   PreviewListInput,
@@ -383,6 +385,7 @@ export const WS_CHANNELS = {
   previewEvent: "preview.event",
   previewAutomationEvent: "preview.automationEvent",
   backgroundPolicyUpdated: "server.backgroundPolicyUpdated",
+  discoveredLocalServers: "preview.discoveredLocalServers",
 } as const;
 
 // -- Tagged Union of all request body schemas ─────────────────────────
@@ -554,6 +557,12 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.previewAutomationConnect, PreviewAutomationHost),
   tagRequestBody(WS_METHODS.previewAutomationFocusHost, PreviewAutomationHostFocus),
   tagRequestBody(WS_METHODS.previewAutomationRespond, PreviewAutomationResponse),
+  tagRequestBody(
+    WS_METHODS.subscribeDiscoveredLocalServers,
+    Schema.Struct({
+      configuredUrls: Schema.optional(ConfiguredLocalServerUrls),
+    }),
+  ),
 
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),
@@ -646,6 +655,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.previewEvent]: PreviewEvent;
   readonly [WS_CHANNELS.previewAutomationEvent]: PreviewAutomationStreamEvent;
   readonly [WS_CHANNELS.backgroundPolicyUpdated]: typeof BackgroundPolicySnapshot.Type;
+  readonly [WS_CHANNELS.discoveredLocalServers]: DiscoveredLocalServerList;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -698,6 +708,10 @@ export const WsPushBackgroundPolicyUpdated = makeWsPushSchema(
   WS_CHANNELS.backgroundPolicyUpdated,
   BackgroundPolicySnapshot,
 );
+export const WsPushDiscoveredLocalServers = makeWsPushSchema(
+  WS_CHANNELS.discoveredLocalServers,
+  DiscoveredLocalServerList,
+);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -715,6 +729,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.previewEvent,
   WS_CHANNELS.previewAutomationEvent,
   WS_CHANNELS.backgroundPolicyUpdated,
+  WS_CHANNELS.discoveredLocalServers,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -731,6 +746,7 @@ export const WsPush = Schema.Union([
   WsPushPreviewEvent,
   WsPushPreviewAutomationEvent,
   WsPushBackgroundPolicyUpdated,
+  WsPushDiscoveredLocalServers,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;

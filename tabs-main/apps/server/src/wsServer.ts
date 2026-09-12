@@ -145,6 +145,7 @@ import { TextGeneration } from "./textGeneration/TextGeneration";
 import { UsageService } from "./usage/UsageService.ts";
 import { listProviderUsageSnapshotsEffect } from "./providerUsage/index.ts";
 import { PreviewManager } from "./preview/Manager.ts";
+import { PortDiscovery } from "./preview/PortScanner.ts";
 import { AgentSessionScanner } from "./project/AgentSessionScanner.ts";
 import { importRecentAgentThreads } from "./project/AgentSessionImporter.ts";
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
@@ -351,6 +352,7 @@ export type ServerRuntimeServices =
   | Open
   | AnalyticsService
   | PreviewManager
+  | PortDiscovery
   | ServerEnvironment
   | EnvironmentAuth
   | PreviewAutomationBroker
@@ -418,6 +420,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const textGeneration = yield* TextGeneration;
   const usageService = yield* UsageService;
   const previewManager = yield* PreviewManager;
+  const portDiscovery = yield* PortDiscovery;
   const serverEnvironment = yield* ServerEnvironment;
   const environmentAuth = yield* EnvironmentAuth;
   const previewAutomationBroker = yield* PreviewAutomationBroker;
@@ -2220,6 +2223,43 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* previewAutomationBroker.focusHost(stripRequestTag(request.body));
       case WS_METHODS.previewAutomationRespond:
         return yield* previewAutomationBroker.respond(stripRequestTag(request.body));
+
+      case WS_METHODS.subscribeDiscoveredLocalServers: {
+        const body = stripRequestTag(request.body) as { configuredUrls?: ReadonlyArray<string> };
+        const configuredUrls = body?.configuredUrls ?? [];
+        yield* Scope.provide(subscriptionsScope)(portDiscovery.retain);
+        const initial = yield* portDiscovery.scan(configuredUrls);
+        const initialScannedAt = DateTime.formatIso(yield* DateTime.now);
+        yield* pushBus.publishClient(ws, WS_CHANNELS.discoveredLocalServers, {
+          servers: initial,
+          scannedAt: initialScannedAt,
+          configuredUrlProbing: true,
+        });
+        const unsubscribeFiber = yield* Scope.provide(subscriptionsScope)(
+          portDiscovery.subscribe(
+            { configuredUrls, initialSnapshot: initial },
+            (servers) =>
+              Effect.gen(function* () {
+                const scannedAt = DateTime.formatIso(yield* DateTime.now);
+                yield* pushBus.publishClient(ws, WS_CHANNELS.discoveredLocalServers, {
+                  servers,
+                  scannedAt,
+                  configuredUrlProbing: true,
+                });
+              }),
+          ),
+        ).pipe(
+          Effect.forkIn(subscriptionsScope),
+        );
+        const fibers = previewAutomationFibers.get(ws) ?? new Set();
+        fibers.add(unsubscribeFiber);
+        previewAutomationFibers.set(ws, fibers);
+        return {
+          servers: initial,
+          scannedAt: initialScannedAt,
+          configuredUrlProbing: true,
+        };
+      }
 
       case WS_METHODS.serverGetConfig: {
         const keybindingsConfig = yield* keybindingsManager.loadConfigState;

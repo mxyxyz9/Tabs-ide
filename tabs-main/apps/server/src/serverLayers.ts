@@ -44,6 +44,7 @@ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as PreviewManager from "./preview/Manager.ts";
+import * as PortScanner from "./preview/PortScanner.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -206,6 +207,7 @@ export function makeServerRuntimeServicesLayer() {
     usageLayer,
     usageLimitSourcesLayer,
     PreviewManager.layer,
+    PortScanner.layer,
     PreviewAutomationBroker.layer,
     EnvironmentTheme.layer,
     TraceDiagnostics.layer,

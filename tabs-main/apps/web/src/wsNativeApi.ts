@@ -554,7 +554,23 @@ export function createWsNativeApi(options?: {
       },
       onEvent: (callback) =>
         transport.subscribe(WS_CHANNELS.previewEvent, (message) => callback(message.data)),
-      subscribePorts: () => () => {},
+      subscribePorts: (callback, options) => {
+        const unsubscribe = transport.subscribe(WS_CHANNELS.discoveredLocalServers, (message) =>
+          callback(message.data),
+        );
+        let subscribedOnce = false;
+        const unsubscribeOpen = transport.onOpen(() => {
+          if (subscribedOnce) options?.onResubscribe?.();
+          subscribedOnce = true;
+          void transport
+            .request(WS_METHODS.subscribeDiscoveredLocalServers, {}, { timeoutMs: null })
+            .catch(() => undefined);
+        });
+        return () => {
+          unsubscribeOpen();
+          unsubscribe();
+        };
+      },
     },
     agentSessions: {
       scan: () => transport.request(WS_METHODS.agentSessionsScan, {}),

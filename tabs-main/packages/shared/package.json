@@ -56,6 +56,10 @@
       "types": "./src/Net.ts",
       "import": "./src/Net.ts"
     },
+    "./hostClassification": {
+      "types": "./src/hostClassification.ts",
+      "import": "./src/hostClassification.ts"
+    },
     "./DrainableWorker": {
       "types": "./src/DrainableWorker.ts",
       "import": "./src/DrainableWorker.ts"
