@@ -5,9 +5,12 @@ import { runProcess } from "./processRunner";
 
 import {
   ProjectEntry,
+  ProjectSearchContentsInput,
+  ProjectSearchContentsResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
 } from "@tabs/contracts";
+import { isWorkspaceImagePreviewPath } from "@tabs/shared/filePreview";
 
 const WORKSPACE_CACHE_TTL_MS = 15_000;
 const WORKSPACE_CACHE_MAX_KEYS = 4;
@@ -546,6 +549,21 @@ export async function searchWorkspaceEntries(
   let matchedEntryCount = 0;
 
   for (const entry of index.entries) {
+    if (input.kind && entry.kind !== input.kind) {
+      continue;
+    }
+    if (input.imageOnly && !isWorkspaceImagePreviewPath(entry.path)) {
+      continue;
+    }
+
+    if (!normalizedQuery) {
+      matchedEntryCount += 1;
+      if (rankedEntries.length < limit) {
+        rankedEntries.push({ entry, score: 0 });
+      }
+      continue;
+    }
+
     const score = scoreEntry(entry, normalizedQuery);
     if (score === null) {
       continue;
@@ -558,5 +576,162 @@ export async function searchWorkspaceEntries(
   return {
     entries: rankedEntries.map((candidate) => candidate.entry),
     truncated: index.truncated || matchedEntryCount > limit,
+  };
+}
+
+const WORD_CHARACTER = /[\p{Letter}\p{Mark}\p{Number}_]/u;
+
+function codePointAt(line: string, index: number): string | undefined {
+  const codePoint = line.codePointAt(index);
+  return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
+}
+
+function codePointBefore(line: string, index: number): string | undefined {
+  if (index <= 0) return undefined;
+  const previousCodeUnit = line.charCodeAt(index - 1);
+  const previousIndex =
+    previousCodeUnit >= 0xdc00 && previousCodeUnit <= 0xdfff ? index - 2 : index - 1;
+  return codePointAt(line, previousIndex);
+}
+
+function isWholeWordRange(
+  line: string,
+  range: { readonly start: number; readonly end: number },
+): boolean {
+  if (range.end <= range.start) return false;
+  const isWord = (character: string | undefined) =>
+    character !== undefined && WORD_CHARACTER.test(character);
+  const leftIsBoundary =
+    range.start === 0 ||
+    !isWord(codePointBefore(line, range.start)) ||
+    !isWord(codePointAt(line, range.start));
+  const rightIsBoundary =
+    range.end >= line.length ||
+    !isWord(codePointAt(line, range.end)) ||
+    !isWord(codePointBefore(line, range.end));
+  return leftIsBoundary && rightIsBoundary;
+}
+
+const BINARY_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".avif",
+  ".mp4", ".mov", ".webm", ".avi", ".mkv",
+  ".pdf", ".zip", ".tar", ".gz", ".tgz", ".7z",
+  ".exe", ".dll", ".dylib", ".so", ".wasm",
+  ".ttf", ".woff", ".woff2", ".eot",
+  ".pyc", ".class", ".o", ".obj",
+  ".db", ".sqlite", ".sqlite3",
+]);
+
+const CONTENT_SEARCH_TIME_BUDGET_MS = 2500;
+const CONTENT_SEARCH_MAX_MATCHES_PER_FILE = 100;
+const MAX_SEARCHABLE_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+
+export async function searchWorkspaceContents(
+  input: ProjectSearchContentsInput,
+): Promise<ProjectSearchContentsResult> {
+  const index = await getWorkspaceIndex(input.cwd);
+  const limit = Math.max(1, Math.min(input.limit, 500));
+  const deadline = performance.now() + CONTENT_SEARCH_TIME_BUDGET_MS;
+  const matches: Array<ProjectSearchContentsResult["matches"][number]> = [];
+  let truncated = false;
+  let regexFallbackError: string | undefined;
+
+  let searchRegex: RegExp;
+  if (input.useRegex) {
+    try {
+      searchRegex = new RegExp(input.query, input.caseSensitive ? "g" : "gi");
+    } catch (err) {
+      regexFallbackError = err instanceof Error ? err.message : "Invalid regular expression";
+      const escaped = input.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      searchRegex = new RegExp(escaped, input.caseSensitive ? "g" : "gi");
+    }
+  } else {
+    const escaped = input.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    searchRegex = new RegExp(escaped, input.caseSensitive ? "g" : "gi");
+  }
+
+  for (const entry of index.entries) {
+    if (entry.kind !== "file") continue;
+    if (matches.length >= limit || performance.now() > deadline) {
+      truncated = matches.length >= limit || performance.now() > deadline;
+      break;
+    }
+
+    const ext = path.extname(entry.path).toLowerCase();
+    if (BINARY_EXTENSIONS.has(ext)) continue;
+
+    const fullPath = path.isAbsolute(entry.path)
+      ? entry.path
+      : path.join(input.cwd, entry.path);
+
+    let content: string;
+    try {
+      const stat = await fs.stat(fullPath);
+      if (stat.size > MAX_SEARCHABLE_FILE_SIZE_BYTES || stat.size === 0) continue;
+      content = await fs.readFile(fullPath, "utf-8");
+    } catch {
+      continue;
+    }
+
+    if (content.includes("\0")) continue;
+
+    const lines = content.split("\n");
+    let fileMatchCount = 0;
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      if (matches.length >= limit) {
+        truncated = true;
+        break;
+      }
+      if (fileMatchCount >= CONTENT_SEARCH_MAX_MATCHES_PER_FILE) {
+        break;
+      }
+
+      let line = lines[lineIndex];
+      if (line === undefined) {
+        continue;
+      }
+      if (line.endsWith("\r")) {
+        line = line.slice(0, -1);
+      }
+
+      searchRegex.lastIndex = 0;
+      const lineRanges: Array<{ start: number; end: number }> = [];
+      let execMatch: RegExpExecArray | null;
+
+      while ((execMatch = searchRegex.exec(line)) !== null) {
+        const start = execMatch.index;
+        const end = start + execMatch[0].length;
+        if (end <= start) {
+          searchRegex.lastIndex = start + 1;
+          continue;
+        }
+
+        const range = { start, end };
+        if (!input.wholeWord || isWholeWordRange(line, range)) {
+          lineRanges.push(range);
+        }
+
+        if (searchRegex.lastIndex === execMatch.index) {
+          searchRegex.lastIndex += 1;
+        }
+      }
+
+      if (lineRanges.length > 0) {
+        fileMatchCount += 1;
+        matches.push({
+          path: entry.path,
+          lineNumber: lineIndex + 1,
+          lineContent: line,
+          matchRanges: lineRanges,
+        });
+      }
+    }
+  }
+
+  return {
+    matches: matches.slice(0, limit),
+    truncated: truncated || matches.length > limit,
+    ...(regexFallbackError !== undefined ? { regexFallbackError } : {}),
   };
 }

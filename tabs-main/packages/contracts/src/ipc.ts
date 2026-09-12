@@ -121,8 +121,11 @@ import type { AssetCreateUrlInput, AssetCreateUrlResult } from "./assets.ts";
 import type {
   ProjectListEntriesInput,
   ProjectListEntriesResult,
+  ProjectReadFileError,
   ProjectReadFileInput,
   ProjectReadFileResult,
+  ProjectSearchContentsInput,
+  ProjectSearchContentsResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
@@ -1422,6 +1425,7 @@ export interface EnvironmentApi {
   projects: {
     listEntries: (input: ProjectListEntriesInput) => Promise<ProjectListEntriesResult>;
     readFile: (input: ProjectReadFileInput) => Promise<ProjectReadFileResult>;
+    searchContents: (input: ProjectSearchContentsInput) => Promise<ProjectSearchContentsResult>;
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;
   };
@@ -1698,6 +1702,7 @@ export interface DesktopCodeHostOpenFileInput {
   projectId: string;
   relativePath: string;
   navigationNonce: number;
+  lineNumber?: number;
 }
 
 export interface DesktopCodeHostSetBoundsInput {

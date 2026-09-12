@@ -277,10 +277,11 @@ export class CodeControlChannel {
     projectId: string,
     filePath: string,
     options?: {
-      preview?: boolean;
-      pinned?: boolean;
-      preserveFocus?: boolean;
-      viewColumn?: number;
+      preview?: boolean | undefined;
+      pinned?: boolean | undefined;
+      preserveFocus?: boolean | undefined;
+      viewColumn?: number | undefined;
+      lineNumber?: number | undefined;
     },
   ): boolean {
     const socket = this.socketsByProject.get(projectId);

@@ -105,7 +105,7 @@ import { GitManager } from "./git/Services/GitManager.ts";
 import { TerminalManager } from "./terminal/Services/Manager.ts";
 import { Keybindings } from "./keybindings";
 import { ServerSettingsService } from "./serverSettings";
-import { searchWorkspaceEntries } from "./workspaceEntries";
+import { searchWorkspaceContents, searchWorkspaceEntries } from "./workspaceEntries";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
 import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReactor";
@@ -1714,6 +1714,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.agentSessionsImport: {
         const body = stripRequestTag(request.body) as AgentSessionImportInput;
         return yield* importRecentAgentThreads(body);
+      }
+
+      case WS_METHODS.projectsSearchContents: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => searchWorkspaceContents(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to search workspace contents: ${String(cause)}`,
+            }),
+        });
       }
 
       case WS_METHODS.projectsSearchEntries: {

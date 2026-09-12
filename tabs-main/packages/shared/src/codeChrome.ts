@@ -472,10 +472,11 @@ export type CodeControlServerMessage =
   | {
       type: "openFile";
       filePath: string;
-      preview?: boolean;
-      pinned?: boolean;
-      preserveFocus?: boolean;
-      viewColumn?: number;
+      preview?: boolean | undefined;
+      pinned?: boolean | undefined;
+      preserveFocus?: boolean | undefined;
+      viewColumn?: number | undefined;
+      lineNumber?: number | undefined;
     }
   | { type: "setTheme"; theme: string };
 
@@ -542,6 +543,7 @@ export function parseCodeControlServerMessage(raw: string): CodeControlServerMes
     if (typeof record.pinned === "boolean") msg.pinned = record.pinned;
     if (typeof record.preserveFocus === "boolean") msg.preserveFocus = record.preserveFocus;
     if (typeof record.viewColumn === "number") msg.viewColumn = record.viewColumn;
+    if (typeof record.lineNumber === "number") msg.lineNumber = record.lineNumber;
     return msg;
   }
   if (record.type === "setTheme" && typeof record.theme === "string") {

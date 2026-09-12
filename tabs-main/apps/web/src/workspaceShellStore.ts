@@ -52,6 +52,7 @@ export interface ProjectBrowserToolState {
 
 export interface ProjectCodeToolState {
   lastFocusedPath: string | null;
+  lastFocusedLineNumber?: number | null;
   navigationNonce: number;
   // The Code-tab AI side chat's open state and selected thread, persisted per
   // project so switching tools/projects (which unmounts the Code tool) doesn't
@@ -109,7 +110,11 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
     },
     sessionId?: string | undefined,
   ) => void;
-  setCodeFocusedPath: (projectId: ProjectId, path: string | null) => void;
+  setCodeFocusedPath: (
+    projectId: ProjectId,
+    path: string | null,
+    lineNumber?: number | null | undefined,
+  ) => void;
   setCodeChromeState: (
     projectId: ProjectId,
     updater: CodeChromeState | ((current: CodeChromeState) => CodeChromeState),
@@ -235,6 +240,7 @@ function defaultBrowserToolState(settings: ProjectWorkspaceSettingsType): Projec
 function defaultCodeToolState(): ProjectCodeToolState {
   return {
     lastFocusedPath: null,
+    lastFocusedLineNumber: null,
     navigationNonce: 0,
     sideChatOpen: false,
     sideChatThreadId: null,
@@ -759,7 +765,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             browserStateByProjectId: nextProjectMap,
           };
         }),
-      setCodeFocusedPath: (projectId, path) =>
+      setCodeFocusedPath: (projectId, path, lineNumber) =>
         set((state) => ({
           ...state,
           codeStateByProjectId: {
@@ -767,6 +773,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             [projectId]: {
               ...(state.codeStateByProjectId[projectId] ?? defaultCodeToolState()),
               lastFocusedPath: path,
+              lastFocusedLineNumber: lineNumber ?? null,
               navigationNonce: (state.codeStateByProjectId[projectId]?.navigationNonce ?? 0) + 1,
             },
           },

@@ -3064,11 +3064,16 @@ function DesktopCodeTool(props: { project: Project }) {
         projectId: props.project.id,
         relativePath: codeState.lastFocusedPath,
         navigationNonce: codeState.navigationNonce,
+        ...(typeof codeState.lastFocusedLineNumber === "number" &&
+        codeState.lastFocusedLineNumber > 0
+          ? { lineNumber: codeState.lastFocusedLineNumber }
+          : {}),
       })
       .catch(() => undefined);
   }, [
     codeHostState?.available,
     codeState.lastFocusedPath,
+    codeState.lastFocusedLineNumber,
     codeState.navigationNonce,
     props.project.id,
   ]);

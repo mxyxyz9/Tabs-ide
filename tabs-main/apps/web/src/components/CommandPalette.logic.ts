@@ -19,7 +19,7 @@ export interface CommandPaletteItem {
   readonly value: string;
   readonly searchTerms: ReadonlyArray<string>;
   readonly title: ReactNode;
-  readonly description?: string;
+  readonly description?: ReactNode;
   readonly timestamp?: string;
   readonly icon: ReactNode;
   readonly disabled?: boolean;
@@ -56,6 +56,48 @@ export interface CommandPaletteView {
 }
 
 export type CommandPaletteMode = "root" | "root-browse" | "submenu" | "submenu-browse";
+
+export type SearchOverlayMode = "command" | "files" | "content";
+
+export type CommandPaletteOpenIntent =
+  | { readonly kind: "add-project" }
+  | {
+      readonly kind: "search";
+      readonly query: string;
+    };
+
+export interface CommandPaletteUiState {
+  readonly open: boolean;
+  readonly mode: SearchOverlayMode;
+  readonly openIntent: CommandPaletteOpenIntent | null;
+}
+
+export type CommandPaletteUiAction =
+  | { readonly _tag: "SetOpen"; readonly open: boolean }
+  | { readonly _tag: "ToggleMode"; readonly mode: SearchOverlayMode }
+  | { readonly _tag: "OpenAddProject" }
+  | { readonly _tag: "ClearOpenIntent" };
+
+export function reduceCommandPaletteUiState(
+  state: CommandPaletteUiState,
+  action: CommandPaletteUiAction,
+): CommandPaletteUiState {
+  switch (action._tag) {
+    case "SetOpen":
+      return action.open
+        ? { open: true, mode: "command", openIntent: state.openIntent }
+        : { ...state, open: false, openIntent: null };
+    case "ToggleMode":
+      return state.open && state.mode === action.mode
+        ? { ...state, open: false, openIntent: null }
+        : { open: true, mode: action.mode, openIntent: null };
+    case "OpenAddProject":
+      return { open: true, mode: "command", openIntent: { kind: "add-project" } };
+    case "ClearOpenIntent":
+      return { ...state, openIntent: null };
+  }
+}
+
 
 export function resolveCommandPaletteWorkspaceContext(input: {
   projects: ReadonlyArray<Project>;

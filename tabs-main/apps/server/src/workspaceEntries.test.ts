@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 
 import { afterEach, assert, describe, it, vi } from "vitest";
 
-import { searchWorkspaceEntries } from "./workspaceEntries";
+import { searchWorkspaceContents, searchWorkspaceEntries } from "./workspaceEntries";
 
 const tempDirs: string[] = [];
 
@@ -200,3 +200,83 @@ describe("searchWorkspaceEntries", () => {
     assert.isAtMost(peakReads, 32);
   });
 });
+
+describe("searchWorkspaceContents", () => {
+  it("searches file contents matching case-insensitively and returns matchRanges", async () => {
+    const cwd = makeTempDir("ws-search-contents-");
+    writeFile(cwd, "src/hello.ts", "const greeting = 'Hello World';\nconsole.log(greeting);\n");
+    writeFile(cwd, "src/other.ts", "const test = 123;\n");
+
+    const result = await searchWorkspaceContents({
+      cwd,
+      query: "hello",
+      limit: 10,
+      caseSensitive: false,
+      wholeWord: false,
+      useRegex: false,
+    });
+
+    assert.strictEqual(result.matches.length, 1);
+    const firstMatch = result.matches[0]!;
+    assert.strictEqual(firstMatch.path, "src/hello.ts");
+    assert.strictEqual(firstMatch.lineNumber, 1);
+    assert.strictEqual(firstMatch.lineContent, "const greeting = 'Hello World';");
+    assert.deepEqual(firstMatch.matchRanges, [{ start: 18, end: 23 }]);
+    assert.strictEqual(result.truncated, false);
+  });
+
+  it("respects case sensitivity and whole word filters", async () => {
+    const cwd = makeTempDir("ws-search-contents-case-");
+    writeFile(cwd, "test.txt", "Foo foobar FOO foo\n");
+
+    const caseMatch = await searchWorkspaceContents({
+      cwd,
+      query: "FOO",
+      limit: 10,
+      caseSensitive: true,
+      wholeWord: false,
+      useRegex: false,
+    });
+    assert.strictEqual(caseMatch.matches.length, 1);
+    assert.strictEqual(caseMatch.matches[0]!.matchRanges.length, 1);
+
+    const wholeWordMatch = await searchWorkspaceContents({
+      cwd,
+      query: "foo",
+      limit: 10,
+      caseSensitive: false,
+      wholeWord: true,
+      useRegex: false,
+    });
+    // Should match "Foo", "FOO", "foo" but NOT "foobar"
+    assert.strictEqual(wholeWordMatch.matches.length, 1);
+    assert.strictEqual(wholeWordMatch.matches[0]!.matchRanges.length, 3);
+  });
+
+  it("supports regular expressions and falls back safely on invalid regex", async () => {
+    const cwd = makeTempDir("ws-search-contents-regex-");
+    writeFile(cwd, "code.ts", "const a = 1;\nlet b = 2;\nvar c = 3;\n");
+
+    const regexMatch = await searchWorkspaceContents({
+      cwd,
+      query: "(const|let)\\s+[a-z]",
+      limit: 10,
+      caseSensitive: false,
+      wholeWord: false,
+      useRegex: true,
+    });
+    assert.strictEqual(regexMatch.matches.length, 2);
+
+    const invalidRegex = await searchWorkspaceContents({
+      cwd,
+      query: "[unclosed",
+      limit: 10,
+      caseSensitive: false,
+      wholeWord: false,
+      useRegex: true,
+    });
+    assert.isDefined(invalidRegex.regexFallbackError);
+    assert.strictEqual(invalidRegex.matches.length, 0);
+  });
+});
+

@@ -65,6 +65,17 @@ describe("parseCodeControlServerMessage", () => {
       theme: "light",
     });
   });
+  it("parses a valid openFile with lineNumber", () => {
+    expect(
+      parseCodeControlServerMessage(
+        JSON.stringify({ type: "openFile", filePath: "src/main.ts", lineNumber: 42 }),
+      ),
+    ).toEqual({
+      type: "openFile",
+      filePath: "src/main.ts",
+      lineNumber: 42,
+    });
+  });
   it("rejects malformed JSON and unknown/invalid shapes", () => {
     expect(parseCodeControlServerMessage("not json")).toBeNull();
     expect(parseCodeControlServerMessage(JSON.stringify({ type: "runCommand" }))).toBeNull();

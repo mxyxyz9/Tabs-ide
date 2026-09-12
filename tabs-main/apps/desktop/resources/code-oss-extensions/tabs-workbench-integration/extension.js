@@ -877,6 +877,10 @@ function startCodeControlChannel(context) {
               if (typeof parsed.preserveFocus === "boolean")
                 options.preserveFocus = parsed.preserveFocus;
               if (typeof parsed.viewColumn === "number") options.viewColumn = parsed.viewColumn;
+              if (typeof parsed.lineNumber === "number" && parsed.lineNumber > 0) {
+                const lineIndex = parsed.lineNumber - 1;
+                options.selection = new vscode.Range(lineIndex, 0, lineIndex, 0);
+              }
               await vscode.commands.executeCommand("vscode.open", fileUri, options);
             } catch (err) {
               log(`openFile error: ${err && err.message ? err.message : err}`);

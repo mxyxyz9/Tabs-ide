@@ -19,6 +19,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type KeyboardEvent,
@@ -37,7 +38,7 @@ import { readNativeApi } from "../nativeApi";
 import { readModelStateAtom } from "../state/readModel";
 import { useKeybindings } from "../state/settings";
 import { useThreadTerminalState } from "../state/terminal";
-import { newCommandId, newProjectId } from "../lib/utils";
+import { cn, newCommandId, newProjectId } from "../lib/utils";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { makeAppModelSelection } from "../modelSelection";
 import { resolveShortcutCommand } from "../keybindings";
@@ -53,13 +54,18 @@ import {
   getCommandPaletteMode,
   ITEM_ICON_CLASS,
   RECENT_THREAD_LIMIT,
+  reduceCommandPaletteUiState,
   resolveCommandPaletteWorkspaceContext,
   type CommandPaletteActionItem,
   type CommandPaletteGroup,
+  type CommandPaletteOpenIntent,
   type CommandPaletteSubmenuItem,
   type CommandPaletteView,
+  type SearchOverlayMode,
 } from "./CommandPalette.logic";
 import { CommandPaletteResults } from "./CommandPaletteResults";
+import { ProjectFilePicker } from "./files/ProjectFilePicker";
+import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { ProjectFavicon } from "./Sidebar";
 import {
   Command,
@@ -71,15 +77,23 @@ import {
 } from "./ui/command";
 
 export function CommandPalette({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [openIntent, setOpenIntent] = useState<{ kind: "add-project" } | null>(null);
+  const [state, dispatch] = useReducer(reduceCommandPaletteUiState, {
+    open: false,
+    mode: "command",
+    openIntent: null,
+  });
 
-  const toggleOpen = useCallback(() => setOpen((prev) => !prev), []);
+  const toggleOpen = useCallback(
+    () => dispatch({ _tag: "ToggleMode", mode: "command" }),
+    [],
+  );
   const openAddProject = useCallback(() => {
-    setOpen(true);
-    setOpenIntent({ kind: "add-project" });
+    dispatch({ _tag: "OpenAddProject" });
   }, []);
-  const clearOpenIntent = useCallback(() => setOpenIntent(null), []);
+  const clearOpenIntent = useCallback(
+    () => dispatch({ _tag: "ClearOpenIntent" }),
+    [],
+  );
 
   const keybindings = useKeybindings();
 
@@ -99,25 +113,45 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           shellChromeFocus: true,
         },
       });
-      if (command !== "commandPalette.toggle") {
-        return;
+      if (command === "commandPalette.toggle") {
+        event.preventDefault();
+        event.stopPropagation();
+        dispatch({ _tag: "ToggleMode", mode: "command" });
+      } else if (command === "filePicker.toggle") {
+        event.preventDefault();
+        event.stopPropagation();
+        dispatch({ _tag: "ToggleMode", mode: "files" });
+      } else if (command === "projectSearch.toggle") {
+        event.preventDefault();
+        event.stopPropagation();
+        dispatch({ _tag: "ToggleMode", mode: "content" });
       }
-      event.preventDefault();
-      event.stopPropagation();
-      toggleOpen();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, terminalOpen, toggleOpen]);
+  }, [keybindings, terminalOpen]);
 
   return (
     <OpenAddProjectCommandPaletteProvider openAddProject={openAddProject}>
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        {children}
+      <CommandDialog
+        open={state.open}
+        onOpenChange={(open, eventDetails) => {
+          if (!open && eventDetails?.reason === "escape-key" && state.mode !== "command") {
+            eventDetails.cancel();
+            dispatch({ _tag: "ToggleMode", mode: "command" });
+            return;
+          }
+          dispatch({ _tag: "SetOpen", open });
+        }}
+      >
+        <div className="contents" inert={state.open}>
+          {children}
+        </div>
         <CommandPaletteDialog
-          open={open}
-          openIntent={openIntent}
-          setOpen={setOpen}
+          open={state.open}
+          mode={state.mode}
+          openIntent={state.openIntent}
+          setOpen={(open) => dispatch({ _tag: "SetOpen", open })}
           clearOpenIntent={clearOpenIntent}
           keybindings={keybindings}
         />
@@ -128,13 +162,42 @@ export function CommandPalette({ children }: { children: ReactNode }) {
 
 function CommandPaletteDialog(props: {
   readonly open: boolean;
-  readonly openIntent: { kind: "add-project" } | null;
+  readonly mode: SearchOverlayMode;
+  readonly openIntent: CommandPaletteOpenIntent | null;
   readonly setOpen: (open: boolean) => void;
   readonly clearOpenIntent: () => void;
   readonly keybindings: ResolvedKeybindingsConfig;
 }) {
   if (!props.open) {
     return null;
+  }
+
+  if (props.mode === "files") {
+    return (
+      <CommandDialogPopup
+        aria-label="File picker"
+        className="overflow-hidden p-0"
+        data-command-palette="true"
+        data-palette-mode="files"
+        data-testid="command-palette"
+      >
+        <ProjectFilePicker setOpen={props.setOpen} />
+      </CommandDialogPopup>
+    );
+  }
+
+  if (props.mode === "content") {
+    return (
+      <CommandDialogPopup
+        aria-label="Search project contents"
+        className="h-105 overflow-hidden p-0"
+        data-command-palette="true"
+        data-palette-mode="content"
+        data-testid="command-palette"
+      >
+        <ProjectContentSearchDialog onOpenChange={props.setOpen} />
+      </CommandDialogPopup>
+    );
   }
 
   return (
@@ -148,7 +211,7 @@ function CommandPaletteDialog(props: {
 }
 
 function OpenCommandPaletteDialog(props: {
-  readonly openIntent: { kind: "add-project" } | null;
+  readonly openIntent: CommandPaletteOpenIntent | null;
   readonly setOpen: (open: boolean) => void;
   readonly clearOpenIntent: () => void;
   readonly keybindings: ResolvedKeybindingsConfig;

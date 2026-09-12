@@ -101,12 +101,15 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         customModels: ["claude-custom"],
         launchArgs: "",
       });
-      // Option selections are replaced wholesale (not deep-merged) under the
-      // canonical array shape, so the prior reasoningEffort is dropped.
+      // Option selections are merged by id under the canonical array shape,
+      // so reasoningEffort is preserved and fastMode is updated.
       assert.deepEqual(next.textGenerationModelSelection, {
         instanceId: "codex" as ProviderInstanceId,
         model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-        options: [{ id: "fastMode", value: false }],
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "fastMode", value: false },
+        ],
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );

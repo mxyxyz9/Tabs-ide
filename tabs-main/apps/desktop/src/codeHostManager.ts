@@ -1490,7 +1490,8 @@ export class CodeHostManager {
     }
     const needsUpdate =
       session.lastFocusedPath !== normalizedRelativePath ||
-      session.lastNavigationNonce !== input.navigationNonce;
+      session.lastNavigationNonce !== input.navigationNonce ||
+      input.lineNumber !== undefined;
     session.lastFocusedPath = normalizedRelativePath;
     session.lastNavigationNonce = input.navigationNonce;
 
@@ -1499,7 +1500,9 @@ export class CodeHostManager {
     }
 
     if (this.controlChannel) {
-      const sent = this.controlChannel.openFile(input.projectId, fullFilePath);
+      const sent = this.controlChannel.openFile(input.projectId, fullFilePath, {
+        lineNumber: input.lineNumber,
+      });
       if (sent) {
         return;
       }
