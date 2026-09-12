@@ -26,6 +26,7 @@ import {
   categorizePermission,
 } from "./permissionMediator";
 import { buildSecurityContext } from "./browserSecurityContext";
+import { detectGoogleRejection } from "./googleAuthHandler";
 
 export const defaultPermissionMediator = new PermissionMediator();
 
@@ -1667,6 +1668,12 @@ export class BrowserHostManager {
       session.loading = false;
       session.currentUrl = contents.getURL() || session.currentUrl;
       session.pageTitle = contents.getTitle() || session.pageTitle;
+      if (session.currentUrl) {
+        const rejection = detectGoogleRejection(session.currentUrl, session.pageTitle);
+        if (rejection.isRejected && rejection.code === "disallowed_useragent") {
+          session.lastError = rejection.explanation;
+        }
+      }
       refreshNavigationState();
       this.emitState(session);
     });
