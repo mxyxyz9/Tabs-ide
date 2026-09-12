@@ -78,9 +78,12 @@ export function getStoredFontPreferences(): FontPreferences {
           if (parsed) {
             if (parsed.fontFamilySans) clientFontSettings.uiFont = parsed.fontFamilySans;
             if (parsed.fontFamilyCode) clientFontSettings.editorFont = parsed.fontFamilyCode;
-            if (typeof parsed.fontSizeInterface === "number") clientFontSettings.fontSizeInterface = parsed.fontSizeInterface;
-            if (typeof parsed.fontSizeCode === "number") clientFontSettings.fontSizeCode = parsed.fontSizeCode;
-            if (typeof parsed.fontSizePrompt === "number") clientFontSettings.fontSizePrompt = parsed.fontSizePrompt;
+            if (typeof parsed.fontSizeInterface === "number")
+              clientFontSettings.fontSizeInterface = parsed.fontSizeInterface;
+            if (typeof parsed.fontSizeCode === "number")
+              clientFontSettings.fontSizeCode = parsed.fontSizeCode;
+            if (typeof parsed.fontSizePrompt === "number")
+              clientFontSettings.fontSizePrompt = parsed.fontSizePrompt;
           }
         } catch {}
       }
@@ -91,11 +94,27 @@ export function getStoredFontPreferences(): FontPreferences {
         if (parsed && typeof parsed === "object") {
           return {
             uiFont: clientFontSettings.uiFont || parsed.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
-            headingFont: parsed.headingFont || clientFontSettings.uiFont || parsed.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
-            editorFont: clientFontSettings.editorFont || parsed.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
-            fontSizeInterface: clientFontSettings.fontSizeInterface ?? parsed.fontSizeInterface ?? DEFAULT_FONT_PREFERENCES.fontSizeInterface,
-            fontSizeCode: clientFontSettings.fontSizeCode ?? parsed.fontSizeCode ?? DEFAULT_FONT_PREFERENCES.fontSizeCode,
-            fontSizePrompt: clientFontSettings.fontSizePrompt ?? parsed.fontSizePrompt ?? DEFAULT_FONT_PREFERENCES.fontSizePrompt,
+            headingFont:
+              parsed.headingFont ||
+              clientFontSettings.uiFont ||
+              parsed.uiFont ||
+              DEFAULT_FONT_PREFERENCES.headingFont,
+            editorFont:
+              clientFontSettings.editorFont ||
+              parsed.editorFont ||
+              DEFAULT_FONT_PREFERENCES.editorFont,
+            fontSizeInterface:
+              clientFontSettings.fontSizeInterface ??
+              parsed.fontSizeInterface ??
+              DEFAULT_FONT_PREFERENCES.fontSizeInterface,
+            fontSizeCode:
+              clientFontSettings.fontSizeCode ??
+              parsed.fontSizeCode ??
+              DEFAULT_FONT_PREFERENCES.fontSizeCode,
+            fontSizePrompt:
+              clientFontSettings.fontSizePrompt ??
+              parsed.fontSizePrompt ??
+              DEFAULT_FONT_PREFERENCES.fontSizePrompt,
           };
         }
       }
@@ -105,9 +124,11 @@ export function getStoredFontPreferences(): FontPreferences {
           uiFont: clientFontSettings.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
           headingFont: clientFontSettings.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
           editorFont: clientFontSettings.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
-          fontSizeInterface: clientFontSettings.fontSizeInterface ?? DEFAULT_FONT_PREFERENCES.fontSizeInterface,
+          fontSizeInterface:
+            clientFontSettings.fontSizeInterface ?? DEFAULT_FONT_PREFERENCES.fontSizeInterface,
           fontSizeCode: clientFontSettings.fontSizeCode ?? DEFAULT_FONT_PREFERENCES.fontSizeCode,
-          fontSizePrompt: clientFontSettings.fontSizePrompt ?? DEFAULT_FONT_PREFERENCES.fontSizePrompt,
+          fontSizePrompt:
+            clientFontSettings.fontSizePrompt ?? DEFAULT_FONT_PREFERENCES.fontSizePrompt,
         };
       }
     }
@@ -182,6 +203,16 @@ export function resolveActiveThemeId(preference: ThemePreference): ThemePreferen
   return DEFAULT_THEME_ID;
 }
 
+/**
+ * Applies the interface text preference without changing the root rem unit.
+ * Tailwind expresses both typography and layout in rem, so assigning a 13px
+ * font size to `<html>` silently scales the entire application to 81.25%.
+ */
+export function applyInterfaceFontSize(style: CSSStyleDeclaration, size: number): void {
+  style.setProperty("--font-size-interface", `${size}px`);
+  style.removeProperty("font-size");
+}
+
 function applyTheme(
   preference: ThemePreference,
   suppressTransitions = false,
@@ -199,8 +230,7 @@ function applyTheme(
     rootStyle.setProperty("--font-display", fonts.headingFont || fonts.uiFont);
     rootStyle.setProperty("--font-mono", fonts.editorFont);
     if (typeof fonts.fontSizeInterface === "number") {
-      rootStyle.setProperty("--font-size-interface", `${fonts.fontSizeInterface}px`);
-      rootStyle.fontSize = `${fonts.fontSizeInterface}px`;
+      applyInterfaceFontSize(rootStyle, fonts.fontSizeInterface);
     }
     if (typeof fonts.fontSizeCode === "number") {
       rootStyle.setProperty("--font-size-code", `${fonts.fontSizeCode}px`);

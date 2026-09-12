@@ -693,6 +693,9 @@ body {
     system-ui,
     sans-serif
   );
+  /* Interface text can be customized without redefining the root rem used by
+     Tailwind for every font, gap, radius, and control dimension. */
+  font-size: var(--font-size-interface, 13px);
   margin: 0;
   padding: 0;
 }
