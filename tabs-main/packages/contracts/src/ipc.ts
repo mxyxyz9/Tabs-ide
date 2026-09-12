@@ -1116,6 +1116,7 @@ export interface BrowserProfileDomainInfo {
 
 export interface DesktopBridge {
   writeClipboardText: (text: string) => Promise<void>;
+  readClipboardText?: (type?: "clipboard" | "selection") => Promise<string>;
   getClientPlatform?: () => string;
   getLocalEnvironmentBootstraps: () => readonly DesktopEnvironmentBootstrap[];
   getConnectionCatalog?: () => Promise<string | null>;

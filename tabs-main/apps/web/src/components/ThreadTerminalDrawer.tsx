@@ -23,6 +23,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
+import { handleTerminalMiddleClick } from "~/lib/terminalMiddleClick";
 import { openInPreferredEditor } from "../editorPreferences";
 import {
   extractTerminalLinks,
@@ -466,8 +467,16 @@ function TerminalViewport({
       clearSelectionAction();
       selectionGestureActiveRef.current = event.button === 0;
     };
+    const handleAuxClick = (event: MouseEvent) => {
+      const activeTerminal = terminalRef.current;
+      if (!activeTerminal) return;
+      void handleTerminalMiddleClick(event, activeTerminal, {
+        readClipboardText: window.desktopBridge?.readClipboardText,
+      });
+    };
     window.addEventListener("mouseup", handleMouseUp);
     mount.addEventListener("pointerdown", handlePointerDown);
+    mount.addEventListener("auxclick", handleAuxClick);
 
     const themeObserver = new MutationObserver(() => {
       const activeTerminal = terminalRef.current;
@@ -603,6 +612,7 @@ function TerminalViewport({
       }
       window.removeEventListener("mouseup", handleMouseUp);
       mount.removeEventListener("pointerdown", handlePointerDown);
+      mount.removeEventListener("auxclick", handleAuxClick);
       themeObserver.disconnect();
       terminalRef.current = null;
       fitAddonRef.current = null;

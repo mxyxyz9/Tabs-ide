@@ -141,6 +141,7 @@ const CODE_HOST_GET_CHROME_STATE_CHANNEL = "desktop:code-host:get-chrome-state";
 const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
 const WRITE_CLIPBOARD_TEXT_CHANNEL = "desktop:clipboard:write-text";
+const READ_CLIPBOARD_TEXT_CHANNEL = "desktop:clipboard:read-text";
 const BROWSER_HOST_GET_SESSION_STATE_CHANNEL = "desktop:browser-host:get-session-state";
 const BROWSER_HOST_ENSURE_SESSION_CHANNEL = "desktop:browser-host:ensure-session";
 const BROWSER_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:browser-host:activate-session";
@@ -2288,6 +2289,12 @@ function registerIpcHandlers(): void {
       throw new Error("Invalid clipboard text payload.");
     }
     clipboard.writeText(value);
+  });
+
+  ipcMain.removeHandler(READ_CLIPBOARD_TEXT_CHANNEL);
+  ipcMain.handle(READ_CLIPBOARD_TEXT_CHANNEL, async (_event, type: unknown) => {
+    const clipboardType = type === "selection" ? "selection" : "clipboard";
+    return (clipboard as unknown as { readText: (type?: string) => string }).readText(clipboardType);
   });
 
   ipcMain.removeHandler(BROWSER_HOST_GET_STATE_CHANNEL);
