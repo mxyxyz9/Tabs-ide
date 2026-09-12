@@ -32,6 +32,18 @@
       "types": "./src/path.ts",
       "import": "./src/path.ts"
     },
+    "./projectScripts": {
+      "types": "./src/projectScripts.ts",
+      "import": "./src/projectScripts.ts"
+    },
+    "./tabsProjectFile": {
+      "types": "./src/tabsProjectFile.ts",
+      "import": "./src/tabsProjectFile.ts"
+    },
+    "./t3ProjectFile": {
+      "types": "./src/tabsProjectFile.ts",
+      "import": "./src/tabsProjectFile.ts"
+    },
     "./logging": {
       "types": "./src/logging.ts",
       "import": "./src/logging.ts"

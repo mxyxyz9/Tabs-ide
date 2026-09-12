@@ -147,6 +147,8 @@ import { listProviderUsageSnapshotsEffect } from "./providerUsage/index.ts";
 import { PreviewManager } from "./preview/Manager.ts";
 import { AgentSessionScanner } from "./project/AgentSessionScanner.ts";
 import { importRecentAgentThreads } from "./project/AgentSessionImporter.ts";
+import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
+import { ProjectFileLoader } from "./project/ProjectFileLoader.ts";
 import { ServerEnvironment } from "./environment/ServerEnvironment.ts";
 import { EnvironmentAuth } from "./auth/EnvironmentAuth.ts";
 import { PreviewAutomationBroker } from "./mcp/PreviewAutomationBroker.ts";
@@ -360,6 +362,8 @@ export type ServerRuntimeServices =
   | TraceDiagnostics.TraceDiagnostics
   | UsageLimitSources.UsageLimitSources
   | AgentSessionScanner
+  | ProjectSetupScriptRunner
+  | ProjectFileLoader
   | ProviderInstanceRegistry;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
@@ -1041,6 +1045,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const orchestrationReactor = yield* OrchestrationReactor;
   const { openInEditor } = yield* Open;
   const agentSessionScanner = yield* AgentSessionScanner;
+  const projectSetupScriptRunner = yield* ProjectSetupScriptRunner;
+  const projectFileLoader = yield* ProjectFileLoader;
 
   const subscriptionsScope = yield* Scope.make("sequential");
   yield* Effect.addFinalizer(() => Scope.close(subscriptionsScope, Exit.void));
@@ -1546,6 +1552,136 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case ORCHESTRATION_WS_METHODS.dispatchCommand: {
         const { command } = request.body;
         const normalizedCommand = yield* normalizeDispatchCommand({ command });
+
+        if (
+          normalizedCommand.type === "thread.turn.start" &&
+          normalizedCommand.bootstrap?.runSetupScript
+        ) {
+          const bootstrap = normalizedCommand.bootstrap;
+          const snapshot = yield* projectionReadModelQuery.getSnapshot();
+          const thread = snapshot.threads.find((t) => t.id === normalizedCommand.threadId);
+          const project = thread
+            ? snapshot.projects.find((p) => p.id === thread.projectId)
+            : undefined;
+          const targetWorktreePath =
+            bootstrap.prepareWorktree?.projectCwd ??
+            thread?.worktreePath ??
+            project?.workspaceRoot ??
+            null;
+
+          if (targetWorktreePath) {
+            const requestedAt = new Date().toISOString();
+            yield* projectSetupScriptRunner
+              .runForThread({
+                threadId: normalizedCommand.threadId,
+                ...(thread?.projectId ? { projectId: thread.projectId } : {}),
+                worktreePath: targetWorktreePath,
+              })
+              .pipe(
+                Effect.matchEffect({
+                  onFailure: (error) => {
+                    const detail =
+                      error._tag === "ProjectSetupScriptOperationError"
+                        ? error.cause instanceof Error
+                          ? error.cause.message
+                          : String(error.cause)
+                        : error._tag === "ProjectSetupScriptProjectNotFoundError"
+                          ? "Project was not found for setup script execution."
+                          : "Setup script execution failed.";
+
+                    return orchestrationEngine
+                      .dispatch({
+                        type: "thread.activity.append",
+                        commandId: crypto.randomUUID() as CommandId,
+                        threadId: normalizedCommand.threadId,
+                        activity: {
+                          id: crypto.randomUUID() as any,
+                          tone: "error",
+                          kind: "setup-script.failed",
+                          summary: "Setup script failed to start",
+                          payload: {
+                            detail,
+                            worktreePath: targetWorktreePath,
+                          },
+                          turnId: null,
+                          createdAt: requestedAt,
+                        },
+                        createdAt: requestedAt,
+                      })
+                      .pipe(
+                        Effect.ignoreCause({ log: false }),
+                        Effect.flatMap(() =>
+                          Effect.logWarning("bootstrap turn start failed to launch setup script", {
+                            threadId: normalizedCommand.threadId,
+                            worktreePath: targetWorktreePath,
+                            detail,
+                          }),
+                        ),
+                      );
+                  },
+                  onSuccess: (setupResult) => {
+                    if (setupResult.status !== "started") {
+                      return Effect.void;
+                    }
+                    const startedAt = new Date().toISOString();
+                    const payload = {
+                      scriptId: setupResult.scriptId,
+                      scriptName: setupResult.scriptName,
+                      terminalId: setupResult.terminalId,
+                      worktreePath: targetWorktreePath,
+                    };
+                    return Effect.all([
+                      orchestrationEngine.dispatch({
+                        type: "thread.activity.append",
+                        commandId: crypto.randomUUID() as CommandId,
+                        threadId: normalizedCommand.threadId,
+                        activity: {
+                          id: crypto.randomUUID() as any,
+                          tone: "info",
+                          kind: "setup-script.requested",
+                          summary: "Starting setup script",
+                          payload,
+                          turnId: null,
+                          createdAt: requestedAt,
+                        },
+                        createdAt: requestedAt,
+                      }),
+                      orchestrationEngine.dispatch({
+                        type: "thread.activity.append",
+                        commandId: crypto.randomUUID() as CommandId,
+                        threadId: normalizedCommand.threadId,
+                        activity: {
+                          id: crypto.randomUUID() as any,
+                          tone: "info",
+                          kind: "setup-script.started",
+                          summary: "Setup script started",
+                          payload,
+                          turnId: null,
+                          createdAt: startedAt,
+                        },
+                        createdAt: startedAt,
+                      }),
+                    ]).pipe(
+                      Effect.asVoid,
+                      Effect.catch((error: any) =>
+                        Effect.logWarning(
+                          "bootstrap turn start launched setup script but failed to record setup activity",
+                          {
+                            threadId: normalizedCommand.threadId,
+                            worktreePath: targetWorktreePath,
+                            scriptId: setupResult.scriptId,
+                            terminalId: setupResult.terminalId,
+                            detail: error?.message ?? String(error),
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                }),
+              );
+          }
+        }
+
         return yield* orchestrationEngine.dispatch(normalizedCommand);
       }
 

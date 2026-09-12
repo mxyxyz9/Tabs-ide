@@ -93,10 +93,12 @@ describe("GitPreparePullRequestThreadInput", () => {
       cwd: "/repo",
       reference: "#42",
       mode: "worktree",
+      threadId: "test-thread-id",
     });
 
     expect(parsed.reference).toBe("#42");
     expect(parsed.mode).toBe("worktree");
+    expect(parsed.threadId).toBe("test-thread-id");
   });
 });
 

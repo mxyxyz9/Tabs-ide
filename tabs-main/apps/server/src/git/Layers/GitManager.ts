@@ -52,6 +52,7 @@ import {
   addReviewHistoryRecord,
   getReviewHistory as fetchReviewHistoryStore,
 } from "../../review/ReviewHistoryStore.ts";
+import { ProjectSetupScriptRunner } from "../../project/ProjectSetupScriptRunner.ts";
 
 const COMMIT_TIMEOUT_MS = 10 * 60_000;
 const MAX_PROGRESS_TEXT_LENGTH = 500;
@@ -537,6 +538,7 @@ export const makeGitManager = Effect.gen(function* () {
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
   const pullRequestReadCache = yield* PullRequestReadCache;
+  const projectSetupScriptRunner = yield* ProjectSetupScriptRunner;
 
   const repositoryRemoteUrl = (cwd: string) =>
     Effect.gen(function* () {
@@ -1764,6 +1766,24 @@ export const makeGitManager = Effect.gen(function* () {
         path: null,
       });
       yield* ensureExistingWorktreeUpstream(worktree.worktree.path);
+
+      if (input.threadId) {
+        yield* projectSetupScriptRunner
+          .runForThread({
+            threadId: input.threadId,
+            projectCwd: input.cwd,
+            worktreePath: worktree.worktree.path,
+          })
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("GitManager.preparePullRequestThread setup script failed", {
+                threadId: input.threadId,
+                worktreePath: worktree.worktree.path,
+                cause: error,
+              }).pipe(Effect.asVoid),
+            ),
+          );
+      }
 
       return {
         pullRequest,

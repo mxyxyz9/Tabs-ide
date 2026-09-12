@@ -50,6 +50,8 @@ import { AntigravityInstallation } from "./provider/AntigravityInstallation.ts";
 import * as CodexResetCreditCoordinator from "./provider/Layers/codexResetCredit.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
+import * as ProjectFileLoader from "./project/ProjectFileLoader.ts";
+import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -152,11 +154,17 @@ export function makeServerRuntimeServicesLayer() {
 
   const terminalLayer = TerminalManagerLive.pipe(Layer.provide(makeRuntimePtyAdapterLayer()));
 
+  const projectSetupScriptRunnerLayer = ProjectSetupScriptRunner.layer.pipe(
+    Layer.provideMerge(runtimeServicesLayer),
+    Layer.provideMerge(terminalLayer),
+  );
+
   const gitManagerLayer = GitManagerLive.pipe(
     Layer.provideMerge(GitCoreLive),
     Layer.provideMerge(GitHubCliLive),
     Layer.provideMerge(textGenerationLayer),
     Layer.provideMerge(PullRequestReadCacheLive),
+    Layer.provideMerge(projectSetupScriptRunnerLayer),
   );
 
   // The session reaper needs ProjectionSnapshotQuery (orchestration) alongside
@@ -195,6 +203,8 @@ export function makeServerRuntimeServicesLayer() {
     EnvironmentTheme.layer,
     TraceDiagnostics.layer,
     agentSessionScannerLayer,
+    ProjectFileLoader.layer,
+    projectSetupScriptRunnerLayer,
   ).pipe(Layer.provideMerge(AntigravityInstallation.layer));
 }
 

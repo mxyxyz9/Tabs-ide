@@ -1,4 +1,4 @@
-import { ServerSettings, type ServerSettingsPatch } from "@tabs/contracts";
+import { type ProjectId, ServerSettings, type ServerSettingsPatch } from "@tabs/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { deepMerge } from "./Struct";
@@ -82,6 +82,17 @@ function mergeSettingsEntries<Value>(
   return Object.fromEntries(next) as Record<string, Value>;
 }
 
+export function resolveProjectAutoPull(
+  settings: Pick<ServerSettings, "defaultAutoPull" | "projectAutoPullOverrides">,
+  projectId: ProjectId,
+  legacyAutoPull?: boolean | undefined,
+): boolean {
+  return (
+    settings.projectAutoPullOverrides[projectId] ??
+    (legacyAutoPull === true || settings.defaultAutoPull)
+  );
+}
+
 /**
  * Applies a server settings patch while treating textGenerationModelSelection as
  * replace-on-provider/model updates. This prevents stale nested options from
@@ -96,6 +107,10 @@ export function applyServerSettingsPatch(
     automaticGitFetchInterval,
     usageLimitSources: usageLimitSourcesPatch,
     usagePriceOverrides: usagePriceOverridesPatch,
+    projectScriptOverrides: projectScriptOverridesPatch,
+    projectAutoPullOverrides: projectAutoPullOverridesPatch,
+    defaultProjectScripts: defaultProjectScriptsPatch,
+    defaultAutoPull: defaultAutoPullPatch,
     ...patchForMerge
   } = patch;
   const next = deepMerge(current, patchForMerge);
@@ -103,6 +118,26 @@ export function applyServerSettingsPatch(
     ...next,
     ...(patch.providerInstances !== undefined
       ? { providerInstances: patch.providerInstances }
+      : {}),
+    ...(defaultProjectScriptsPatch !== undefined
+      ? { defaultProjectScripts: defaultProjectScriptsPatch }
+      : {}),
+    ...(defaultAutoPullPatch !== undefined ? { defaultAutoPull: defaultAutoPullPatch } : {}),
+    ...(projectScriptOverridesPatch !== undefined
+      ? {
+          projectScriptOverrides: mergeSettingsEntries(
+            current.projectScriptOverrides,
+            projectScriptOverridesPatch,
+          ),
+        }
+      : {}),
+    ...(projectAutoPullOverridesPatch !== undefined
+      ? {
+          projectAutoPullOverrides: mergeSettingsEntries(
+            current.projectAutoPullOverrides,
+            projectAutoPullOverridesPatch,
+          ),
+        }
       : {}),
     ...(usageLimitSourcesPatch !== undefined
       ? {

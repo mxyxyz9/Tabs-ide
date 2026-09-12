@@ -6,7 +6,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, PlatformError, Scope } from "effect";
 import { expect } from "vitest";
-import type { GitActionProgressEvent } from "@tabs/contracts";
+import type { GitActionProgressEvent, GitPreparePullRequestThreadInput } from "@tabs/contracts";
 
 import { GitCommandError, GitHubCliError, TextGenerationError } from "../Errors.ts";
 import { type GitManagerShape } from "../Services/GitManager.ts";
@@ -22,6 +22,7 @@ import { makeGitManager } from "./GitManager.ts";
 import { PullRequestReadCacheLive } from "./PullRequestReadCache.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { ProjectSetupScriptRunner } from "../../project/ProjectSetupScriptRunner.ts";
 
 interface FakeGhScenario {
   prListSequence?: string[];
@@ -494,7 +495,7 @@ function resolvePullRequest(manager: GitManagerShape, input: { cwd: string; refe
 
 function preparePullRequestThread(
   manager: GitManagerShape,
-  input: { cwd: string; reference: string; mode: "local" | "worktree" },
+  input: GitPreparePullRequestThreadInput,
 ) {
   return manager.preparePullRequestThread(input);
 }
@@ -503,6 +504,7 @@ function makeManager(input?: {
   ghScenario?: FakeGhScenario;
   textGeneration?: Partial<FakeGitTextGeneration>;
   serverSettingsOverrides?: Parameters<typeof ServerSettingsService.layerTest>[0];
+  setupScriptRunner?: ProjectSetupScriptRunner["Service"];
 }) {
   const { service: gitHubCli, ghCalls } = createGitHubCliWithFakeGh(input?.ghScenario);
   const textGeneration = createTextGeneration(input?.textGeneration);
@@ -520,6 +522,12 @@ function makeManager(input?: {
   const managerLayer = Layer.mergeAll(
     Layer.succeed(GitHubCli, gitHubCli),
     Layer.succeed(TextGeneration, textGeneration),
+    Layer.succeed(
+      ProjectSetupScriptRunner,
+      input?.setupScriptRunner ?? {
+        runForThread: () => Effect.succeed({ status: "no-script" as const }),
+      },
+    ),
     gitCoreLayer,
     serverSettingsLayer,
     PullRequestReadCacheLive.pipe(Layer.provideMerge(ServerConfigLayer)),
@@ -1660,6 +1668,57 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         "--show-current",
       ])).stdout.trim();
       expect(worktreeBranch).toBe("feature/pr-worktree");
+    }),
+  );
+
+  it.effect("runs setup script when preparing a worktree PR thread with threadId", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/pr-setup"]);
+      fs.writeFileSync(path.join(repoDir, "setup.txt"), "setup\n");
+      yield* runGit(repoDir, ["add", "setup.txt"]);
+      yield* runGit(repoDir, ["commit", "-m", "PR setup branch"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "feature/pr-setup"]);
+      yield* runGit(repoDir, ["push", "origin", "HEAD:refs/pull/88/head"]);
+      yield* runGit(repoDir, ["checkout", "main"]);
+
+      const setupCalls: any[] = [];
+      const { manager } = yield* makeManager({
+        ghScenario: {
+          pullRequest: {
+            number: 88,
+            title: "Setup PR",
+            url: "https://github.com/pingdotgg/codething-mvp/pull/88",
+            baseRefName: "main",
+            headRefName: "feature/pr-setup",
+            state: "open",
+          },
+        },
+        setupScriptRunner: {
+          runForThread: (input) =>
+            Effect.sync(() => {
+              setupCalls.push(input);
+              return { status: "no-script" as const };
+            }),
+        },
+      });
+
+      const result = yield* preparePullRequestThread(manager, {
+        cwd: repoDir,
+        reference: "88",
+        mode: "worktree",
+        threadId: "thread-pr-88" as any,
+      });
+
+      expect(result.branch).toBe("feature/pr-setup");
+      expect(result.worktreePath).not.toBeNull();
+      expect(setupCalls).toHaveLength(1);
+      expect(setupCalls[0].threadId).toBe("thread-pr-88");
+      expect(setupCalls[0].worktreePath).toBe(result.worktreePath);
     }),
   );
 
