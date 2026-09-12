@@ -156,6 +156,40 @@ it.effect("decodes project.create with createWorkspaceRootIfMissing enabled", ()
   }),
 );
 
+it.effect("decodes project.create and project events with autoPull enabled", () =>
+  Effect.gen(function* () {
+    const createCmd = yield* decodeProjectCreateCommand({
+      type: "project.create",
+      commandId: "cmd-1",
+      projectId: "project-1",
+      title: "Project Title",
+      workspaceRoot: "/tmp/workspace",
+      autoPull: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(createCmd.autoPull, true);
+
+    const createdPayload = yield* decodeProjectCreatedPayload({
+      projectId: "project-1",
+      title: "Project Title",
+      workspaceRoot: "/tmp/workspace",
+      defaultModelSelection: null,
+      autoPull: true,
+      scripts: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(createdPayload.autoPull, true);
+
+    const metaUpdatedPayload = yield* decodeProjectMetaUpdatedPayload({
+      projectId: "project-1",
+      autoPull: false,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(metaUpdatedPayload.autoPull, false);
+  }),
+);
+
 it.effect("decodes historical project.created payloads with a default provider", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeProjectCreatedPayload({

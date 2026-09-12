@@ -58,6 +58,7 @@ import Migration0042 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts
 import Migration0043 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
 import Migration0044 from "./Migrations/044_CatchUpThreadLifecycle.ts";
 import Migration0045 from "./Migrations/045_ProjectionThreadPullRequests.ts";
+import Migration0046 from "./Migrations/046_ProjectionProjectsAutoPull.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -115,6 +116,7 @@ export const migrationEntries = [
   [43, "ProjectionThreadsUnsettledAt", Migration0043],
   [44, "CatchUpThreadLifecycle", Migration0044],
   [45, "ProjectionThreadPullRequests", Migration0045],
+  [46, "ProjectionProjectsAutoPull", Migration0046],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

@@ -53,6 +53,7 @@ import {
   getReviewHistory as fetchReviewHistoryStore,
 } from "../../review/ReviewHistoryStore.ts";
 import { ProjectSetupScriptRunner } from "../../project/ProjectSetupScriptRunner.ts";
+import { VcsAutoPullPolicy } from "../Services/VcsAutoPullPolicy.ts";
 
 const COMMIT_TIMEOUT_MS = 10 * 60_000;
 const MAX_PROGRESS_TEXT_LENGTH = 500;
@@ -539,6 +540,7 @@ export const makeGitManager = Effect.gen(function* () {
   const serverSettingsService = yield* ServerSettingsService;
   const pullRequestReadCache = yield* PullRequestReadCache;
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner;
+  const autoPullPolicy = yield* VcsAutoPullPolicy;
 
   const repositoryRemoteUrl = (cwd: string) =>
     Effect.gen(function* () {
@@ -1196,7 +1198,56 @@ export const makeGitManager = Effect.gen(function* () {
       };
     });
 
+  const inFlightPulls = new Set<string>();
+
+  const maybeAutoPull = (cwd: string) =>
+    Effect.gen(function* () {
+      if (inFlightPulls.has(cwd)) {
+        return;
+      }
+      const isEnabled = yield* autoPullPolicy.isEnabled(cwd);
+      if (!isEnabled) {
+        return;
+      }
+      const details = yield* gitCore.statusDetails(cwd);
+      if (
+        !details.branch ||
+        !details.hasUpstream ||
+        details.hasWorkingTreeChanges ||
+        details.aheadCount > 0 ||
+        details.behindCount <= 0
+      ) {
+        return;
+      }
+      const branchList = yield* gitCore.listBranches({ cwd });
+      const isDefaultBranch = branchList.branches.some(
+        (b) => b.name === details.branch && b.isDefault,
+      );
+      if (!isDefaultBranch) {
+        return;
+      }
+
+      yield* Effect.gen(function* () {
+        inFlightPulls.add(cwd);
+        const pullResult = yield* gitCore.pullCurrentBranch(cwd);
+        yield* Effect.logDebug("Automatic project pull completed", {
+          cwd,
+          status: pullResult.status,
+          branch: pullResult.branch,
+        });
+      }).pipe(
+        Effect.ensuring(Effect.sync(() => inFlightPulls.delete(cwd))),
+      );
+    }).pipe(
+      Effect.catch((cause) =>
+        Effect.logWarning("Automatic project pull failed", { cwd, cause }).pipe(
+          Effect.asVoid,
+        ),
+      ),
+    );
+
   const status: GitManagerShape["status"] = Effect.fnUntraced(function* (input) {
+    yield* maybeAutoPull(input.cwd);
     const details = yield* gitCore.statusDetails(input.cwd);
 
     const pr =

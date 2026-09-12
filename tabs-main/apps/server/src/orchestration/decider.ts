@@ -215,6 +215,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           title: command.title,
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
+          ...(command.autoPull !== undefined ? { autoPull: command.autoPull } : {}),
           scripts: [],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -244,6 +245,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.defaultModelSelection !== undefined
             ? { defaultModelSelection: command.defaultModelSelection }
             : {}),
+          ...(command.autoPull !== undefined ? { autoPull: command.autoPull } : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
           updatedAt: occurredAt,
         },

@@ -246,6 +246,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
+          autoPull: false,
           scripts: [
             {
               id: "script-1",

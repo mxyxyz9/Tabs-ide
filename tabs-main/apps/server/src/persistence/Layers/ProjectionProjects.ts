@@ -1,6 +1,6 @@
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
-import { Effect, Layer, Schema, Struct } from "effect";
+import { Effect, Layer, Option, Schema, Struct } from "effect";
 
 import { ModelSelection, ProjectScript } from "@tabs/contracts";
 import { toPersistenceSqlError } from "../Errors.ts";
@@ -15,6 +15,7 @@ import {
 const ProjectionProjectDbRow = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
+    autoPull: Schema.Number,
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
   }),
 );
@@ -32,6 +33,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           title,
           workspace_root,
           default_model_selection_json,
+          auto_pull,
           scripts_json,
           created_at,
           updated_at,
@@ -42,6 +44,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           ${row.title},
           ${row.workspaceRoot},
           ${row.defaultModelSelection !== null ? JSON.stringify(row.defaultModelSelection) : null},
+          ${row.autoPull ? 1 : 0},
           ${JSON.stringify(row.scripts)},
           ${row.createdAt},
           ${row.updatedAt},
@@ -52,6 +55,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           title = excluded.title,
           workspace_root = excluded.workspace_root,
           default_model_selection_json = excluded.default_model_selection_json,
+          auto_pull = excluded.auto_pull,
           scripts_json = excluded.scripts_json,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at,
@@ -69,6 +73,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           title,
           workspace_root AS "workspaceRoot",
           default_model_selection_json AS "defaultModelSelection",
+          auto_pull AS "autoPull",
           scripts_json AS "scripts",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -88,6 +93,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           title,
           workspace_root AS "workspaceRoot",
           default_model_selection_json AS "defaultModelSelection",
+          auto_pull AS "autoPull",
           scripts_json AS "scripts",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -113,11 +119,13 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
 
   const getById: ProjectionProjectRepositoryShape["getById"] = (input) =>
     getProjectionProjectRow(input).pipe(
+      Effect.map(Option.map((row) => ({ ...row, autoPull: row.autoPull === 1 }))),
       Effect.mapError(toPersistenceSqlError("ProjectionProjectRepository.getById:query")),
     );
 
   const listAll: ProjectionProjectRepositoryShape["listAll"] = () =>
     listProjectionProjectRows().pipe(
+      Effect.map((rows) => rows.map((row) => ({ ...row, autoPull: row.autoPull === 1 }))),
       Effect.mapError(toPersistenceSqlError("ProjectionProjectRepository.listAll:query")),
     );
 

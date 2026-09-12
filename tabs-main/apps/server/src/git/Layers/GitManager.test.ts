@@ -23,6 +23,7 @@ import { PullRequestReadCacheLive } from "./PullRequestReadCache.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProjectSetupScriptRunner } from "../../project/ProjectSetupScriptRunner.ts";
+import { VcsAutoPullPolicy, type VcsAutoPullPolicyShape } from "../Services/VcsAutoPullPolicy.ts";
 
 interface FakeGhScenario {
   prListSequence?: string[];
@@ -505,6 +506,7 @@ function makeManager(input?: {
   textGeneration?: Partial<FakeGitTextGeneration>;
   serverSettingsOverrides?: Parameters<typeof ServerSettingsService.layerTest>[0];
   setupScriptRunner?: ProjectSetupScriptRunner["Service"];
+  autoPullPolicy?: VcsAutoPullPolicyShape;
 }) {
   const { service: gitHubCli, ghCalls } = createGitHubCliWithFakeGh(input?.ghScenario);
   const textGeneration = createTextGeneration(input?.textGeneration);
@@ -526,6 +528,12 @@ function makeManager(input?: {
       ProjectSetupScriptRunner,
       input?.setupScriptRunner ?? {
         runForThread: () => Effect.succeed({ status: "no-script" as const }),
+      },
+    ),
+    Layer.succeed(
+      VcsAutoPullPolicy,
+      input?.autoPullPolicy ?? {
+        isEnabled: () => Effect.succeed(false),
       },
     ),
     gitCoreLayer,
@@ -2342,6 +2350,66 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
 
       expect(result.wasTruncated).toBe(true);
       expect(result.truncatedReason).toContain("excluded or truncated");
+    }),
+  );
+
+  it.effect("status safely auto-pulls default branch when enabled and behind", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-autopull-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+      yield* runGit(remoteDir, ["symbolic-ref", "HEAD", "refs/heads/main"]);
+
+      const otherDir = yield* makeTempDir("tabs-git-autopull-other-");
+      yield* runGit(otherDir, ["clone", remoteDir, "."]);
+      const fileSystem = yield* FileSystem.FileSystem;
+      yield* fileSystem.writeFileString(path.join(otherDir, "remote.txt"), "remote-content\n");
+      yield* runGit(otherDir, ["add", "remote.txt"]);
+      yield* runGit(otherDir, ["commit", "-m", "Remote change"]);
+      yield* runGit(otherDir, ["push", "origin", "main"]);
+
+      yield* runGit(repoDir, ["fetch", "origin"]);
+
+      // 1. When autoPull is disabled: behindCount is 1, no pull occurs
+      const { manager: disabledManager } = yield* makeManager({
+        autoPullPolicy: {
+          isEnabled: () => Effect.succeed(false),
+        },
+      });
+      const disabledStatus = yield* disabledManager.status({ cwd: repoDir });
+      expect(disabledStatus.behindCount).toBe(1);
+      const localFileBefore = yield* fileSystem.exists(path.join(repoDir, "remote.txt"));
+      expect(localFileBefore).toBe(false);
+
+      // 2. When autoPull is enabled: automatically pulls and refreshes
+      const { manager: enabledManager } = yield* makeManager({
+        autoPullPolicy: {
+          isEnabled: () => Effect.succeed(true),
+        },
+      });
+      const enabledStatus = yield* enabledManager.status({ cwd: repoDir });
+      expect(enabledStatus.behindCount).toBe(0);
+      const localFileAfter = yield* fileSystem.exists(path.join(repoDir, "remote.txt"));
+      expect(localFileAfter).toBe(true);
+      const content = yield* fileSystem.readFileString(path.join(repoDir, "remote.txt"));
+      expect(content).toBe("remote-content\n");
+
+      // 3. Safety gate: does NOT auto-pull if working tree changes exist
+      yield* fileSystem.writeFileString(path.join(otherDir, "second.txt"), "second-content\n");
+      yield* runGit(otherDir, ["add", "second.txt"]);
+      yield* runGit(otherDir, ["commit", "-m", "Second remote change"]);
+      yield* runGit(otherDir, ["push", "origin", "main"]);
+      yield* runGit(repoDir, ["fetch", "origin"]);
+
+      // Create dirty uncommitted file in repoDir
+      yield* fileSystem.writeFileString(path.join(repoDir, "dirty.txt"), "uncommitted\n");
+      const dirtyStatus = yield* enabledManager.status({ cwd: repoDir });
+      expect(dirtyStatus.hasWorkingTreeChanges).toBe(true);
+      expect(dirtyStatus.behindCount).toBe(1);
+      const secondFileExists = yield* fileSystem.exists(path.join(repoDir, "second.txt"));
+      expect(secondFileExists).toBe(false);
     }),
   );
 });
