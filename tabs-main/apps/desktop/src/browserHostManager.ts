@@ -2,6 +2,15 @@ import * as FS from "node:fs/promises";
 import * as Path from "node:path";
 import { JourneyRecorder } from "./journeyRecorder";
 import { BrowserSessionImporter } from "./browserImport/BrowserSessionImporter";
+import {
+  classifyAuthNavigation,
+  sanitizeAuthUrl,
+  hasSameRegistrableOrigin,
+  isLoopbackHostname,
+  type AuthClassificationKind,
+  type AuthClassificationResult,
+  type AuthNavigationRequest,
+} from "./authClassifier";
 
 import {
   app,
@@ -68,6 +77,16 @@ export function normalizeRemoteBrowserUrl(value: string): string {
   }
   return parsed.toString();
 }
+
+export {
+  classifyAuthNavigation,
+  sanitizeAuthUrl,
+  hasSameRegistrableOrigin,
+  isLoopbackHostname,
+  type AuthClassificationKind,
+  type AuthClassificationResult,
+  type AuthNavigationRequest,
+};
 
 const AUTHENTICATION_HOST_PREFIXES = ["accounts.", "auth.", "id.", "login.", "sso."];
 const AUTHENTICATION_PATH_SEGMENTS = new Set([
@@ -847,9 +866,7 @@ export class BrowserHostManager {
     await this.loadUrl(session, input.url);
   }
 
-  async reload(
-    input: DesktopBrowserHostControlInput & { ignoreCache?: boolean },
-  ): Promise<void> {
+  async reload(input: DesktopBrowserHostControlInput & { ignoreCache?: boolean }): Promise<void> {
     const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session) return;
     session.lastError = null;
@@ -1626,10 +1643,7 @@ export class BrowserHostManager {
   }
 
   private attachSession(session: BrowserSession): void {
-    if (
-      session.pictureInPictureWindow &&
-      !session.pictureInPictureWindow.isDestroyed()
-    ) {
+    if (session.pictureInPictureWindow && !session.pictureInPictureWindow.isDestroyed()) {
       return;
     }
     const window = this.getWindow();
