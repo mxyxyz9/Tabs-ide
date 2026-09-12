@@ -19,10 +19,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
 } from "lucide-react";
-import type {
-  BrowserImportSource,
-  BrowserImportResult,
-} from "@tabs/contracts";
+import type { BrowserImportSourceId, BrowserImportSource } from "@tabs/contracts";
 import { BROWSER_IMPORT_FAILURE_COPY } from "@tabs/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
@@ -221,7 +218,7 @@ export function BrowserProfilesSettings() {
   // Browser import modal state
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importSources, setImportSources] = useState<BrowserImportSource[]>([]);
-  const [selectedSourceId, setSelectedSourceId] = useState<string>("");
+  const [selectedSourceId, setSelectedSourceId] = useState<BrowserImportSourceId | "">("");
   const [selectedProfileDir, setSelectedProfileDir] = useState<string>("Default");
   const [importTargetProfileId, setImportTargetProfileId] = useState<string>("");
   const [importing, setImporting] = useState(false);
@@ -246,14 +243,17 @@ export function BrowserProfilesSettings() {
   };
 
   const handleRunImport = async () => {
-    if (!window.desktopBridge?.importBrowserCookies) return;
+    if (!window.desktopBridge?.importBrowserCookies || selectedSourceId === "") return;
     setImporting(true);
     try {
       const result = await window.desktopBridge.importBrowserCookies({
-        sourceId: selectedSourceId as any,
+        sourceId: selectedSourceId,
         sourceProfileDirectory: selectedProfileDir,
         targetProfileId: importTargetProfileId,
       });
+      if (result.imported === 0) {
+        throw new Error(BROWSER_IMPORT_FAILURE_COPY.noCookies);
+      }
       toastManager.add({
         type: "success",
         title: "Browser session imported",
@@ -476,11 +476,7 @@ export function BrowserProfilesSettings() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            onClick={openImportModal}
-            className="gap-1.5 cursor-pointer"
-          >
+          <Button variant="outline" onClick={openImportModal} className="gap-1.5 cursor-pointer">
             <DownloadIcon className="size-4" />
             Import Sessions
           </Button>
@@ -1066,7 +1062,8 @@ export function BrowserProfilesSettings() {
               </Button>
             </div>
             <DialogDescription className="text-xs text-muted-foreground">
-              Import existing login cookies from an installed browser directly into an isolated Tabs profile. Passwords and browsing history are never read.
+              Import existing login cookies from an installed browser directly into an isolated Tabs
+              profile. Passwords and browsing history are never read.
             </DialogDescription>
           </DialogHeader>
 
@@ -1086,16 +1083,20 @@ export function BrowserProfilesSettings() {
                     value={selectedSourceId}
                     onChange={(e) => {
                       const nextId = e.target.value;
-                      setSelectedSourceId(nextId);
                       const s = importSources.find((src) => src.id === nextId);
-                      if (s && s.profiles.length > 0) {
+                      if (!s) return;
+                      setSelectedSourceId(s.id);
+                      if (s.profiles.length > 0) {
                         setSelectedProfileDir(s.profiles[0]?.directory ?? "Default");
                       }
                     }}
                   >
                     {importSources.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} {s.unavailable ? `(${s.unavailable === "browserRunning" ? "Running" : "Locked"})` : ""}
+                        {s.name}{" "}
+                        {s.unavailable
+                          ? `(${s.unavailable === "browserRunning" ? "Running" : "Locked"})`
+                          : ""}
                       </option>
                     ))}
                   </select>
@@ -1106,15 +1107,15 @@ export function BrowserProfilesSettings() {
                   if (!s) return null;
 
                   if (s.unavailable) {
-                    const copy = BROWSER_IMPORT_FAILURE_COPY[s.unavailable] ?? "Source is currently unavailable.";
+                    const copy =
+                      BROWSER_IMPORT_FAILURE_COPY[s.unavailable] ??
+                      "Source is currently unavailable.";
                     return (
                       <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-600 dark:text-amber-400 space-y-1">
                         <div className="font-medium flex items-center gap-1.5">
                           Browser database unavailable
                         </div>
-                        <div className="text-[11px] leading-relaxed">
-                          {copy}
-                        </div>
+                        <div className="text-[11px] leading-relaxed">{copy}</div>
                       </div>
                     );
                   }
@@ -1190,4 +1191,3 @@ export function BrowserProfilesSettings() {
     </div>
   );
 }
-

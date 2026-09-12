@@ -58,19 +58,17 @@ describe("BrowserSessionImporter", () => {
     ).rejects.toThrow("Please quit the browser first");
   });
 
-  it("handles non-existent or corrupted cookie store safely without crashing", async () => {
+  it("rejects unknown profile directories instead of allowing path traversal", async () => {
     const mockRunningFn = vi.fn().mockResolvedValue(false);
     const importer = new BrowserSessionImporter("darwin", mockRunningFn);
 
-    const result = await importer.importSelectedCookies({
-      sourceId: "chrome",
-      sourceProfileDirectory: "NonExistentProfileDirectory12345",
-      targetProfileId: "imported-chrome",
-    });
-
-    expect(result.imported).toBe(0);
-    expect(result.skipped).toBe(0);
-    expect(result.skippedDomains).toEqual([]);
-    expect(electronMocks.fromPartition).toHaveBeenCalledWith("persist:tabs-browser:profile:imported-chrome");
+    await expect(
+      importer.importSelectedCookies({
+        sourceId: "chrome",
+        sourceProfileDirectory: "../../../../etc",
+        targetProfileId: "imported-chrome",
+      }),
+    ).rejects.toThrow("Selected browser profile was not found");
+    expect(electronMocks.fromPartition).not.toHaveBeenCalled();
   });
 });

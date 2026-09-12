@@ -94,7 +94,9 @@ const BROWSER_CONFIGS: readonly BrowserSourceConfig[] = [
 export class BrowserSessionImporter {
   constructor(
     private readonly platform: NodeJS.Platform = process.platform,
-    private readonly isProcessRunningFn: (processNames: readonly string[]) => Promise<boolean> = isProcessRunningDefault,
+    private readonly isProcessRunningFn: (
+      processNames: readonly string[],
+    ) => Promise<boolean> = isProcessRunningDefault,
   ) {}
 
   async listSources(): Promise<BrowserImportSource[]> {
@@ -122,6 +124,11 @@ export class BrowserSessionImporter {
       let unavailable: BrowserImportUnavailableReason | undefined;
       if (running) {
         unavailable = "browserRunning";
+      } else {
+        // Source discovery is retained for the settings UI, but the engine-
+        // specific cookie readers have not been ported yet. Keep import
+        // disabled instead of presenting a control that cannot do its job.
+        unavailable = "unsupportedPlatform";
       }
 
       const profiles = await this.discoverProfiles(config.id, userDataDir);
@@ -207,18 +214,22 @@ export class BrowserSessionImporter {
       throw new Error(`Browser source ${input.sourceId} is not supported on this platform.`);
     }
 
+    const profiles = await this.discoverProfiles(config.id, userDataDir);
+    if (!profiles.some((profile) => profile.directory === input.sourceProfileDirectory)) {
+      throw new Error("Selected browser profile was not found.");
+    }
+
     const partition = `persist:tabs-browser:profile:${targetProfileId}`;
     const targetSession = electronSession.fromPartition(partition);
 
-    // Bounded import result
-    const skippedDomains = new Set<string>();
-    let imported = 0;
-    let skipped = 0;
-
-    // Read cookie source safely
-    // Note: For unit testing and safety, we parse unencrypted or sanitized cookies from SQLite/jar
-    // Passwords, history, and autofill are NEVER accessed or copied.
-    const cookieDbPath = Path.join(userDataDir, input.sourceProfileDirectory, "Cookies");
+    // Resolve only the cookie store belonging to the validated profile. Passwords,
+    // history, and autofill are never accessed.
+    const cookieDbPath =
+      config.id === "firefox"
+        ? Path.join(userDataDir, input.sourceProfileDirectory, "cookies.sqlite")
+        : config.id === "safari"
+          ? Path.join(userDataDir, "Cookies.binarycookies")
+          : Path.join(userDataDir, input.sourceProfileDirectory, "Cookies");
     let fileExists = false;
     try {
       const stat = await FS.stat(cookieDbPath);
@@ -228,21 +239,16 @@ export class BrowserSessionImporter {
     }
 
     if (!fileExists) {
-      // In environments where Cookies file isn't directly unlocked or found,
-      // return a safe 0-cookie result rather than crashing
-      return {
-        imported: 0,
-        skipped: 0,
-        skippedDomains: [],
-      };
+      throw new Error("No readable cookie database was found for the selected browser profile.");
     }
 
-    // Write cookies into destination Electron partition
-    return {
-      imported,
-      skipped,
-      skippedDomains: Array.from(skippedDomains),
-    };
+    // Cookie extraction requires each browser engine's native decryption and
+    // database handling. Do not report success until that implementation has
+    // actually populated the Electron partition.
+    void targetSession;
+    throw new Error(
+      "Cookie import for this browser is not available yet. No browser data was changed.",
+    );
   }
 }
 

@@ -23,6 +23,7 @@ import {
 import type { MenuItemConstructorOptions } from "electron";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
+import * as Schema from "effect/Schema";
 import type {
   DesktopIconTheme,
   DesktopTheme,
@@ -30,6 +31,7 @@ import type {
   DesktopUpdateState,
   DesktopSshEnvironmentTarget,
 } from "@tabs/contracts";
+import { BrowserImportInput } from "@tabs/contracts";
 import { DEFAULT_DESKTOP_ICON_THEME } from "@tabs/contracts/settings";
 import { autoUpdater } from "electron-updater";
 import { DEFAULT_KEYBINDINGS, parseKeybindingShortcut } from "@tabs/shared/keybindings";
@@ -1437,7 +1439,10 @@ function configureAutoUpdater(): void {
   });
   autoUpdater.on("error", (error) => {
     const message = formatErrorMessage(error);
-    if (!autoUpdater.disableDifferentialDownload && message.toLowerCase().includes("differential")) {
+    if (
+      !autoUpdater.disableDifferentialDownload &&
+      message.toLowerCase().includes("differential")
+    ) {
       console.warn("[desktop-updater] Differential download failed, falling back to full download");
       autoUpdater.disableDifferentialDownload = true;
     }
@@ -2304,7 +2309,9 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(READ_CLIPBOARD_TEXT_CHANNEL);
   ipcMain.handle(READ_CLIPBOARD_TEXT_CHANNEL, async (_event, type: unknown) => {
     const clipboardType = type === "selection" ? "selection" : "clipboard";
-    return (clipboard as unknown as { readText: (type?: string) => string }).readText(clipboardType);
+    return (clipboard as unknown as { readText: (type?: string) => string }).readText(
+      clipboardType,
+    );
   });
 
   ipcMain.removeHandler(DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL);
@@ -2787,7 +2794,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.removeHandler(BROWSER_HOST_IMPORT_COOKIES_CHANNEL);
   ipcMain.handle(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, async (_event, input: unknown) => {
-    return await browserHostManager.importBrowserCookies(input as any);
+    const decoded = Schema.decodeUnknownSync(BrowserImportInput)(input);
+    return await browserHostManager.importBrowserCookies(decoded);
   });
 
   ipcMain.removeHandler(VSCODE_FETCH_SHELL_ENV_CHANNEL);
