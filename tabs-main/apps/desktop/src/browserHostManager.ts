@@ -11,6 +11,7 @@ import {
   type AuthClassificationResult,
   type AuthNavigationRequest,
 } from "./authClassifier";
+import { openHardenedAuthWindow, type AuthWindowResult } from "./authWindow";
 
 import {
   app,
@@ -700,90 +701,18 @@ export class BrowserHostManager {
     label: string,
     targetUrl: string,
     completionOriginUrl?: string,
-  ): Promise<void> {
+  ): Promise<AuthWindowResult> {
     const url = normalizeRemoteBrowserUrl(targetUrl);
 
     const s = electronSession.fromPartition(partition);
     this.observeProfileSession(partition, s);
     configurePartitionSession(s);
 
-    const win = new BrowserWindow({
-      width: 1024,
-      height: 768,
-      title: `Tabs Profile Login - ${label}`,
-      webPreferences: {
-        partition,
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-      },
-    });
-
-    win.webContents.setUserAgent(sanitizeEmbeddedBrowserUserAgent(win.webContents.getUserAgent()));
-    let authenticationCompleted = false;
-    const closeAfterAuthentication = (candidateUrl: string) => {
-      if (
-        authenticationCompleted ||
-        !completionOriginUrl ||
-        !hasReturnedToAuthenticationOrigin(candidateUrl, completionOriginUrl)
-      ) {
-        return;
-      }
-      authenticationCompleted = true;
-      void s.cookies
-        .flushStore()
-        .catch((err) => {
-          console.error("[browserHostManager] Failed to persist authenticated session:", err);
-        })
-        .finally(() => {
-          if (!win.isDestroyed()) win.close();
-        });
-    };
-    win.webContents.on("did-navigate", (_event, navigatedUrl) => {
-      closeAfterAuthentication(navigatedUrl);
-    });
-    win.webContents.on("did-navigate-in-page", (_event, navigatedUrl) => {
-      closeAfterAuthentication(navigatedUrl);
-    });
-    win.webContents.on("before-input-event", (event, input) => {
-      if (input.type === "keyDown" && input.key === "Escape") {
-        event.preventDefault();
-        win.close();
-      }
-    });
-    win.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
-      let protocol = "";
-      try {
-        protocol = new URL(popupUrl).protocol;
-      } catch {
-        return { action: "deny" };
-      }
-      if (protocol !== "https:" && protocol !== "http:") {
-        return { action: "deny" };
-      }
-      return {
-        action: "allow",
-        overrideBrowserWindowOptions: {
-          autoHideMenuBar: true,
-          webPreferences: {
-            partition,
-            nodeIntegration: false,
-            contextIsolation: true,
-            sandbox: true,
-          },
-        },
-      };
-    });
-
-    await win.loadURL(url).catch((err) => {
-      console.error("[browserHostManager] Failed to load login URL:", err);
-    });
-    await new Promise<void>((resolve) => {
-      if (win.isDestroyed()) {
-        resolve();
-        return;
-      }
-      win.once("closed", resolve);
+    return await openHardenedAuthWindow({
+      partition,
+      label,
+      targetUrl: url,
+      completionOriginUrl,
     });
   }
 
@@ -1692,10 +1621,18 @@ export class BrowserHostManager {
       const profileId = session.partition.startsWith(PROFILE_PARTITION_PREFIX)
         ? session.partition.slice(PROFILE_PARTITION_PREFIX.length)
         : session.projectId;
-      void this.openLoginWindow(session.partition, profileId, url, originatingUrl).finally(() => {
-        authenticationWindowPending = false;
-        if (!contents.isDestroyed()) contents.reload();
-      });
+      void this.openLoginWindow(session.partition, profileId, url, originatingUrl)
+        .then((result) => {
+          if (result.completed && !contents.isDestroyed()) {
+            contents.reload();
+          }
+        })
+        .finally(() => {
+          authenticationWindowPending = false;
+          if (!contents.isDestroyed()) {
+            contents.focus?.();
+          }
+        });
     };
 
     contents.on("will-navigate", (event, url) => {
