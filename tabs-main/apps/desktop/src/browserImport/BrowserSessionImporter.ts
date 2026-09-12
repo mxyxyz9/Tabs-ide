@@ -11,6 +11,102 @@ import {
 } from "@tabs/contracts";
 import { session as electronSession } from "electron";
 import { normalizeBrowserProfileId } from "../browserHostManager";
+import { normalizeProfileIdentifier } from "../profileStorage";
+
+export interface SyntheticCookieInput {
+  readonly name: string;
+  readonly value: string;
+  readonly domain: string;
+  readonly path?: string | undefined;
+  readonly secure?: boolean | undefined;
+  readonly httpOnly?: boolean | undefined;
+  readonly sameSite?: "unspecified" | "no_restriction" | "lax" | "strict" | undefined;
+  readonly expirationDate?: number | undefined;
+}
+
+export interface SyntheticCookieImportOptions {
+  readonly allowedDomains?: readonly string[] | undefined;
+  readonly explicitConsentGiven?: boolean | undefined;
+}
+
+/**
+ * Hardened cookie import engine.
+ *
+ * Enforces:
+ * 1. Target profile isolation (validates normalized profile ID to prevent partition breakout).
+ * 2. Scope restriction (filters to allowed domains if specified).
+ * 3. Never logs cookie values or includes values in error messages.
+ * 4. Preserves Secure, HttpOnly, SameSite, domain, path, and expiration semantics.
+ * 5. Deterministic partial-failure accounting.
+ */
+export async function importSyntheticCookiesToSession(
+  targetSession: { cookies: { set: (details: Electron.CookiesSetDetails) => Promise<void> } },
+  targetProfileId: string,
+  cookies: readonly SyntheticCookieInput[],
+  options?: SyntheticCookieImportOptions,
+): Promise<BrowserImportResult> {
+  const normalizedProfile = normalizeProfileIdentifier(targetProfileId);
+  if (!normalizedProfile) {
+    throw new Error("Invalid target profile identifier.");
+  }
+
+  let imported = 0;
+  let skipped = 0;
+  const skippedDomains = new Set<string>();
+
+  const allowedDomainsSet = options?.allowedDomains
+    ? new Set(options.allowedDomains.map((d) => d.toLowerCase().replace(/^\./, "")))
+    : null;
+
+  for (const cookie of cookies) {
+    const rawDomain = (cookie.domain || "").trim().toLowerCase();
+    const cleanDomain = rawDomain.replace(/^\./, "");
+
+    if (!cleanDomain || !cookie.name || typeof cookie.value !== "string") {
+      skipped++;
+      if (cleanDomain) skippedDomains.add(cleanDomain);
+      continue;
+    }
+
+    if (allowedDomainsSet && !allowedDomainsSet.has(cleanDomain)) {
+      skipped++;
+      skippedDomains.add(cleanDomain);
+      continue;
+    }
+
+    const scheme = cookie.secure ? "https:" : "http:";
+    const path = cookie.path && cookie.path.startsWith("/") ? cookie.path : "/";
+    const url = `${scheme}//${cleanDomain}${path}`;
+
+    try {
+      const details: Electron.CookiesSetDetails = {
+        url,
+        name: cookie.name,
+        value: cookie.value,
+        domain: rawDomain.startsWith(".") ? rawDomain : cleanDomain,
+        path,
+        secure: Boolean(cookie.secure),
+        httpOnly: Boolean(cookie.httpOnly),
+        sameSite: cookie.sameSite ?? "lax",
+      };
+      if (typeof cookie.expirationDate === "number") {
+        details.expirationDate = cookie.expirationDate;
+      }
+      await targetSession.cookies.set(details);
+      imported++;
+    } catch {
+      // Deterministic partial-failure handling: count as skipped, record domain, NEVER log cookie value
+      skipped++;
+      skippedDomains.add(cleanDomain);
+    }
+  }
+
+  return {
+    imported,
+    skipped,
+    skippedDomains: Array.from(skippedDomains),
+  };
+}
 
 interface BrowserSourceConfig {
   readonly id: BrowserImportSourceId;
