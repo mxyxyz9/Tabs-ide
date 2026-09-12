@@ -12,6 +12,13 @@ import {
   type AuthNavigationRequest,
 } from "./authClassifier";
 import { openHardenedAuthWindow, type AuthWindowResult } from "./authWindow";
+import {
+  deriveBrowserPartition,
+  extractProfileIdFromPartition,
+  isPersistentPartition,
+  isProfilePartition,
+  normalizeProfileIdentifier,
+} from "./profileStorage";
 
 import {
   app,
@@ -61,14 +68,9 @@ const ALLOWED_REMOTE_PERMISSIONS = new Set([
   "pointerLock",
   "notifications",
 ]);
-const BROWSER_PROFILE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
 
 export function normalizeBrowserProfileId(profileId: string): string {
-  const normalized = profileId.trim().toLowerCase();
-  if (!BROWSER_PROFILE_ID_PATTERN.test(normalized)) {
-    throw new Error("Invalid browser profile identifier.");
-  }
-  return normalized;
+  return normalizeProfileIdentifier(profileId);
 }
 
 export function normalizeRemoteBrowserUrl(value: string): string {
@@ -84,6 +86,11 @@ export {
   sanitizeAuthUrl,
   hasSameRegistrableOrigin,
   isLoopbackHostname,
+  deriveBrowserPartition,
+  extractProfileIdFromPartition,
+  isPersistentPartition,
+  isProfilePartition,
+  normalizeProfileIdentifier,
   type AuthClassificationKind,
   type AuthClassificationResult,
   type AuthNavigationRequest,
@@ -514,7 +521,7 @@ export class BrowserHostManager {
 
   async clearProfileData(profileId: string): Promise<void> {
     const trimmed = normalizeBrowserProfileId(profileId);
-    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const partition = deriveBrowserPartition({ profileId: trimmed });
     const s = electronSession.fromPartition(partition);
     this.observeProfileSession(partition, s);
     await s.closeAllConnections();
@@ -563,7 +570,7 @@ export class BrowserHostManager {
 
   async getProfileDomains(profileId: string): Promise<BrowserProfileDomainInfo[]> {
     const trimmed = normalizeBrowserProfileId(profileId);
-    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const partition = deriveBrowserPartition({ profileId: trimmed });
     const s = electronSession.fromPartition(partition);
     this.observeProfileSession(partition, s);
     try {
@@ -630,7 +637,7 @@ export class BrowserHostManager {
   async clearProfileDomain(profileId: string, domainToClear: string): Promise<void> {
     const trimmed = normalizeBrowserProfileId(profileId);
     const domain = normalizeBrowserCookieDomain(domainToClear);
-    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const partition = deriveBrowserPartition({ profileId: trimmed });
     const s = electronSession.fromPartition(partition);
     this.observeProfileSession(partition, s);
     try {
@@ -673,7 +680,7 @@ export class BrowserHostManager {
 
   async openProfileLoginWindow(profileId: string, targetUrl?: string): Promise<void> {
     const trimmed = normalizeBrowserProfileId(profileId);
-    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const partition = deriveBrowserPartition({ profileId: trimmed });
     await this.openLoginWindow(
       partition,
       trimmed,
@@ -1558,11 +1565,10 @@ export class BrowserHostManager {
   }
 
   private observeProfileSession(partition: string, s: Session): void {
-    if (!partition.startsWith(PROFILE_PARTITION_PREFIX) || this.observedProfileSessions.has(s)) {
+    const profileId = extractProfileIdFromPartition(partition);
+    if (!profileId || this.observedProfileSessions.has(s)) {
       return;
     }
-    const profileId = partition.slice(PROFILE_PARTITION_PREFIX.length);
-    if (!BROWSER_PROFILE_ID_PATTERN.test(profileId)) return;
     this.observedProfileSessions.add(s);
     s.cookies.on("changed", () => {
       const window = this.getWindow();
