@@ -44,16 +44,32 @@ describe("BackgroundActivityReporter.logic", () => {
   });
 
   describe("resolveCurrentScopes", () => {
-    it("includes baseline scopes and thread scope if on chat route", () => {
+    it("includes baseline scopes and thread scope for current and legacy thread routes", () => {
       const base = resolveCurrentScopes("/settings");
       expect(base).toEqual([{ type: "server-config" }, { type: "provider-status" }]);
 
-      const chat = resolveCurrentScopes("/chat/thread-123");
-      expect(chat).toEqual([
+      expect(resolveCurrentScopes("/local/thread-123")).toEqual([
         { type: "server-config" },
         { type: "provider-status" },
         { type: "thread", threadId: "thread-123" },
       ]);
+      expect(resolveCurrentScopes("/thread-legacy")).toEqual([
+        { type: "server-config" },
+        { type: "provider-status" },
+        { type: "thread", threadId: "thread-legacy" },
+      ]);
+      expect(resolveCurrentScopes("/chat/thread%20encoded")).toEqual([
+        { type: "server-config" },
+        { type: "provider-status" },
+        { type: "thread", threadId: "thread encoded" },
+      ]);
+    });
+
+    it("does not crash on malformed URL encoding", () => {
+      expect(resolveCurrentScopes("/environment/%E0%A4%A")).toContainEqual({
+        type: "thread",
+        threadId: "%E0%A4%A",
+      });
     });
   });
 
@@ -95,7 +111,8 @@ describe("BackgroundActivityReporter.logic", () => {
         resolveFirst = res;
       });
 
-      const sendReport = vi.fn()
+      const sendReport = vi
+        .fn()
         .mockImplementationOnce(() => firstPromise)
         .mockImplementationOnce(async () => undefined);
 

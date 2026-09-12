@@ -320,7 +320,11 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   // Code owns its complete stock workbench inside the Tabs Code tool. Keeping
   // these parts native avoids duplicating VS Code's layout and accessibility
   // behavior in the surrounding React shell.
-  "workbench.activityBar.location": "default",
+  // Hide the stock activity bar from the first workbench frame. The Tabs
+  // integration extension enforces the same value after activation, but using
+  // "default" here briefly exposed extension icons (including ChatGPT/Codex)
+  // during initial Code-OSS startup.
+  "workbench.activityBar.location": "hidden",
   // Tabs supplies the outer activity rail. Code-OSS keeps ownership of the
   // corresponding views, commands, keyboard navigation, and sidebar content.
   "workbench.activityBar.visible": false,
@@ -933,7 +937,12 @@ export function isPathInsideWorkspace(workspaceRoot: string, filePath: string): 
 export function shouldOpenCodeOssUrlExternally(url: string): boolean {
   try {
     const protocol = new URL(url).protocol.toLowerCase();
-    return protocol === "http:" || protocol === "https:" || protocol === "mailto:" || protocol === "tabs:";
+    return (
+      protocol === "http:" ||
+      protocol === "https:" ||
+      protocol === "mailto:" ||
+      protocol === "tabs:"
+    );
   } catch {
     return false;
   }

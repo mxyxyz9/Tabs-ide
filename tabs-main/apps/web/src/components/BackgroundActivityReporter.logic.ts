@@ -24,9 +24,27 @@ export function wasRecentlyInteracted(lastInteractionMs: number, nowMs: number):
 
 export function resolveCurrentScopes(pathname: string): BackgroundScope[] {
   const scopes: BackgroundScope[] = [{ type: "server-config" }, { type: "provider-status" }];
-  const match = /\/chat\/([^/?#]+)/u.exec(pathname);
-  if (match?.[1]) {
-    scopes.push({ type: "thread", threadId: ThreadId.make(match[1]) });
+  const segments = pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch {
+        return segment;
+      }
+    });
+  const threadId =
+    segments[0] === "chat"
+      ? segments[1]
+      : segments.length === 2
+        ? segments[1]
+        : segments.length === 1 &&
+            !["settings", "usage", "welcome", "connect", "pair"].includes(segments[0]!)
+          ? segments[0]
+          : undefined;
+  if (threadId) {
+    scopes.push({ type: "thread", threadId: ThreadId.make(threadId) });
   }
   return scopes;
 }

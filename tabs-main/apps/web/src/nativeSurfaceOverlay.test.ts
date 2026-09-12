@@ -18,17 +18,14 @@ describe("native surface overlay policy", () => {
     expect(isNativeSurfaceBlockingOverlaySlot("code-resize-overlay")).toBe(true);
   });
 
-  it("suspends native surfaces for interactive notifications with actions", () => {
+  it("suspends native surfaces for every notification", () => {
     expect(isNativeSurfaceBlockingOverlaySlot("toast-root", { interactive: true })).toBe(true);
     expect(isNativeSurfaceBlockingOverlaySlot("toast-popup", { interactive: true })).toBe(true);
     expect(isNativeSurfaceBlockingOverlaySlot("toast-action")).toBe(true);
-  });
-
-  it("does not blank native surfaces for passive notifications", () => {
-    expect(isNativeSurfaceBlockingOverlaySlot("toast-root", { interactive: false })).toBe(false);
-    expect(isNativeSurfaceBlockingOverlaySlot("toast-popup", { interactive: false })).toBe(false);
-    expect(isNativeSurfaceBlockingOverlaySlot("toast-root")).toBe(false);
-    expect(isNativeSurfaceBlockingOverlaySlot("toast-popup")).toBe(false);
+    expect(isNativeSurfaceBlockingOverlaySlot("toast-root", { interactive: false })).toBe(true);
+    expect(isNativeSurfaceBlockingOverlaySlot("toast-popup", { interactive: false })).toBe(true);
+    expect(isNativeSurfaceBlockingOverlaySlot("toast-root")).toBe(true);
+    expect(isNativeSurfaceBlockingOverlaySlot("toast-popup")).toBe(true);
   });
 
   it("does not abort a native surface that is still starting", () => {
@@ -38,4 +35,3 @@ describe("native surface overlay policy", () => {
     expect(shouldSuspendNativeSurfaceForOverlay(false, false)).toBe(false);
   });
 });
-
