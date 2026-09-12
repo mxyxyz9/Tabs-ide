@@ -113,8 +113,10 @@ const REMOVE_PERSISTED_ITEM_CHANNEL = "desktop:remove-persisted-item";
 contextBridge.exposeInMainWorld("desktopBridge", {
   writeClipboardText: (text) => ipcRenderer.invoke(WRITE_CLIPBOARD_TEXT_CHANNEL, text),
   readClipboardText: (type) => ipcRenderer.invoke(READ_CLIPBOARD_TEXT_CHANNEL, type),
-  getDesktopCapturePermissionStatus: () => ipcRenderer.invoke(DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL),
-  requestDesktopCapturePermission: () => ipcRenderer.invoke(DESKTOP_CAPTURE_REQUEST_PERMISSION_CHANNEL),
+  getDesktopCapturePermissionStatus: () =>
+    ipcRenderer.invoke(DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL),
+  requestDesktopCapturePermission: () =>
+    ipcRenderer.invoke(DESKTOP_CAPTURE_REQUEST_PERMISSION_CHANNEL),
   captureDesktopScreen: (options) => ipcRenderer.invoke(DESKTOP_CAPTURE_SCREEN_CHANNEL, options),
   getClientPlatform: () => process.platform,
   getLocalEnvironmentBootstraps: () => {
@@ -284,10 +286,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL, input),
   clearBrowserProfileDomain: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL, input),
-  listBrowserImportSources: () =>
-    ipcRenderer.invoke(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL),
-  importBrowserCookies: (input) =>
-    ipcRenderer.invoke(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, input),
+  listBrowserImportSources: () => ipcRenderer.invoke(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL),
+  importBrowserCookies: (input) => ipcRenderer.invoke(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, input),
   onBrowserProfileDataChanged: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, profileId: unknown) => {
       if (typeof profileId === "string") listener(profileId);

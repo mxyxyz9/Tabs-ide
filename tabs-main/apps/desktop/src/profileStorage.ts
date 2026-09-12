@@ -101,7 +101,9 @@ export function isProfilePartition(partition: string): boolean {
   );
 }
 
-export function extractProfileIdFromPartition(partition?: string | null | undefined): string | null {
+export function extractProfileIdFromPartition(
+  partition?: string | null | undefined,
+): string | null {
   if (!partition) {
     return null;
   }
