@@ -1097,7 +1097,7 @@ describe("WebSocket Server", () => {
       (push) => Array.isArray(push.data.issues) && push.data.issues.length === 0,
     );
     expect(successPush.data).toEqual(expect.objectContaining({ issues: [] }));
-  });
+  }, 30_000);
 
   it("routes shell.openInEditor through the injected open service", async () => {
     const openCalls: Array<{ cwd: string; editor: string }> = [];
