@@ -70,6 +70,7 @@ import {
   type ServerProcessResourceHistoryInput,
   type ServerSignalProcessInput,
   type ProviderConsumeResetCreditInput,
+  type AgentSessionImportInput,
   WS_CHANNELS,
   WS_METHODS,
   WebSocketRequest,
@@ -109,6 +110,7 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
 import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReactor";
 import { ProviderService } from "./provider/Services/ProviderService";
+import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry";
 import { ProviderMaintenanceRunner } from "./provider/providerMaintenanceRunner";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
@@ -143,6 +145,8 @@ import { TextGeneration } from "./textGeneration/TextGeneration";
 import { UsageService } from "./usage/UsageService.ts";
 import { listProviderUsageSnapshotsEffect } from "./providerUsage/index.ts";
 import { PreviewManager } from "./preview/Manager.ts";
+import { AgentSessionScanner } from "./project/AgentSessionScanner.ts";
+import { importRecentAgentThreads } from "./project/AgentSessionImporter.ts";
 import { ServerEnvironment } from "./environment/ServerEnvironment.ts";
 import { EnvironmentAuth } from "./auth/EnvironmentAuth.ts";
 import { PreviewAutomationBroker } from "./mcp/PreviewAutomationBroker.ts";
@@ -328,6 +332,7 @@ export type ServerCoreRuntimeServices =
   | CheckpointDiffQuery
   | OrchestrationReactor
   | ProviderService
+  | ProviderSessionDirectory
   | ProviderRegistry
   | ProviderMaintenanceRunner;
 
@@ -354,6 +359,7 @@ export type ServerRuntimeServices =
   | EnvironmentThemeService
   | TraceDiagnostics.TraceDiagnostics
   | UsageLimitSources.UsageLimitSources
+  | AgentSessionScanner
   | ProviderInstanceRegistry;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
@@ -1034,6 +1040,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const checkpointDiffQuery = yield* CheckpointDiffQuery;
   const orchestrationReactor = yield* OrchestrationReactor;
   const { openInEditor } = yield* Open;
+  const agentSessionScanner = yield* AgentSessionScanner;
 
   const subscriptionsScope = yield* Scope.make("sequential");
   yield* Effect.addFinalizer(() => Scope.close(subscriptionsScope, Exit.void));
@@ -1562,6 +1569,15 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             }),
           ),
         ).pipe(Effect.map((events) => Array.from(events)));
+      }
+
+      case WS_METHODS.agentSessionsScan: {
+        return yield* agentSessionScanner.scan;
+      }
+
+      case WS_METHODS.agentSessionsImport: {
+        const body = stripRequestTag(request.body) as AgentSessionImportInput;
+        return yield* importRecentAgentThreads(body);
       }
 
       case WS_METHODS.projectsSearchEntries: {

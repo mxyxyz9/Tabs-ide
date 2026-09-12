@@ -154,3 +154,28 @@ export type ProviderInstanceConfigMap = typeof ProviderInstanceConfigMap.Type;
  */
 export const defaultInstanceIdForDriver = (driver: ProviderDriverKind): ProviderInstanceId =>
   ProviderInstanceId.make(driver);
+
+function providerInstanceConfigEnabledFlag(config: unknown): boolean | undefined {
+  if (typeof config !== "object" || config === null) {
+    return undefined;
+  }
+  const enabled = (config as Record<string, unknown>).enabled;
+  return typeof enabled === "boolean" ? enabled : undefined;
+}
+
+function defaultEnabledForDriver(driver: string): boolean {
+  return driver === "codex" || driver === "claudeAgent";
+}
+
+export const resolveProviderInstanceEnabled = (
+  instance: Pick<ProviderInstanceConfig, "driver"> & {
+    readonly enabled?: boolean;
+    readonly config?: unknown;
+  },
+): boolean => {
+  const configEnabled = providerInstanceConfigEnabledFlag(instance.config);
+  if (instance.enabled === false || configEnabled === false) {
+    return false;
+  }
+  return instance.enabled ?? configEnabled ?? defaultEnabledForDriver(instance.driver);
+};

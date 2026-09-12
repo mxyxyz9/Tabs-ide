@@ -355,6 +355,7 @@ it.layer(testLayer)("server CLI command", (it) => {
       yield* recordStartupHeartbeat.pipe(
         Effect.provideService(ProjectionSnapshotQuery, {
           getSnapshot,
+          getImportedAgentSessionSources: vi.fn(() => Effect.succeed([])),
         }),
         Effect.provideService(AnalyticsService, {
           record: recordTelemetry,

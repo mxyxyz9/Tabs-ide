@@ -195,6 +195,7 @@ describe("ProviderSessionReaper", () => {
           // Tabs' ProjectionSnapshotQuery exposes only `getSnapshot`; the reaper
           // reads the full read model and looks up the thread locally.
           getSnapshot: () => Effect.succeed(input.readModel as never),
+          getImportedAgentSessionSources: () => Effect.succeed([]),
         }),
       ),
       Layer.provideMerge(NodeServices.layer),

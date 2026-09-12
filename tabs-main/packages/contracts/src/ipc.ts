@@ -32,6 +32,11 @@ import type {
 } from "./providerUsageLimits.ts";
 import type { TestingApi } from "./testing.ts";
 import type {
+  AgentSessionImportInput,
+  AgentSessionImportResult,
+  AgentSessionScanResult,
+} from "./agentSessions.ts";
+import type {
   BackgroundPolicySnapshot,
   ClientActivityReportInput,
   HostPowerSnapshot,
@@ -1422,6 +1427,10 @@ export interface EnvironmentApi {
   };
   filesystem: {
     browse: (input: FilesystemBrowseInput) => Promise<FilesystemBrowseResult>;
+  };
+  agentSessions: {
+    scan: () => Promise<AgentSessionScanResult>;
+    import: (input: AgentSessionImportInput) => Promise<AgentSessionImportResult>;
   };
   assets: {
     createUrl: (input: AssetCreateUrlInput) => Promise<AssetCreateUrlResult>;

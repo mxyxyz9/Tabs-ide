@@ -1,5 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { DesktopCodeHostState, ServerProvider } from "@tabs/contracts";
+import type {
+  AgentSessionProjectCandidate,
+  DesktopCodeHostState,
+  ServerProvider,
+} from "@tabs/contracts";
 import { PROVIDER_DISPLAY_NAMES } from "@tabs/contracts";
 import {
   ArrowLeftIcon,
@@ -182,6 +186,84 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
     await completeOnboarding();
     onDone?.();
   }, [completeOnboarding, onDone]);
+
+  const [scannedCandidates, setScannedCandidates] = useState<readonly AgentSessionProjectCandidate[]>([]);
+  const [isScanningSessions, setIsScanningSessions] = useState(false);
+  const [importStatusByPath, setImportStatusByPath] = useState<
+    Record<string, { status: "pending" | "success" | "error"; count?: number; message?: string }>
+  >({});
+
+  const runScan = useCallback(async () => {
+    const api = readNativeApi();
+    if (!api?.agentSessions?.scan) return;
+    setIsScanningSessions(true);
+    try {
+      const res = await api.agentSessions.scan();
+      setScannedCandidates(res.candidates ?? []);
+    } catch (e) {
+      console.warn("[Onboarding] Failed to scan agent sessions", e);
+    } finally {
+      setIsScanningSessions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (step === 2) {
+      void runScan();
+    }
+  }, [step, runScan]);
+
+  const handleImportCandidate = useCallback(
+    async (candidate: AgentSessionProjectCandidate) => {
+      const api = readNativeApi();
+      if (!api?.agentSessions?.import) return;
+      setImportStatusByPath((prev) => ({
+        ...prev,
+        [candidate.path]: { status: "pending" },
+      }));
+      try {
+        let targetProjectId = candidate.projectId;
+        if (!targetProjectId) {
+          const existing = projects.find((p) => p.cwd === candidate.path);
+          if (existing) {
+            targetProjectId = existing.id;
+          } else {
+            targetProjectId = newProjectId();
+            await api.orchestration.dispatchCommand({
+              type: "project.create",
+              commandId: newCommandId(),
+              projectId: targetProjectId,
+              title: candidate.title,
+              workspaceRoot: candidate.path,
+              defaultModelSelection: null,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
+
+        const res = await api.agentSessions.import({
+          projectId: targetProjectId,
+          expectedWorkspaceRoot: candidate.path,
+        });
+
+        setImportStatusByPath((prev) => ({
+          ...prev,
+          [candidate.path]: {
+            status: "success",
+            count: res.importedCount,
+            message: `Imported ${res.importedCount} ${res.importedCount === 1 ? "thread" : "threads"}${res.skippedCount > 0 ? ` (${res.skippedCount} skipped)` : ""}`,
+          },
+        }));
+        setSelectedFolder(candidate.path);
+      } catch (e) {
+        setImportStatusByPath((prev) => ({
+          ...prev,
+          [candidate.path]: { status: "error", message: String(e) },
+        }));
+      }
+    },
+    [projects],
+  );
 
   const handlePickFolder = useCallback(async () => {
     const api = readNativeApi();
@@ -592,6 +674,108 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 </Button>
               </div>
             )}
+
+            {/* Discovered Agent Sessions / Projects from Claude Code & Codex */}
+            <div className="rounded-xl border border-border/70 bg-card/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BotIcon className="size-4 text-primary" />
+                  <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
+                    Discovered Agent Projects {scannedCandidates.length > 0 ? `(${scannedCandidates.length})` : ""}
+                  </span>
+                </div>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  disabled={isScanningSessions}
+                  onClick={runScan}
+                  className="h-6 text-[11px] text-muted-foreground hover:text-foreground gap-1.5"
+                >
+                  <RefreshCwIcon className={`size-3 ${isScanningSessions ? "animate-spin" : ""}`} />
+                  <span>{isScanningSessions ? "Scanning..." : "Rescan"}</span>
+                </Button>
+              </div>
+
+              {scannedCandidates.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {isScanningSessions
+                    ? "Searching Claude Code and Codex histories for compatible project sessions..."
+                    : "No compatible agent sessions found in ~/.claude or ~/.codex."}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {scannedCandidates.map((candidate) => {
+                    const status = importStatusByPath[candidate.path];
+                    const isSelected = selectedFolder === candidate.path;
+                    return (
+                      <div
+                        key={candidate.path}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg p-3 text-xs border transition-colors ${
+                          isSelected
+                            ? "bg-primary/10 border-primary/40 text-foreground"
+                            : "bg-muted/20 border-border/50 hover:bg-muted/40 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <div
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => setSelectedFolder(candidate.path)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground truncate">{candidate.title}</span>
+                            {candidate.git?.repository && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-muted-foreground/30">
+                                {candidate.git.repository}
+                              </Badge>
+                            )}
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+                              {candidate.threadCount} {candidate.threadCount === 1 ? "thread" : "threads"}
+                            </Badge>
+                          </div>
+                          <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
+                            {candidate.path}
+                          </p>
+                          {status?.message && (
+                            <p
+                              className={`text-[11px] mt-1 font-medium ${
+                                status.status === "error" ? "text-destructive" : "text-emerald-500"
+                              }`}
+                            >
+                              {status.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                          <Button
+                            size="xs"
+                            variant={status?.status === "success" ? "outline" : "default"}
+                            disabled={status?.status === "pending"}
+                            onClick={() => void handleImportCandidate(candidate)}
+                            className="h-7 text-xs gap-1"
+                          >
+                            {status?.status === "pending" ? (
+                              <>
+                                <RefreshCwIcon className="size-3 animate-spin" />
+                                <span>Importing...</span>
+                              </>
+                            ) : status?.status === "success" ? (
+                              <>
+                                <CheckCircle2Icon className="size-3 text-emerald-500" />
+                                <span>Imported</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Import & Select</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Recent Workspaces List if available */}
             {projects.length > 0 && (

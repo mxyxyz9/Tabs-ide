@@ -123,7 +123,7 @@ function withEventBase(
     readonly aggregateKind: OrchestrationEvent["aggregateKind"];
     readonly aggregateId: OrchestrationEvent["aggregateId"];
     readonly occurredAt: string;
-    readonly metadata?: OrchestrationEvent["metadata"];
+    readonly metadata?: OrchestrationEvent["metadata"] | undefined;
   },
 ): Omit<OrchestrationEvent, "sequence" | "type" | "payload"> {
   return {
@@ -289,6 +289,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           aggregateId: command.threadId,
           occurredAt: command.createdAt,
           commandId: command.commandId,
+          metadata: command.historyImport ? { historyImport: true } : undefined,
         }),
         type: "thread.created",
         payload: {
@@ -1138,6 +1139,79 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: command.createdAt,
         },
       };
+    }
+
+    case "thread.history.import": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (
+        thread.deletedAt !== null ||
+        thread.archivedAt !== null ||
+        thread.messages.length > 0 ||
+        thread.latestTurn !== null ||
+        thread.session !== null
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' must be active and empty before history can be imported.`,
+        });
+      }
+      const firstMessage = command.messages[0];
+      if (firstMessage === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Thread history imports require at least one message.",
+        });
+      }
+
+      const events: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      for (const message of command.messages) {
+        events.push({
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: message.createdAt,
+            commandId: command.commandId,
+            metadata: { historyImport: true },
+          }),
+          type: "thread.message-sent",
+          payload: {
+            threadId: command.threadId,
+            messageId: message.messageId,
+            role: message.role,
+            text: message.text,
+            turnId: null,
+            streaming: false,
+            createdAt: message.createdAt,
+            updatedAt: message.createdAt,
+          },
+        });
+      }
+      const settledAt = command.messages.reduce(
+        (latest, message) =>
+          message.createdAt > latest ? message.createdAt : latest,
+        firstMessage.createdAt,
+      );
+      events.push({
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: settledAt,
+          commandId: command.commandId,
+          metadata: { historyImport: true },
+        }),
+        type: "thread.settled",
+        payload: {
+          threadId: command.threadId,
+          settledAt,
+          updatedAt: settledAt,
+        },
+      });
+
+      return events;
     }
 
     case "thread.proposed-plan.upsert": {

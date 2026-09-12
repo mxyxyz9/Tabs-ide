@@ -5,6 +5,12 @@ import {
   HostPowerSnapshot,
 } from "./background.ts";
 import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas";
+import {
+  AgentSessionImportInput,
+  AgentSessionImportResult,
+  AgentSessionScanInput,
+  AgentSessionScanResult,
+} from "./agentSessions.ts";
 
 import {
   ClientOrchestrationCommand,
@@ -353,6 +359,8 @@ export const WS_METHODS = {
   subscribeTerminalEvents: "subscribeTerminalEvents",
   subscribeTerminalMetadata: "subscribeTerminalMetadata",
   subscribeVcsStatus: "subscribeVcsStatus",
+  agentSessionsScan: "agentSessions.scan",
+  agentSessionsImport: "agentSessions.import",
 } as const;
 
 // ── Push Event Channels ──────────────────────────────────────────────
@@ -583,6 +591,10 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.usageReadSummary, UsageSummaryInput),
   tagRequestBody(WS_METHODS.usageListSnapshots, ServerListProviderUsageInput),
   tagRequestBody(WS_METHODS.usageRefreshAll, Schema.Struct({})),
+
+  // Agent sessions
+  tagRequestBody(WS_METHODS.agentSessionsScan, Schema.Struct({})),
+  tagRequestBody(WS_METHODS.agentSessionsImport, AgentSessionImportInput),
 ]);
 
 export const WebSocketRequest = Schema.Struct({

@@ -1,4 +1,5 @@
 import {
+  AgentSessionImportSource,
   ChatAttachment,
   IsoDateTime,
   MessageId,
@@ -6,6 +7,7 @@ import {
   OrchestrationCheckpointFile,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
+  ProjectId,
   ProjectScript,
   ThreadId,
   ThreadLinkedPullRequest,
@@ -24,7 +26,7 @@ import {
   ModelSelection,
 } from "@tabs/contracts";
 import { legacyLinkedPullRequestOf } from "@tabs/shared/threadPullRequests";
-import { Effect, Layer, Schema, Struct } from "effect";
+import { Effect, Layer, Option, Schema, Struct } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import { ProjectionThreadPullRequest } from "../../persistence/ProjectionThreadPullRequests.ts";
@@ -75,6 +77,21 @@ const ProjectionThreadPullRequestDbRowSchema = ProjectionThreadPullRequest.mapFi
     stack: Schema.NullOr(Schema.fromJsonString(ThreadPullRequestStack)),
   }),
 );
+
+const ProjectionImportedAgentSessionSourcesRowSchema = Schema.Struct({
+  threadId: ThreadId,
+  runtimePayload: Schema.NullOr(Schema.String),
+});
+
+const decodeImportedTranscriptsPayload = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      importedTranscripts: Schema.Array(Schema.Unknown),
+    }),
+  ),
+);
+
+const decodeAgentSessionImportSource = Schema.decodeUnknownOption(AgentSessionImportSource);
 
 function mapPullRequestRow(
   row: Schema.Schema.Type<typeof ProjectionThreadPullRequestDbRowSchema>,
@@ -710,8 +727,61 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         }),
       );
 
+  const listImportedAgentSessionSourceRows = SqlSchema.findAll({
+    Request: Schema.Struct({ projectId: ProjectId }),
+    Result: ProjectionImportedAgentSessionSourcesRowSchema,
+    execute: ({ projectId }) =>
+      sql`
+        SELECT
+          threads.thread_id AS "threadId",
+          runtime.runtime_payload_json AS "runtimePayload"
+        FROM projection_threads AS threads
+        INNER JOIN projection_projects AS projects
+          ON projects.project_id = threads.project_id
+        INNER JOIN provider_session_runtime AS runtime
+          ON runtime.thread_id = threads.thread_id
+        WHERE threads.project_id = ${projectId}
+          AND threads.deleted_at IS NULL
+          AND threads.archived_at IS NULL
+          AND projects.deleted_at IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM projection_thread_messages AS messages
+            WHERE messages.thread_id = threads.thread_id
+              AND messages.message_id GLOB 'import:*'
+          )
+        ORDER BY threads.thread_id ASC
+      `,
+  });
+
+  const getImportedAgentSessionSources: ProjectionSnapshotQueryShape["getImportedAgentSessionSources"] =
+    Effect.fn("ProjectionSnapshotQuery.getImportedAgentSessionSources")(function* (projectId) {
+      const rows = yield* listImportedAgentSessionSourceRows({ projectId }).pipe(
+        Effect.mapError(
+          toPersistenceSqlError("ProjectionSnapshotQuery.getImportedAgentSessionSources:query"),
+        ),
+      );
+      return rows.flatMap((row) => {
+        if (!row.runtimePayload) return [];
+        const payload = decodeImportedTranscriptsPayload(row.runtimePayload);
+        if (Option.isNone(payload)) return [];
+        return payload.value.importedTranscripts.flatMap((entry) => {
+          const source = decodeAgentSessionImportSource(entry);
+          if (
+            Option.isNone(source) ||
+            row.threadId !==
+              `import:${source.value.providerInstanceId}:${source.value.providerSessionId}`
+          ) {
+            return [];
+          }
+          return [{ threadId: row.threadId, source: source.value }];
+        });
+      });
+    });
+
   return {
     getSnapshot,
+    getImportedAgentSessionSources,
   } satisfies ProjectionSnapshotQueryShape;
 });
 

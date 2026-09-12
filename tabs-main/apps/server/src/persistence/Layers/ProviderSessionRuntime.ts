@@ -1,4 +1,4 @@
-import { ThreadId } from "@tabs/contracts";
+import { AgentSessionImportSource, ThreadId } from "@tabs/contracts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import { Effect, Layer, Option, Schema, Struct } from "effect";
@@ -28,6 +28,11 @@ const GetRuntimeRequestSchema = Schema.Struct({
 });
 
 const DeleteRuntimeRequestSchema = GetRuntimeRequestSchema;
+
+const RecordImportedTranscriptRequestSchema = Schema.Struct({
+  threadId: ThreadId,
+  source: Schema.fromJsonString(AgentSessionImportSource),
+});
 
 function toPersistenceSqlOrDecodeError(sqlOperation: string, decodeOperation: string) {
   return (cause: unknown): ProviderSessionRuntimeRepositoryError =>
@@ -75,6 +80,83 @@ const makeProviderSessionRuntimeRepository = Effect.gen(function* () {
           last_seen_at = excluded.last_seen_at,
           resume_cursor_json = excluded.resume_cursor_json,
           runtime_payload_json = excluded.runtime_payload_json
+      `,
+  });
+
+  const insertIgnoreRuntimeRow = SqlSchema.void({
+    Request: ProviderSessionRuntimeDbRowSchema,
+    execute: (runtime) =>
+      sql`
+        INSERT INTO provider_session_runtime (
+          thread_id,
+          provider_name,
+          provider_instance_id,
+          adapter_key,
+          runtime_mode,
+          status,
+          last_seen_at,
+          resume_cursor_json,
+          runtime_payload_json
+        )
+        VALUES (
+          ${runtime.threadId},
+          ${runtime.providerName},
+          ${runtime.providerInstanceId},
+          ${runtime.adapterKey},
+          ${runtime.runtimeMode},
+          ${runtime.status},
+          ${runtime.lastSeenAt},
+          ${runtime.resumeCursor},
+          ${runtime.runtimePayload}
+        )
+        ON CONFLICT (thread_id) DO NOTHING
+      `,
+  });
+
+  const recordImportedTranscriptRow = SqlSchema.void({
+    Request: RecordImportedTranscriptRequestSchema,
+    execute: ({ threadId, source }) =>
+      sql`
+        WITH current_runtime AS (
+          SELECT CASE
+            WHEN json_valid(runtime_payload_json) THEN CASE
+              WHEN json_type(runtime_payload_json) = 'object' THEN runtime_payload_json
+              ELSE '{}'
+            END
+            ELSE '{}'
+          END AS payload
+          FROM provider_session_runtime
+          WHERE thread_id = ${threadId}
+        )
+        UPDATE provider_session_runtime
+        SET runtime_payload_json = (
+          SELECT json_set(
+            payload,
+            '$.importedTranscripts',
+            json((
+              SELECT json_group_array(json(value))
+              FROM (
+                SELECT value
+                FROM json_each(CASE
+                  WHEN json_type(payload, '$.importedTranscripts') = 'array'
+                  THEN json_extract(payload, '$.importedTranscripts')
+                  ELSE '[]'
+                END)
+                WHERE CASE
+                  WHEN type = 'object' THEN
+                    json_extract(value, '$.providerInstanceId')
+                      IS NOT json_extract(${source}, '$.providerInstanceId')
+                    OR json_extract(value, '$.filePath') IS NOT json_extract(${source}, '$.filePath')
+                  ELSE 0
+                END
+                UNION ALL
+                SELECT ${source} AS value
+              )
+            ))
+          )
+          FROM current_runtime
+        )
+        WHERE thread_id = ${threadId}
       `,
   });
 
@@ -127,12 +209,27 @@ const makeProviderSessionRuntimeRepository = Effect.gen(function* () {
       `,
   });
 
-  const upsert: ProviderSessionRuntimeRepositoryShape["upsert"] = (runtime) =>
-    upsertRuntimeRow(runtime).pipe(
+  const upsert: ProviderSessionRuntimeRepositoryShape["upsert"] = (runtime, options) =>
+    (options?.onConflict === "ignore"
+      ? insertIgnoreRuntimeRow(runtime)
+      : upsertRuntimeRow(runtime)
+    ).pipe(
       Effect.mapError(
         toPersistenceSqlOrDecodeError(
           "ProviderSessionRuntimeRepository.upsert:query",
           "ProviderSessionRuntimeRepository.upsert:encodeRequest",
+        ),
+      ),
+    );
+
+  const recordImportedTranscript: ProviderSessionRuntimeRepositoryShape["recordImportedTranscript"] = (
+    input,
+  ) =>
+    recordImportedTranscriptRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProviderSessionRuntimeRepository.recordImportedTranscript:query",
+          "ProviderSessionRuntimeRepository.recordImportedTranscript:encodeRequest",
         ),
       ),
     );
@@ -192,6 +289,7 @@ const makeProviderSessionRuntimeRepository = Effect.gen(function* () {
 
   return {
     upsert,
+    recordImportedTranscript,
     getByThreadId,
     list,
     deleteByThreadId,

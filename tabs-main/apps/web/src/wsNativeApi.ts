@@ -555,6 +555,10 @@ export function createWsNativeApi(options?: {
         transport.subscribe(WS_CHANNELS.previewEvent, (message) => callback(message.data)),
       subscribePorts: () => () => {},
     },
+    agentSessions: {
+      scan: () => transport.request(WS_METHODS.agentSessionsScan, {}),
+      import: (input) => transport.request(WS_METHODS.agentSessionsImport, input),
+    },
   };
 
   if (singleton) instance = { api, transport };

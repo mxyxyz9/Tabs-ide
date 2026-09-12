@@ -681,6 +681,7 @@ const ThreadCreateCommand = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
+  historyImport: Schema.optional(Schema.Boolean),
 });
 
 const ThreadDeleteCommand = Schema.Struct({
@@ -1050,10 +1051,26 @@ export const ThreadPullRequestLinkSyncCommand = Schema.Struct({
 });
 export type ThreadPullRequestLinkSyncCommand = typeof ThreadPullRequestLinkSyncCommand.Type;
 
+export const ThreadHistoryImportCommand = Schema.Struct({
+  type: Schema.Literal("thread.history.import"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messages: Schema.Array(
+    Schema.Struct({
+      messageId: MessageId,
+      role: Schema.Literals(["user", "assistant"]),
+      text: Schema.String,
+      createdAt: IsoDateTime,
+    }),
+  ).check(Schema.isNonEmpty()),
+});
+export type ThreadHistoryImportCommand = typeof ThreadHistoryImportCommand.Type;
+
 const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
+  ThreadHistoryImportCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
@@ -1352,6 +1369,7 @@ export const OrchestrationEventMetadata = Schema.Struct({
   adapterKey: Schema.optional(TrimmedNonEmptyString),
   requestId: Schema.optional(ApprovalRequestId),
   ingestedAt: Schema.optional(IsoDateTime),
+  historyImport: Schema.optional(Schema.Boolean),
 });
 export type OrchestrationEventMetadata = typeof OrchestrationEventMetadata.Type;
 

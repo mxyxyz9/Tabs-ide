@@ -7,7 +7,7 @@ import * as Context from "effect/Context";
  *
  * @module ProjectionSnapshotQuery
  */
-import type { OrchestrationReadModel } from "@tabs/contracts";
+import type { AgentSessionImportSource, OrchestrationReadModel, ProjectId, ThreadId } from "@tabs/contracts";
 import {} from "effect";
 import type { Effect } from "effect";
 
@@ -24,6 +24,14 @@ export interface ProjectionSnapshotQueryShape {
    * projector cursor state.
    */
   readonly getSnapshot: () => Effect.Effect<OrchestrationReadModel, ProjectionRepositoryError>;
+
+  /**
+   * Read all imported agent session sources for a project.
+   */
+  readonly getImportedAgentSessionSources: (projectId: ProjectId) => Effect.Effect<
+    ReadonlyArray<{ readonly threadId: ThreadId; readonly source: AgentSessionImportSource }>,
+    ProjectionRepositoryError
+  >;
 }
 
 /**

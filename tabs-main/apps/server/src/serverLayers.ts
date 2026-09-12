@@ -49,6 +49,7 @@ import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import { AntigravityInstallation } from "./provider/AntigravityInstallation.ts";
 import * as CodexResetCreditCoordinator from "./provider/Layers/codexResetCredit.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
+import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -170,6 +171,10 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provide(FetchHttpClient.layer),
   );
 
+  const agentSessionScannerLayer = AgentSessionScanner.layer.pipe(
+    Layer.provideMerge(runtimeServicesLayer),
+  );
+
   // NodeServices (FileSystem/Path/ChildProcessSpawner) is provided once, at the
   // innermost level of the main composition, so the instance-registry drivers
   // (which sit below this layer) can also see it.
@@ -189,6 +194,7 @@ export function makeServerRuntimeServicesLayer() {
     PreviewAutomationBroker.layer,
     EnvironmentTheme.layer,
     TraceDiagnostics.layer,
+    agentSessionScannerLayer,
   ).pipe(Layer.provideMerge(AntigravityInstallation.layer));
 }
 

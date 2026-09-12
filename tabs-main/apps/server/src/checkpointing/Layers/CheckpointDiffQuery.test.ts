@@ -130,6 +130,7 @@ describe("CheckpointDiffQueryLive", () => {
       Layer.provideMerge(
         Layer.succeed(ProjectionSnapshotQuery, {
           getSnapshot: () => Effect.succeed(snapshot),
+          getImportedAgentSessionSources: () => Effect.succeed([]),
         }),
       ),
     );
@@ -185,6 +186,7 @@ describe("CheckpointDiffQueryLive", () => {
               threads: [],
               updatedAt: "2026-01-01T00:00:00.000Z",
             } satisfies OrchestrationReadModel),
+          getImportedAgentSessionSources: () => Effect.succeed([]),
         }),
       ),
     );

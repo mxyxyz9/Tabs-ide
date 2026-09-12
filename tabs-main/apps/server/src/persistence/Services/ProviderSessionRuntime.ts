@@ -7,6 +7,7 @@ import * as Context from "effect/Context";
  * @module ProviderSessionRuntimeRepository
  */
 import {
+  AgentSessionImportSource,
   IsoDateTime,
   ProviderInstanceId,
   ProviderSessionRuntimeStatus,
@@ -40,6 +41,10 @@ export type GetProviderSessionRuntimeInput = typeof GetProviderSessionRuntimeInp
 export const DeleteProviderSessionRuntimeInput = Schema.Struct({ threadId: ThreadId });
 export type DeleteProviderSessionRuntimeInput = typeof DeleteProviderSessionRuntimeInput.Type;
 
+export interface ProviderSessionRuntimeUpsertOptions {
+  readonly onConflict?: "update" | "ignore";
+}
+
 /**
  * ProviderSessionRuntimeRepositoryShape - Service API for provider runtime records.
  */
@@ -51,7 +56,13 @@ export interface ProviderSessionRuntimeRepositoryShape {
    */
   readonly upsert: (
     runtime: ProviderSessionRuntime,
+    options?: ProviderSessionRuntimeUpsertOptions,
   ) => Effect.Effect<void, ProviderSessionRuntimeRepositoryError>;
+
+  readonly recordImportedTranscript: (input: {
+    readonly threadId: ThreadId;
+    readonly source: AgentSessionImportSource;
+  }) => Effect.Effect<void, ProviderSessionRuntimeRepositoryError>;
 
   /**
    * Read provider runtime state by canonical thread id.
