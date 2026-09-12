@@ -25,6 +25,7 @@ import {
   checkWebAuthnContext,
   categorizePermission,
 } from "./permissionMediator";
+import { buildSecurityContext } from "./browserSecurityContext";
 
 export const defaultPermissionMediator = new PermissionMediator();
 
@@ -242,6 +243,7 @@ type BrowserSession = {
   /** Transient error set when ERR_CONNECTION_REFUSED fires (dev server not ready yet).
    * Cleared as soon as any successful navigation or page load occurs. */
   transientError: string | null;
+  certificateError: string | null;
   consoleEntries: BrowserConsoleEntry[];
   networkEntries: BrowserNetworkEntry[];
   actionTimeline: BrowserActionEvent[];
@@ -428,6 +430,7 @@ export class BrowserHostManager {
       colorScheme: "system",
       lastError: null,
       transientError: null,
+      certificateError: null,
       consoleEntries: [],
       networkEntries: [],
       actionTimeline: [],
@@ -1531,6 +1534,12 @@ export class BrowserHostManager {
       controller: session.controller ?? "none",
       lastError: session.lastError,
       transientError: session.transientError,
+      securityContext: buildSecurityContext({
+        url: session.currentUrl,
+        partition: session.partition,
+        certificateError: session.certificateError,
+        isTabsOwned: true,
+      }),
     };
   }
 
@@ -1650,6 +1659,7 @@ export class BrowserHostManager {
       session.loading = true;
       session.lastError = null;
       session.transientError = null;
+      session.certificateError = null;
       refreshNavigationState();
       this.emitState(session);
     });
@@ -1669,10 +1679,19 @@ export class BrowserHostManager {
       session.currentUrl = url;
       session.lastError = null;
       session.transientError = null;
+      session.certificateError = null;
       session.crashRecoveryAttempts = 0;
       session.crashRecoveryWindowStartedAt = null;
       refreshNavigationState();
       this.emitState(session);
+    });
+    contents.on("certificate-error", (event, _url, error, _certificate, callback) => {
+      event.preventDefault();
+      session.certificateError = error;
+      session.lastError = `Certificate error: ${error}`;
+      refreshNavigationState();
+      this.emitState(session);
+      callback(false);
     });
     contents.on("did-navigate-in-page", (_event, url) => {
       session.currentUrl = url;

@@ -1786,6 +1786,16 @@ export interface DesktopBrowserHostSetBoundsInput {
   visible: boolean;
 }
 
+export interface DesktopBrowserSecurityContext {
+  securityState: "secure" | "insecure" | "broken" | "unknown";
+  registrableDomain: string | null;
+  origin: string | null;
+  profileId: string | null;
+  isTabsOwned: boolean;
+  certificateError?: string | null | undefined;
+  hasPunycodeWarning?: boolean | undefined;
+}
+
 export interface DesktopBrowserSessionState {
   projectId: string;
   sessionId: string;
@@ -1808,4 +1818,5 @@ export interface DesktopBrowserSessionState {
    * does NOT switch the browser UI into an offline/error state — the overlay
    * instead shows "Starting..." and retries automatically. */
   transientError: string | null;
+  securityContext?: DesktopBrowserSecurityContext | undefined;
 }

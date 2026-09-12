@@ -101,7 +101,10 @@ export function isProfilePartition(partition: string): boolean {
   );
 }
 
-export function extractProfileIdFromPartition(partition: string): string | null {
+export function extractProfileIdFromPartition(partition?: string | null | undefined): string | null {
+  if (!partition) {
+    return null;
+  }
   const persistentPrefix = `${PERSISTENT_PARTITION_PREFIX}${PROFILE_NAMESPACE}`;
   const ephemeralPrefix = `${EPHEMERAL_PARTITION_PREFIX}${PROFILE_NAMESPACE}`;
 

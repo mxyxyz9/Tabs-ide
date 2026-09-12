@@ -145,6 +145,7 @@ import { GitAccountMenu } from "./git/GitAccountMenu";
 import { GitEnvironmentGate } from "./git/GitEnvironmentGate";
 import { ToolErrorBoundary } from "./ToolErrorBoundary";
 import { GitToolV2 } from "./GitToolV2";
+import { BrowserSecurityBadge } from "./BrowserSecurityBadge";
 import {
   buildSingleHunkPatch,
   getRenderablePatch,
@@ -7508,6 +7509,15 @@ function DesktopBrowserChrome(props: {
                 </MenuPopup>
               </Menu>
               <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
+                <BrowserSecurityBadge
+                  securityContext={props.sessionState.securityContext}
+                  currentUrl={props.sessionState.currentUrl}
+                  onOpenExternal={() =>
+                    void api?.shell.openExternal(
+                      props.sessionState.currentUrl ?? props.normalizedUrl,
+                    )
+                  }
+                />
                 <Input
                   className="h-8"
                   value={props.draftUrl}
