@@ -27,6 +27,7 @@ import {
 } from "./permissionMediator";
 import { buildSecurityContext } from "./browserSecurityContext";
 import { detectGoogleRejection } from "./googleAuthHandler";
+import { BrowserAuthDiagnostics, type AuthDiagnosticEntry } from "./browserDiagnostics";
 
 export const defaultPermissionMediator = new PermissionMediator();
 
@@ -339,8 +340,17 @@ export class BrowserHostManager {
   private activeKey: string | null = null;
   private readonly observedProfileSessions = new WeakSet<Session>();
   private readonly observedAutomationSessions = new WeakSet<Session>();
+  readonly diagnostics = new BrowserAuthDiagnostics();
 
   constructor(private readonly getWindow: () => BrowserWindow | null) {}
+
+  getAuthDiagnostics(): readonly AuthDiagnosticEntry[] {
+    return this.diagnostics.getEntries();
+  }
+
+  getAuthDiagnosticsSummary(): string {
+    return this.diagnostics.formatBugReportSummary();
+  }
 
   private sessionKey(projectId: string, sessionId?: string): string {
     return `${projectId}::${sessionId ?? DEFAULT_SESSION_ID}`;
@@ -1645,6 +1655,15 @@ export class BrowserHostManager {
         initiatingUrl: currentUrl,
         isWindowOpen: false,
       });
+      this.diagnostics.record({
+        profileId: session.partition,
+        provider: classification.provider,
+        stage: "navigation_initiated",
+        navigationType: "will_navigate",
+        rawUrl: url,
+        outcome: classification.kind === "externalOAuthRequired" ? "in_progress" : "completed",
+        summary: classification.reason,
+      });
       if (classification.kind === "blockedUnsafeScheme") {
         event.preventDefault();
         return;
@@ -1696,6 +1715,15 @@ export class BrowserHostManager {
       event.preventDefault();
       session.certificateError = error;
       session.lastError = `Certificate error: ${error}`;
+      this.diagnostics.record({
+        profileId: session.partition,
+        stage: "error",
+        navigationType: "in_page",
+        rawUrl: _url,
+        errorCode: error,
+        outcome: "error",
+        summary: `Certificate verification failed: ${error}`,
+      });
       refreshNavigationState();
       this.emitState(session);
       callback(false);
@@ -1789,6 +1817,17 @@ export class BrowserHostManager {
     });
     contents.setWindowOpenHandler((details) => {
       const decision = decideWindowOpenAction(details, session.partition, contents.getURL());
+      this.diagnostics.record({
+        profileId: session.partition,
+        stage: "popup_opened",
+        navigationType: decision.action === "allow" ? "new_window" : "external_browser",
+        rawUrl: details.url,
+        outcome: decision.action === "allow" ? "in_progress" : "completed",
+        summary:
+          decision.action === "allow"
+            ? "Scripted popup allowed with shared partition"
+            : "Routed to external browser",
+      });
       if (decision.action === "allow") {
         return {
           action: "allow",
