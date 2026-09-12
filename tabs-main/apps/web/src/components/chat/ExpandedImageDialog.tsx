@@ -6,6 +6,8 @@ import {
   ChevronRightIcon,
   CopyIcon,
   DownloadIcon,
+  MaximizeIcon,
+  MinimizeIcon,
   MinusIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -22,6 +24,7 @@ import {
 } from "react";
 
 import { cn } from "../../lib/utils";
+import { prepareVideoFirstFrame } from "../../lib/videoFirstFrame";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -64,6 +67,76 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   const totalImages = preview.images.length;
   const currentIndex = totalImages > 0 ? (preview.index + imageOffset + totalImages) % totalImages : 0;
   const currentItem = preview.images[currentIndex];
+  const isVideo = currentItem?.type === "video";
+  const displaySrc = currentItem
+    ? reloadKey > 0
+      ? `${currentItem.src}#retry=${reloadKey}`
+      : currentItem.src
+    : "";
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playbackStateRef = useRef<{
+    currentTime: number;
+    paused: boolean;
+    volume: number;
+    muted: boolean;
+  }>({
+    currentTime: 0,
+    paused: false,
+    volume: 1,
+    muted: false,
+  });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const handleToggleFullscreen = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+    } else {
+      if (typeof video.requestFullscreen === "function") {
+        void video.requestFullscreen().catch(() => {});
+      } else if (typeof (video as any).webkitEnterFullscreen === "function") {
+        (video as any).webkitEnterFullscreen();
+      }
+    }
+  }, []);
+
+  // Sync fullscreen state & prevent unwanted pausing during fullscreen / visibility transitions
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isVideo) return;
+
+    const handleFullscreenChange = () => {
+      const active =
+        document.fullscreenElement === video ||
+        document.fullscreenElement?.contains(video) ||
+        Boolean((video as any)?.webkitDisplayingFullscreen);
+      setIsFullscreen(Boolean(active));
+    };
+
+    const handleVisibilityChange = () => {
+      const active =
+        document.fullscreenElement === video ||
+        document.fullscreenElement?.contains(video) ||
+        Boolean((video as any)?.webkitDisplayingFullscreen);
+      // Native fullscreen transitions may cause document.hidden to flip briefly.
+      // Do not pause if the video is currently in fullscreen.
+      if (document.hidden && !active) {
+        video.pause();
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    video.addEventListener("webkitendfullscreen", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      video.removeEventListener("webkitendfullscreen", handleFullscreenChange);
+    };
+  }, [isVideo, displaySrc]);
 
   // Reset zoom, pan, and error when navigating to another image
   const resetTransform = useCallback(() => {
@@ -105,6 +178,13 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
         return;
       }
 
+      if ((event.key === "f" || event.key === "F") && isVideo && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleToggleFullscreen();
+        return;
+      }
+
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         event.stopPropagation();
@@ -140,7 +220,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigateImage, onClose, resetTransform]);
+  }, [handleToggleFullscreen, isVideo, navigateImage, onClose, resetTransform]);
 
   // Pan dragging handlers
   const handleMouseDown = (e: ReactMouseEvent) => {
@@ -221,8 +301,6 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
 
   if (!currentItem) return null;
 
-  const isVideo = currentItem.type === "video";
-  const displaySrc = reloadKey > 0 ? `${currentItem.src}#retry=${reloadKey}` : currentItem.src;
   const BackdropComponent = disablePortal ? "div" : DialogPrimitive.Backdrop;
   const PopupComponent = disablePortal ? "div" : DialogPrimitive.Popup;
 
@@ -316,6 +394,32 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
               />
               <TooltipPopup side="bottom">Fit to screen</TooltipPopup>
             </Tooltip>
+
+            {/* Video Fullscreen */}
+            {isVideo && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={handleToggleFullscreen}
+                      aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                    >
+                      {isFullscreen ? (
+                        <MinimizeIcon className="size-3.5" />
+                      ) : (
+                        <MaximizeIcon className="size-3.5" />
+                      )}
+                    </Button>
+                  }
+                />
+                <TooltipPopup side="bottom">
+                  {isFullscreen ? "Exit fullscreen" : "Fullscreen (F)"}
+                </TooltipPopup>
+              </Tooltip>
+            )}
 
             <div className="mx-1 h-4 w-px bg-border/60" aria-hidden="true" />
 
@@ -452,11 +556,52 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
               </div>
             ) : isVideo ? (
               <video
+                ref={videoRef}
                 key={displaySrc}
                 src={displaySrc}
                 controls
                 autoPlay
+                playsInline
                 className="max-h-[84vh] max-w-[90vw] rounded-lg border border-border/60 bg-black object-contain shadow-2xl"
+                onLoadedMetadata={(e) => {
+                  const video = e.currentTarget;
+                  prepareVideoFirstFrame(video);
+                  const saved = playbackStateRef.current;
+                  if (
+                    saved.currentTime > 0 &&
+                    Number.isFinite(video.duration) &&
+                    saved.currentTime < video.duration
+                  ) {
+                    try {
+                      video.currentTime = saved.currentTime;
+                    } catch {
+                      // ignore seek error
+                    }
+                  }
+                  if (saved.muted) video.muted = true;
+                  if (!saved.paused && !video.autoplay) {
+                    video.play().catch(() => {});
+                  }
+                }}
+                onTimeUpdate={(e) => {
+                  const video = e.currentTarget;
+                  playbackStateRef.current = {
+                    currentTime: video.currentTime,
+                    paused: video.paused,
+                    volume: video.volume,
+                    muted: video.muted,
+                  };
+                }}
+                onPlay={(e) => {
+                  const video = e.currentTarget;
+                  playbackStateRef.current.paused = false;
+                  playbackStateRef.current.currentTime = video.currentTime;
+                }}
+                onPause={(e) => {
+                  const video = e.currentTarget;
+                  playbackStateRef.current.paused = true;
+                  playbackStateRef.current.currentTime = video.currentTime;
+                }}
                 onError={() => setHasError(true)}
                 onClick={(e) => e.stopPropagation()}
               />

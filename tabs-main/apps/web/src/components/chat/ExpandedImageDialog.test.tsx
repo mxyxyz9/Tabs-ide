@@ -156,7 +156,7 @@ describe("ExpandedImageDialog component markup", () => {
     expect(markup).not.toContain("(1 / 1)");
   });
 
-  it("renders video element when item type is video", () => {
+  it("renders video element with controls and fullscreen button when item type is video", () => {
     const videoPreview: ExpandedImagePreview = {
       images: [{ src: "https://example.com/clip.mp4", name: "Clip.mp4", type: "video" }],
       index: 0,
@@ -168,5 +168,9 @@ describe("ExpandedImageDialog component markup", () => {
 
     expect(markup).toContain("<video");
     expect(markup).toContain('src="https://example.com/clip.mp4"');
+    expect(markup).toContain("controls");
+    expect(markup).toContain("Enter fullscreen");
   });
 });
+
+
