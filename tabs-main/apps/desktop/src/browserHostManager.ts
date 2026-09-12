@@ -19,6 +19,7 @@ import {
   isProfilePartition,
   normalizeProfileIdentifier,
 } from "./profileStorage";
+import { decideWindowOpenAction, configureChildPopupWindow } from "./popupHandoff";
 
 import {
   app,
@@ -59,7 +60,6 @@ const DEFAULT_BROWSER_HOST_STATE: DesktopBrowserHostState = {
 const DOCKED_DEVTOOLS_MODE = "bottom";
 
 const DEFAULT_SESSION_ID = "browser";
-const PROFILE_PARTITION_PREFIX = "persist:tabs-browser:profile:";
 const configuredSessions = new WeakSet<Session>();
 const ALLOWED_REMOTE_PERMISSIONS = new Set([
   "clipboard-read",
@@ -1620,32 +1620,22 @@ export class BrowserHostManager {
     };
     contents.on("before-input-event", markHumanControl);
     contents.on("before-mouse-event", markHumanControl);
-    let authenticationWindowPending = false;
-    const openAuthenticationWindow = (url: string, originatingUrl: string) => {
-      if (authenticationWindowPending) return;
-      authenticationWindowPending = true;
-      const profileId = session.partition.startsWith(PROFILE_PARTITION_PREFIX)
-        ? session.partition.slice(PROFILE_PARTITION_PREFIX.length)
-        : session.projectId;
-      void this.openLoginWindow(session.partition, profileId, url, originatingUrl)
-        .then((result) => {
-          if (result.completed && !contents.isDestroyed()) {
-            contents.reload();
-          }
-        })
-        .finally(() => {
-          authenticationWindowPending = false;
-          if (!contents.isDestroyed()) {
-            contents.focus?.();
-          }
-        });
-    };
-
     contents.on("will-navigate", (event, url) => {
       const currentUrl = contents.getURL();
-      if (!isLikelyAuthenticationUrl(url) || isLikelyAuthenticationUrl(currentUrl)) return;
-      event.preventDefault();
-      openAuthenticationWindow(url, currentUrl);
+      const classification = classifyAuthNavigation({
+        url,
+        initiatingUrl: currentUrl,
+        isWindowOpen: false,
+      });
+      if (classification.kind === "blockedUnsafeScheme") {
+        event.preventDefault();
+        return;
+      }
+      if (classification.kind === "externalOAuthRequired") {
+        event.preventDefault();
+        void shell.openExternal(url).catch(() => undefined);
+        return;
+      }
     });
 
     contents.on("did-start-loading", () => {
@@ -1763,60 +1753,18 @@ export class BrowserHostManager {
       this.emitState(session);
       void this.applyColorScheme(session);
     });
-    contents.setWindowOpenHandler(({ url, disposition }) => {
-      // OAuth flows ("Continue with Google", SSO, etc.) call window.open(...)
-      // with popup features, which Electron reports as a "new-window"
-      // disposition. Those popups MUST stay in-app and share this view's
-      // session partition — otherwise the auth completes in the external
-      // browser (different cookies, no window.opener) and can never hand the
-      // session back. Allow them as a child window on the same partition.
-      if (disposition === "new-window" && isLikelyAuthenticationUrl(url)) {
-        openAuthenticationWindow(url, contents.getURL());
-        return { action: "deny" };
-      }
-      if (disposition === "new-window") {
+    contents.setWindowOpenHandler((details) => {
+      const decision = decideWindowOpenAction(details, session.partition, contents.getURL());
+      if (decision.action === "allow") {
         return {
           action: "allow",
-          overrideBrowserWindowOptions: {
-            autoHideMenuBar: true,
-            webPreferences: {
-              contextIsolation: true,
-              sandbox: true,
-              nodeIntegration: false,
-              partition: session.partition || `persist:tabs-browser:${session.projectId}`,
-            },
-          },
+          overrideBrowserWindowOptions: decision.overrideBrowserWindowOptions,
         };
       }
-      // Plain link clicks (target=_blank / foreground-tab) open in the user's
-      // real browser, matching prior behavior.
-      void shell.openExternal(url).catch(() => undefined);
       return { action: "deny" };
     });
     contents.on("did-create-window", (childWindow) => {
-      // Keep the OAuth popup tidy and let it close itself when the provider
-      // calls window.close() at the end of the flow.
-      childWindow.setMenuBarVisibility(false);
-      childWindow.webContents.setWindowOpenHandler(
-        ({ url: nestedUrl, disposition: nestedDisposition }) => {
-          if (nestedDisposition === "new-window") {
-            return {
-              action: "allow",
-              overrideBrowserWindowOptions: {
-                autoHideMenuBar: true,
-                webPreferences: {
-                  contextIsolation: true,
-                  sandbox: true,
-                  nodeIntegration: false,
-                  partition: session.partition || `persist:tabs-browser:${session.projectId}`,
-                },
-              },
-            };
-          }
-          void shell.openExternal(nestedUrl).catch(() => undefined);
-          return { action: "deny" };
-        },
-      );
+      configureChildPopupWindow(childWindow, contents, session.partition);
     });
     contents.on("context-menu", (_event, params) => {
       const template: MenuItemConstructorOptions[] = [

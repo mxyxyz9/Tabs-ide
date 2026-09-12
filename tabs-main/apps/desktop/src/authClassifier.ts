@@ -27,10 +27,16 @@ export interface AuthClassificationResult {
 
 export interface AuthNavigationRequest {
   readonly url: string;
-  readonly initiatingUrl?: string | null;
-  readonly disposition?: "default" | "new-window" | "foreground-tab" | "background-tab" | "other";
-  readonly isWindowOpen?: boolean;
-  readonly profileLoginIntent?: boolean;
+  readonly initiatingUrl?: string | null | undefined;
+  readonly disposition?:
+    | "default"
+    | "new-window"
+    | "foreground-tab"
+    | "background-tab"
+    | "other"
+    | undefined;
+  readonly isWindowOpen?: boolean | undefined;
+  readonly profileLoginIntent?: boolean | undefined;
 }
 
 const BLOCKED_UNSAFE_SCHEMES = new Set([
