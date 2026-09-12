@@ -15,7 +15,8 @@ import type {
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
-import { readResourceAttributionSnapshot } from "./ResourceAttribution.ts";
+import { readResourceAttributionSnapshot, recordResourceAttribution } from "./ResourceAttribution.ts";
+import { readEventLoopLag } from "./EventLoopMonitor.ts";
 import { type ProcessRow, readSystemProcessRows } from "./ProcessEnumerator.ts";
 
 interface HistoricalSample {
@@ -255,6 +256,14 @@ export async function readResourceTelemetrySnapshot(
     else if (power.thermalState === "fair") speedLimitPercent = 85;
     else if (power.thermalState === "serious") speedLimitPercent = 65;
     else if (power.thermalState === "critical") speedLimitPercent = 40;
+
+    const lag = readEventLoopLag();
+    recordResourceAttribution({
+      component: "server-runtime",
+      operation: "event-loop-lag",
+      count: 1,
+      durationMs: Math.round(lag.meanMs),
+    });
 
     const attribution = readResourceAttributionSnapshot();
     const collectionDurationMicros = (Date.now() - startTime) * 1_000;

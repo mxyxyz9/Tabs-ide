@@ -11,6 +11,7 @@ import {
   WS_METHODS,
   type WsWelcomePayload,
   type TerminalEvent,
+  type ResourceTelemetrySnapshot,
 } from "@tabs/contracts";
 
 import { showContextMenuFallback } from "./contextMenuFallback";
@@ -466,6 +467,14 @@ export function createWsNativeApi(options?: {
         transport.subscribe(WS_CHANNELS.backgroundPolicyUpdated, (message) =>
           callback(message.data),
         ),
+      onResourceTelemetry: (callback) => {
+        const unsubscribe = transport.subscribe(
+          WS_CHANNELS.resourceTelemetryUpdated,
+          (message) => callback(message.data),
+        );
+        void transport.request(WS_METHODS.subscribeResourceTelemetry, {}).catch(() => {});
+        return unsubscribe;
+      },
       readUsageSummary: (input) => transport.request(WS_METHODS.usageReadSummary, input),
       listUsageSnapshots: (input = {}) => transport.request(WS_METHODS.usageListSnapshots, input),
       refreshAllUsageSnapshots: () => transport.request(WS_METHODS.usageRefreshAll, {}),

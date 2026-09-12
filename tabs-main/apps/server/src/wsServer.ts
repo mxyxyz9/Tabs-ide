@@ -2346,6 +2346,36 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.subscribeResourceTelemetry: {
+        const policy = yield* backgroundPolicy.snapshot;
+        const initial = yield* Effect.tryPromise({
+          try: () => readResourceTelemetrySnapshot(policy.hostPower),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
+        yield* pushBus.publishClient(ws, WS_CHANNELS.resourceTelemetryUpdated, initial);
+        yield* Scope.provide(subscriptionsScope)(
+          Effect.forkScoped(
+            Effect.gen(function* () {
+              while (true) {
+                yield* Effect.sleep("5 seconds");
+                const currentPolicy = yield* backgroundPolicy.snapshot;
+                const snapshot = yield* Effect.tryPromise({
+                  try: () => readResourceTelemetrySnapshot(currentPolicy.hostPower),
+                  catch: () => null,
+                });
+                if (snapshot) {
+                  yield* pushBus.publishClient(ws, WS_CHANNELS.resourceTelemetryUpdated, snapshot);
+                }
+              }
+            }),
+          ),
+        );
+        return { subscribed: true };
+      }
+
       case WS_METHODS.serverSignalProcess:
         return yield* Effect.tryPromise({
           try: () => signalProcess(stripRequestTag(request.body) as ServerSignalProcessInput),
@@ -2791,6 +2821,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     const elapsedNanos = endedAt > startedAt ? endedAt - startedAt : 0n;
     const durationMs = Number(elapsedNanos / 1_000_000n);
     const methodTag = (request.success.body as { _tag?: string })?._tag ?? "unknown";
+    recordResourceAttribution({
+      component: "rpc",
+      operation: methodTag,
+      count: 1,
+      durationMs,
+    });
 
     if (durationMs > 5_000) {
       yield* Effect.logWarning(

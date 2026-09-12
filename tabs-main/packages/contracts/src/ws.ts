@@ -110,7 +110,7 @@ import {
   ServerSignalProcessInput,
 } from "./server";
 import { ServerSettingsPatch } from "./settings";
-import { ResourceTelemetryHistoryInput } from "./resourceTelemetry";
+import { ResourceTelemetryHistoryInput, ResourceTelemetrySnapshot } from "./resourceTelemetry";
 import {
   SourceControlCloneRepositoryInput,
   SourceControlRepositoryLookupInput,
@@ -367,6 +367,7 @@ export const WS_METHODS = {
   subscribeTerminalEvents: "subscribeTerminalEvents",
   subscribeTerminalMetadata: "subscribeTerminalMetadata",
   subscribeVcsStatus: "subscribeVcsStatus",
+  subscribeResourceTelemetry: "subscribeResourceTelemetry",
   agentSessionsScan: "agentSessions.scan",
   agentSessionsImport: "agentSessions.import",
 } as const;
@@ -386,6 +387,7 @@ export const WS_CHANNELS = {
   previewAutomationEvent: "preview.automationEvent",
   backgroundPolicyUpdated: "server.backgroundPolicyUpdated",
   discoveredLocalServers: "preview.discoveredLocalServers",
+  resourceTelemetryUpdated: "resourceTelemetry.updated",
 } as const;
 
 // -- Tagged Union of all request body schemas ─────────────────────────
@@ -587,6 +589,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverGetResourceTelemetry, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverGetResourceTelemetryHistory, ResourceTelemetryHistoryInput),
   tagRequestBody(WS_METHODS.serverRetryResourceTelemetry, Schema.Struct({})),
+  tagRequestBody(WS_METHODS.subscribeResourceTelemetry, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverSignalProcess, ServerSignalProcessInput),
   tagRequestBody(WS_METHODS.serverCreateSupportBundle, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverReportClientActivity, ClientActivityReportInput),
@@ -656,6 +659,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.previewAutomationEvent]: PreviewAutomationStreamEvent;
   readonly [WS_CHANNELS.backgroundPolicyUpdated]: typeof BackgroundPolicySnapshot.Type;
   readonly [WS_CHANNELS.discoveredLocalServers]: DiscoveredLocalServerList;
+  readonly [WS_CHANNELS.resourceTelemetryUpdated]: ResourceTelemetrySnapshot;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -712,6 +716,10 @@ export const WsPushDiscoveredLocalServers = makeWsPushSchema(
   WS_CHANNELS.discoveredLocalServers,
   DiscoveredLocalServerList,
 );
+export const WsPushResourceTelemetryUpdated = makeWsPushSchema(
+  WS_CHANNELS.resourceTelemetryUpdated,
+  ResourceTelemetrySnapshot,
+);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -730,6 +738,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.previewAutomationEvent,
   WS_CHANNELS.backgroundPolicyUpdated,
   WS_CHANNELS.discoveredLocalServers,
+  WS_CHANNELS.resourceTelemetryUpdated,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -747,6 +756,7 @@ export const WsPush = Schema.Union([
   WsPushPreviewAutomationEvent,
   WsPushBackgroundPolicyUpdated,
   WsPushDiscoveredLocalServers,
+  WsPushResourceTelemetryUpdated,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;

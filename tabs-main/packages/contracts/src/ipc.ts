@@ -1396,6 +1396,7 @@ export interface LocalApi {
     reportHostPowerState: (input: HostPowerSnapshot) => Promise<void>;
     getBackgroundPolicy: () => Promise<BackgroundPolicySnapshot>;
     onBackgroundPolicy: (listener: (snapshot: BackgroundPolicySnapshot) => void) => () => void;
+    onResourceTelemetry?: (listener: (snapshot: ResourceTelemetrySnapshot) => void) => () => void;
     readUsageSummary: (input: UsageSummaryInput) => Promise<UsageSummary>;
     listUsageSnapshots: (
       input?: ServerListProviderUsageInput,
