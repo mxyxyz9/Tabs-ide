@@ -20,6 +20,13 @@ import {
   normalizeProfileIdentifier,
 } from "./profileStorage";
 import { decideWindowOpenAction, configureChildPopupWindow } from "./popupHandoff";
+import {
+  PermissionMediator,
+  checkWebAuthnContext,
+  categorizePermission,
+} from "./permissionMediator";
+
+export const defaultPermissionMediator = new PermissionMediator();
 
 import {
   app,
@@ -61,13 +68,6 @@ const DOCKED_DEVTOOLS_MODE = "bottom";
 
 const DEFAULT_SESSION_ID = "browser";
 const configuredSessions = new WeakSet<Session>();
-const ALLOWED_REMOTE_PERMISSIONS = new Set([
-  "clipboard-read",
-  "clipboard-write",
-  "clipboard-sanitized-write",
-  "pointerLock",
-  "notifications",
-]);
 
 export function normalizeBrowserProfileId(profileId: string): string {
   return normalizeProfileIdentifier(profileId);
@@ -91,6 +91,9 @@ export {
   isPersistentPartition,
   isProfilePartition,
   normalizeProfileIdentifier,
+  checkWebAuthnContext,
+  categorizePermission,
+  PermissionMediator,
   type AuthClassificationKind,
   type AuthClassificationResult,
   type AuthNavigationRequest,
@@ -178,11 +181,16 @@ export function configurePartitionSession(s: Session): void {
         console.error("[browserHostManager] Failed to persist browser cookies:", err);
       });
     });
-    s.setPermissionRequestHandler((_webContents, permission, callback) => {
-      callback(ALLOWED_REMOTE_PERMISSIONS.has(permission));
+    s.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+      const granted = defaultPermissionMediator.evaluateRequest(
+        permission,
+        details?.requestingUrl,
+        details,
+      );
+      callback(granted);
     });
-    s.setPermissionCheckHandler((_webContents, permission) => {
-      return ALLOWED_REMOTE_PERMISSIONS.has(permission);
+    s.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
+      return defaultPermissionMediator.evaluateCheck(permission, requestingOrigin);
     });
   } catch (err) {
     console.error("[browserHostManager] Failed to configure partition session:", err);
