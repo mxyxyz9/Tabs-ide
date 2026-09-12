@@ -1437,6 +1437,10 @@ function configureAutoUpdater(): void {
   });
   autoUpdater.on("error", (error) => {
     const message = formatErrorMessage(error);
+    if (!autoUpdater.disableDifferentialDownload && message.toLowerCase().includes("differential")) {
+      console.warn("[desktop-updater] Differential download failed, falling back to full download");
+      autoUpdater.disableDifferentialDownload = true;
+    }
     if (!updateCheckInFlight && !updateDownloadInFlight) {
       setUpdateState({
         status: "error",
