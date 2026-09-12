@@ -27,7 +27,11 @@ import {
 } from "./permissionMediator";
 import { buildSecurityContext } from "./browserSecurityContext";
 import { detectGoogleRejection } from "./googleAuthHandler";
-import { BrowserAuthDiagnostics, type AuthDiagnosticEntry } from "./browserDiagnostics";
+import {
+  BrowserAuthDiagnostics,
+  type AuthDiagnosticEntry,
+  sanitizeDiagnosticOrigin,
+} from "./browserDiagnostics";
 
 export const defaultPermissionMediator = new PermissionMediator();
 
@@ -1771,8 +1775,9 @@ export class BrowserHostManager {
         : `The page crashed repeatedly (${details.reason}). Reload to try again.`;
       refreshNavigationState();
       this.emitState(session);
+      const sanitizedUrl = sanitizeDiagnosticOrigin(session.currentUrl);
       console.error(
-        `[browser-host] render process gone for ${session.key} (${session.currentUrl ?? "?"}): ${details.reason}`,
+        `[browser-host] render process gone for ${session.key} (${sanitizedUrl}): ${details.reason}`,
       );
       if (!recovery || session.crashRecoveryTimer) return;
       session.crashRecoveryAttempts = recovery.attempts;
@@ -1791,18 +1796,19 @@ export class BrowserHostManager {
     // (e.g. figma); capturing it here makes those diagnosable without manually
     // opening DevTools on the BrowserView.
     contents.on("console-message", (details) => {
+      const sanitizedSource = sanitizeDiagnosticOrigin(details.sourceId);
       session.consoleEntries ??= [];
       appendBounded(session.consoleEntries, {
         level: details.level,
         text: details.message,
         timestamp: new Date().toISOString(),
-        ...(details.sourceId.length > 0
-          ? { source: `${details.sourceId}:${details.lineNumber}` }
+        ...(sanitizedSource.length > 0
+          ? { source: `${sanitizedSource}:${details.lineNumber}` }
           : {}),
       });
       if (details.level === "error") {
         console.error(
-          `[browser-host] page console error ${session.key} (${details.sourceId}:${details.lineNumber}): ${details.message}`,
+          `[browser-host] page console error ${session.key} (${sanitizedSource}:${details.lineNumber}): ${details.message}`,
         );
       }
     });
