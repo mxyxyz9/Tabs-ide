@@ -1,6 +1,7 @@
 import * as FS from "node:fs/promises";
 import * as Path from "node:path";
 import { JourneyRecorder } from "./journeyRecorder";
+import { BrowserSessionImporter } from "./browserImport/BrowserSessionImporter";
 
 import {
   app,
@@ -25,6 +26,9 @@ import type {
   DesktopBrowserHostState,
   DesktopBrowserSessionState,
   BrowserProfileDomainInfo,
+  BrowserImportInput,
+  BrowserImportResult,
+  BrowserImportSource,
   DesktopPreviewScreenshotArtifact,
   DesktopPreviewRecordingArtifact,
   PreviewAnnotationPayload,
@@ -655,6 +659,21 @@ export class BrowserHostManager {
       trimmed,
       targetUrl?.trim() || "https://accounts.google.com",
     );
+  }
+
+  async listBrowserImportSources(): Promise<BrowserImportSource[]> {
+    const importer = new BrowserSessionImporter();
+    return await importer.listSources();
+  }
+
+  async importBrowserCookies(input: BrowserImportInput): Promise<BrowserImportResult> {
+    const importer = new BrowserSessionImporter();
+    const result = await importer.importSelectedCookies(input);
+    const trimmed = normalizeBrowserProfileId(input.targetProfileId);
+    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const s = electronSession.fromPartition(partition);
+    this.observeProfileSession(partition, s);
+    return result;
   }
 
   private async openLoginWindow(

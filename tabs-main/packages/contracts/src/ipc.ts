@@ -37,6 +37,11 @@ import type {
   AgentSessionScanResult,
 } from "./agentSessions.ts";
 import type {
+  BrowserImportInput,
+  BrowserImportResult,
+  BrowserImportSource,
+} from "./browserImport.ts";
+import type {
   BackgroundPolicySnapshot,
   ClientActivityReportInput,
   HostPowerSnapshot,
@@ -1232,6 +1237,8 @@ export interface DesktopBridge {
   openBrowserProfileLoginWindow: (input: { profileId: string; url?: string }) => Promise<void>;
   getBrowserProfileDomains: (input: { profileId: string }) => Promise<BrowserProfileDomainInfo[]>;
   clearBrowserProfileDomain: (input: { profileId: string; domain: string }) => Promise<void>;
+  listBrowserImportSources?: () => Promise<BrowserImportSource[]>;
+  importBrowserCookies?: (input: BrowserImportInput) => Promise<BrowserImportResult>;
   onBrowserProfileDataChanged: (listener: (profileId: string) => void) => () => void;
   onBrowserSessionState: (listener: (state: DesktopBrowserSessionState) => void) => () => void;
   getTailscaleStatus: () => Promise<{

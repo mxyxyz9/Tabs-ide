@@ -97,6 +97,8 @@ const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL =
 const BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL = "desktop:browser-host:get-profile-domains";
 const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-profile-domain";
 const BROWSER_HOST_PROFILE_DATA_CHANGED_CHANNEL = "desktop:browser-host:profile-data-changed";
+const BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL = "desktop:browser-host:list-import-sources";
+const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies";
 
 // Persistence channels
 const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
@@ -272,6 +274,10 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL, input),
   clearBrowserProfileDomain: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL, input),
+  listBrowserImportSources: () =>
+    ipcRenderer.invoke(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL),
+  importBrowserCookies: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, input),
   onBrowserProfileDataChanged: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, profileId: unknown) => {
       if (typeof profileId === "string") listener(profileId);

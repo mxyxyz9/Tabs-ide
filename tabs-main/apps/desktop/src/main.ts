@@ -173,6 +173,8 @@ const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL =
   "desktop:browser-host:open-profile-login-window";
 const BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL = "desktop:browser-host:get-profile-domains";
 const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-profile-domain";
+const BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL = "desktop:browser-host:list-import-sources";
+const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies";
 
 function readBrowserSessionId(input: unknown): string | undefined {
   const value = (input as { sessionId?: unknown }).sessionId;
@@ -2744,6 +2746,16 @@ function registerIpcHandlers(): void {
       domain: string;
     };
     await browserHostManager.clearProfileDomain(profileId, domain);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL, async () => {
+    return await browserHostManager.listBrowserImportSources();
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_IMPORT_COOKIES_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, async (_event, input: unknown) => {
+    return await browserHostManager.importBrowserCookies(input as any);
   });
 
   ipcMain.removeHandler(VSCODE_FETCH_SHELL_ENV_CHANNEL);

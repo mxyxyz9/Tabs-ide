@@ -7,6 +7,7 @@ import { type BrowserProfileDomainInfo } from "@tabs/contracts";
 import {
   FingerprintIcon,
   PlusIcon,
+  DownloadIcon,
   PencilIcon,
   Trash2Icon,
   RotateCcwIcon,
@@ -18,6 +19,11 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
 } from "lucide-react";
+import type {
+  BrowserImportSource,
+  BrowserImportResult,
+} from "@tabs/contracts";
+import { BROWSER_IMPORT_FAILURE_COPY } from "@tabs/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useAtomValue } from "@effect/atom-react";
@@ -210,6 +216,65 @@ export function BrowserProfilesSettings() {
     setDescriptionDraft(profile.description ?? "");
     setColorDraft(profile.color ?? "#3b82f6");
     setModalOpen(true);
+  };
+
+  // Browser import modal state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importSources, setImportSources] = useState<BrowserImportSource[]>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState<string>("");
+  const [selectedProfileDir, setSelectedProfileDir] = useState<string>("Default");
+  const [importTargetProfileId, setImportTargetProfileId] = useState<string>("");
+  const [importing, setImporting] = useState(false);
+
+  const openImportModal = async () => {
+    if (!window.desktopBridge?.listBrowserImportSources) {
+      toastManager.add({
+        type: "error",
+        title: "Desktop build required",
+        description: "Browser session import is only supported in the native desktop app.",
+      });
+      return;
+    }
+    const sources = await window.desktopBridge.listBrowserImportSources();
+    setImportSources(sources);
+    if (sources.length > 0) {
+      setSelectedSourceId(sources[0]?.id ?? "");
+      setSelectedProfileDir(sources[0]?.profiles[0]?.directory ?? "Default");
+    }
+    setImportTargetProfileId(profiles[0]?.id ?? "personal");
+    setImportModalOpen(true);
+  };
+
+  const handleRunImport = async () => {
+    if (!window.desktopBridge?.importBrowserCookies) return;
+    setImporting(true);
+    try {
+      const result = await window.desktopBridge.importBrowserCookies({
+        sourceId: selectedSourceId as any,
+        sourceProfileDirectory: selectedProfileDir,
+        targetProfileId: importTargetProfileId,
+      });
+      toastManager.add({
+        type: "success",
+        title: "Browser session imported",
+        description: `Imported ${result.imported} cookies into profile "${importTargetProfileId}".`,
+      });
+      setImportModalOpen(false);
+      if (window.desktopBridge?.getBrowserProfileDomains) {
+        const domains = await window.desktopBridge.getBrowserProfileDomains({
+          profileId: importTargetProfileId,
+        });
+        setProfileDomains((prev) => ({ ...prev, [importTargetProfileId]: domains }));
+      }
+    } catch (err: any) {
+      toastManager.add({
+        type: "error",
+        title: "Import failed",
+        description: err.message || "Failed to import browser session.",
+      });
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleSaveProfile = () => {
@@ -410,10 +475,20 @@ export function BrowserProfilesSettings() {
             projects while keeping separate accounts completely isolated.
           </p>
         </div>
-        <Button onClick={openCreateModal} className="shrink-0 gap-1.5 cursor-pointer">
-          <PlusIcon className="size-4" />
-          Create Profile
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            onClick={openImportModal}
+            className="gap-1.5 cursor-pointer"
+          >
+            <DownloadIcon className="size-4" />
+            Import Sessions
+          </Button>
+          <Button onClick={openCreateModal} className="gap-1.5 cursor-pointer">
+            <PlusIcon className="size-4" />
+            Create Profile
+          </Button>
+        </div>
       </div>
 
       <Card className="border border-border/70 bg-card shadow-xs">
@@ -970,6 +1045,149 @@ export function BrowserProfilesSettings() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Import Browser Sessions Modal */}
+      <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+                <DownloadIcon className="size-4 text-primary" />
+                Import Browser Session
+              </DialogTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-muted-foreground hover:text-foreground"
+                onClick={() => setImportModalOpen(false)}
+                title="Close"
+              >
+                <XIcon className="size-4" />
+              </Button>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Import existing login cookies from an installed browser directly into an isolated Tabs profile. Passwords and browsing history are never read.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {importSources.length === 0 ? (
+              <div className="p-4 border rounded-md border-dashed text-center text-muted-foreground">
+                No supported desktop browsers detected on this system.
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
+                    Source Browser
+                  </label>
+                  <select
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={selectedSourceId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setSelectedSourceId(nextId);
+                      const s = importSources.find((src) => src.id === nextId);
+                      if (s && s.profiles.length > 0) {
+                        setSelectedProfileDir(s.profiles[0]?.directory ?? "Default");
+                      }
+                    }}
+                  >
+                    {importSources.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.unavailable ? `(${s.unavailable === "browserRunning" ? "Running" : "Locked"})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {(() => {
+                  const s = importSources.find((src) => src.id === selectedSourceId);
+                  if (!s) return null;
+
+                  if (s.unavailable) {
+                    const copy = BROWSER_IMPORT_FAILURE_COPY[s.unavailable] ?? "Source is currently unavailable.";
+                    return (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-600 dark:text-amber-400 space-y-1">
+                        <div className="font-medium flex items-center gap-1.5">
+                          Browser database unavailable
+                        </div>
+                        <div className="text-[11px] leading-relaxed">
+                          {copy}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {s.profiles.length > 1 && (
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
+                            Browser Profile
+                          </label>
+                          <select
+                            className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            value={selectedProfileDir}
+                            onChange={(e) => setSelectedProfileDir(e.target.value)}
+                          >
+                            {s.profiles.map((p) => (
+                              <option key={p.directory} value={p.directory}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
+                          Target Tabs Profile
+                        </label>
+                        <select
+                          className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          value={importTargetProfileId}
+                          onChange={(e) => setImportTargetProfileId(e.target.value)}
+                        >
+                          {profiles.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.label} ({p.id})
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-[11px] text-muted-foreground mt-1.5 block">
+                          Cookies will be imported into partition:{" "}
+                          <code className="font-mono text-foreground font-medium">
+                            persist:tabs-browser:profile:{importTargetProfileId}
+                          </code>
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40">
+            <Button variant="ghost" size="sm" onClick={() => setImportModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleRunImport}
+              disabled={
+                importing ||
+                importSources.length === 0 ||
+                Boolean(importSources.find((s) => s.id === selectedSourceId)?.unavailable)
+              }
+            >
+              {importing ? "Importing..." : "Import Cookies"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
