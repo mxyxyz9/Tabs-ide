@@ -428,7 +428,10 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
             title: event.payload.title,
             workspaceRoot: event.payload.workspaceRoot,
             defaultModelSelection: event.payload.defaultModelSelection,
+            defaultThreadEnvMode: null,
             autoPull: event.payload.autoPull ?? false,
+            faviconPath: event.payload.faviconPath ?? null,
+            projectIcon: event.payload.projectIcon ?? null,
             scripts: event.payload.scripts,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -452,7 +455,16 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
             ...(event.payload.defaultModelSelection !== undefined
               ? { defaultModelSelection: event.payload.defaultModelSelection }
               : {}),
+            ...(event.payload.defaultThreadEnvMode !== undefined
+              ? { defaultThreadEnvMode: event.payload.defaultThreadEnvMode }
+              : {}),
             ...(event.payload.autoPull !== undefined ? { autoPull: event.payload.autoPull } : {}),
+            ...(event.payload.faviconPath !== undefined
+              ? { faviconPath: event.payload.faviconPath }
+              : {}),
+            ...(event.payload.projectIcon !== undefined
+              ? { projectIcon: event.payload.projectIcon }
+              : {}),
             ...(event.payload.scripts !== undefined ? { scripts: event.payload.scripts } : {}),
             updatedAt: event.payload.updatedAt,
           });

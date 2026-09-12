@@ -262,8 +262,8 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = Schema.decodeSync(ClientS
 
 // ── Server Settings (server-authoritative) ────────────────────
 
-export const ThreadEnvMode = Schema.Literals(["local", "worktree"]);
-export type ThreadEnvMode = typeof ThreadEnvMode.Type;
+import { ThreadEnvMode } from "./environment.ts";
+export { ThreadEnvMode };
 
 const makeBinaryPathSetting = (fallback: string) =>
   TrimmedString.pipe(

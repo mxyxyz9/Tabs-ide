@@ -24,6 +24,7 @@ import {
   type OrchestrationThreadActivity,
   type ThreadPullRequestLink,
   ModelSelection,
+  ProjectIconOverride,
 } from "@tabs/contracts";
 import { legacyLinkedPullRequestOf } from "@tabs/shared/threadPullRequests";
 import { Effect, Layer, Option, Schema, Struct } from "effect";
@@ -56,6 +57,7 @@ const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
     autoPull: Schema.Number,
+    projectIcon: Schema.NullOr(Schema.fromJsonString(ProjectIconOverride)),
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
   }),
 );
@@ -220,7 +222,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           title,
           workspace_root AS "workspaceRoot",
           default_model_selection_json AS "defaultModelSelection",
+          default_thread_env_mode AS "defaultThreadEnvMode",
           auto_pull AS "autoPull",
+          favicon_path AS "faviconPath",
+          project_icon_json AS "projectIcon",
           scripts_json AS "scripts",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -659,7 +664,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             title: row.title,
             workspaceRoot: row.workspaceRoot,
             defaultModelSelection: row.defaultModelSelection,
+            defaultThreadEnvMode: row.defaultThreadEnvMode ?? null,
             autoPull: row.autoPull === 1,
+            faviconPath: row.faviconPath ?? null,
+            projectIcon: row.projectIcon ?? null,
             scripts: row.scripts,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,

@@ -215,7 +215,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           title: command.title,
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
+          defaultThreadEnvMode: null,
           ...(command.autoPull !== undefined ? { autoPull: command.autoPull } : {}),
+          faviconPath: null,
+          projectIcon: null,
           scripts: [],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
@@ -245,7 +248,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.defaultModelSelection !== undefined
             ? { defaultModelSelection: command.defaultModelSelection }
             : {}),
+          ...(command.defaultThreadEnvMode !== undefined
+            ? { defaultThreadEnvMode: command.defaultThreadEnvMode }
+            : {}),
           ...(command.autoPull !== undefined ? { autoPull: command.autoPull } : {}),
+          ...(command.faviconPath !== undefined ? { faviconPath: command.faviconPath } : {}),
+          ...(command.projectIcon !== undefined ? { projectIcon: command.projectIcon } : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
           updatedAt: occurredAt,
         },

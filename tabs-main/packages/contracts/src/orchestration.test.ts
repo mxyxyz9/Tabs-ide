@@ -13,6 +13,8 @@ import {
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
   ProjectCreatedPayload,
+  ProjectFaviconPath,
+  ProjectIconOverride,
   ProjectMetaUpdatedPayload,
   OrchestrationProposedPlan,
   OrchestrationSession,
@@ -841,3 +843,123 @@ it.effect("ModelSelection rejects malformed instance ids", () =>
     assert.strictEqual(result._tag, "Failure");
   }),
 );
+
+const decodeProjectFaviconPath = Schema.decodeUnknownEffect(ProjectFaviconPath);
+const decodeProjectIconOverride = Schema.decodeUnknownEffect(ProjectIconOverride);
+
+it.effect("ProjectFaviconPath accepts valid image file extensions and rejects invalid ones", () =>
+  Effect.gen(function* () {
+    const validPaths = [
+      "favicon.ico",
+      "assets/icon.svg",
+      "public/app.png",
+      "nested/path/to/logo.webp",
+      "logo.avif",
+      "icon.jpeg",
+      "test.jpg",
+      "anim.gif",
+    ];
+    for (const path of validPaths) {
+      const decoded = yield* decodeProjectFaviconPath(path);
+      assert.strictEqual(decoded, path);
+    }
+
+    const invalidPaths = ["favicon.txt", "icon.exe", "file.pdf", "", "   "];
+    for (const path of invalidPaths) {
+      const result = yield* Effect.exit(decodeProjectFaviconPath(path));
+      assert.strictEqual(result._tag, "Failure");
+    }
+  }),
+);
+
+it.effect("ProjectIconOverride decodes lucide icon and emoji configurations", () =>
+  Effect.gen(function* () {
+    const lucide = yield* decodeProjectIconOverride({
+      kind: "lucide",
+      name: "folder-code",
+      color: "blue",
+    });
+    assert.deepStrictEqual(lucide, {
+      kind: "lucide",
+      name: "folder-code",
+      color: "blue",
+    });
+
+    const emoji = yield* decodeProjectIconOverride({
+      kind: "emoji",
+      emoji: "🚀",
+    });
+    assert.deepStrictEqual(emoji, {
+      kind: "emoji",
+      emoji: "🚀",
+    });
+
+    const invalidColor = yield* Effect.exit(
+      decodeProjectIconOverride({
+        kind: "lucide",
+        name: "folder-code",
+        color: "invalid-color",
+      }),
+    );
+    assert.strictEqual(invalidColor._tag, "Failure");
+
+    const invalidKind = yield* Effect.exit(
+      decodeProjectIconOverride({
+        kind: "custom",
+        icon: "test",
+      }),
+    );
+    assert.strictEqual(invalidKind._tag, "Failure");
+  }),
+);
+
+it.effect("ProjectCreatedPayload decodes with optional faviconPath, projectIcon, and defaultThreadEnvMode", () =>
+  Effect.gen(function* () {
+    const payload = yield* decodeProjectCreatedPayload({
+      projectId: "project-1",
+      title: "Tabs Project",
+      workspaceRoot: "/workspace/tabs",
+      defaultModelSelection: null,
+      defaultThreadEnvMode: "worktree",
+      autoPull: true,
+      faviconPath: "public/favicon.svg",
+      projectIcon: {
+        kind: "lucide",
+        name: "code-2",
+        color: "violet",
+      },
+      scripts: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(payload.defaultThreadEnvMode, "worktree");
+    assert.strictEqual(payload.faviconPath, "public/favicon.svg");
+    assert.deepStrictEqual(payload.projectIcon, {
+      kind: "lucide",
+      name: "code-2",
+      color: "violet",
+    });
+  }),
+);
+
+it.effect("ProjectMetaUpdatedPayload decodes updates to faviconPath, projectIcon, and defaultThreadEnvMode", () =>
+  Effect.gen(function* () {
+    const payload = yield* decodeProjectMetaUpdatedPayload({
+      projectId: "project-1",
+      defaultThreadEnvMode: null,
+      faviconPath: null,
+      projectIcon: {
+        kind: "emoji",
+        emoji: "⚡",
+      },
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(payload.defaultThreadEnvMode, null);
+    assert.strictEqual(payload.faviconPath, null);
+    assert.deepStrictEqual(payload.projectIcon, {
+      kind: "emoji",
+      emoji: "⚡",
+    });
+  }),
+);
+

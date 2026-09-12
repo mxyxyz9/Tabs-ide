@@ -296,34 +296,8 @@ function getServerHttpOrigin(): string {
   }
 }
 
-const serverHttpOrigin = getServerHttpOrigin();
-
-export function ProjectFavicon({ cwd, className }: { cwd: string; className?: string }) {
-  const src = `${serverHttpOrigin}/api/project-favicon?cwd=${encodeURIComponent(cwd)}`;
-  const [status, setStatus] = useState<"loading" | "loaded" | "error">(() =>
-    loadedProjectFaviconSrcs.has(src) ? "loaded" : "loading",
-  );
-
-  if (status === "error") {
-    return <FolderIcon className={className ?? "size-3.5 shrink-0 text-muted-foreground/50"} />;
-  }
-
-  return (
-    <img
-      src={src}
-      alt=""
-      className={
-        className ??
-        `size-3.5 shrink-0 rounded-sm object-contain ${status === "loading" ? "hidden" : ""}`
-      }
-      onLoad={() => {
-        loadedProjectFaviconSrcs.add(src);
-        setStatus("loaded");
-      }}
-      onError={() => setStatus("error")}
-    />
-  );
-}
+import { ProjectFavicon } from "./ProjectFavicon";
+export { ProjectFavicon };
 
 type SortableProjectHandleProps = Pick<
   ReturnType<typeof useSortable>,
@@ -1655,7 +1629,15 @@ export default function Sidebar() {
                 }`}
               />
             )}
-            <ProjectFavicon cwd={project.cwd} />
+            <ProjectFavicon
+              project={{
+                workspaceRoot: project.cwd,
+                title: project.name,
+                faviconPath: project.faviconPath,
+                projectIcon: project.projectIcon,
+                environmentId: project.environmentId,
+              }}
+            />
             <span className="flex-1 truncate text-xs font-medium text-foreground/90">
               {project.name}
             </span>

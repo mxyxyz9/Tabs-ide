@@ -156,6 +156,9 @@ function mapProjectsFromReadModel(
               ),
             }
           : null),
+      defaultThreadEnvMode: project.defaultThreadEnvMode ?? existing?.defaultThreadEnvMode ?? null,
+      faviconPath: project.faviconPath ?? existing?.faviconPath ?? null,
+      projectIcon: project.projectIcon ?? existing?.projectIcon ?? null,
       expanded:
         existing?.expanded ??
         (persistedExpandedProjectKeys.size > 0

@@ -59,6 +59,7 @@ import Migration0043 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
 import Migration0044 from "./Migrations/044_CatchUpThreadLifecycle.ts";
 import Migration0045 from "./Migrations/045_ProjectionThreadPullRequests.ts";
 import Migration0046 from "./Migrations/046_ProjectionProjectsAutoPull.ts";
+import Migration0047 from "./Migrations/047_ProjectionProjectIcon.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -117,6 +118,7 @@ export const migrationEntries = [
   [44, "CatchUpThreadLifecycle", Migration0044],
   [45, "ProjectionThreadPullRequests", Migration0045],
   [46, "ProjectionProjectsAutoPull", Migration0046],
+  [47, "ProjectionProjectIcon", Migration0047],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

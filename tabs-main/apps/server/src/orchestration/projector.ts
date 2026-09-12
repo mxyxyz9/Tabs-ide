@@ -276,7 +276,10 @@ export function projectEvent(
             title: payload.title,
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
+            defaultThreadEnvMode: payload.defaultThreadEnvMode ?? null,
             autoPull: payload.autoPull ?? false,
+            faviconPath: payload.faviconPath ?? null,
+            projectIcon: payload.projectIcon ?? null,
             scripts: payload.scripts,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
@@ -309,7 +312,16 @@ export function projectEvent(
                   ...(payload.defaultModelSelection !== undefined
                     ? { defaultModelSelection: payload.defaultModelSelection }
                     : {}),
+                  ...(payload.defaultThreadEnvMode !== undefined
+                    ? { defaultThreadEnvMode: payload.defaultThreadEnvMode }
+                    : {}),
                   ...(payload.autoPull !== undefined ? { autoPull: payload.autoPull } : {}),
+                  ...(payload.faviconPath !== undefined
+                    ? { faviconPath: payload.faviconPath }
+                    : {}),
+                  ...(payload.projectIcon !== undefined
+                    ? { projectIcon: payload.projectIcon }
+                    : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
                   updatedAt: payload.updatedAt,
                 }

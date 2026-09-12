@@ -43,6 +43,11 @@ import { useAtomValue } from "@effect/atom-react";
 import { useTheme } from "../hooks/useTheme";
 import { useSettings, useUpdateSettings } from "../hooks/useSettings";
 import type { BrowserProfileDefinition } from "@tabs/contracts/settings";
+import type { ProjectIconOverride } from "@tabs/contracts";
+import { ProjectFavicon } from "./ProjectFavicon";
+import { ProjectIconPickerDialog } from "./settings/ProjectIconPickerDialog";
+import { ensureNativeApi } from "~/nativeApi";
+import { newCommandId } from "~/lib/utils";
 import { getActiveFontCombo } from "../lib/themes";
 import {
   AlertDialog,
@@ -861,6 +866,53 @@ export function ProjectWorkspaceSettingsSection() {
   }
 
   const projectId = activeProjectId;
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+
+  const handleSelectIcon = async (icon: ProjectIconOverride) => {
+    try {
+      const api = ensureNativeApi();
+      await api.orchestration.dispatchCommand({
+        type: "project.meta.update",
+        commandId: newCommandId(),
+        projectId: activeProject.id,
+        projectIcon: icon,
+        faviconPath: null,
+      });
+      toastManager.add({
+        title: "Project icon updated",
+        type: "success",
+      });
+    } catch (err) {
+      toastManager.add({
+        title: "Failed to update project icon",
+        description: err instanceof Error ? err.message : String(err),
+        type: "error",
+      });
+    }
+  };
+
+  const handleResetIcon = async () => {
+    try {
+      const api = ensureNativeApi();
+      await api.orchestration.dispatchCommand({
+        type: "project.meta.update",
+        commandId: newCommandId(),
+        projectId: activeProject.id,
+        projectIcon: null,
+        faviconPath: null,
+      });
+      toastManager.add({
+        title: "Project icon reset to automatic",
+        type: "success",
+      });
+    } catch (err) {
+      toastManager.add({
+        title: "Failed to reset project icon",
+        description: err instanceof Error ? err.message : String(err),
+        type: "error",
+      });
+    }
+  };
 
   // Drag-to-reorder the toolbar tools. The preview list is a merge of saved
   // tools and (when edited) draft custom tabs/terminals, so persist the new
@@ -1072,12 +1124,45 @@ export function ProjectWorkspaceSettingsSection() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">Active Project</CardTitle>
-            <CardDescription>Current workspace folder and path details.</CardDescription>
+            <CardDescription>Current workspace folder and project identity.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-2">
-              <div className="text-lg font-semibold text-foreground tracking-tight break-words">
-                {activeProject.name}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <ProjectFavicon
+                    project={{
+                      workspaceRoot: activeProject.cwd,
+                      title: activeProject.name,
+                      faviconPath: activeProject.faviconPath,
+                      projectIcon: activeProject.projectIcon,
+                      environmentId: activeProject.environmentId,
+                    }}
+                    className="size-6"
+                  />
+                  <div className="text-lg font-semibold text-foreground tracking-tight truncate">
+                    {activeProject.name}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {activeProject.projectIcon || activeProject.faviconPath ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={handleResetIcon}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      Reset icon
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={() => setIconPickerOpen(true)}
+                  >
+                    Change icon
+                  </Button>
+                </div>
               </div>
               <div className="text-xs text-muted-foreground font-mono bg-muted/40 px-2.5 py-1.5 rounded-md w-fit break-all border border-border/50">
                 {activeProject.cwd}
@@ -2209,6 +2294,13 @@ export function ProjectWorkspaceSettingsSection() {
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
+
+      <ProjectIconPickerDialog
+        current={activeProject.projectIcon ?? null}
+        open={iconPickerOpen}
+        onOpenChange={setIconPickerOpen}
+        onSelect={handleSelectIcon}
+      />
     </>
   );
 }

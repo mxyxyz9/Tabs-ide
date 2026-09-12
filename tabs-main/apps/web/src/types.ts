@@ -17,6 +17,8 @@ import type {
   ThreadLinkedPullRequest,
   ThreadPullRequestLink,
   ThreadTitleRegeneration,
+  ProjectIconOverride,
+  ThreadEnvMode,
 } from "@tabs/contracts";
 
 export type SessionPhase = "disconnected" | "connecting" | "ready" | "running";
@@ -95,6 +97,9 @@ export interface Project {
   name: string;
   cwd: string;
   defaultModelSelection: ModelSelection | null;
+  defaultThreadEnvMode?: ThreadEnvMode | null | undefined;
+  faviconPath?: string | null | undefined;
+  projectIcon?: ProjectIconOverride | null | undefined;
   expanded: boolean;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;

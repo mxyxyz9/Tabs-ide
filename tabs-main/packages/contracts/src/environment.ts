@@ -55,6 +55,9 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 
+export const ThreadEnvMode = Schema.Literals(["local", "worktree"]);
+export type ThreadEnvMode = typeof ThreadEnvMode.Type;
+
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
   environmentId: EnvironmentId,
   label: TrimmedNonEmptyString,

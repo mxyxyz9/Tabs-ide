@@ -246,7 +246,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
+          defaultThreadEnvMode: null,
           autoPull: false,
+          faviconPath: null,
+          projectIcon: null,
           scripts: [
             {
               id: "script-1",

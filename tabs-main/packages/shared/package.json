@@ -203,6 +203,10 @@
     "./threadPullRequests": {
       "types": "./src/threadPullRequests.ts",
       "import": "./src/threadPullRequests.ts"
+    },
+    "./projectFavicon": {
+      "types": "./src/projectFavicon.ts",
+      "import": "./src/projectFavicon.ts"
     }
   },
   "scripts": {

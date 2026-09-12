@@ -362,7 +362,18 @@ function OpenCommandPaletteDialog(props: {
         projects,
         valuePrefix: "project",
         locationByEnvironmentId,
-        icon: (project) => <ProjectFavicon cwd={project.cwd} className={ITEM_ICON_CLASS} />,
+        icon: (project) => (
+          <ProjectFavicon
+            project={{
+              workspaceRoot: project.cwd,
+              title: project.name,
+              faviconPath: project.faviconPath,
+              projectIcon: project.projectIcon,
+              environmentId: project.environmentId,
+            }}
+            className={ITEM_ICON_CLASS}
+          />
+        ),
         runProject: openProjectFromSearch,
       }),
     [locationByEnvironmentId, openProjectFromSearch, projects],
@@ -388,7 +399,18 @@ function OpenCommandPaletteDialog(props: {
           searchTerms: [project.name, project.cwd, envLabel],
           title: project.name,
           description: isAmbiguous ? `${project.cwd} · ${envLabel}` : project.cwd,
-          icon: <ProjectFavicon cwd={project.cwd} className={ITEM_ICON_CLASS} />,
+          icon: (
+            <ProjectFavicon
+              project={{
+                workspaceRoot: project.cwd,
+                title: project.name,
+                faviconPath: project.faviconPath,
+                projectIcon: project.projectIcon,
+                environmentId: project.environmentId,
+              }}
+              className={ITEM_ICON_CLASS}
+            />
+          ),
           run: async () => {
             await handleNewThread(project.id, { environmentId: project.environmentId });
           },
