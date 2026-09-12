@@ -377,8 +377,9 @@ it.layer(testLayer)("server CLI command", (it) => {
     Effect.gen(function* () {
       const err = yield* runCli(["--mode", "invalid"]).pipe(Effect.flip);
 
-      assert.equal(err._tag, "ShowHelp");
+      assert.ok(err);
       const showHelp = err as any;
+      assert.equal(showHelp._tag, "ShowHelp");
       assert.equal(showHelp.errors[0]?.option, "mode");
       assert.match(showHelp.errors[0]?.expected, /Expected "web" \| "desktop"/);
 
@@ -400,8 +401,9 @@ it.layer(testLayer)("server CLI command", (it) => {
     Effect.gen(function* () {
       const err = yield* runCli(["--port", "70000"]).pipe(Effect.flip);
 
-      assert.equal(err._tag, "ShowHelp");
+      assert.ok(err);
       const showHelp = err as any;
+      assert.equal(showHelp._tag, "ShowHelp");
       assert.equal(showHelp.errors[0]?.option, "port");
       assert.match(showHelp.errors[0]?.expected, /Expected a value between 1 and 65535/);
 

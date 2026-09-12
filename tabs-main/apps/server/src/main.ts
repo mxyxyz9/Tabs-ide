@@ -37,6 +37,14 @@ import { readBootstrapEnvelope } from "./bootstrap";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry";
 import { ServerSettingsLive } from "./serverSettings";
 import * as BackgroundPolicy from "./background/BackgroundPolicy";
+import {
+  checkServiceStatus,
+  formatHeadlessInfo,
+  removePidFile,
+  stopDaemon,
+  uninstallService,
+  writePidFile,
+} from "./background/BackgroundService.ts";
 
 export class StartupError extends Data.TaggedError("StartupError")<{
   readonly message: string;
@@ -388,6 +396,21 @@ const makeServerRuntimeProgram = (input: CliInput) =>
           }),
         ),
       );
+    } else {
+      yield* Effect.promise(() => writePidFile(config.baseDir));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          void removePidFile(config.baseDir).catch(() => {});
+        }),
+      );
+      yield* Effect.logInfo(
+        formatHeadlessInfo({
+          port: config.port,
+          host: config.host,
+          authToken: config.authToken,
+          baseDir: config.baseDir,
+        }),
+      );
     }
 
     return yield* stopSignal;
@@ -454,7 +477,7 @@ const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
   Flag.optional,
 );
 
-export const tabsCli = Command.make("tabs", {
+const sharedServerFlags = {
   mode: modeFlag,
   port: portFlag,
   host: hostFlag,
@@ -465,7 +488,94 @@ export const tabsCli = Command.make("tabs", {
   bootstrapFd: bootstrapFdFlag,
   autoBootstrapProjectFromCwd: autoBootstrapProjectFromCwdFlag,
   logWebSocketEvents: logWebSocketEventsFlag,
-}).pipe(
+};
+
+const serveCommand = Command.make("serve", sharedServerFlags).pipe(
+  Command.withDescription("Run the Tabs server in headless background mode."),
+  Command.withHandler((input) =>
+    Effect.scoped(
+      makeServerProgram({
+        ...input,
+        noBrowser: Option.some(true),
+      }),
+    ),
+  ),
+);
+
+const statusCommand = Command.make("status", { tabsHome: tabsHomeFlag }).pipe(
+  Command.withDescription("Check status of running Tabs daemon and background service."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const baseDir = yield* resolveBaseDir(Option.getOrUndefined(flags.tabsHome));
+      const status = yield* Effect.tryPromise({
+        try: () => checkServiceStatus(baseDir),
+        catch: (e) => new StartupError({ message: String(e) }),
+      });
+      console.log(`Tabs Daemon Status:`);
+      console.log(`  Base directory: ${baseDir}`);
+      console.log(`  Running:        ${status.running ? `Yes (PID ${status.pid})` : "No"}`);
+      console.log(`  Service:        ${status.installed ? "Installed" : "Not installed"}`);
+      if (status.unitPath) {
+        console.log(`  Unit path:      ${status.unitPath}`);
+      }
+      console.log(`  Log path:       ${status.logPath}`);
+    }),
+  ),
+);
+
+const stopCommand = Command.make("stop", { tabsHome: tabsHomeFlag }).pipe(
+  Command.withDescription("Stop a running Tabs background server."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const baseDir = yield* resolveBaseDir(Option.getOrUndefined(flags.tabsHome));
+      const result = yield* Effect.tryPromise({
+        try: () => stopDaemon(baseDir),
+        catch: (e) => new StartupError({ message: String(e) }),
+      });
+      console.log(result.message);
+    }),
+  ),
+);
+
+const serviceStatusCommand = Command.make("status", { tabsHome: tabsHomeFlag }).pipe(
+  Command.withDescription("Show background service status."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const baseDir = yield* resolveBaseDir(Option.getOrUndefined(flags.tabsHome));
+      const status = yield* Effect.tryPromise({
+        try: () => checkServiceStatus(baseDir),
+        catch: (e) => new StartupError({ message: String(e) }),
+      });
+      console.log(`Background Service:`);
+      console.log(`  Platform:  ${status.platform}`);
+      console.log(`  Supported: ${status.supported ? "Yes" : "No"}`);
+      console.log(`  Installed: ${status.installed ? "Yes" : "No"}`);
+      if (status.unitPath) console.log(`  Unit:      ${status.unitPath}`);
+      console.log(`  Logs:      ${status.logPath}`);
+    }),
+  ),
+);
+
+const serviceUninstallCommand = Command.make("uninstall").pipe(
+  Command.withDescription("Uninstall and remove background service."),
+  Command.withHandler(() =>
+    Effect.gen(function* () {
+      const result = yield* Effect.tryPromise({
+        try: () => uninstallService(),
+        catch: (e) => new StartupError({ message: String(e) }),
+      });
+      console.log(result.removed ? "Background service removed." : "Service was not installed.");
+    }),
+  ),
+);
+
+const serviceCommand = Command.make("service").pipe(
+  Command.withDescription("Manage background OS service."),
+  Command.withSubcommands([serviceStatusCommand, serviceUninstallCommand]),
+);
+
+export const tabsCli = Command.make("tabs", sharedServerFlags).pipe(
   Command.withDescription("Run the Tabs server."),
   Command.withHandler((input) => Effect.scoped(makeServerProgram(input))),
+  Command.withSubcommands([serveCommand, statusCommand, stopCommand, serviceCommand]),
 );
