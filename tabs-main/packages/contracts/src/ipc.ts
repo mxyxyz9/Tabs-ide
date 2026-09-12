@@ -1184,6 +1184,7 @@ export interface DesktopBridge {
   ensureCodeSession: (input: DesktopCodeHostEnsureSessionInput) => Promise<void>;
   activateCodeSession: (input: DesktopCodeHostActivateSessionInput) => Promise<void>;
   hideCodeSession: () => Promise<void>;
+  captureCodeSession: (input: { projectId: string }) => Promise<string | null>;
   openCodeFile: (input: DesktopCodeHostOpenFileInput) => Promise<void>;
   setCodeBounds: (input: DesktopCodeHostSetBoundsInput) => Promise<void>;
   syncCodeSessions: (projectIds: readonly string[]) => Promise<void>;

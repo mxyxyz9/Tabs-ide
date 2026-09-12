@@ -15,6 +15,10 @@ const { webContentsViews, MockWebContentsView } = vi.hoisted(() => {
       removeListener: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       executeJavaScript: vi.fn(async () => null),
+      capturePage: vi.fn(async () => ({
+        isEmpty: () => false,
+        toDataURL: () => "data:image/png;base64,dGVzdA==",
+      })),
       isDestroyed: vi.fn(() => false),
       isLoading: vi.fn(() => false),
       stop: vi.fn(),
@@ -524,6 +528,25 @@ describe("CodeHostManager", () => {
     expect(window.contentView.removeChildView).toHaveBeenCalledTimes(1);
     expect(window.contentView.addChildView).toHaveBeenCalledTimes(2);
     expect(window.contentView.children).toHaveLength(1);
+  });
+
+  it("captures an embedded session for transient native-surface overlays", async () => {
+    const workspace = makeTempDir("tabs-session-capture-");
+    const window = createMockWindow();
+    const manager = new CodeHostManager(() => window as never, {
+      state: {
+        available: true,
+        mode: "embedded",
+        entry: "http://127.0.0.1:3000",
+        reason: null,
+      },
+      runtime: null,
+    });
+
+    await manager.ensureSession({ projectId: "capture", workspaceRoot: workspace });
+
+    await expect(manager.captureSession("capture")).resolves.toBe("data:image/png;base64,dGVzdA==");
+    await expect(manager.captureSession("missing")).resolves.toBeNull();
   });
 
   it("hides the active session and disposes stale sessions on sync", async () => {

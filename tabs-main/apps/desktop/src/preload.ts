@@ -60,6 +60,7 @@ const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
 const CODE_HOST_HIDE_SESSION_CHANNEL = "desktop:code-host:hide-session";
+const CODE_HOST_CAPTURE_SESSION_CHANNEL = "desktop:code-host:capture-session";
 const CODE_HOST_OPEN_FILE_CHANNEL = "desktop:code-host:open-file";
 const CODE_HOST_SET_BOUNDS_CHANNEL = "desktop:code-host:set-bounds";
 const CODE_HOST_SYNC_SESSIONS_CHANNEL = "desktop:code-host:sync-sessions";
@@ -217,6 +218,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   ensureCodeSession: (input) => ipcRenderer.invoke(CODE_HOST_ENSURE_SESSION_CHANNEL, input),
   activateCodeSession: (input) => ipcRenderer.invoke(CODE_HOST_ACTIVATE_SESSION_CHANNEL, input),
   hideCodeSession: () => ipcRenderer.invoke(CODE_HOST_HIDE_SESSION_CHANNEL),
+  captureCodeSession: (input) => ipcRenderer.invoke(CODE_HOST_CAPTURE_SESSION_CHANNEL, input),
   openCodeFile: (input) => ipcRenderer.invoke(CODE_HOST_OPEN_FILE_CHANNEL, input),
   setCodeBounds: (input) => ipcRenderer.invoke(CODE_HOST_SET_BOUNDS_CHANNEL, input),
   syncCodeSessions: (projectIds) => ipcRenderer.invoke(CODE_HOST_SYNC_SESSIONS_CHANNEL, projectIds),

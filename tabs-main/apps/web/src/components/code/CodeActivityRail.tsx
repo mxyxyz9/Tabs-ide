@@ -7,7 +7,7 @@ import {
   SearchIcon,
   SettingsIcon,
 } from "lucide-react";
-import { type ComponentType, Fragment } from "react";
+import { type ComponentType, Fragment, useState } from "react";
 import {
   CODE_ACTIVITY_ITEMS,
   CODE_CHROME_COMMANDS,
@@ -43,7 +43,7 @@ const ICONS: Record<CodeActivityItem["icon"], ComponentType<{ className?: string
 
 interface CodeActivityRailProps {
   chromeState: CodeChromeState;
-  onApplicationMenuOpen?: () => void;
+  onApplicationMenuOpenChange?: (open: boolean) => void | Promise<void>;
   onRunCommand: (commandId: string) => void;
 }
 
@@ -118,10 +118,24 @@ function CustomActivityIcon({ item }: { item: CustomActivityBarItem }) {
 }
 
 function ApplicationMenu(props: CodeActivityRailProps) {
+  const [open, setOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
+
   return (
     <DropdownMenu
-      onOpenChange={(open) => {
-        if (open) props.onApplicationMenuOpen?.();
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setOpen(false);
+          void props.onApplicationMenuOpenChange?.(false);
+          return;
+        }
+        if (opening) return;
+        setOpening(true);
+        void Promise.resolve(props.onApplicationMenuOpenChange?.(true)).finally(() => {
+          setOpening(false);
+          setOpen(true);
+        });
       }}
     >
       <DropdownMenuTrigger

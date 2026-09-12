@@ -134,6 +134,7 @@ const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
 const CODE_HOST_HIDE_SESSION_CHANNEL = "desktop:code-host:hide-session";
+const CODE_HOST_CAPTURE_SESSION_CHANNEL = "desktop:code-host:capture-session";
 const CODE_HOST_OPEN_FILE_CHANNEL = "desktop:code-host:open-file";
 const CODE_HOST_SET_BOUNDS_CHANNEL = "desktop:code-host:set-bounds";
 const CODE_HOST_SYNC_SESSIONS_CHANNEL = "desktop:code-host:sync-sessions";
@@ -2198,6 +2199,18 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(CODE_HOST_HIDE_SESSION_CHANNEL);
   ipcMain.handle(CODE_HOST_HIDE_SESSION_CHANNEL, async () => {
     codeHostManager.hideActiveSession();
+  });
+
+  ipcMain.removeHandler(CODE_HOST_CAPTURE_SESSION_CHANNEL);
+  ipcMain.handle(CODE_HOST_CAPTURE_SESSION_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      throw new Error("Invalid Code-OSS capture request");
+    }
+    return codeHostManager.captureSession((input as { projectId: string }).projectId);
   });
 
   ipcMain.removeHandler(CODE_HOST_OPEN_FILE_CHANNEL);

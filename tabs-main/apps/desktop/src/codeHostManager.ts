@@ -1471,6 +1471,20 @@ export class CodeHostManager {
     this.activeProjectId = null;
   }
 
+  async captureSession(projectId: string): Promise<string | null> {
+    const session = this.sessions.get(projectId);
+    if (!session?.view || session.view.webContents.isDestroyed()) return null;
+    try {
+      const image = await session.view.webContents.capturePage();
+      return image.isEmpty() ? null : image.toDataURL();
+    } catch (error) {
+      writeCodeHostDiagnostic(`[code-oss:${projectId}] session capture failed`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
   /** Ask every connected embedded workbench to save its dirty editors before shutdown. */
   saveAllOpenSessions(): void {
     for (const projectId of this.sessions.keys()) {

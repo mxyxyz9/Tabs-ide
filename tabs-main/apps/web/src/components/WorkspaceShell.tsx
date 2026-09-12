@@ -2762,6 +2762,7 @@ function DesktopCodeTool(props: { project: Project }) {
   );
   const [hostReady, setHostReady] = useState(false);
   const [hostError, setHostError] = useState<string | null>(null);
+  const [menuBackdrop, setMenuBackdrop] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const codeState = useAtomValue(
     workspaceShellAtom,
@@ -3282,8 +3283,17 @@ function DesktopCodeTool(props: { project: Project }) {
       <div className="flex min-h-0 min-w-0 flex-1">
         <CodeActivityRail
           chromeState={chromeState}
-          onApplicationMenuOpen={() => {
-            void window.desktopBridge?.hideCodeSession().catch(() => undefined);
+          onApplicationMenuOpenChange={async (open) => {
+            const bridge = window.desktopBridge;
+            if (!bridge) return;
+            if (open) {
+              const snapshot = await bridge.captureCodeSession({ projectId }).catch(() => null);
+              setMenuBackdrop(snapshot);
+              await bridge.hideCodeSession().catch(() => undefined);
+              return;
+            }
+            await bridge.activateCodeSession({ projectId }).catch(() => undefined);
+            setMenuBackdrop(null);
           }}
           onRunCommand={runCodeCommand}
         />
@@ -3291,6 +3301,14 @@ function DesktopCodeTool(props: { project: Project }) {
             owns the stable outer navigation and workspace toolbar. */}
         <div className="relative min-h-0 min-w-0 flex-1">
           <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0 bg-background" />
+          {menuBackdrop ? (
+            <img
+              src={menuBackdrop}
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 size-full select-none"
+            />
+          ) : null}
           {!hostReady ? (
             <div
               role="status"
