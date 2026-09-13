@@ -286,7 +286,9 @@ export class BrowserSessionImporter {
     return await this.discoverChromiumProfiles(userDataDir);
   }
 
-  private async discoverChromiumProfiles(userDataDir: string): Promise<BrowserImportSourceProfile[]> {
+  private async discoverChromiumProfiles(
+    userDataDir: string,
+  ): Promise<BrowserImportSourceProfile[]> {
     try {
       const entries = await FS.readdir(userDataDir, { withFileTypes: true });
       const profiles: BrowserImportSourceProfile[] = [];
@@ -325,7 +327,9 @@ export class BrowserSessionImporter {
     }
   }
 
-  private async discoverFirefoxProfiles(userDataDir: string): Promise<BrowserImportSourceProfile[]> {
+  private async discoverFirefoxProfiles(
+    userDataDir: string,
+  ): Promise<BrowserImportSourceProfile[]> {
     const profiles: BrowserImportSourceProfile[] = [];
 
     // First attempt: parse profiles.ini
@@ -426,7 +430,9 @@ export class BrowserSessionImporter {
     }
 
     const profiles = await this.discoverProfiles(config.id, userDataDir);
-    const matchedProfile = profiles.find((profile) => profile.directory === input.sourceProfileDirectory);
+    const matchedProfile = profiles.find(
+      (profile) => profile.directory === input.sourceProfileDirectory,
+    );
     if (!matchedProfile) {
       throw new Error("Selected browser profile was not found.");
     }

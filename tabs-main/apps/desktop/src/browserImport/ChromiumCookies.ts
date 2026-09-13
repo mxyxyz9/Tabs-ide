@@ -1,10 +1,6 @@
 import * as NodeCrypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import {
-  type ChromiumKeyMaterial,
-  readWindowsKey,
-  resolveChromiumKeys,
-} from "./ChromiumKeys";
+import { type ChromiumKeyMaterial, readWindowsKey, resolveChromiumKeys } from "./ChromiumKeys";
 import {
   bareHost,
   cookieScope,

@@ -106,7 +106,8 @@ const BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL = "desktop:browser-host:list-impo
 const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies";
 const BROWSER_HOST_RESPOND_PERMISSION_CHANNEL = "desktop:browser-host:respond-permission";
 const BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL = "desktop:browser-host:get-profile-permissions";
-const BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL = "desktop:browser-host:revoke-profile-permission";
+const BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL =
+  "desktop:browser-host:revoke-profile-permission";
 const BROWSER_HOST_TAKE_CONTROL_CHANNEL = "desktop:browser-host:take-control";
 const BROWSER_HOST_RESUME_AGENT_CHANNEL = "desktop:browser-host:resume-agent";
 const BROWSER_HOST_ASSIGN_TAB_TASK_CHANNEL = "desktop:browser-host:assign-tab-task";
@@ -311,8 +312,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   retainBrowserTab: (input) => ipcRenderer.invoke(BROWSER_HOST_RETAIN_TAB_CHANNEL, input),
   cleanupAgentBrowserTabs: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLEANUP_AGENT_TABS_CHANNEL, input),
-  destroyBrowserSession: (input) =>
-    ipcRenderer.invoke(BROWSER_HOST_DESTROY_SESSION_CHANNEL, input),
+  destroyBrowserSession: (input) => ipcRenderer.invoke(BROWSER_HOST_DESTROY_SESSION_CHANNEL, input),
   getRecentlyClosedBrowserTabs: (projectId) =>
     ipcRenderer.invoke(BROWSER_HOST_GET_RECENTLY_CLOSED_CHANNEL, projectId),
   restoreRecentlyClosedBrowserTab: (input) =>

@@ -93,7 +93,9 @@ async function readKeychainSecret(service: string, account: string): Promise<str
     return secret;
   } catch (err) {
     if (err instanceof ChromiumKeyError) throw err;
-    const msg = String((err as { message?: string; stderr?: string })?.stderr || (err as Error)?.message || "");
+    const msg = String(
+      (err as { message?: string; stderr?: string })?.stderr || (err as Error)?.message || "",
+    );
     if (/The specified item could not be found|not found/i.test(msg)) {
       throw new ChromiumKeyError("keychainItemMissing", err);
     }
@@ -189,7 +191,9 @@ export interface ChromiumKeyRequest {
   readonly linuxSecretApplication?: string | undefined;
 }
 
-export async function resolveChromiumKeys(request: ChromiumKeyRequest): Promise<ChromiumKeyMaterial> {
+export async function resolveChromiumKeys(
+  request: ChromiumKeyRequest,
+): Promise<ChromiumKeyMaterial> {
   if (request.platform === "darwin") {
     if (!request.keychainService || !request.keychainAccount) {
       throw new ChromiumKeyError("unsupportedPlatform");

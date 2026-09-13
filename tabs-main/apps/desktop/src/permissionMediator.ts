@@ -182,11 +182,9 @@ export class PermissionMediator {
     getMediaAccessStatus?: (mediaType: "camera" | "microphone" | "screen") => string;
   };
 
-  constructor(
-    sysPrefs?: {
-      getMediaAccessStatus?: (mediaType: "camera" | "microphone" | "screen") => string;
-    },
-  ) {
+  constructor(sysPrefs?: {
+    getMediaAccessStatus?: (mediaType: "camera" | "microphone" | "screen") => string;
+  }) {
     let detectedSysPrefs: any = undefined;
     try {
       detectedSysPrefs = (Electron as any)?.systemPreferences;
@@ -214,7 +212,11 @@ export class PermissionMediator {
   /**
    * Synchronous check handler (e.g. navigator.permissions.query).
    */
-  evaluateCheck(permission: string, requestingOrigin: string, profileId: string = "default"): boolean {
+  evaluateCheck(
+    permission: string,
+    requestingOrigin: string,
+    profileId: string = "default",
+  ): boolean {
     const category = categorizePermission(permission);
     if (category === "safe_allowed") {
       return true;
@@ -398,13 +400,9 @@ export class PermissionMediator {
     }
 
     const isVideo =
-      permission === "camera" ||
-      permission === "media" ||
-      details?.mediaType === "video";
+      permission === "camera" || permission === "media" || details?.mediaType === "video";
     const isAudio =
-      permission === "microphone" ||
-      permission === "media" ||
-      details?.mediaType === "audio";
+      permission === "microphone" || permission === "media" || details?.mediaType === "audio";
 
     if (isVideo) {
       const status = this.sysPrefs.getMediaAccessStatus("camera");
@@ -516,7 +514,11 @@ export class PermissionMediator {
     }
   }
 
-  hasRememberedDecision(origin: string, permission: string, profileId: string = "default"): boolean {
+  hasRememberedDecision(
+    origin: string,
+    permission: string,
+    profileId: string = "default",
+  ): boolean {
     const cleanOrigin = extractOriginFromUrl(origin) || origin;
     return Boolean(this.rememberedDecisions.get(profileId)?.get(cleanOrigin)?.has(permission));
   }

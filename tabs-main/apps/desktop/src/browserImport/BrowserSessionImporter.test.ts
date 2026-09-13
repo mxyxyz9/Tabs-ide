@@ -21,10 +21,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import {
-  BrowserSessionImporter,
-  importSyntheticCookiesToSession,
-} from "./BrowserSessionImporter";
+import { BrowserSessionImporter, importSyntheticCookiesToSession } from "./BrowserSessionImporter";
 import { decryptChromiumValue, readChromiumCookies } from "./ChromiumCookies";
 import { deriveKey } from "./ChromiumKeys";
 import { bareHost, cookieScope, snapshotCookieDatabase } from "./CookieDatabase";
@@ -134,7 +131,18 @@ describe("BrowserSessionImporter", () => {
       INSERT INTO cookies VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     // Insert a plain cookie
-    stmt.run(".example.com", "my_session", "session_content_123", Buffer.alloc(0), "/", webkitExpiry, 1, 1, 1, "");
+    stmt.run(
+      ".example.com",
+      "my_session",
+      "session_content_123",
+      Buffer.alloc(0),
+      "/",
+      webkitExpiry,
+      1,
+      1,
+      1,
+      "",
+    );
     db.close();
 
     const mockSet = vi.fn().mockResolvedValue(undefined);
@@ -372,7 +380,17 @@ describe("BrowserSessionImporter", () => {
       // Expiry in schema 16 is in milliseconds
       stmt.run(".mozilla.org", "moz_sess", "secret123", "/", 1767225600000, 1, 1, 1, "");
       // Private window / container cookie with originAttributes (must be ignored)
-      stmt.run(".mozilla.org", "moz_container", "container123", "/", 1767225600000, 1, 1, 1, "^userContextId=2");
+      stmt.run(
+        ".mozilla.org",
+        "moz_container",
+        "container123",
+        "/",
+        1767225600000,
+        1,
+        1,
+        1,
+        "^userContextId=2",
+      );
       db.close();
 
       const cookies = await readFirefoxCookies(dbPath);

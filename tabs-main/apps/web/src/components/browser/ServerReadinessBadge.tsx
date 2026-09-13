@@ -11,13 +11,7 @@ import type { EnvironmentId } from "@tabs/contracts";
 import { isLoopbackHost } from "@tabs/shared/preview";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "~/components/ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "~/components/ui/menu";
 import { useDiscoveredLocalServers } from "./useDiscoveredLocalServers";
 
 export type ServerReadinessState = "ready" | "probing" | "offline" | "not_local";

@@ -85,7 +85,9 @@ describe("permissionMediator", () => {
       expect(mediator.evaluateCheck("camera", origin, "personal")).toBe(false);
 
       // NOT granted for another origin in "work"
-      expect(mediator.evaluateRequest("camera", "https://other.com", undefined, "work")).toBe(false);
+      expect(mediator.evaluateRequest("camera", "https://other.com", undefined, "work")).toBe(
+        false,
+      );
     });
 
     it("supports revoking specific permissions for a profile and origin", () => {
@@ -153,7 +155,9 @@ describe("permissionMediator", () => {
       expect(callbackResult).toBe(true);
 
       // Now remembered for future checks
-      expect(mediator.evaluateRequest("camera", "https://zoom.us/join", undefined, "work")).toBe(true);
+      expect(mediator.evaluateRequest("camera", "https://zoom.us/join", undefined, "work")).toBe(
+        true,
+      );
     });
 
     it("cancels pending requests when tab navigates or closes (webContents destroyed)", () => {

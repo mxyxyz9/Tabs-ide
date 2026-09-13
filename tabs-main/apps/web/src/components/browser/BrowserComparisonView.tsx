@@ -148,7 +148,9 @@ export function BrowserComparisonView({
         <div className="flex items-center justify-between border-b px-4 py-3 bg-muted/30 shrink-0">
           <div className="flex items-center gap-2">
             <Columns2Icon className="size-4 text-primary" />
-            <DialogTitle className="text-sm font-semibold">Side-by-Side Browser Comparison</DialogTitle>
+            <DialogTitle className="text-sm font-semibold">
+              Side-by-Side Browser Comparison
+            </DialogTitle>
             <Badge variant="outline" className="text-[11px] capitalize">
               {mode}
             </Badge>
@@ -161,7 +163,9 @@ export function BrowserComparisonView({
                 type="button"
                 onClick={() => setMode("responsive")}
                 className={`flex items-center gap-1 rounded px-2 py-1 transition-colors ${
-                  mode === "responsive" ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:text-foreground"
+                  mode === "responsive"
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <SmartphoneIcon className="size-3" />
@@ -171,7 +175,9 @@ export function BrowserComparisonView({
                 type="button"
                 onClick={() => setMode("profiles")}
                 className={`flex items-center gap-1 rounded px-2 py-1 transition-colors ${
-                  mode === "profiles" ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:text-foreground"
+                  mode === "profiles"
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <UsersIcon className="size-3" />
@@ -181,7 +187,9 @@ export function BrowserComparisonView({
                 type="button"
                 onClick={() => setMode("routes")}
                 className={`flex items-center gap-1 rounded px-2 py-1 transition-colors ${
-                  mode === "routes" ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:text-foreground"
+                  mode === "routes"
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <LayersIcon className="size-3" />
@@ -218,7 +226,11 @@ export function BrowserComparisonView({
               className="gap-1 text-xs"
               title="Synchronize scrolling between panes"
             >
-              {syncScroll ? <Link2Icon className="size-3 text-primary" /> : <Link2OffIcon className="size-3" />}
+              {syncScroll ? (
+                <Link2Icon className="size-3 text-primary" />
+              ) : (
+                <Link2OffIcon className="size-3" />
+              )}
               <span>Sync</span>
             </Button>
 
@@ -294,7 +306,9 @@ export function BrowserComparisonView({
               </div>
 
               <div className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
-                <span>{viewportA.width}x{viewportA.height}</span>
+                <span>
+                  {viewportA.width}x{viewportA.height}
+                </span>
               </div>
             </div>
 
@@ -372,7 +386,9 @@ export function BrowserComparisonView({
               </div>
 
               <div className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
-                <span>{viewportB.width}x{viewportB.height}</span>
+                <span>
+                  {viewportB.width}x{viewportB.height}
+                </span>
               </div>
             </div>
 
@@ -422,7 +438,9 @@ export function BrowserComparisonView({
         {/* Footer controls & info */}
         <div className="flex items-center justify-between border-t px-4 py-2 bg-muted/30 text-xs shrink-0">
           <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
-            <span>Mode: <strong>{mode}</strong></span>
+            <span>
+              Mode: <strong>{mode}</strong>
+            </span>
             <span>·</span>
             <span>
               {mode === "responsive"

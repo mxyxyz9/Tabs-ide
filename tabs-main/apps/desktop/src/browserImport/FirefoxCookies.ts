@@ -1,9 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import {
-  cookieScope,
-  type ImportedCookie,
-  snapshotCookieDatabase,
-} from "./CookieDatabase";
+import { cookieScope, type ImportedCookie, snapshotCookieDatabase } from "./CookieDatabase";
 
 const SAMESITE_NONE = 0;
 const SAMESITE_LAX = 1;
@@ -26,7 +22,8 @@ function sameSiteFromColumn(
 
 function expiryToSeconds(expiry: number, schemaVersion: number): number | undefined {
   if (!expiry || expiry <= 0) return undefined;
-  const sec = schemaVersion >= FIREFOX_EXPIRY_MILLISECONDS_SCHEMA ? Math.floor(expiry / 1000) : expiry;
+  const sec =
+    schemaVersion >= FIREFOX_EXPIRY_MILLISECONDS_SCHEMA ? Math.floor(expiry / 1000) : expiry;
   return sec > 0 ? sec : undefined;
 }
 
@@ -37,7 +34,9 @@ export async function readFirefoxCookies(cookieDatabasePath: string): Promise<Im
     try {
       let schemaVersion = 0;
       try {
-        const versionRow = db.prepare("PRAGMA user_version").get() as { user_version?: number } | undefined;
+        const versionRow = db.prepare("PRAGMA user_version").get() as
+          | { user_version?: number }
+          | undefined;
         schemaVersion = versionRow?.user_version ?? 0;
       } catch {
         schemaVersion = 0;

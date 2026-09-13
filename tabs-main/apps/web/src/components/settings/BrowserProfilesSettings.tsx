@@ -141,9 +141,9 @@ export function BrowserProfilesSettings() {
     setProfileDomains(res);
   }, [profiles]);
 
-  const [profilePermissions, setProfilePermissions] = useState<Record<string, BrowserProfilePermissionInfo[]>>(
-    {},
-  );
+  const [profilePermissions, setProfilePermissions] = useState<
+    Record<string, BrowserProfilePermissionInfo[]>
+  >({});
   const refreshPermissions = useCallback(async () => {
     if (!window.desktopBridge?.getBrowserProfilePermissions) return;
     const res: Record<string, BrowserProfilePermissionInfo[]> = {};
@@ -745,7 +745,9 @@ export function BrowserProfilesSettings() {
                           </span>
                           <button
                             type="button"
-                            onClick={() => void handleRevokePermission(profile.id, perm.origin, perm.permission)}
+                            onClick={() =>
+                              void handleRevokePermission(profile.id, perm.origin, perm.permission)
+                            }
                             title={`Revoke ${perm.permission} for ${perm.origin}`}
                             className="text-muted-foreground hover:text-destructive cursor-pointer opacity-70 hover:opacity-100"
                           >

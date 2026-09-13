@@ -1124,10 +1124,12 @@ export interface BrowserPermissionRequest {
   readonly profileId: string;
   readonly origin: string;
   readonly permission: string;
-  readonly details?: {
-    readonly mediaType?: "video" | "audio" | undefined;
-    readonly requestingUrl?: string | undefined;
-  } | undefined;
+  readonly details?:
+    | {
+        readonly mediaType?: "video" | "audio" | undefined;
+        readonly requestingUrl?: string | undefined;
+      }
+    | undefined;
 }
 
 export interface BrowserPermissionResponse {
