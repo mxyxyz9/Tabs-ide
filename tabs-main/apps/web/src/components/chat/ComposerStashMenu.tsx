@@ -48,7 +48,8 @@ export const ComposerStashMenu = memo(function ComposerStashMenu({
       const container = containerRef.current;
       if (
         (container && event.composedPath().includes(container)) ||
-        (event.target instanceof Element && event.target.closest('[data-prompt-stash-badge="true"]'))
+        (event.target instanceof Element &&
+          event.target.closest('[data-prompt-stash-badge="true"]'))
       ) {
         return;
       }
@@ -90,7 +91,10 @@ export const ComposerStashMenu = memo(function ComposerStashMenu({
       }
 
       if (event.key === "Enter") {
-        if (event.target instanceof HTMLElement && event.target.closest("button[data-stash-delete]")) {
+        if (
+          event.target instanceof HTMLElement &&
+          event.target.closest("button[data-stash-delete]")
+        ) {
           return;
         }
         if (!highlightedEntry) return;
@@ -168,12 +172,20 @@ export const ComposerStashMenu = memo(function ComposerStashMenu({
             Nothing stashed yet.
             {stashShortcutLabel ? (
               <span className="mt-1 block text-[11px]">
-                Press <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px]">{stashShortcutLabel}</kbd> with a prompt in the composer to stash it.
+                Press{" "}
+                <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px]">
+                  {stashShortcutLabel}
+                </kbd>{" "}
+                with a prompt in the composer to stash it.
               </span>
             ) : null}
           </div>
         ) : (
-          <ul role="list" aria-label="Stashed prompts list" className="divide-y divide-border/40 p-1">
+          <ul
+            role="list"
+            aria-label="Stashed prompts list"
+            className="divide-y divide-border/40 p-1"
+          >
             {entries.map((entry) => {
               const isHighlighted = highlightedEntry?.id === entry.id;
               const { value: timeVal, suffix: timeSuffix } = formatRelativeTime(entry.createdAt);
@@ -218,7 +230,8 @@ export const ComposerStashMenu = memo(function ComposerStashMenu({
                         )}
                         {entry.attachments.length > 0 && (
                           <span className="flex items-center gap-0.5">
-                            · {entry.attachments.length} image{entry.attachments.length === 1 ? "" : "s"}
+                            · {entry.attachments.length} image
+                            {entry.attachments.length === 1 ? "" : "s"}
                           </span>
                         )}
                         {(entry.files?.length ?? 0) > 0 && (

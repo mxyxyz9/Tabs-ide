@@ -19,10 +19,7 @@ describe("ProviderStatusBanner", () => {
     expect(shouldShowProviderStatusBanner(warningProvider, null)).toBe(true);
     expect(shouldShowProviderStatusBanner(warningProvider, key)).toBe(false);
     expect(
-      shouldShowProviderStatusBanner(
-        { ...warningProvider, message: "A different warning" },
-        key,
-      ),
+      shouldShowProviderStatusBanner({ ...warningProvider, message: "A different warning" }, key),
     ).toBe(true);
   });
 

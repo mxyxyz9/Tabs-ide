@@ -98,7 +98,10 @@ export function loadTabsReviewJson(cwd: string): TabsReviewJsonLoadResult {
     };
   }
   if (obj["excludedPaths"] !== undefined) {
-    if (!Array.isArray(obj["excludedPaths"]) || obj["excludedPaths"].some((v) => typeof v !== "string")) {
+    if (
+      !Array.isArray(obj["excludedPaths"]) ||
+      obj["excludedPaths"].some((v) => typeof v !== "string")
+    ) {
       return {
         config: undefined,
         parseError: `.tabs-review.json at ${filePath}: "excludedPaths" must be an array of strings.`,
@@ -117,7 +120,9 @@ export function loadTabsReviewJson(cwd: string): TabsReviewJsonLoadResult {
   return {
     config: {
       instructions: typeof obj["instructions"] === "string" ? obj["instructions"] : undefined,
-      excludedPaths: Array.isArray(obj["excludedPaths"]) ? (obj["excludedPaths"] as string[]) : undefined,
+      excludedPaths: Array.isArray(obj["excludedPaths"])
+        ? (obj["excludedPaths"] as string[])
+        : undefined,
       muted: Array.isArray(obj["muted"]) ? (obj["muted"] as string[]) : undefined,
     },
     parseError: undefined,
@@ -178,11 +183,7 @@ export interface FileHistory {
  * Returns an empty commits array on any failure (git not installed, file
  * has no history, etc.).
  */
-export function buildFileHistory(
-  cwd: string,
-  file: string,
-  maxCommits: number,
-): FileHistory {
+export function buildFileHistory(cwd: string, file: string, maxCommits: number): FileHistory {
   try {
     const result = spawnSync(
       "git",
@@ -229,11 +230,7 @@ export interface CallerList {
  * (e.g. comments, string literals) and are labelled as such in all LLM output.
  * Capped at `maxCallers` results.
  */
-export function buildCallerList(
-  cwd: string,
-  symbol: string,
-  maxCallers: number,
-): CallerList {
+export function buildCallerList(cwd: string, symbol: string, maxCallers: number): CallerList {
   try {
     const result = spawnSync("git", ["grep", "-l", symbol], {
       cwd,
@@ -394,10 +391,7 @@ export function buildRepoContext(input: RepoContextInput): RepoContextResult {
 
   const body = compressRepoContext(fileHistories, callerLists, budgetChars);
 
-  const contextSection = [
-    "## Repo Context & Impact Analysis",
-    body,
-  ].join("\n");
+  const contextSection = ["## Repo Context & Impact Analysis", body].join("\n");
 
   return { contextSection, fileHistories, callerLists };
 }

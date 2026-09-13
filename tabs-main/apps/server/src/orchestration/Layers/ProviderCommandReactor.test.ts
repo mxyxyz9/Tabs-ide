@@ -1481,9 +1481,7 @@ describe("ProviderCommandReactor", () => {
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
     const thread = readModel.threads.find((entry) => entry.id === threadId);
     expect(thread?.session?.status).toBe("ready");
-    expect(
-      thread?.activities.filter((a) => a.kind === "provider.turn.start.failed"),
-    ).toEqual([]);
+    expect(thread?.activities.filter((a) => a.kind === "provider.turn.start.failed")).toEqual([]);
   });
 
   it("cancels queued messages if session is stopped during compaction", async () => {
@@ -1725,10 +1723,14 @@ describe("ProviderCommandReactor", () => {
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
     const thread = readModel.threads.find((entry) => entry.id === threadId);
-    const compactFailure = thread?.activities.find((a) => a.summary === "Context compaction failed");
+    const compactFailure = thread?.activities.find(
+      (a) => a.summary === "Context compaction failed",
+    );
     expect(compactFailure).toBeDefined();
 
-    const queuedFailure = thread?.activities.find((a) => a.summary === "Queued message was not sent");
+    const queuedFailure = thread?.activities.find(
+      (a) => a.summary === "Queued message was not sent",
+    );
     expect(queuedFailure).toBeDefined();
     expect((queuedFailure?.payload as Record<string, unknown>)?.detail).toContain(
       "Context compaction failed. Send this message again to continue.",

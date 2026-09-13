@@ -3,10 +3,7 @@
 // Layer: Server provider domain
 // Exports: Pure skills, plugin, and model discovery response parsers.
 
-import type {
-  ProviderListModelsResult,
-  ProviderSkillDescriptor,
-} from "@tabs/contracts";
+import type { ProviderListModelsResult, ProviderSkillDescriptor } from "@tabs/contracts";
 type ProviderListPluginsResult = any;
 type ProviderPluginAppSummary = any;
 type ProviderPluginDescriptor = any;

@@ -15,12 +15,12 @@ describe("permissionMediator", () => {
   });
 
   describe("categorizePermission", () => {
-    it("recognizes safe allowed permissions", () => {
-      expect(categorizePermission("clipboard-read")).toBe("safe_allowed");
+    it("only treats sanitized clipboard writes as safe", () => {
       expect(categorizePermission("clipboard-sanitized-write")).toBe("safe_allowed");
-      expect(categorizePermission("notifications")).toBe("safe_allowed");
-      expect(categorizePermission("pointerLock")).toBe("safe_allowed");
-      expect(categorizePermission("fullscreen")).toBe("safe_allowed");
+      expect(categorizePermission("clipboard-read")).toBe("high_risk_privacy");
+      expect(categorizePermission("notifications")).toBe("high_risk_privacy");
+      expect(categorizePermission("pointerLock")).toBe("high_risk_privacy");
+      expect(categorizePermission("fullscreen")).toBe("high_risk_privacy");
     });
 
     it("recognizes high-risk media permissions", () => {
@@ -47,9 +47,9 @@ describe("permissionMediator", () => {
     const requestUrl = "https://app.example.com/dashboard";
 
     it("automatically grants safe permissions", () => {
-      expect(mediator.evaluateRequest("clipboard-read", requestUrl)).toBe(true);
       expect(mediator.evaluateRequest("clipboard-sanitized-write", requestUrl)).toBe(true);
-      expect(mediator.evaluateCheck("clipboard-read", origin)).toBe(true);
+      expect(mediator.evaluateRequest("clipboard-read", requestUrl)).toBe(false);
+      expect(mediator.evaluateCheck("clipboard-read", origin)).toBe(false);
     });
 
     it("never silently grants camera or microphone", () => {

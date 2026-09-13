@@ -1128,7 +1128,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       const providers = yield* providerRegistry.refresh();
       yield* Ref.set(providersRef, providers);
       const effectiveProviders = yield* getEffectiveProviders(providers);
-      yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, { providers: effectiveProviders });
+      yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, {
+        providers: effectiveProviders,
+      });
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("background provider refresh failed", {
@@ -2236,21 +2238,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           configuredUrlProbing: true,
         });
         const unsubscribeFiber = yield* Scope.provide(subscriptionsScope)(
-          portDiscovery.subscribe(
-            { configuredUrls, initialSnapshot: initial },
-            (servers) =>
-              Effect.gen(function* () {
-                const scannedAt = DateTime.formatIso(yield* DateTime.now);
-                yield* pushBus.publishClient(ws, WS_CHANNELS.discoveredLocalServers, {
-                  servers,
-                  scannedAt,
-                  configuredUrlProbing: true,
-                });
-              }),
+          portDiscovery.subscribe({ configuredUrls, initialSnapshot: initial }, (servers) =>
+            Effect.gen(function* () {
+              const scannedAt = DateTime.formatIso(yield* DateTime.now);
+              yield* pushBus.publishClient(ws, WS_CHANNELS.discoveredLocalServers, {
+                servers,
+                scannedAt,
+                configuredUrlProbing: true,
+              });
+            }),
           ),
-        ).pipe(
-          Effect.forkIn(subscriptionsScope),
-        );
+        ).pipe(Effect.forkIn(subscriptionsScope));
         const fibers = previewAutomationFibers.get(ws) ?? new Set();
         fibers.add(unsubscribeFiber);
         previewAutomationFibers.set(ws, fibers);
@@ -2495,7 +2493,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             Effect.mapError(
               (error: any) =>
                 new RouteRequestError({
-                  message: error?.detail ?? (error instanceof Error ? error.message : String(error)),
+                  message:
+                    error?.detail ?? (error instanceof Error ? error.message : String(error)),
                 }),
             ),
           );

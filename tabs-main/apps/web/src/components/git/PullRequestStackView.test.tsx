@@ -36,11 +36,7 @@ const sampleStack: GitPullRequestStack = {
 describe("PullRequestStackView", () => {
   it("renders stack header, position badge, and base branch", () => {
     const markup = renderToStaticMarkup(
-      <PullRequestStackView
-        stack={sampleStack}
-        currentNumber={102}
-        cwd="/repo"
-      />,
+      <PullRequestStackView stack={sampleStack} currentNumber={102} cwd="/repo" />,
     );
 
     expect(markup).toContain("Stack #50");
@@ -50,11 +46,7 @@ describe("PullRequestStackView", () => {
 
   it("renders all layers with status badges and current indicator on active PR", () => {
     const markup = renderToStaticMarkup(
-      <PullRequestStackView
-        stack={sampleStack}
-        currentNumber={102}
-        cwd="/repo"
-      />,
+      <PullRequestStackView stack={sampleStack} currentNumber={102} cwd="/repo" />,
     );
 
     expect(markup).toContain("Foundation layer");

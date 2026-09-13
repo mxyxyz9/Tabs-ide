@@ -83,7 +83,9 @@ export async function executeStaticAnalyzerRegistry(
   }
 
   // Legacy fallback: run tsc / eslint if configured
-  const legacyTools = tools.filter((t) => t === "tsc" || t === "eslint" || t.includes("tsc ") || t.includes("eslint "));
+  const legacyTools = tools.filter(
+    (t) => t === "tsc" || t === "eslint" || t.includes("tsc ") || t.includes("eslint "),
+  );
   if (legacyTools.length > 0) {
     promises.push(
       Effect.runPromise(
@@ -117,7 +119,7 @@ export async function executeStaticAnalyzerRegistry(
             ...(f.col ? { startColumn: f.col } : {}),
             category: "correctness",
             severity: f.severity,
-            confidence: 0.90,
+            confidence: 0.9,
             title: `${f.tool}: ${f.rule}`,
             explanation: f.message,
             evidenceSnippet: f.message,

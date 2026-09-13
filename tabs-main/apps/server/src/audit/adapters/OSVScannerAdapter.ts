@@ -23,7 +23,10 @@ export interface OSVResult {
 export async function runOSVScanner(
   cwd: string,
   auditId: string,
-): Promise<{ readonly findings: ReadonlyArray<AuditFinding>; readonly skippedReason?: string | undefined }> {
+): Promise<{
+  readonly findings: ReadonlyArray<AuditFinding>;
+  readonly skippedReason?: string | undefined;
+}> {
   const result = await executeSandboxedProcess({
     cwd,
     executable: "osv-scanner",
@@ -32,7 +35,10 @@ export async function runOSVScanner(
   });
 
   if (result.exitCode === 127 || result.stderr.includes("not found")) {
-    return { findings: [], skippedReason: "OSV-Scanner not installed on PATH — skipping dependency vulnerability audit." };
+    return {
+      findings: [],
+      skippedReason: "OSV-Scanner not installed on PATH — skipping dependency vulnerability audit.",
+    };
   }
 
   const rawJson = result.stdout.trim();
@@ -55,8 +61,14 @@ export async function runOSVScanner(
   for (const resItem of resultsArray) {
     if (typeof resItem !== "object" || resItem === null) continue;
     const itemObj = resItem as Record<string, unknown>;
-    const sourceObj = typeof itemObj["source"] === "object" && itemObj["source"] !== null ? (itemObj["source"] as Record<string, unknown>) : {};
-    const lockfilePath = typeof sourceObj["path"] === "string" ? sourceObj["path"].replace(cwd, "").replace(/^\//, "") : "package.json";
+    const sourceObj =
+      typeof itemObj["source"] === "object" && itemObj["source"] !== null
+        ? (itemObj["source"] as Record<string, unknown>)
+        : {};
+    const lockfilePath =
+      typeof sourceObj["path"] === "string"
+        ? sourceObj["path"].replace(cwd, "").replace(/^\//, "")
+        : "package.json";
 
     const packages = Array.isArray(itemObj["packages"]) ? itemObj["packages"] : [];
 
@@ -72,7 +84,10 @@ export async function runOSVScanner(
         if (typeof vuln !== "object" || vuln === null) continue;
         const v = vuln as Record<string, unknown>;
         const cveId = typeof v["id"] === "string" ? v["id"] : "CVE-UNKNOWN";
-        const summary = typeof v["summary"] === "string" ? v["summary"] : `Vulnerability ${cveId} in ${pkgName}@${pkgVersion}`;
+        const summary =
+          typeof v["summary"] === "string"
+            ? v["summary"]
+            : `Vulnerability ${cveId} in ${pkgName}@${pkgVersion}`;
 
         const title = `Dependency CVE: ${cveId} (${pkgName}@${pkgVersion})`;
         const fingerprint = computeFindingFingerprint({

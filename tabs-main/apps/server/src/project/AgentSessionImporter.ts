@@ -107,9 +107,11 @@ export const importRecentAgentThreads = Effect.fn("importRecentAgentThreads")(fu
   const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const crypto = yield* Crypto.Crypto;
-  const snapshot = yield* snapshots.getSnapshot().pipe(
-    Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-projects", cause })),
-  );
+  const snapshot = yield* snapshots
+    .getSnapshot()
+    .pipe(
+      Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-projects", cause })),
+    );
   const project = snapshot.projects.find((p) => p.id === input.projectId);
   if (!project) {
     return yield* new AgentSessionImportProjectNotFoundError({ projectId: input.projectId });

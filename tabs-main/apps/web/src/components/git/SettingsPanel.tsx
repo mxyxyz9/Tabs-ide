@@ -943,11 +943,7 @@ export function SettingsPanel({
                   {r.url}
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void removeRemote(r.name)}
-              >
+              <Button variant="ghost" size="sm" onClick={() => void removeRemote(r.name)}>
                 Remove
               </Button>
             </div>

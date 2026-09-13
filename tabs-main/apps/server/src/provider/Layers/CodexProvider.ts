@@ -215,7 +215,10 @@ export function mapCodexModelCapabilities(
   const serviceTiers = hasFastTier
     ? rawServiceTiers
     : supportsFast
-      ? [{ id: "fast", name: "Fast", description: "" }, ...rawServiceTiers.filter((t) => t.id !== "fast")]
+      ? [
+          { id: "fast", name: "Fast", description: "" },
+          ...rawServiceTiers.filter((t) => t.id !== "fast"),
+        ]
       : rawServiceTiers;
   const defaultServiceTierFromModel = (model as any).defaultServiceTier;
   const catalogDefaultServiceTier =
@@ -455,16 +458,20 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
       }),
       requestAllCodexModels(client),
       client.request("account/rateLimits/read", undefined).pipe(
-        Effect.map((response: any): CodexRateLimitsProbe => ({
-          snapshot: response.rateLimits,
-          rateLimitsByLimitId: response.rateLimitsByLimitId,
-          resetCredits: response.rateLimitResetCredits,
-        })),
+        Effect.map(
+          (response: any): CodexRateLimitsProbe => ({
+            snapshot: response.rateLimits,
+            rateLimitsByLimitId: response.rateLimitsByLimitId,
+            resetCredits: response.rateLimitResetCredits,
+          }),
+        ),
         Effect.timeoutOption(Duration.millis(RATE_LIMITS_PROBE_TIMEOUT_MS)),
         Effect.map(
-          Option.getOrElse((): CodexRateLimitsProbe => ({
-            failure: "Codex did not answer the usage request.",
-          })),
+          Option.getOrElse(
+            (): CodexRateLimitsProbe => ({
+              failure: "Codex did not answer the usage request.",
+            }),
+          ),
         ),
         Effect.catch((error: unknown) =>
           Effect.logDebug("Codex rate-limit read failed.", { cause: error }).pipe(

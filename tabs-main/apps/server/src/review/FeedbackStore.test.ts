@@ -8,11 +8,7 @@ import path from "node:path";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 
 import type { ReviewFinding } from "@tabs/contracts";
-import {
-  recordFeedback,
-  getFeedbackDiscountFactor,
-  getFalsePositiveCount,
-} from "./FeedbackStore";
+import { recordFeedback, getFeedbackDiscountFactor, getFalsePositiveCount } from "./FeedbackStore";
 import { filterAndDeduplicateFindings } from "./VerificationFilter";
 
 describe("FeedbackStore & VerificationFilter Discount Integration", () => {
@@ -40,7 +36,7 @@ describe("FeedbackStore & VerificationFilter Discount Integration", () => {
     expect(res.isSuppressed).toBe(false);
 
     const factor = getFeedbackDiscountFactor(cwd, fingerprint, tempStateDir);
-    expect(factor).toBe(0.80);
+    expect(factor).toBe(0.8);
   });
 
   it("2 FPs -> 0.65 discount factor (confidence further reduced)", () => {
@@ -82,7 +78,7 @@ describe("FeedbackStore & VerificationFilter Discount Integration", () => {
         severity: "error",
         title: "Potential Null Dereference",
         body: "Check req.user before accessing id",
-        confidence: 0.90,
+        confidence: 0.9,
         isInDiff: true,
       },
     ];
@@ -94,7 +90,7 @@ describe("FeedbackStore & VerificationFilter Discount Integration", () => {
     });
     console.log(`[Feedback E2E Test] Initial confidence: ${initialRun[0]?.confidence}`);
     expect(initialRun).toHaveLength(1);
-    expect(initialRun[0]?.confidence).toBe(0.90);
+    expect(initialRun[0]?.confidence).toBe(0.9);
 
     // AFTER 1 FP feedback: confidence discounted (0.90 * 0.80 = 0.72)
     recordFeedback(cwd, fingerprint, "correctness", "false_positive", tempStateDir);

@@ -25,8 +25,7 @@ export function useProjectContentSearch(target: ProjectContentSearchTarget) {
     (state) => ({ isPending: state.isPending }),
   );
 
-  const shouldFetch =
-    target.cwd !== null && hasQuery && debouncedQuery.trim().length > 0;
+  const shouldFetch = target.cwd !== null && hasQuery && debouncedQuery.trim().length > 0;
 
   const searchQuery = useQuery(
     projectSearchContentsQueryOptions({
@@ -43,7 +42,7 @@ export function useProjectContentSearch(target: ProjectContentSearchTarget) {
 
   return {
     matches: searchQuery.data?.matches ?? EMPTY_CONTENT_MATCHES,
-    error: searchQuery.error ? (searchQuery.error as Error).message ?? "Search failed" : null,
+    error: searchQuery.error ? ((searchQuery.error as Error).message ?? "Search failed") : null,
     isPending: hasQuery && (debouncer.state.isPending || searchQuery.isFetching),
     hasQuery,
     truncated: searchQuery.data?.truncated ?? false,

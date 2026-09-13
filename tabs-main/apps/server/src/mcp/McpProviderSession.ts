@@ -26,4 +26,3 @@ export function clearMcpProviderSession(threadId: ThreadId): void {
 export function clearAllMcpProviderSessions(): void {
   sessionsByThread.clear();
 }
-

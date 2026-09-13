@@ -442,4 +442,3 @@ describe("scroll restoration", () => {
     expect(MAX_REMEMBERED_SCROLL_POSITIONS).toBe(32);
   });
 });
-

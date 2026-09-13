@@ -63,7 +63,7 @@ function mergeServerSettingsPatch(
   let next = deepMerge(current, restPatch as any);
 
   if (usageLimitSourcesPatch) {
-    const updatedSources = { ...(next.usageLimitSources ?? {}) };
+    const updatedSources = { ...next.usageLimitSources };
     for (const [id, value] of Object.entries(usageLimitSourcesPatch)) {
       if (value === null) {
         delete (updatedSources as any)[id];
@@ -78,7 +78,7 @@ function mergeServerSettingsPatch(
   }
 
   if (usagePriceOverridesPatch) {
-    const updatedOverrides = { ...(next.usagePriceOverrides ?? {}) };
+    const updatedOverrides = { ...next.usagePriceOverrides };
     for (const [id, value] of Object.entries(usagePriceOverridesPatch)) {
       if (value === null) {
         delete (updatedOverrides as any)[id];
@@ -160,9 +160,7 @@ function splitPatch(patch: Partial<UnifiedSettings>): {
  * only re-render when the slice they care about changes.
  */
 
-export function useSettings<T = UnifiedSettings>(
-  selector?: (s: UnifiedSettings) => T,
-): T {
+export function useSettings<T = UnifiedSettings>(selector?: (s: UnifiedSettings) => T): T {
   const serverSettings = useServerSettings();
   const clientSettings = useClientSettings();
 
@@ -174,7 +172,10 @@ export function useSettings<T = UnifiedSettings>(
     [serverSettings, clientSettings],
   );
 
-  return useMemo(() => (selector ? selector(merged) : (merged as unknown as T)), [merged, selector]);
+  return useMemo(
+    () => (selector ? selector(merged) : (merged as unknown as T)),
+    [merged, selector],
+  );
 }
 
 /**

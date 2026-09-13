@@ -10,7 +10,7 @@
 import type { AuditFinding, AuditSeverity } from "@tabs/contracts";
 import { getFeedbackDiscountFactor } from "../review/FeedbackStore.ts";
 
-export const MIN_CONFIDENCE_THRESHOLD = 0.60;
+export const MIN_CONFIDENCE_THRESHOLD = 0.6;
 
 export const SEVERITY_WEIGHTS: Record<AuditSeverity, number> = {
   critical: 4,

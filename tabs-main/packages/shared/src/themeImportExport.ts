@@ -78,9 +78,7 @@ export function parseColor(color: unknown): RgbaColor | null {
     const g = Math.max(0, Math.min(255, Number.parseInt(rgbaMatch[2]!, 10)));
     const b = Math.max(0, Math.min(255, Number.parseInt(rgbaMatch[3]!, 10)));
     const a =
-      rgbaMatch[4] !== undefined
-        ? Math.max(0, Math.min(1, Number.parseFloat(rgbaMatch[4])))
-        : 1;
+      rgbaMatch[4] !== undefined ? Math.max(0, Math.min(1, Number.parseFloat(rgbaMatch[4]))) : 1;
     return { r, g, b, a };
   }
 
@@ -116,7 +114,10 @@ export function toHex(color: RgbaColor): string {
 
 /** Humanizes a theme slug or filename */
 export function humanizeThemeName(raw: string): string {
-  const trimmed = raw.trim().replace(/\.json$/i, "").replace(/-color-theme$/i, "");
+  const trimmed = raw
+    .trim()
+    .replace(/\.json$/i, "")
+    .replace(/-color-theme$/i, "");
   if (/\s/.test(trimmed) || !/[-_.]/.test(trimmed)) {
     return trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "Custom Theme";
   }
@@ -197,19 +198,10 @@ export function parseVsCodeTheme(
 
   // Foreground
   const fgRaw = pick("editor.foreground", "foreground");
-  const fgHex = fgRaw
-    ? flattenOver(fgRaw, editorBg)
-    : isLight
-      ? "#1e293b"
-      : "#f8fafc";
+  const fgHex = fgRaw ? flattenOver(fgRaw, editorBg) : isLight ? "#1e293b" : "#f8fafc";
 
   // Border
-  const borderRaw = pick(
-    "sideBar.border",
-    "panel.border",
-    "editorGroup.border",
-    "widget.border",
-  );
+  const borderRaw = pick("sideBar.border", "panel.border", "editorGroup.border", "widget.border");
   const borderHex = borderRaw
     ? flattenOver(borderRaw, editorBg)
     : isLight
@@ -223,7 +215,11 @@ export function parseVsCodeTheme(
     "focusBorder",
     "progressBar.background",
   );
-  const primaryHex = primaryRaw ? flattenOver(primaryRaw, editorBg) : isLight ? "#2563eb" : "#38bdf8";
+  const primaryHex = primaryRaw
+    ? flattenOver(primaryRaw, editorBg)
+    : isLight
+      ? "#2563eb"
+      : "#38bdf8";
 
   // Extract explicit token overrides from colors
   const tokenOverrides: Record<string, string> = {};
@@ -325,8 +321,7 @@ export function parseNativeTheme(
     const card =
       toHexColor(rawColors.card || rawColors.secondaryBackground) || fallback.colors.card;
     const border = rawColors.border || fallback.colors.border;
-    const primary =
-      toHexColor(rawColors.accent || rawColors.primary) || fallback.colors.primary;
+    const primary = toHexColor(rawColors.accent || rawColors.primary) || fallback.colors.primary;
 
     return {
       name,
@@ -344,9 +339,7 @@ export function parseNativeTheme(
     };
   }
 
-  throw new Error(
-    "Unrecognized theme format: missing baseVariant/appearance or required colors.",
-  );
+  throw new Error("Unrecognized theme format: missing baseVariant/appearance or required colors.");
 }
 
 /**
@@ -453,12 +446,19 @@ export function safeRecoverTheme(
       background: toValidHex(colors.background, fallback.colors.background),
       foreground: toValidHex(colors.foreground, fallback.colors.foreground),
       card: toValidHex(colors.card, fallback.colors.card),
-      border: colors.border && typeof colors.border === "string" ? colors.border : fallback.colors.border,
+      border:
+        colors.border && typeof colors.border === "string" ? colors.border : fallback.colors.border,
       primary: toValidHex(colors.primary, fallback.colors.primary),
     },
     fonts: {
-      uiFont: typeof fonts.uiFont === "string" && fonts.uiFont.trim().length > 0 ? fonts.uiFont : fallback.fonts.uiFont,
-      editorFont: typeof fonts.editorFont === "string" && fonts.editorFont.trim().length > 0 ? fonts.editorFont : fallback.fonts.editorFont,
+      uiFont:
+        typeof fonts.uiFont === "string" && fonts.uiFont.trim().length > 0
+          ? fonts.uiFont
+          : fallback.fonts.uiFont,
+      editorFont:
+        typeof fonts.editorFont === "string" && fonts.editorFont.trim().length > 0
+          ? fonts.editorFont
+          : fallback.fonts.editorFont,
     },
     ...(tokenOverrides ? { tokenOverrides } : {}),
     ...(diffColorScheme ? { diffColorScheme } : {}),

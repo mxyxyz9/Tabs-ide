@@ -8,9 +8,7 @@ import type { AuditFinding } from "@tabs/contracts";
 import { computeFindingFingerprint } from "@tabs/contracts";
 import type { ReviewPassContext } from "./CorrectnessPass.ts";
 
-export function runArchitecturePass(
-  ctx: ReviewPassContext,
-): ReadonlyArray<AuditFinding> {
+export function runArchitecturePass(ctx: ReviewPassContext): ReadonlyArray<AuditFinding> {
   const findings: AuditFinding[] = [];
   const filePath = ctx.contextPack.targetScope;
 
@@ -34,7 +32,7 @@ export function runArchitecturePass(
       endLine: lineCount,
       category: "architecture",
       severity: "info",
-      confidence: 0.90,
+      confidence: 0.9,
       title,
       explanation: `File '${filePath}' contains ${lineCount} lines. Large god files increase cognitive load, complicate testing, and violate single-responsibility principles.`,
       evidenceSnippet: `File total lines: ${lineCount}`,

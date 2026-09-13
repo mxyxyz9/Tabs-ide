@@ -103,7 +103,8 @@ export function PullRequestStackView({
   const hasDraftInUnmerged = unmergedLayers.some((l) => l.isDraft);
 
   // For stack merge: all layers up to currentLayer
-  const mergeSlice = currentPosition > 0 ? layers.slice(0, currentPosition).filter((l) => l.state !== "merged") : [];
+  const mergeSlice =
+    currentPosition > 0 ? layers.slice(0, currentPosition).filter((l) => l.state !== "merged") : [];
   const hasDraftInMergeSlice = mergeSlice.some((l) => l.isDraft);
   const hasClosedInMergeSlice = mergeSlice.some((l) => l.state === "closed");
   const hasUnknownHeadInMergeSlice = mergeSlice.some((l) => !l.headSha);
@@ -190,7 +191,8 @@ export function PullRequestStackView({
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Base target: <code className="text-foreground/80 font-mono text-[10px]">{stack.base}</code>
+              Base target:{" "}
+              <code className="text-foreground/80 font-mono text-[10px]">{stack.base}</code>
             </p>
           </div>
         </div>
@@ -212,7 +214,10 @@ export function PullRequestStackView({
               onClick={() => setConfirmation("rebase")}
               className="gap-1 text-xs"
             >
-              <RefreshCw className={`size-3 ${isPending ? "animate-spin" : ""}`} aria-hidden="true" />
+              <RefreshCw
+                className={`size-3 ${isPending ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
               Rebase stack
             </Button>
           )}
@@ -240,7 +245,11 @@ export function PullRequestStackView({
       </div>
 
       {/* Layers list - rendered from top (highest child) down to base */}
-      <div className="space-y-1.5" role="list" aria-label={`Pull request stack ${stack.number} layers`}>
+      <div
+        className="space-y-1.5"
+        role="list"
+        aria-label={`Pull request stack ${stack.number} layers`}
+      >
         {layers
           .slice()
           .reverse()
@@ -265,7 +274,10 @@ export function PullRequestStackView({
                   <span className="flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-mono text-muted-foreground border border-border/60 bg-background">
                     {index + 1}
                   </span>
-                  <StateIcon className={`size-3.5 shrink-0 ${stateInfo.colorClass}`} aria-hidden="true" />
+                  <StateIcon
+                    className={`size-3.5 shrink-0 ${stateInfo.colorClass}`}
+                    aria-hidden="true"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <button
@@ -279,7 +291,10 @@ export function PullRequestStackView({
                         {layer.title || layer.headBranch}
                       </button>
                       {isCurrent && (
-                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 shrink-0 font-normal">
+                        <Badge
+                          variant="secondary"
+                          className="text-[9px] px-1 py-0 h-4 shrink-0 font-normal"
+                        >
                           Current
                         </Badge>
                       )}
@@ -291,7 +306,9 @@ export function PullRequestStackView({
                       {layer.headSha && (
                         <>
                           <span>·</span>
-                          <span className="font-mono text-muted-foreground/80">{layer.headSha.slice(0, 7)}</span>
+                          <span className="font-mono text-muted-foreground/80">
+                            {layer.headSha.slice(0, 7)}
+                          </span>
                         </>
                       )}
                     </div>

@@ -1,11 +1,14 @@
 import { TestingGraphStore } from "./src/testing/graphStore";
-import { normalizeStructuralSnapshot, normalizeAccessibilityForStorage } from "./src/testing/security";
+import {
+  normalizeStructuralSnapshot,
+  normalizeAccessibilityForStorage,
+} from "./src/testing/security";
 import * as fs from "node:fs";
 
 const store = new TestingGraphStore("/Users/rushil.dev/.tabs/dev/testing/state-graph.sqlite");
 const graph = store.graph("eacfd757-b8f9-44c5-97e6-0ea299b4dbb4");
 
-const newThreadStates = graph.nodes.filter(n => n.pageTitle === 'New thread');
+const newThreadStates = graph.nodes.filter((n) => n.pageTitle === "New thread");
 console.log("Total new thread states:", newThreadStates.length);
 
 const hashes = new Set();
@@ -23,7 +26,7 @@ console.log("Unique normalized structural snapshots:", hashes.size);
 if (newThreadStates.length >= 2) {
   const s1 = normalizeStructuralSnapshot(newThreadStates[0].snapshot);
   const s2 = normalizeStructuralSnapshot(newThreadStates[1].snapshot);
-  
-  fs.writeFileSync('/tmp/s1.txt', s1);
-  fs.writeFileSync('/tmp/s2.txt', s2);
+
+  fs.writeFileSync("/tmp/s1.txt", s1);
+  fs.writeFileSync("/tmp/s2.txt", s2);
 }

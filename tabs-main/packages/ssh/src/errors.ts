@@ -45,4 +45,3 @@ export class SshPasswordPromptError extends Data.TaggedError("SshPasswordPromptE
   readonly message: string;
   readonly cause?: unknown;
 }> {}
-

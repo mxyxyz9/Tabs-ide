@@ -41,7 +41,11 @@ describe("SARIFNormalizer", () => {
                 {
                   physicalLocation: {
                     artifactLocation: { uri: "src/App.tsx" },
-                    region: { startLine: 42, endLine: 42, snippet: { text: "el.innerHTML = input;" } },
+                    region: {
+                      startLine: 42,
+                      endLine: 42,
+                      snippet: { text: "el.innerHTML = input;" },
+                    },
                   },
                 },
               ],

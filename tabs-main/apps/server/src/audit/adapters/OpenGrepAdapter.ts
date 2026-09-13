@@ -13,7 +13,10 @@ import { normalizeSarifLog } from "../SARIFNormalizer.ts";
 export async function runOpenGrepScan(
   cwd: string,
   auditId: string,
-): Promise<{ readonly findings: ReadonlyArray<AuditFinding>; readonly skippedReason?: string | undefined }> {
+): Promise<{
+  readonly findings: ReadonlyArray<AuditFinding>;
+  readonly skippedReason?: string | undefined;
+}> {
   // Try opengrep first, fallback to semgrep
   let executable = "opengrep";
   let result = await executeSandboxedProcess({

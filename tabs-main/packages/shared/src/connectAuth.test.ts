@@ -102,4 +102,3 @@ describe("connectAuth", () => {
     expect(parseConnectAuthCode("trailing.")).toBeNull();
   });
 });
-

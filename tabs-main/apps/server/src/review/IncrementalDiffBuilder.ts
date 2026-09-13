@@ -14,7 +14,12 @@
 
 import { spawnSync } from "node:child_process";
 import type { ReviewFinding } from "@tabs/contracts";
-import { getReviewState, clearReviewState, saveReviewState, type ReviewState } from "./ReviewStateStore";
+import {
+  getReviewState,
+  clearReviewState,
+  saveReviewState,
+  type ReviewState,
+} from "./ReviewStateStore";
 import { filterAndDeduplicateFindings } from "./VerificationFilter";
 
 export interface ReviewInfoEvent {
@@ -36,11 +41,10 @@ export interface IncrementalDiffResult {
  */
 export function isAncestorCommit(cwd: string, ancestorSha: string): boolean {
   try {
-    const result = spawnSync(
-      "git",
-      ["merge-base", "--is-ancestor", ancestorSha, "HEAD"],
-      { cwd, encoding: "utf8" },
-    );
+    const result = spawnSync("git", ["merge-base", "--is-ancestor", ancestorSha, "HEAD"], {
+      cwd,
+      encoding: "utf8",
+    });
     return result.status === 0;
   } catch {
     return false;
@@ -90,17 +94,15 @@ export function prepareIncrementalDiff(
 
   // Prior SHA is ancestor → build incremental delta patch
   try {
-    const diffRes = spawnSync(
-      "git",
-      ["diff", `${priorState.lastReviewedSha}..HEAD`],
-      { cwd, encoding: "utf8" },
-    );
+    const diffRes = spawnSync("git", ["diff", `${priorState.lastReviewedSha}..HEAD`], {
+      cwd,
+      encoding: "utf8",
+    });
     const deltaPatch = diffRes.stdout ?? "";
-    const statRes = spawnSync(
-      "git",
-      ["diff", "--stat", `${priorState.lastReviewedSha}..HEAD`],
-      { cwd, encoding: "utf8" },
-    );
+    const statRes = spawnSync("git", ["diff", "--stat", `${priorState.lastReviewedSha}..HEAD`], {
+      cwd,
+      encoding: "utf8",
+    });
     const deltaSummary = statRes.stdout?.trim() || "Incremental changes";
 
     return {

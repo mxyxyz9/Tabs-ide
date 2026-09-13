@@ -21,13 +21,19 @@ export function AuditReadinessDashboard({
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-zinc-100">Repository Code Audit & Security Engine</h2>
-            <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400 bg-emerald-950/40">
+            <h2 className="text-base font-bold text-zinc-100">
+              Repository Code Audit & Security Engine
+            </h2>
+            <Badge
+              variant="outline"
+              className="text-[10px] border-emerald-800 text-emerald-400 bg-emerald-950/40"
+            >
               System Ready
             </Badge>
           </div>
           <p className="text-xs text-zinc-400 mt-1 max-w-xl leading-relaxed">
-            Deterministic AST indexing, sandboxed static analysis, disproof verification, and token-budgeted context packing ready for automated repository reviews.
+            Deterministic AST indexing, sandboxed static analysis, disproof verification, and
+            token-budgeted context packing ready for automated repository reviews.
           </p>
         </div>
 
@@ -47,7 +53,8 @@ export function AuditReadinessDashboard({
             <span>AST Intelligence & Indexer</span>
           </div>
           <p className="text-[11px] text-zinc-400 leading-relaxed">
-            Fast file enumeration with content-addressed SHA-256 caching and dependency graph extraction.
+            Fast file enumeration with content-addressed SHA-256 caching and dependency graph
+            extraction.
           </p>
         </div>
 
@@ -118,7 +125,10 @@ export function AuditReadinessDashboard({
                 }`}
               >
                 <div className="flex items-center gap-2 font-semibold text-zinc-200 mb-1">
-                  <IconComponent size={14} className={isSelected ? "text-blue-400" : "text-zinc-400"} />
+                  <IconComponent
+                    size={14}
+                    className={isSelected ? "text-blue-400" : "text-zinc-400"}
+                  />
                   <span>{preset.title}</span>
                 </div>
                 <p className="text-[11px] text-zinc-400 leading-relaxed">{preset.desc}</p>

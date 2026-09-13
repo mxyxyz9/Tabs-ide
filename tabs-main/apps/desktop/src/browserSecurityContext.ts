@@ -9,24 +9,8 @@
  */
 
 import type { DesktopBrowserSecurityContext } from "@tabs/contracts";
+import { getDomain } from "tldts";
 import { extractProfileIdFromPartition } from "./profileStorage";
-
-const TWO_LEVEL_TLD_SUFFIXES = new Set([
-  "co.uk",
-  "org.uk",
-  "gov.uk",
-  "ac.uk",
-  "com.au",
-  "net.au",
-  "org.au",
-  "co.jp",
-  "ne.jp",
-  "ac.jp",
-  "go.jp",
-  "co.nz",
-  "co.za",
-  "com.br",
-]);
 
 export function deriveRegistrableDomain(hostname: string): string {
   const normalized = hostname
@@ -44,17 +28,7 @@ export function deriveRegistrableDomain(hostname: string): string {
     return normalized;
   }
 
-  const parts = normalized.split(".").filter(Boolean);
-  if (parts.length <= 2) {
-    return normalized;
-  }
-
-  const lastTwo = `${parts[parts.length - 2]}.${parts[parts.length - 1]}`;
-  if (TWO_LEVEL_TLD_SUFFIXES.has(lastTwo)) {
-    return parts.slice(-3).join(".");
-  }
-
-  return parts.slice(-2).join(".");
+  return getDomain(normalized, { allowPrivateDomains: true }) ?? normalized;
 }
 
 export function hasPunycodeOrHomoglyphWarning(hostname: string): boolean {

@@ -34,11 +34,12 @@ describe("externalOAuth", () => {
       expect(check.suggestedAction).toBe("launchSystemBrowser");
     });
 
-    it("accepts custom protocol redirect_uri", () => {
+    it("rejects custom protocols until a state-bound handler is wired", () => {
       const url =
         "https://github.com/login/oauth/authorize?client_id=xyz&redirect_uri=tabs://oauth-callback";
       const check = verifyExternalAuthReturnPath(url);
-      expect(check.canCompleteExternally).toBe(true);
+      expect(check.canCompleteExternally).toBe(false);
+      expect(check.suggestedAction).toBe("manualOpen");
     });
 
     it("honestly rejects third-party web domains that cannot complete to desktop", () => {

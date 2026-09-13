@@ -48,9 +48,9 @@ This is a stability release. It does not add a new end-user workflow.`,
 function isComparisonOnly(body: string | null): boolean {
   return Boolean(
     body &&
-      /^\s*\*\*Full Changelog\*\*:\s*https:\/\/github\.com\/mxyxyz9\/Tabs-ide\/compare\/v?\d+\.\d+\.\d+\.\.\.v?\d+\.\d+\.\d+\s*$/i.test(
-        body,
-      ),
+    /^\s*\*\*Full Changelog\*\*:\s*https:\/\/github\.com\/mxyxyz9\/Tabs-ide\/compare\/v?\d+\.\d+\.\d+\.\.\.v?\d+\.\d+\.\d+\s*$/i.test(
+      body,
+    ),
   );
 }
 
@@ -59,7 +59,10 @@ function legacyReleaseNotes(tag: string): string | null {
   if (!release) return null;
 
   const categories = release.categories
-    .map((category) => `### ${category.title}\n\n${category.items.map((item) => `- ${item}`).join("\n")}`)
+    .map(
+      (category) =>
+        `### ${category.title}\n\n${category.items.map((item) => `- ${item}`).join("\n")}`,
+    )
     .join("\n\n");
   return `## ${release.title}\n\n${release.summary}\n\n### Highlights\n\n${release.highlights.map((item) => `- ${item}`).join("\n")}${categories ? `\n\n${categories}` : ""}`;
 }
@@ -71,6 +74,7 @@ function legacyReleaseNotes(tag: string): string | null {
  */
 export function resolveReleaseNotes(tag: string, body: string | null): string {
   if (manualReleaseNotes[tag]) return manualReleaseNotes[tag];
-  if (isComparisonOnly(body)) return legacyReleaseNotes(tag) ?? "Release notes were not recorded for this version.";
+  if (isComparisonOnly(body))
+    return legacyReleaseNotes(tag) ?? "Release notes were not recorded for this version.";
   return body?.trim() || "Release notes were not recorded for this version.";
 }

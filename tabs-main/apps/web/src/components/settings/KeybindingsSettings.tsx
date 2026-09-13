@@ -113,7 +113,10 @@ function SettingsSection({
           </h2>
         ) : (
           <h2
-            className={cn("text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
+            className={cn(
+              "text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3",
+              activeFontCombo.serifClass,
+            )}
             style={{ fontFamily: "var(--font-display)" }}
           >
             {title}
@@ -1232,7 +1235,10 @@ export function KeybindingsSettings({
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
                 <h2
-                  className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                  className={cn(
+                    "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+                    activeFontCombo.sansClass,
+                  )}
                   style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                 >
                   Keybindings

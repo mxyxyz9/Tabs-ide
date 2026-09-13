@@ -140,7 +140,7 @@ export function computeFindingFingerprint(finding: {
   const normTitle = finding.title.trim().toLowerCase().replace(/\s+/g, "_");
 
   const key = `${normPath}:${symbol}:${category}:${normTitle}`;
-  
+
   // Simple deterministic djb2 / fnv1a string hash fallback if crypto is not available in browser
   let hash = 5381;
   for (let i = 0; i < key.length; i++) {

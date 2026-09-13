@@ -649,7 +649,8 @@ export const make = Effect.gen(function* () {
   ): Effect.Effect<string> =>
     Effect.gen(function* () {
       const resolved = path.resolve(target);
-      const stats = knownStats === undefined ? yield* statOption(resolved) : Option.some(knownStats);
+      const stats =
+        knownStats === undefined ? yield* statOption(resolved) : Option.some(knownStats);
       if (
         Option.isSome(stats) &&
         Option.isSome(stats.value.ino) &&
@@ -792,7 +793,9 @@ export const make = Effect.gen(function* () {
         fileSystem.open(filePath, { flag: "r" }).pipe(
           Effect.flatMap((file) =>
             Effect.gen(function* () {
-              if (!sameTranscriptIdentity(expected, transcriptIdentity(filePath, yield* file.stat))) {
+              if (
+                !sameTranscriptIdentity(expected, transcriptIdentity(filePath, yield* file.stat))
+              ) {
                 return null;
               }
               const records: Array<DecodedTranscriptRecord> = [];
@@ -844,7 +847,9 @@ export const make = Effect.gen(function* () {
                       const newline = next.value.indexOf(10, start);
                       const end = newline === -1 ? next.value.byteLength : newline;
                       recordStarted = true;
-                      reader.write(decoder.decode(next.value.subarray(start, end), { stream: true }));
+                      reader.write(
+                        decoder.decode(next.value.subarray(start, end), { stream: true }),
+                      );
                       if (newline === -1) break;
                       if (!finishRecord()) return false;
                       start = newline + 1;
@@ -856,8 +861,15 @@ export const make = Effect.gen(function* () {
                 if (!withinBudget) return null;
               }
 
-              if (recordStarted && !(yield* Effect.try({ try: finishRecord, catch: (error) => error }))) return null;
-              return sameTranscriptIdentity(expected, transcriptIdentity(filePath, yield* file.stat))
+              if (
+                recordStarted &&
+                !(yield* Effect.try({ try: finishRecord, catch: (error) => error }))
+              )
+                return null;
+              return sameTranscriptIdentity(
+                expected,
+                transcriptIdentity(filePath, yield* file.stat),
+              )
                 ? { records, recordCount }
                 : null;
             }),
@@ -1040,14 +1052,17 @@ export const make = Effect.gen(function* () {
         }
       }
 
-      return Array.from(byOwnerAndCwd.values(), (group): RawCandidate => ({
-        cwd: group.cwd,
-        source,
-        providerInstanceId: group.providerInstanceId,
-        threadCount: group.transcripts.length,
-        lastActiveAtMs: group.lastActiveAtMs,
-        transcripts: group.transcripts,
-      }));
+      return Array.from(
+        byOwnerAndCwd.values(),
+        (group): RawCandidate => ({
+          cwd: group.cwd,
+          source,
+          providerInstanceId: group.providerInstanceId,
+          threadCount: group.transcripts.length,
+          lastActiveAtMs: group.lastActiveAtMs,
+          transcripts: group.transcripts,
+        }),
+      );
     });
 
   const collectCandidates = (): Effect.Effect<
@@ -1056,7 +1071,9 @@ export const make = Effect.gen(function* () {
   > =>
     Effect.gen(function* () {
       const settings = yield* serverSettings.getSettings.pipe(
-        Effect.mapError((cause) => new AgentSessionScanError({ operation: "read-settings", cause })),
+        Effect.mapError(
+          (cause) => new AgentSessionScanError({ operation: "read-settings", cause }),
+        ),
       );
 
       const raw: Array<RawCandidate> = [];
@@ -1068,7 +1085,8 @@ export const make = Effect.gen(function* () {
           readonly config: ProviderInstanceConfig;
         }> = Object.entries(settings.providerInstances)
           .filter(
-            ([, instance]) => instance.driver === source && resolveProviderInstanceEnabled(instance),
+            ([, instance]) =>
+              instance.driver === source && resolveProviderInstanceEnabled(instance),
           )
           .map(([instanceId, config]) => ({
             instanceId: ProviderInstanceId.make(instanceId),
@@ -1130,7 +1148,8 @@ export const make = Effect.gen(function* () {
         const baseOperationBudget = Math.floor(
           MAX_DISCOVERY_OPERATIONS_PER_SOURCE / Math.max(1, homes.length),
         );
-        const extraOperationBudgets = MAX_DISCOVERY_OPERATIONS_PER_SOURCE % Math.max(1, homes.length);
+        const extraOperationBudgets =
+          MAX_DISCOVERY_OPERATIONS_PER_SOURCE % Math.max(1, homes.length);
         for (const [index, home] of homes.entries()) {
           const operationBudget = baseOperationBudget + (index < extraOperationBudgets ? 1 : 0);
           if (operationBudget === 0) {

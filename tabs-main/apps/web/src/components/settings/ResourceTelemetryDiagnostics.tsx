@@ -96,7 +96,9 @@ export function processSummaryIdentityKey(process: ResourceTelemetryProcessSumma
   return `${process.identity.pid}:${process.identity.startTimeMs}`;
 }
 
-export function formatProcessName(process: Pick<ResourceTelemetryProcess, "command" | "name">): string {
+export function formatProcessName(
+  process: Pick<ResourceTelemetryProcess, "command" | "name">,
+): string {
   if (process.name.trim()) return process.name;
   const firstToken = process.command.trim().split(/\s+/)[0] ?? process.command;
   const normalized = firstToken.replace(/^['"]|['"]$/g, "");
@@ -245,7 +247,11 @@ export function safeIsoString(value: unknown): string | null {
   return null;
 }
 
-export function LastSampleLabel({ sampledAt }: { sampledAt: DateTime.Utc | string | number | null | undefined }) {
+export function LastSampleLabel({
+  sampledAt,
+}: {
+  sampledAt: DateTime.Utc | string | number | null | undefined;
+}) {
   const iso = safeIsoString(sampledAt);
   if (!iso) {
     return <span className="text-[11px] text-muted-foreground/55">Waiting for sample</span>;
@@ -309,7 +315,10 @@ export function IconStat({
       {barPercent != null ? (
         <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-muted/60">
           <div
-            className={cn("h-full rounded-full transition-all duration-300", barColor ?? "bg-primary")}
+            className={cn(
+              "h-full rounded-full transition-all duration-300",
+              barColor ?? "bg-primary",
+            )}
             style={{ width: `${Math.min(100, Math.max(0, barPercent))}%` }}
           />
         </div>
@@ -337,9 +346,7 @@ export function AggregateCard({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className={cn("size-2 rounded-full", accentClass)} />
-          <div className="text-[13px] font-semibold text-foreground tracking-tight">
-            {label}
-          </div>
+          <div className="text-[13px] font-semibold text-foreground tracking-tight">{label}</div>
         </div>
         <div className="rounded-full bg-muted/60 border border-border/40 px-2 py-0.5 font-mono text-[9.5px] font-medium tabular-nums text-muted-foreground">
           {aggregate.processCount} {aggregate.processCount === 1 ? "proc" : "procs"}
@@ -597,7 +604,9 @@ export function ProcessActions({
             </button>
           }
         />
-        <TooltipPopup side="top">Send SIGINT (Interrupt) to {process.name || `PID ${process.identity.pid}`}</TooltipPopup>
+        <TooltipPopup side="top">
+          Send SIGINT (Interrupt) to {process.name || `PID ${process.identity.pid}`}
+        </TooltipPopup>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger
@@ -611,7 +620,10 @@ export function ProcessActions({
             </button>
           }
         />
-        <TooltipPopup side="top">Terminate process {process.name ? `"${process.name}"` : ""} ({process.identity.pid}) with SIGKILL</TooltipPopup>
+        <TooltipPopup side="top">
+          Terminate process {process.name ? `"${process.name}"` : ""} ({process.identity.pid}) with
+          SIGKILL
+        </TooltipPopup>
       </Tooltip>
     </div>
   );
@@ -690,7 +702,9 @@ export function ProcessTable({
               </td>
               <td className="truncate px-3 py-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/40 px-2.5 py-0.5 text-[10px] font-medium text-foreground/80">
-                  <span className={cn("size-1.5 rounded-full", categoryDotClass(process.category))} />
+                  <span
+                    className={cn("size-1.5 rounded-full", categoryDotClass(process.category))}
+                  />
                   {categoryLabel(process.category)}
                 </span>
               </td>
@@ -773,7 +787,10 @@ export function HistoryProcessTable({
             </tr>
           ) : null}
           {processes.map((process) => (
-            <tr key={processSummaryIdentityKey(process)} className="hover:bg-muted/30 transition-colors">
+            <tr
+              key={processSummaryIdentityKey(process)}
+              className="hover:bg-muted/30 transition-colors"
+            >
               <td className="px-4 py-2 sm:pl-5">
                 <Tooltip>
                   <TooltipTrigger
@@ -793,7 +810,9 @@ export function HistoryProcessTable({
               </td>
               <td className="truncate px-3 py-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/40 px-2.5 py-0.5 text-[10px] font-medium text-foreground/80">
-                  <span className={cn("size-1.5 rounded-full", categoryDotClass(process.category))} />
+                  <span
+                    className={cn("size-1.5 rounded-full", categoryDotClass(process.category))}
+                  />
                   {categoryLabel(process.category)}
                 </span>
               </td>
@@ -861,7 +880,10 @@ export function AttributionTable({
             </tr>
           ) : null}
           {entries.map((entry) => (
-            <tr key={`${entry.component}:${entry.operation}`} className="hover:bg-muted/30 transition-colors">
+            <tr
+              key={`${entry.component}:${entry.operation}`}
+              className="hover:bg-muted/30 transition-colors"
+            >
               <td className="truncate px-4 py-2 font-medium text-foreground sm:pl-5">
                 {entry.component}
               </td>
@@ -1006,9 +1028,7 @@ export function ResourceMonitorHeaderSection({
           <IconStat
             icon={<GaugeIcon className="size-3.5" />}
             label="CPU limit"
-            value={
-              snapshot ? (speedLimit === null ? "100%" : `${speedLimit.toFixed(0)}%`) : "..."
-            }
+            value={snapshot ? (speedLimit === null ? "100%" : `${speedLimit.toFixed(0)}%`) : "..."}
             detail={snapshot ? `${snapshot.power.thermalState} thermal` : undefined}
             tone={speedLimit !== null && speedLimit < 80 ? "warning" : "default"}
             barPercent={speedLimit ?? 100}

@@ -5,7 +5,7 @@
  * and security while enabling 2FA, QR code scanning, and passkey/WebAuthn flows.
  *
  * Core principles:
- * 1. Safe minimum permissions (clipboard, notifications, pointerLock) granted automatically.
+ * 1. Only sanitized clipboard writes are granted automatically.
  * 2. High-risk permissions (camera, microphone, USB, HID, serial, local-fonts) NEVER silently granted.
  * 3. Secure context verification for WebAuthn/Passkey flows with external fallback guidance.
  * 4. Origin isolation: decisions for one origin never bleed into another.
@@ -34,17 +34,17 @@ export interface WebAuthnSupportCheck {
   readonly reason: string;
 }
 
-const SAFE_PERMISSIONS = new Set([
-  "clipboard-read",
-  "clipboard-sanitized-write",
-  "pointerLock",
-  "notifications",
-  "fullscreen",
-]);
+const SAFE_PERMISSIONS = new Set(["clipboard-sanitized-write"]);
 
 const HIGH_RISK_MEDIA = new Set(["media", "camera", "microphone"]);
 const HIGH_RISK_HARDWARE = new Set(["usb", "hid", "serial", "midi", "midiSysex"]);
 const HIGH_RISK_PRIVACY = new Set(["local-fonts", "display-capture", "geolocation"]);
+const USER_GESTURE_PERMISSIONS = new Set([
+  "clipboard-read",
+  "notifications",
+  "pointerLock",
+  "fullscreen",
+]);
 
 export function categorizePermission(
   permission: string,
@@ -60,6 +60,9 @@ export function categorizePermission(
     return "high_risk_hardware";
   }
   if (HIGH_RISK_PRIVACY.has(permission)) {
+    return "high_risk_privacy";
+  }
+  if (USER_GESTURE_PERMISSIONS.has(permission)) {
     return "high_risk_privacy";
   }
   if (permission === "openExternal") {

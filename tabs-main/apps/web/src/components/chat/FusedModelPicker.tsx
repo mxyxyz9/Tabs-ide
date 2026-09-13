@@ -649,7 +649,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           style={panelStyle}
         >
           {/* Provider Sidebar navigation on Left */}
-          {(providerOptions.length > 1 || pinnedModels.length > 0 || AVAILABLE_PROVIDER_OPTIONS.length > 1) && (
+          {(providerOptions.length > 1 ||
+            pinnedModels.length > 0 ||
+            AVAILABLE_PROVIDER_OPTIONS.length > 1) && (
             <div className="flex flex-col gap-2.5 border-r border-border pr-6">
               {/* 📌 Pinned Models Tab */}
               <Tooltip key="pinned">

@@ -44,9 +44,7 @@ describe("DocumentationSettings topics and categorization", () => {
     expect(shortcutTopic?.shortcuts).toBeDefined();
     expect(shortcutTopic?.shortcuts?.length).toBeGreaterThan(0);
 
-    const commandPalette = shortcutTopic?.shortcuts?.find(
-      (s) => s.label === "Command Palette",
-    );
+    const commandPalette = shortcutTopic?.shortcuts?.find((s) => s.label === "Command Palette");
     expect(commandPalette).toBeDefined();
     expect(commandPalette?.keys).toContain("⌘");
     expect(commandPalette?.keys).toContain("K");

@@ -457,4 +457,3 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('aria-label="View details for Tool call"');
   });
 });
-

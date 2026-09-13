@@ -14,17 +14,9 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import type { TextGenerationShape } from "../textGeneration/TextGeneration";
-import type {
-  StoredGraphEdge,
-  StoredGraphNode,
-  TestingGraphStore,
-} from "./graphStore";
+import type { StoredGraphEdge, StoredGraphNode, TestingGraphStore } from "./graphStore";
 import type { LocatorLibraryStore } from "./locatorLibrary";
-import {
-  sanitizePersistedUrl,
-  sanitizeModelBoundText,
-  shortDigest,
-} from "./security";
+import { sanitizePersistedUrl, sanitizeModelBoundText, shortDigest } from "./security";
 import { generateOfficialPlaywright } from "./officialPlaywright";
 
 const GenerationPlan = Schema.Struct({
@@ -104,9 +96,7 @@ function slug(value: string): string {
 function identifier(value: string): string {
   const words = slug(value).split("-").filter(Boolean);
   const combined = words
-    .map((word, index) =>
-      index === 0 ? word : `${word.charAt(0).toUpperCase()}${word.slice(1)}`,
-    )
+    .map((word, index) => (index === 0 ? word : `${word.charAt(0).toUpperCase()}${word.slice(1)}`))
     .join("");
   return /^[a-zA-Z_$]/.test(combined) ? combined : `item${combined}`;
 }
@@ -128,9 +118,7 @@ function edgesForCase(
     const fromStateId = testCase.matchedStateIds[index];
     const toStateId = testCase.matchedStateIds[index + 1];
     const edge = graph.edges.find(
-      (candidate) =>
-        candidate.fromStateId === fromStateId &&
-        candidate.toStateId === toStateId,
+      (candidate) => candidate.fromStateId === fromStateId && candidate.toStateId === toStateId,
     );
     if (edge) edges.push(edge);
   }
@@ -148,9 +136,7 @@ function graphLocators(
     arguments: { role: edge.role, name: edge.name },
     semanticContext: `${edge.role} ${edge.name}`,
     graphStateId: edge.fromStateId,
-    urlPattern:
-      graph.nodes.find((node) => node.stateId === edge.fromStateId)?.pageUrl ??
-      targetUrl,
+    urlPattern: graph.nodes.find((node) => node.stateId === edge.fromStateId)?.pageUrl ?? targetUrl,
   }));
 }
 
@@ -170,32 +156,21 @@ function libraryLocators(
   }));
 }
 
-function ensureRepositoryOutput(
-  projectPath: string,
-  configuredPath: string | undefined,
-): string {
+function ensureRepositoryOutput(projectPath: string, configuredPath: string | undefined): string {
   const root = resolve(projectPath);
   const output = resolve(root, configuredPath?.trim() || "tests/e2e/generated");
   const relativePath = relative(root, output);
-  if (
-    relativePath === "" ||
-    (!relativePath.startsWith(`..${sep}`) && relativePath !== "..")
-  ) {
+  if (relativePath === "" || (!relativePath.startsWith(`..${sep}`) && relativePath !== "..")) {
     return output;
   }
-  throw new Error(
-    "Repository test output must stay inside the selected project directory",
-  );
+  throw new Error("Repository test output must stay inside the selected project directory");
 }
 
 function safeRelativePath(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.trim())
-    throw new Error(`Template ${field} is required`);
+  if (typeof value !== "string" || !value.trim()) throw new Error(`Template ${field} is required`);
   const normalized = value.trim().replaceAll("\\", "/");
   if (normalized.startsWith("/") || normalized.split("/").includes("..")) {
-    throw new Error(
-      `Template ${field} must be a relative path without parent traversal`,
-    );
+    throw new Error(`Template ${field} must be a relative path without parent traversal`);
   }
   return normalized;
 }
@@ -209,14 +184,9 @@ async function loadTemplate(
   const resolvedPath = resolve(root, templatePath);
   const relativePath = relative(root, resolvedPath);
   if (relativePath === ".." || relativePath.startsWith(`..${sep}`)) {
-    throw new Error(
-      "The company testing template must stay inside the selected project",
-    );
+    throw new Error("The company testing template must stay inside the selected project");
   }
-  const raw = JSON.parse(await readFile(resolvedPath, "utf8")) as Record<
-    string,
-    unknown
-  >;
+  const raw = JSON.parse(await readFile(resolvedPath, "utf8")) as Record<string, unknown>;
   if (raw.version !== 1) {
     throw new Error("Company testing template version must be 1");
   }
@@ -227,20 +197,14 @@ async function loadTemplate(
   }
   return {
     version: 1,
-    name:
-      typeof raw.name === "string" && raw.name.trim()
-        ? raw.name.trim()
-        : "Company template",
+    name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Company template",
     directories: {
       pages: safeRelativePath(directories.pages, "directories.pages"),
       data: safeRelativePath(directories.data, "directories.data"),
       specs: safeRelativePath(directories.specs, "directories.specs"),
     },
     filePatterns: {
-      pageObject: safeRelativePath(
-        filePatterns.pageObject,
-        "filePatterns.pageObject",
-      ),
+      pageObject: safeRelativePath(filePatterns.pageObject, "filePatterns.pageObject"),
       data: safeRelativePath(filePatterns.data, "filePatterns.data"),
       spec: safeRelativePath(filePatterns.spec, "filePatterns.spec"),
     },
@@ -260,8 +224,7 @@ function applyTemplatePattern(
     .replaceAll("{caseId}", values.caseId)
     .replaceAll("{feature}", values.feature)
     .replaceAll("{featurePascal}", values.featurePascal);
-  if (/\{[^}]+\}/.test(rendered))
-    throw new Error(`Unsupported template placeholder in ${pattern}`);
+  if (/\{[^}]+\}/.test(rendered)) throw new Error(`Unsupported template placeholder in ${pattern}`);
   return rendered;
 }
 
@@ -276,8 +239,7 @@ function buildPrompt(
     ...testCase.steps.map((step, index) => `${index + 1}. ${step}`),
     "Verified intent path:",
     ...locators.map(
-      (locator) =>
-        `${locator.key}: ${locator.strategy} ${JSON.stringify(locator.arguments)}`,
+      (locator) => `${locator.key}: ${locator.strategy} ${JSON.stringify(locator.arguments)}`,
     ),
   ];
   lines.push(`Expected Result: ${testCase.expectedResult}`);
@@ -291,9 +253,7 @@ function pageObjectSource(input: {
   readonly className: string;
   readonly locators: ReadonlyArray<GenerationLocator>;
 }): string {
-  const declarations = input.locators.map(
-    (locator) => `  readonly ${locator.key}: Locator;`,
-  );
+  const declarations = input.locators.map((locator) => `  readonly ${locator.key}: Locator;`);
   const expression = (locator: GenerationLocator): string => {
     const args = locator.arguments;
     switch (locator.strategy) {
@@ -450,8 +410,7 @@ export class TestingGenerator {
       ? allCases.filter((testCase) => input.caseIds?.includes(testCase.id))
       : allCases.filter(
           (testCase) =>
-            testCase.reviewDecision === "accepted" ||
-            testCase.reviewDecision === "edited",
+            testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited",
         );
     const maxCases = input.maxCases ?? DEFAULT_TESTING_BATCH_MAX_CASES;
     const cases = requested.slice(0, maxCases);
@@ -461,9 +420,7 @@ export class TestingGenerator {
       );
     }
     if (cases.length === 0) {
-      throw new Error(
-        "Select or accept at least one reconciled case before generation",
-      );
+      throw new Error("Select or accept at least one reconciled case before generation");
     }
     const missingExpected = cases.find((c) => !c.expectedResult?.trim());
     if (missingExpected) {
@@ -475,9 +432,7 @@ export class TestingGenerator {
     let parentJobId = input.parentJobId ?? null;
     const parentRunId = input.parentRunId ?? input.failureRunId ?? null;
     if (!parentJobId && parentRunId) {
-      const run = this.store
-        .executionRuns(input.projectId)
-        .runs.find((r) => r.id === parentRunId);
+      const run = this.store.executionRuns(input.projectId).runs.find((r) => r.id === parentRunId);
       if (run) {
         parentJobId = run.generationJobId;
       }
@@ -501,15 +456,9 @@ export class TestingGenerator {
 
     const jobId = crypto.randomUUID();
     const outputDirectory =
-      input.engine !== "official-playwright" &&
-      (input.outputMode ?? "managed") === "repository"
+      input.engine !== "official-playwright" && (input.outputMode ?? "managed") === "repository"
         ? ensureRepositoryOutput(input.projectPath, input.repositoryOutputPath)
-        : resolve(
-            this.testingRoot,
-            "generated",
-            shortDigest(input.projectId),
-            jobId,
-          );
+        : resolve(this.testingRoot, "generated", shortDigest(input.projectId), jobId);
     this.store.createGenerationJob({
       id: jobId,
       projectId: input.projectId,
@@ -557,10 +506,8 @@ export class TestingGenerator {
     outputDirectory: string,
     beforeRun?: () => Promise<void>,
   ): Promise<TestingGenerationJob> {
-    const maxTokens =
-      input.maxEstimatedTokens ?? DEFAULT_TESTING_BATCH_MAX_TOKENS;
-    const maxCost =
-      input.maxEstimatedCostUsd ?? DEFAULT_TESTING_BATCH_MAX_COST_USD;
+    const maxTokens = input.maxEstimatedTokens ?? DEFAULT_TESTING_BATCH_MAX_TOKENS;
+    const maxCost = input.maxEstimatedCostUsd ?? DEFAULT_TESTING_BATCH_MAX_COST_USD;
     let completedCases = 0;
     let estimatedTokens = 0;
     let estimatedCostUsd = 0;
@@ -571,10 +518,7 @@ export class TestingGenerator {
     });
     try {
       await beforeRun?.();
-      const template = await loadTemplate(
-        input.projectPath,
-        input.templatePath,
-      );
+      const template = await loadTemplate(input.projectPath, input.templatePath);
       await Promise.all(
         Object.values(template.directories).map((directory) =>
           mkdir(resolve(outputDirectory, directory), { recursive: true }),
@@ -586,14 +530,10 @@ export class TestingGenerator {
         this.store.summary(input.projectId).targetUrl ??
         this.locatorStore
           .library(input.projectId)
-          .pages.find(
-            (page) =>
-              !page.urlPattern.startsWith("https://repository.invalid/"),
-          )?.urlPattern;
+          .pages.find((page) => !page.urlPattern.startsWith("https://repository.invalid/"))
+          ?.urlPattern;
       if (!targetUrl)
-        throw new Error(
-          "The project has no captured target URL for generated test data",
-        );
+        throw new Error("The project has no captured target URL for generated test data");
       for (const testCase of cases) {
         if (this.#cancelledJobs.has(jobId)) break;
         if (input.engine === "official-playwright") {
@@ -603,9 +543,7 @@ export class TestingGenerator {
                 .runs.find((run) => run.id === input.failureRunId)
             : undefined;
           const previous = failure
-            ? this.store.executionArtifacts(failure.generationJobId, [
-                testCase.id,
-              ])[0]
+            ? this.store.executionArtifacts(failure.generationJobId, [testCase.id])[0]
             : undefined;
           this.store.updateGenerationJob(jobId, {
             status: "running",
@@ -616,15 +554,12 @@ export class TestingGenerator {
             testCase,
             outputDirectory,
             textGeneration: this.textGeneration,
-            ...(previous
-              ? { previousSpec: await readFile(previous.specPath, "utf8") }
-              : {}),
+            ...(previous ? { previousSpec: await readFile(previous.specPath, "utf8") } : {}),
             ...(failure
               ? {
                   failureEvidence:
-                    failure.results.find(
-                      (result) => result.caseId === testCase.id,
-                    )?.error ?? "No failure diagnostics",
+                    failure.results.find((result) => result.caseId === testCase.id)?.error ??
+                    "No failure diagnostics",
                 }
               : {}),
           });
@@ -649,14 +584,10 @@ export class TestingGenerator {
           continue;
         }
         const edges = edgesForCase(testCase, graph);
-        const caseLocatorEntries = this.locatorStore.caseLocators(
-          input.projectId,
-          testCase.id,
-        );
+        const caseLocatorEntries = this.locatorStore.caseLocators(input.projectId, testCase.id);
         const invalidEntry = caseLocatorEntries.find(
           (entry) =>
-            entry.lifecycleStatus !== "accepted" ||
-            entry.verificationStatus !== "verified",
+            entry.lifecycleStatus !== "accepted" || entry.verificationStatus !== "verified",
         );
         if (invalidEntry) {
           blockedCases.push(
@@ -666,13 +597,9 @@ export class TestingGenerator {
         }
         const mappedLocators = libraryLocators(caseLocatorEntries, targetUrl);
         const locators =
-          mappedLocators.length > 0
-            ? mappedLocators
-            : graphLocators(edges, graph, targetUrl);
+          mappedLocators.length > 0 ? mappedLocators : graphLocators(edges, graph, targetUrl);
         if (locators.length === 0) {
-          blockedCases.push(
-            `${testCase.externalId}: no verified Locator Library mapping`,
-          );
+          blockedCases.push(`${testCase.externalId}: no verified Locator Library mapping`);
           continue;
         }
         const failedResult = input.failureRunId
@@ -688,17 +615,13 @@ export class TestingGenerator {
             : "");
         const nextTokens = Math.ceil(sanitizedPrompt.length / 4) + 1_500;
         const nextCost = nextTokens * 0.00001;
-        if (
-          estimatedTokens + nextTokens > maxTokens ||
-          estimatedCostUsd + nextCost > maxCost
-        ) {
+        if (estimatedTokens + nextTokens > maxTokens || estimatedCostUsd + nextCost > maxCost) {
           this.store.updateGenerationJob(jobId, {
             status: "budget-stopped",
             completedCases,
             estimatedTokens,
             estimatedCostUsd,
-            error:
-              "Stopped before dispatch because the next case would exceed the batch budget",
+            error: "Stopped before dispatch because the next case would exceed the batch budget",
           });
           return this.store.generationJob(input.projectId, jobId)!;
         }
@@ -718,8 +641,7 @@ export class TestingGenerator {
         );
         try {
           renderGenerationSteps(plan, locators);
-          if (!plan.assertionText.trim())
-            throw new Error("Missing final assertion text");
+          if (!plan.assertionText.trim()) throw new Error("Missing final assertion text");
         } catch (error) {
           blockedCases.push(
             `${testCase.externalId}: ${error instanceof Error ? error.message : String(error)}`,
@@ -734,22 +656,14 @@ export class TestingGenerator {
           feature: planSlug,
           featurePascal: pascal(plan.featureSlug),
         };
-        const className = applyTemplatePattern(
-          template.classPattern,
-          templateValues,
-        );
+        const className = applyTemplatePattern(template.classPattern, templateValues);
         if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(className)) {
-          throw new Error(
-            "Template classPattern must produce a valid TypeScript class name",
-          );
+          throw new Error("Template classPattern must produce a valid TypeScript class name");
         }
         const pageObjectPath = resolve(
           outputDirectory,
           template.directories.pages,
-          applyTemplatePattern(
-            template.filePatterns.pageObject,
-            templateValues,
-          ),
+          applyTemplatePattern(template.filePatterns.pageObject, templateValues),
         );
         const dataPath = resolve(
           outputDirectory,
@@ -761,10 +675,7 @@ export class TestingGenerator {
           template.directories.specs,
           applyTemplatePattern(template.filePatterns.spec, templateValues),
         );
-        const dataImport = relative(
-          resolve(outputDirectory, template.directories.specs),
-          dataPath,
-        )
+        const dataImport = relative(resolve(outputDirectory, template.directories.specs), dataPath)
           .replaceAll(sep, "/")
           .replace(/\.ts$/, "");
         const pageImport = relative(
@@ -779,28 +690,16 @@ export class TestingGenerator {
           mkdir(dirname(specPath), { recursive: true }),
         ]);
         await Promise.all([
-          writeFile(
-            pageObjectPath,
-            pageObjectSource({ className, locators }),
-            "utf8",
-          ),
-          writeFile(
-            dataPath,
-            dataSource({ targetUrl, testCase, plan }),
-            "utf8",
-          ),
+          writeFile(pageObjectPath, pageObjectSource({ className, locators }), "utf8"),
+          writeFile(dataPath, dataSource({ targetUrl, testCase, plan }), "utf8"),
           writeFile(
             specPath,
             specSource({
               className,
               plan,
               locators,
-              dataImport: dataImport.startsWith(".")
-                ? dataImport
-                : `./${dataImport}`,
-              pageImport: pageImport.startsWith(".")
-                ? pageImport
-                : `./${pageImport}`,
+              dataImport: dataImport.startsWith(".") ? dataImport : `./${dataImport}`,
+              pageImport: pageImport.startsWith(".") ? pageImport : `./${pageImport}`,
             }),
             "utf8",
           ),
@@ -827,12 +726,8 @@ export class TestingGenerator {
             semanticContext: testCase.steps[index] ?? locator.semanticContext,
             graphStateId: locator.graphStateId,
             urlPattern: locator.urlPattern,
-            ...(locator.locatorEntryId
-              ? { locatorEntryId: locator.locatorEntryId }
-              : {}),
-            ...(locator.locatorVersionId
-              ? { locatorVersionId: locator.locatorVersionId }
-              : {}),
+            ...(locator.locatorEntryId ? { locatorEntryId: locator.locatorEntryId } : {}),
+            ...(locator.locatorVersionId ? { locatorVersionId: locator.locatorVersionId } : {}),
           })),
         });
         completedCases += 1;
@@ -843,8 +738,7 @@ export class TestingGenerator {
           input.parentRunId ||
           input.parentJobId ||
           (input.attemptCount && input.attemptCount > 1) ||
-          (this.store.generationJob(input.projectId, jobId)?.attemptCount ??
-            1) > 1,
+          (this.store.generationJob(input.projectId, jobId)?.attemptCount ?? 1) > 1,
         );
         const nextStage = isRepair ? "repair-proposed" : "generated";
         this.store.updateGenerationJob(jobId, {
@@ -860,8 +754,7 @@ export class TestingGenerator {
         input.parentRunId ||
         input.parentJobId ||
         (input.attemptCount && input.attemptCount > 1) ||
-        (this.store.generationJob(input.projectId, jobId)?.attemptCount ?? 1) >
-          1,
+        (this.store.generationJob(input.projectId, jobId)?.attemptCount ?? 1) > 1,
       );
       const stage = this.#cancelledJobs.has(jobId)
         ? "cancelled"

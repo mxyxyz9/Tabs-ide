@@ -6,7 +6,11 @@ export function isCompactCommandMessage(message: {
   readonly attachments?: readonly unknown[] | undefined;
 }): boolean {
   const text = (message.text ?? "").trim().toLowerCase();
-  return message.role === "user" && text === "/compact" && !(message.attachments && message.attachments.length > 0);
+  return (
+    message.role === "user" &&
+    text === "/compact" &&
+    !(message.attachments && message.attachments.length > 0)
+  );
 }
 
 export function providerSupportsManualCompaction(

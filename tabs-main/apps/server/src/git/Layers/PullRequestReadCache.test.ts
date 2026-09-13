@@ -45,12 +45,7 @@ const makeTestEnv = (dir: string) => {
   } as any);
 
   return makePullRequestReadCache.pipe(
-    Effect.provide(
-      Layer.mergeAll(
-        configLayer,
-        NodeServices.layer,
-      ),
-    ),
+    Effect.provide(Layer.mergeAll(configLayer, NodeServices.layer)),
   );
 };
 
@@ -196,7 +191,9 @@ it.layer(NodeServices.layer)("PullRequestReadCache", (it) => {
       const rateLimitedFetch = Effect.sync(() => {
         attemptedFetches++;
       }).pipe(
-        Effect.andThen(Effect.fail(new Error("API rate limit exceeded for user octocat (HTTP 429)"))),
+        Effect.andThen(
+          Effect.fail(new Error("API rate limit exceeded for user octocat (HTTP 429)")),
+        ),
       );
 
       // First call triggers rate limit error and serves cached fallback

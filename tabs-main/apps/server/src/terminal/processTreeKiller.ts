@@ -4,7 +4,18 @@
 // Depends on: node child_process, process signals, and tree-kill.
 import { spawnSync } from "node:child_process";
 
-const treeKill = (pid: number, signal?: string | NodeJS.Signals, callback?: (err?: Error) => void) => { try { process.kill(pid, signal); callback?.(); } catch (e) { callback?.(e as Error); } };
+const treeKill = (
+  pid: number,
+  signal?: string | NodeJS.Signals,
+  callback?: (err?: Error) => void,
+) => {
+  try {
+    process.kill(pid, signal);
+    callback?.();
+  } catch (e) {
+    callback?.(e as Error);
+  }
+};
 
 const PROCESS_TREE_SCAN_TIMEOUT_MS = 1_000;
 // Full-system `ps` output scales with host process count and command-line

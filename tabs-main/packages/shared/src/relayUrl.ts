@@ -20,4 +20,3 @@ export function normalizeSecureRelayUrl(value: string): string | null {
 export function isSecureRelayUrl(value: string): boolean {
   return normalizeSecureRelayUrl(value) !== null;
 }
-

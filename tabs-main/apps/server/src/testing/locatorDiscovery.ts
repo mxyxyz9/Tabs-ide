@@ -62,15 +62,11 @@ function candidateKey(role: string, name: string, index: number): string {
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
-  const key = /[^\x00-\x7f]/.test(cleanName)
-    ? `${base}-${shortDigest(cleanName)}`
-    : base;
+  const key = /[^\x00-\x7f]/.test(cleanName) ? `${base}-${shortDigest(cleanName)}` : base;
   return index === 0 ? key : `${key}-${index + 1}`;
 }
 
-function classificationForRole(
-  role: string,
-): TestingLocatorEntry["classification"] {
+function classificationForRole(role: string): TestingLocatorEntry["classification"] {
   if (ACTION_ROLES.has(role)) return "action";
   if (ASSERTION_ROLES.has(role)) return "assertion";
   return "content";
@@ -98,10 +94,7 @@ export function locatorCandidatesFromSnapshot(input: {
   const sanitized = sanitizeAccessibilitySnapshot(input.snapshot, {
     maxDepth: 12,
   });
-  const tokenized = tokenizePii(
-    input.projectId,
-    redactCredentialLikeText(sanitized.sanitized),
-  );
+  const tokenized = tokenizePii(input.projectId, redactCredentialLikeText(sanitized.sanitized));
   const storedSnapshot = normalizeAccessibilityForStorage(tokenized.tokenized);
   const nodes: Array<{ role: string; name: string }> = [];
   for (const line of storedSnapshot.split("\n")) {
@@ -113,15 +106,9 @@ export function locatorCandidatesFromSnapshot(input: {
       .replace(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu, "")
       .trim();
     const classification = classificationForRole(role);
-    if (input.coverage === "actions-only" && classification !== "action")
-      continue;
-    if (input.coverage === "actions-assertions" && classification === "content")
-      continue;
-    if (
-      !name &&
-      classification !== "action" &&
-      input.coverage !== "everything-accessible"
-    )
+    if (input.coverage === "actions-only" && classification !== "action") continue;
+    if (input.coverage === "actions-assertions" && classification === "content") continue;
+    if (!name && classification !== "action" && input.coverage !== "everything-accessible")
       continue;
     nodes.push({ role, name });
   }
@@ -135,9 +122,7 @@ export function locatorCandidatesFromSnapshot(input: {
     taskWords.size === 0
       ? nodes
       : nodes.filter((node) => {
-          const words = `${node.role} ${node.name}`
-            .toLocaleLowerCase()
-            .split(/[^a-z0-9]+/);
+          const words = `${node.role} ${node.name}`.toLocaleLowerCase().split(/[^a-z0-9]+/);
           return words.some((word) => taskWords.has(word));
         });
   const matchCounts = new Map<string, number>();
@@ -183,13 +168,11 @@ export async function captureLocatorSnapshot(input: {
   readonly fallbackUrl: string;
   readonly taskContext?: string;
 }): Promise<LocatorCaptureSnapshot> {
-  if (!input.previewSnapshot && !input.session)
-    throw new Error("No browser available for capture");
+  if (!input.previewSnapshot && !input.session) throw new Error("No browser available for capture");
   const response = input.previewSnapshot
     ? ""
     : await input.session!.call("browser_snapshot", { depth: 12, boxes: true });
-  const rawSnapshot =
-    input.previewSnapshot?.snapshot ?? extractAccessibilityYaml(response);
+  const rawSnapshot = input.previewSnapshot?.snapshot ?? extractAccessibilityYaml(response);
   const parsed = locatorCandidatesFromSnapshot({
     projectId: input.projectId,
     snapshot: rawSnapshot,
@@ -230,10 +213,7 @@ export async function captureLocatorSnapshot(input: {
   }
   return {
     ...parsed,
-    rawUrl:
-      input.previewSnapshot?.url ??
-      extractPageUrl(response) ??
-      input.fallbackUrl,
+    rawUrl: input.previewSnapshot?.url ?? extractPageUrl(response) ?? input.fallbackUrl,
     fingerprint: structuralHash(parsed.storedSnapshot),
   };
 }
@@ -241,12 +221,8 @@ export async function captureLocatorSnapshot(input: {
 export function parseLocatorDomResult(
   response: string,
 ): Pick<TestingLocatorPreviewSnapshot, "url" | "elements"> {
-  const json =
-    response.match(/### Result\s*\n([\s\S]*?)(?=\n### |$)/)?.[1] ?? response;
-  const value = JSON.parse(json.trim()) as Pick<
-    TestingLocatorPreviewSnapshot,
-    "url" | "elements"
-  >;
+  const json = response.match(/### Result\s*\n([\s\S]*?)(?=\n### |$)/)?.[1] ?? response;
+  const value = JSON.parse(json.trim()) as Pick<TestingLocatorPreviewSnapshot, "url" | "elements">;
   if (typeof value.url !== "string" || !Array.isArray(value.elements))
     throw new Error("Playwright did not return DOM locator details.");
   return value;
@@ -261,97 +237,82 @@ export function locatorCandidatesFromDom(input: {
 }) {
   const relevant = input.elements.filter((element) => {
     const classification = classificationForRole(element.role);
-    if (input.coverage === "actions-only" && classification !== "action")
-      return false;
-    if (input.coverage === "actions-assertions" && classification === "content")
-      return false;
+    if (input.coverage === "actions-only" && classification !== "action") return false;
+    if (input.coverage === "actions-assertions" && classification === "content") return false;
     if (
       input.taskContext &&
       !input.taskContext
         .toLocaleLowerCase()
         .split(/\s+/)
-        .some(
-          (word) =>
-            word.length > 2 && element.name.toLocaleLowerCase().includes(word),
-        )
+        .some((word) => word.length > 2 && element.name.toLocaleLowerCase().includes(word))
     )
       return false;
     return true;
   });
   const resolvedCounts = new Map<string, number>();
-  const candidates: LocatorCandidate[] = relevant
-    .slice(0, input.maxElements)
-    .map((element) => {
-      const cleanName = element.name
-        .replace(
-          /[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu,
-          "",
-        )
-        .trim();
-      const sanitize = (text: string) =>
-        tokenizePii(input.projectId, redactCredentialLikeText(text)).tokenized;
-      const name = sanitize(cleanName);
-      const selector = sanitize(element.selector);
-      const testId = sanitize(element.testId);
+  const candidates: LocatorCandidate[] = relevant.slice(0, input.maxElements).map((element) => {
+    const cleanName = element.name
+      .replace(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu, "")
+      .trim();
+    const sanitize = (text: string) =>
+      tokenizePii(input.projectId, redactCredentialLikeText(text)).tokenized;
+    const name = sanitize(cleanName);
+    const selector = sanitize(element.selector);
+    const testId = sanitize(element.testId);
 
-      // Locator priority: test ID → role/name → label → placeholder → stable attribute/text → CSS fallback
-      let strategy: TestingLocatorEntry["strategy"] = "css";
-      let args: Record<string, string | number | boolean> = { selector };
-      let isSemantic = false;
+    // Locator priority: test ID → role/name → label → placeholder → stable attribute/text → CSS fallback
+    let strategy: TestingLocatorEntry["strategy"] = "css";
+    let args: Record<string, string | number | boolean> = { selector };
+    let isSemantic = false;
 
-      if (testId) {
-        strategy = "test-id";
-        args = { testId };
-        isSemantic = true;
-      } else if (element.role && name) {
-        strategy = "role";
-        args = { role: element.role, name };
-        isSemantic = true;
-      } else if (element.tag === "label" && name) {
-        strategy = "label";
-        args = { text: name };
-        isSemantic = true;
-      } else if (
-        (element.tag === "input" || element.tag === "textarea") &&
-        element.selector.includes("[placeholder=") &&
-        name
-      ) {
-        strategy = "placeholder";
-        args = { text: name };
-        isSemantic = true;
-      } else if (name && !element.fragile && element.matchCount === 1) {
-        strategy = "text";
-        args = { text: name };
-        isSemantic = true;
-      } else {
-        strategy = "css";
-        args = { selector };
-        isSemantic = false;
-      }
+    if (testId) {
+      strategy = "test-id";
+      args = { testId };
+      isSemantic = true;
+    } else if (element.role && name) {
+      strategy = "role";
+      args = { role: element.role, name };
+      isSemantic = true;
+    } else if (element.tag === "label" && name) {
+      strategy = "label";
+      args = { text: name };
+      isSemantic = true;
+    } else if (
+      (element.tag === "input" || element.tag === "textarea") &&
+      element.selector.includes("[placeholder=") &&
+      name
+    ) {
+      strategy = "placeholder";
+      args = { text: name };
+      isSemantic = true;
+    } else if (name && !element.fragile && element.matchCount === 1) {
+      strategy = "text";
+      args = { text: name };
+      isSemantic = true;
+    } else {
+      strategy = "css";
+      args = { selector };
+      isSemantic = false;
+    }
 
-      const locatorKey = `${candidateKey(element.role || element.tag, cleanName, 0).slice(0, 44)}-${shortDigest(element.selector)}`;
-      const sensitive = /<(?:PII_|REDACTED_)/.test(
-        `${name} ${selector} ${testId}`,
-      );
-      resolvedCounts.set(locatorKey, element.matchCount);
+    const locatorKey = `${candidateKey(element.role || element.tag, cleanName, 0).slice(0, 44)}-${shortDigest(element.selector)}`;
+    const sensitive = /<(?:PII_|REDACTED_)/.test(`${name} ${selector} ${testId}`);
+    resolvedCounts.set(locatorKey, element.matchCount);
 
-      const isFragile =
-        element.fragile || element.matchCount !== 1 || !isSemantic;
+    const isFragile = element.fragile || element.matchCount !== 1 || !isSemantic;
 
-      return {
-        locatorKey,
-        classification: classificationForRole(element.role),
-        strategy,
-        arguments: args,
-        semanticContext: `${element.role || element.tag} ${name}`.trim(),
-        source: "discovered",
-        fragile: isFragile,
-        lifecycleStatus: sensitive ? "manual-required" : "draft",
-        elementFingerprint: shortDigest(
-          `${element.tag}\0${element.role}\0${selector}`,
-        ),
-      };
-    });
+    return {
+      locatorKey,
+      classification: classificationForRole(element.role),
+      strategy,
+      arguments: args,
+      semanticContext: `${element.role || element.tag} ${name}`.trim(),
+      source: "discovered",
+      fragile: isFragile,
+      lifecycleStatus: sensitive ? "manual-required" : "draft",
+      elementFingerprint: shortDigest(`${element.tag}\0${element.role}\0${selector}`),
+    };
+  });
   return {
     candidates,
     resolvedCounts,
@@ -373,10 +334,7 @@ export function countLocatorMatches(
     for (const line of snapshot.split("\n")) {
       const match = SNAPSHOT_NODE.exec(line);
       if (!match?.[1] || match[1].toLowerCase() !== role) continue;
-      const candidateName = (match[2] ?? "")
-        .replace(/\\"/g, '"')
-        .trim()
-        .toLocaleLowerCase();
+      const candidateName = (match[2] ?? "").replace(/\\"/g, '"').trim().toLocaleLowerCase();
       if (!name || candidateName === name) count += 1;
     }
     return count;
@@ -392,14 +350,10 @@ export function countLocatorMatches(
       "",
   ).toLocaleLowerCase();
   if (!expected) return 0;
-  return snapshot
-    .split("\n")
-    .filter((line) => line.toLocaleLowerCase().includes(expected)).length;
+  return snapshot.split("\n").filter((line) => line.toLocaleLowerCase().includes(expected)).length;
 }
 
-export function verificationStatusForCount(
-  count: number,
-): TestingLocatorVerificationStatus {
+export function verificationStatusForCount(count: number): TestingLocatorVerificationStatus {
   if (count === 0) return "missing";
   if (count === 1) return "verified";
   return "ambiguous";

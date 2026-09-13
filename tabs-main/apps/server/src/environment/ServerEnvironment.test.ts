@@ -24,4 +24,3 @@ it.effect("persists one stable environment identity and advertises capabilities"
     expect(first.capabilities.connectionProbe).toBe(true);
   }).pipe(Effect.provide(makeLayer())),
 );
-

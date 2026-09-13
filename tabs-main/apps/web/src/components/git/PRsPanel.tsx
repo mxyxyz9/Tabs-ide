@@ -27,10 +27,7 @@ import type {
   GitPullRequestStack,
 } from "@tabs/contracts";
 import { PullRequestReviewThreadCard } from "./PullRequestReviewThreadCard";
-import {
-  PullRequestChecksView,
-  PullRequestChecksRollupBadge,
-} from "./PullRequestChecksSummary";
+import { PullRequestChecksView, PullRequestChecksRollupBadge } from "./PullRequestChecksSummary";
 import {
   PullRequestReviewersSection,
   PullRequestLabelsSection,
@@ -192,7 +189,9 @@ export function PRsPanel({
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [fileSearchQuery, setFileSearchQuery] = useState("");
-  const [fileSortMode, setFileSortMode] = useState<"path" | "additions" | "deletions" | "status">("path");
+  const [fileSortMode, setFileSortMode] = useState<"path" | "additions" | "deletions" | "status">(
+    "path",
+  );
 
   // Query 1: Branch PR query
   const branchPrQuery = useQuery(
@@ -943,9 +942,12 @@ export function PRsPanel({
                                 let parsedHost = "github.com";
                                 let repository = "";
                                 try {
-                                  const parsed = new URL(detailQuery.data.pullRequest.url || pr.url);
+                                  const parsed = new URL(
+                                    detailQuery.data.pullRequest.url || pr.url,
+                                  );
                                   parsedHost = parsed.hostname;
-                                  repository = parsed.pathname.replace(/^\//, "").split("/pull/")[0] ?? "";
+                                  repository =
+                                    parsed.pathname.replace(/^\//, "").split("/pull/")[0] ?? "";
                                 } catch {}
                                 await api.orchestration.dispatchCommand({
                                   type: "thread.pull-request.link",
@@ -968,9 +970,12 @@ export function PRsPanel({
                                 let parsedHost = "github.com";
                                 let repository = "";
                                 try {
-                                  const parsed = new URL(detailQuery.data.pullRequest.url || pr.url);
+                                  const parsed = new URL(
+                                    detailQuery.data.pullRequest.url || pr.url,
+                                  );
                                   parsedHost = parsed.hostname;
-                                  repository = parsed.pathname.replace(/^\//, "").split("/pull/")[0] ?? "";
+                                  repository =
+                                    parsed.pathname.replace(/^\//, "").split("/pull/")[0] ?? "";
                                 } catch {}
                                 await api.orchestration.dispatchCommand({
                                   type: "thread.pull-request.unlink",
@@ -990,7 +995,8 @@ export function PRsPanel({
                                 toastManager.add({
                                   type: "success",
                                   title: "Review remarks copied to clipboard",
-                                  description: "Prompt copied to clipboard. Ready to create a new thread or paste into an existing thread.",
+                                  description:
+                                    "Prompt copied to clipboard. Ready to create a new thread or paste into an existing thread.",
                                 });
                                 void navigate({ to: "/" });
                               }}
@@ -1025,8 +1031,8 @@ export function PRsPanel({
                               isPending={pendingAction !== null}
                               isOpen={detailQuery.data.pullRequest.state === "open"}
                             />
-                            </div>
-                          ) : detailTab === "code" ? (
+                          </div>
+                        ) : detailTab === "code" ? (
                           (() => {
                             const allFiles = detailQuery.data.pullRequest.files ?? [];
                             const reviewThreads = detailQuery.data.pullRequest.reviewThreads ?? [];
@@ -1039,15 +1045,20 @@ export function PRsPanel({
                                 result = result.filter((f) => f.path.toLowerCase().includes(q));
                               }
                               return [...result].sort((a, b) => {
-                                if (fileSortMode === "additions") return (b.additions ?? 0) - (a.additions ?? 0);
-                                if (fileSortMode === "deletions") return (b.deletions ?? 0) - (a.deletions ?? 0);
-                                if (fileSortMode === "status") return a.status.localeCompare(b.status);
+                                if (fileSortMode === "additions")
+                                  return (b.additions ?? 0) - (a.additions ?? 0);
+                                if (fileSortMode === "deletions")
+                                  return (b.deletions ?? 0) - (a.deletions ?? 0);
+                                if (fileSortMode === "status")
+                                  return a.status.localeCompare(b.status);
                                 return a.path.localeCompare(b.path);
                               });
                             })();
 
                             const selectedFile =
-                              filteredAndSortedFiles.find((file) => file.path === selectedFilePath) ??
+                              filteredAndSortedFiles.find(
+                                (file) => file.path === selectedFilePath,
+                              ) ??
                               allFiles.find((file) => file.path === selectedFilePath) ??
                               filteredAndSortedFiles[0] ??
                               allFiles[0];
@@ -1118,8 +1129,12 @@ export function PRsPanel({
                                       </p>
                                     ) : (
                                       filteredAndSortedFiles.map((file) => {
-                                        const fileThreads = reviewThreads.filter((t) => t.path === file.path);
-                                        const unresolvedThreads = fileThreads.filter((t) => !t.resolved);
+                                        const fileThreads = reviewThreads.filter(
+                                          (t) => t.path === file.path,
+                                        );
+                                        const unresolvedThreads = fileThreads.filter(
+                                          (t) => !t.resolved,
+                                        );
                                         const isSelected = selectedFile.path === file.path;
 
                                         return (
@@ -1164,8 +1179,12 @@ export function PRsPanel({
                                               </div>
                                             </div>
                                             <span className="shrink-0 text-[10px]">
-                                              <span className="text-diff-addition font-medium">+{file.additions}</span>{" "}
-                                              <span className="text-diff-deletion font-medium">−{file.deletions}</span>
+                                              <span className="text-diff-addition font-medium">
+                                                +{file.additions}
+                                              </span>{" "}
+                                              <span className="text-diff-deletion font-medium">
+                                                −{file.deletions}
+                                              </span>
                                             </span>
                                           </button>
                                         );
@@ -1184,8 +1203,12 @@ export function PRsPanel({
                                       <Badge variant="outline">{selectedFile.status}</Badge>
                                     </div>
                                     <span className="text-[11px] text-muted-foreground">
-                                      <span className="text-diff-addition font-medium">+{selectedFile.additions}</span>{" "}
-                                      <span className="text-diff-deletion font-medium">−{selectedFile.deletions}</span>
+                                      <span className="text-diff-addition font-medium">
+                                        +{selectedFile.additions}
+                                      </span>{" "}
+                                      <span className="text-diff-deletion font-medium">
+                                        −{selectedFile.deletions}
+                                      </span>
                                     </span>
                                   </div>
 
@@ -1203,16 +1226,28 @@ export function PRsPanel({
                                       {patchLines.map((line) => {
                                         const isInlineCommentOpen =
                                           inlineLine &&
-                                          ((inlineSide === "right" && line.newLine && String(line.newLine) === inlineLine) ||
-                                            (inlineSide === "left" && line.oldLine && String(line.oldLine) === inlineLine));
+                                          ((inlineSide === "right" &&
+                                            line.newLine &&
+                                            String(line.newLine) === inlineLine) ||
+                                            (inlineSide === "left" &&
+                                              line.oldLine &&
+                                              String(line.oldLine) === inlineLine));
 
                                         // Find threads that attach directly to this line
                                         const lineThreads = selectedThreads.filter((t) => {
-                                          if (t.side === "right" && line.newLine && t.line === line.newLine) {
+                                          if (
+                                            t.side === "right" &&
+                                            line.newLine &&
+                                            t.line === line.newLine
+                                          ) {
                                             renderedThreadIds.add(t.id);
                                             return true;
                                           }
-                                          if (t.side === "left" && line.oldLine && t.line === line.oldLine) {
+                                          if (
+                                            t.side === "left" &&
+                                            line.oldLine &&
+                                            t.line === line.oldLine
+                                          ) {
                                             renderedThreadIds.add(t.id);
                                             return true;
                                           }
@@ -1220,7 +1255,10 @@ export function PRsPanel({
                                         });
 
                                         return (
-                                          <div key={line.key} className="border-b border-border/20 last:border-b-0">
+                                          <div
+                                            key={line.key}
+                                            className="border-b border-border/20 last:border-b-0"
+                                          >
                                             {/* Code line row */}
                                             <div
                                               className={`grid grid-cols-[2.5rem_2.5rem_minmax(max-content,1fr)] whitespace-pre ${
@@ -1234,8 +1272,10 @@ export function PRsPanel({
                                               }`}
                                             >
                                               {(["left", "right"] as const).map((side) => {
-                                                const lineNumber = side === "left" ? line.oldLine : line.newLine;
-                                                return lineNumber && supportsAction("inline_comment") ? (
+                                                const lineNumber =
+                                                  side === "left" ? line.oldLine : line.newLine;
+                                                return lineNumber &&
+                                                  supportsAction("inline_comment") ? (
                                                   <button
                                                     key={side}
                                                     type="button"
@@ -1243,7 +1283,10 @@ export function PRsPanel({
                                                     aria-label={`Comment on ${side === "left" ? "original" : "new"} line ${lineNumber}`}
                                                     title={`Click to comment on line ${lineNumber}`}
                                                     onClick={() => {
-                                                      if (inlineLine === String(lineNumber) && inlineSide === side) {
+                                                      if (
+                                                        inlineLine === String(lineNumber) &&
+                                                        inlineSide === side
+                                                      ) {
                                                         setInlineLine("");
                                                         setInlineBody("");
                                                       } else {
@@ -1275,7 +1318,12 @@ export function PRsPanel({
                                                   onSubmit={(e) => {
                                                     e.preventDefault();
                                                     const lineNum = Number(inlineLine);
-                                                    if (!Number.isSafeInteger(lineNum) || lineNum <= 0 || !inlineBody.trim()) return;
+                                                    if (
+                                                      !Number.isSafeInteger(lineNum) ||
+                                                      lineNum <= 0 ||
+                                                      !inlineBody.trim()
+                                                    )
+                                                      return;
                                                     void mutatePullRequest(
                                                       pr.n,
                                                       "inline_comment",
@@ -1296,7 +1344,8 @@ export function PRsPanel({
                                                 >
                                                   <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-foreground">
                                                     <span>
-                                                      Add review comment on line {inlineLine} ({inlineSide === "right" ? "new" : "original"})
+                                                      Add review comment on line {inlineLine} (
+                                                      {inlineSide === "right" ? "new" : "original"})
                                                     </span>
                                                     <Button
                                                       type="button"
@@ -1321,10 +1370,17 @@ export function PRsPanel({
                                                         e.preventDefault();
                                                         setInlineLine("");
                                                         setInlineBody("");
-                                                      } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                                                      } else if (
+                                                        (e.metaKey || e.ctrlKey) &&
+                                                        e.key === "Enter"
+                                                      ) {
                                                         e.preventDefault();
                                                         const lineNum = Number(inlineLine);
-                                                        if (Number.isSafeInteger(lineNum) && lineNum > 0 && inlineBody.trim()) {
+                                                        if (
+                                                          Number.isSafeInteger(lineNum) &&
+                                                          lineNum > 0 &&
+                                                          inlineBody.trim()
+                                                        ) {
                                                           void mutatePullRequest(
                                                             pr.n,
                                                             "inline_comment",
@@ -1348,12 +1404,16 @@ export function PRsPanel({
                                                     className="min-h-16 w-full rounded-md border border-border bg-background p-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                                   />
                                                   <div className="flex items-center justify-between gap-2">
-                                                    <span className="text-[10px] text-muted-foreground">⌘+Enter to submit</span>
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                      ⌘+Enter to submit
+                                                    </span>
                                                     <Button
                                                       type="submit"
                                                       size="sm"
                                                       className="h-7 text-xs"
-                                                      disabled={!inlineBody.trim() || pendingAction !== null}
+                                                      disabled={
+                                                        !inlineBody.trim() || pendingAction !== null
+                                                      }
                                                     >
                                                       Comment
                                                     </Button>
@@ -1364,14 +1424,23 @@ export function PRsPanel({
 
                                             {/* In-place Review Threads on this exact line */}
                                             {lineThreads.map((thread) => (
-                                              <div key={thread.id} className="bg-background/80 px-3 py-1">
+                                              <div
+                                                key={thread.id}
+                                                className="bg-background/80 px-3 py-1"
+                                              >
                                                 <PullRequestReviewThreadCard
                                                   thread={thread}
                                                   prNumber={pr.n}
                                                   cwd={cwd}
                                                   supportsAction={supportsAction}
                                                   onMutate={(action, body, value, inline) =>
-                                                    mutatePullRequest(pr.n, action, body, value, inline)
+                                                    mutatePullRequest(
+                                                      pr.n,
+                                                      action,
+                                                      body,
+                                                      value,
+                                                      inline,
+                                                    )
                                                   }
                                                   onFixInThread={handleFixInThread}
                                                   isPending={pendingAction !== null}
@@ -1434,7 +1503,9 @@ export function PRsPanel({
                             );
                           })()
                         ) : detailTab === "checks" ? (
-                          <PullRequestChecksView checks={detailQuery.data.pullRequest.checks ?? []} />
+                          <PullRequestChecksView
+                            checks={detailQuery.data.pullRequest.checks ?? []}
+                          />
                         ) : detailTab === "commits" ? (
                           <div className="space-y-2">
                             {(detailQuery.data.pullRequest.commits ?? []).length > 0 ? (

@@ -1,7 +1,4 @@
-import {
-  BearerConnectionTarget,
-  PrimaryConnectionTarget,
-} from "@tabs/client-runtime/connection";
+import { BearerConnectionTarget, PrimaryConnectionTarget } from "@tabs/client-runtime/connection";
 import { EnvironmentId, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@tabs/contracts";
 import { describe, expect, it } from "vitest";
 

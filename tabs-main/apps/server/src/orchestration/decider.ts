@@ -1201,8 +1201,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
       const settledAt = command.messages.reduce(
-        (latest, message) =>
-          message.createdAt > latest ? message.createdAt : latest,
+        (latest, message) => (message.createdAt > latest ? message.createdAt : latest),
         firstMessage.createdAt,
       );
       events.push({

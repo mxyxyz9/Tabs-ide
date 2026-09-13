@@ -4,7 +4,10 @@ import { DesktopCaptureCoordinator } from "./DesktopCaptureCoordinator";
 const electronMocks = vi.hoisted(() => {
   const thumbnailMock = {
     getSize: vi.fn(() => ({ width: 1920, height: 1080 })),
-    toDataURL: vi.fn(() => "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="),
+    toDataURL: vi.fn(
+      () =>
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    ),
   };
 
   return {

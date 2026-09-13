@@ -59,4 +59,3 @@ describe("OAuth scopes", () => {
     }
   });
 });
-

@@ -70,10 +70,12 @@ describe("usage pricing", () => {
     });
 
     for (const reportedCostUsd of [null, 99]) {
-      expect(priceUsage(table, "example-model", millionTotals, reportedCostUsd, overrides)).toEqual({
-        costUsd: 13.5,
-        costSource: "modelPriced",
-      });
+      expect(priceUsage(table, "example-model", millionTotals, reportedCostUsd, overrides)).toEqual(
+        {
+          costUsd: 13.5,
+          costSource: "modelPriced",
+        },
+      );
     }
     expect(cacheSavingsUsd(table, "example-model", millionTotals, overrides)).toBe(1.5);
   });

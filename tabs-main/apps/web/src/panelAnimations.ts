@@ -84,7 +84,10 @@ export function usePanelAnimationSettings(): {
   const clientSettings = useClientSettings();
   const durationMs = clientSettings.panelAnimationDurationMs ?? 150;
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const isReduced = resolveEffectiveReducedMotion(clientSettings.reducedMotion, prefersReducedMotion);
+  const isReduced = resolveEffectiveReducedMotion(
+    clientSettings.reducedMotion,
+    prefersReducedMotion,
+  );
   const suppressed = useContext(PanelAnimationSuppressionContext);
 
   useEffect(() => {

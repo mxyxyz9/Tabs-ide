@@ -11,7 +11,19 @@ import {
   type RuntimeMode,
   type TurnId,
 } from "@tabs/contracts";
-import { Cache, Cause, DateTime, Deferred, Duration, Effect, Equal, Layer, Option, Schema, Stream } from "effect";
+import {
+  Cache,
+  Cause,
+  DateTime,
+  Deferred,
+  Duration,
+  Effect,
+  Equal,
+  Layer,
+  Option,
+  Schema,
+  Stream,
+} from "effect";
 import { makeDrainableWorker } from "@tabs/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
@@ -257,9 +269,7 @@ const make = Effect.gen(function* () {
     }
   });
 
-  const resumeTurnsAfterCompaction = Effect.fnUntraced(function* (
-    threadId: ThreadId,
-  ) {
+  const resumeTurnsAfterCompaction = Effect.fnUntraced(function* (threadId: ThreadId) {
     const queued = turnsAfterCompaction.get(threadId) ?? [];
     while (queued.length > 0 && turnsAfterCompaction.get(threadId) === queued) {
       const event = queued[0]!;

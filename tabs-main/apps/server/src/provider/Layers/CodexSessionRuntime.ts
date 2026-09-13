@@ -723,7 +723,8 @@ export const makeCodexSessionRuntime = (
         Effect.mapError(
           (cause) =>
             new CodexErrors.CodexAppServerSpawnError({
-              command: `${options.binaryPath} app-server ${(options.launchArgs ?? []).join(" ")}`.trim(),
+              command:
+                `${options.binaryPath} app-server ${(options.launchArgs ?? []).join(" ")}`.trim(),
               cause,
             }),
         ),

@@ -251,12 +251,12 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
                 cwd: process.cwd(),
                 environment: processEnv,
               });
-              const response = yield* ((client as any).request(
+              const response = yield* (client as any).request(
                 "account/rateLimitResetCredit/consume",
                 {
                   idempotencyKey,
                 },
-              ) as Effect.Effect<{ outcome: ProviderConsumeResetCreditOutcome }, any, never>);
+              ) as Effect.Effect<{ outcome: ProviderConsumeResetCreditOutcome }, any, never>;
               return response.outcome;
             }).pipe(Effect.scoped, Effect.timeout(CODEX_RESET_CREDIT_TIMEOUT)),
           )

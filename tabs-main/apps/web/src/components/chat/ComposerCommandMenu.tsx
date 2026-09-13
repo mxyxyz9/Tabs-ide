@@ -222,10 +222,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
         </span>
       </span>
       {skillSourceKind ? (
-        <SkillSourceBadge
-          kind={skillSourceKind}
-          showSkillSuffix={props.triggerKind === "skill"}
-        />
+        <SkillSourceBadge kind={skillSourceKind} showSkillSuffix={props.triggerKind === "skill"} />
       ) : null}
     </CommandItem>
   );

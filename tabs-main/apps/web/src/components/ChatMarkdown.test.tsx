@@ -7,7 +7,10 @@ describe("ChatMarkdown Features", () => {
   describe("GitHub Alert Callouts", () => {
     it("renders [!NOTE] as a styled note callout", () => {
       const html = renderToStaticMarkup(
-        <ChatMarkdown text={"> [!NOTE]\n> Here is important background information."} cwd={undefined} />,
+        <ChatMarkdown
+          text={"> [!NOTE]\n> Here is important background information."}
+          cwd={undefined}
+        />,
       );
       expect(html).toContain('role="note"');
       expect(html).toContain("border-blue-500/70");

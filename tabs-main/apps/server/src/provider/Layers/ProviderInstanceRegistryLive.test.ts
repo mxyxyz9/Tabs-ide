@@ -48,7 +48,10 @@ import { OpenCodeRuntimeLive } from "../opencodeRuntime";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers";
 import * as CodexResetCredit from "./codexResetCredit.ts";
 import type { BuiltInDriversEnv } from "../builtInDrivers";
-import { makeProviderInstanceRegistry, ProviderInstanceRegistryMutableLayer } from "./ProviderInstanceRegistryLive";
+import {
+  makeProviderInstanceRegistry,
+  ProviderInstanceRegistryMutableLayer,
+} from "./ProviderInstanceRegistryLive";
 
 const TestHttpClientLive = Layer.succeed(
   HttpClient.HttpClient,

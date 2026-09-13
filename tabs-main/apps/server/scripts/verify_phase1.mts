@@ -52,7 +52,7 @@ const driver = await Effect.runPromise(
     apiKey: apiKey,
     baseUrl: "https://generativelanguage.googleapis.com",
     customModels: [],
-  })
+  }),
 );
 
 const program = driver.generateDiffSummary({

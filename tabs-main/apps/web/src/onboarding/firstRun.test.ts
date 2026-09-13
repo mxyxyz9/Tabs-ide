@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appAtomRegistry } from "../state/atomRegistry";
-import {
-  manualOnboardingActiveAtom,
-  openWelcomeWizard,
-  closeWelcomeWizard,
-} from "./firstRun";
+import { manualOnboardingActiveAtom, openWelcomeWizard, closeWelcomeWizard } from "./firstRun";
 
 describe("manual onboarding state atom", () => {
   it("defaults to false", () => {

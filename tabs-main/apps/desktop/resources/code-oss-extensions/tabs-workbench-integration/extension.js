@@ -1157,7 +1157,7 @@ function startCodeControlChannel(context) {
                 "red-green";
               const themeOverrides = evaluateThemeTokens(activeConfig, diffColorScheme);
               const currentCustomizations = {
-                ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
+                ...workspaceConfig.get("workbench.colorCustomizations"),
               };
 
               for (const key of CUSTOM_THEME_COLOR_KEYS) {
@@ -1202,7 +1202,12 @@ function startCodeControlChannel(context) {
               const fontSizeCode =
                 (parsed.fontPreferences && parsed.fontPreferences.fontSizeCode) ||
                 (parsed.customConfig && parsed.customConfig.fontSizeCode);
-              if (fontSizeCode && typeof fontSizeCode === "number" && fontSizeCode >= 10 && fontSizeCode <= 24) {
+              if (
+                fontSizeCode &&
+                typeof fontSizeCode === "number" &&
+                fontSizeCode >= 10 &&
+                fontSizeCode <= 24
+              ) {
                 await workspaceConfig.update(
                   "editor.fontSize",
                   fontSizeCode,

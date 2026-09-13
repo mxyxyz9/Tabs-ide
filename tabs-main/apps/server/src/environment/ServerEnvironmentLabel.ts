@@ -111,10 +111,11 @@ const runFriendlyLabelCommand = Effect.fn("runFriendlyLabelCommand")(function* (
   readonly args: readonly string[];
 }) {
   const result = yield* Effect.tryPromise({
-    try: () => runProcess(input.command, input.args, {
-      timeoutMs: 5_000,
-      allowNonZeroExit: true,
-    }),
+    try: () =>
+      runProcess(input.command, input.args, {
+        timeoutMs: 5_000,
+        allowNonZeroExit: true,
+      }),
     catch: (cause) =>
       new ServerEnvironmentLabelCommandError({
         probe: input.probe,
@@ -123,28 +124,28 @@ const runFriendlyLabelCommand = Effect.fn("runFriendlyLabelCommand")(function* (
         cause,
       }),
   }).pipe(
-      Effect.mapError(
-        (cause) =>
-          new ServerEnvironmentLabelCommandError({
-            probe: input.probe,
-            executable: input.command,
-            argumentCount: input.args.length,
-            cause,
+    Effect.mapError(
+      (cause) =>
+        new ServerEnvironmentLabelCommandError({
+          probe: input.probe,
+          executable: input.command,
+          argumentCount: input.args.length,
+          cause,
+        }),
+    ),
+    Effect.catchTags({
+      ServerEnvironmentLabelCommandError: (error) =>
+        Effect.logDebug(error.message).pipe(
+          Effect.annotateLogs({
+            probe: error.probe,
+            executable: error.executable,
+            argumentCount: error.argumentCount,
+            cause: error,
           }),
-      ),
-      Effect.catchTags({
-        ServerEnvironmentLabelCommandError: (error) =>
-          Effect.logDebug(error.message).pipe(
-            Effect.annotateLogs({
-              probe: error.probe,
-              executable: error.executable,
-              argumentCount: error.argumentCount,
-              cause: error,
-            }),
-            Effect.as(null),
-          ),
-      }),
-    );
+          Effect.as(null),
+        ),
+    }),
+  );
 
   if (result === null || result.code !== 0) {
     return null;

@@ -142,7 +142,9 @@ describe("scopedStateStorage", () => {
       // Clearing local state should not affect remote state with duplicate project ID
       clearScopedState(mockStorage, localProjectKey);
       expect(loadScopedState(mockStorage, localProjectKey)).toBeNull();
-      expect(loadScopedState<{ draft: string }>(mockStorage, remoteProjectKey)?.draft).toBe("remote draft for proj-alpha");
+      expect(loadScopedState<{ draft: string }>(mockStorage, remoteProjectKey)?.draft).toBe(
+        "remote draft for proj-alpha",
+      );
     });
 
     it("isolates storage for identical thread IDs across different environments", () => {
@@ -155,8 +157,12 @@ describe("scopedStateStorage", () => {
       saveScopedState(mockStorage, localThreadKey, { expanded: true, scrollPos: 120 });
       saveScopedState(mockStorage, remoteThreadKey, { expanded: false, scrollPos: 0 });
 
-      expect(loadScopedState<{ expanded: boolean }>(mockStorage, localThreadKey)?.expanded).toBe(true);
-      expect(loadScopedState<{ expanded: boolean }>(mockStorage, remoteThreadKey)?.expanded).toBe(false);
+      expect(loadScopedState<{ expanded: boolean }>(mockStorage, localThreadKey)?.expanded).toBe(
+        true,
+      );
+      expect(loadScopedState<{ expanded: boolean }>(mockStorage, remoteThreadKey)?.expanded).toBe(
+        false,
+      );
     });
   });
 });

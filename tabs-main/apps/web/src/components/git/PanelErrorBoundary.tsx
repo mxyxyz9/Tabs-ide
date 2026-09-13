@@ -25,7 +25,11 @@ export class PanelErrorBoundary extends Component<Props, State> {
   }
 
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error(`[PanelErrorBoundary] Error caught in ${this.props.panelName}:`, error, errorInfo);
+    console.error(
+      `[PanelErrorBoundary] Error caught in ${this.props.panelName}:`,
+      error,
+      errorInfo,
+    );
   }
 
   private handleRetry = (): void => {
@@ -39,7 +43,10 @@ export class PanelErrorBoundary extends Component<Props, State> {
           <Banner
             tone="bad"
             title={`Something went wrong in the ${this.props.panelName} panel`}
-            body={this.state.error?.message || "An unexpected error occurred while rendering this panel."}
+            body={
+              this.state.error?.message ||
+              "An unexpected error occurred while rendering this panel."
+            }
             actions={
               <Button variant="ghost" size="sm" onClick={this.handleRetry}>
                 <RefreshCw /> Try again

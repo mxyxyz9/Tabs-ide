@@ -44,7 +44,11 @@ export function mapToolCategory(ruleId?: string, toolName?: string): AuditCatego
   if (normTool.includes("osv") || normRule.includes("cve") || normRule.includes("vulnerability")) {
     return "dependency_secret";
   }
-  if (normTool.includes("semgrep") || normTool.includes("opengrep") || normRule.includes("security")) {
+  if (
+    normTool.includes("semgrep") ||
+    normTool.includes("opengrep") ||
+    normRule.includes("security")
+  ) {
     return "security";
   }
   if (normTool.includes("tsc") || normTool.includes("eslint") || normTool.includes("pyright")) {
@@ -102,7 +106,10 @@ export function normalizeSarifLog(
       const loc = res.locations?.[0]?.physicalLocation;
       const rawUri = loc?.artifactLocation?.uri ?? "repository";
       // Relativise URI against repoPath
-      const filePath = rawUri.replace(/^file:\/\//, "").replace(options.repoPath, "").replace(/^\//, "");
+      const filePath = rawUri
+        .replace(/^file:\/\//, "")
+        .replace(options.repoPath, "")
+        .replace(/^\//, "");
 
       const startLine = loc?.region?.startLine ?? 1;
       const endLine = loc?.region?.endLine ?? startLine;

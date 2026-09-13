@@ -103,7 +103,8 @@ export function deriveRepoState(params: DeriveRepoStateParams): RepoStateDetails
       kind: "not_a_repo",
       severity: "info",
       title: "No repository here yet",
-      description: "Start one to begin recording changes, or clone an existing project into this folder.",
+      description:
+        "Start one to begin recording changes, or clone an existing project into this folder.",
       canCommitLocally: false,
       canPush: false,
       canForcePush: false,
@@ -214,7 +215,8 @@ export function deriveRepoState(params: DeriveRepoStateParams): RepoStateDetails
       kind: "detached_head",
       severity: "warning",
       title: "You're not on a branch",
-      description: "Commits made here won't belong to any branch. Create one from this point to keep your work safe.",
+      description:
+        "Commits made here won't belong to any branch. Create one from this point to keep your work safe.",
       canCommitLocally: (params.stagedFilesCount ?? 0) > 0,
       canPush: false,
       canForcePush: false,
@@ -269,7 +271,8 @@ export function deriveRepoState(params: DeriveRepoStateParams): RepoStateDetails
       kind: "gh_not_authenticated",
       severity: "warning",
       title: "Sign in to GitHub to continue",
-      description: "Pushing, pulling from a remote, and pull requests all need a signed-in GitHub account.",
+      description:
+        "Pushing, pulling from a remote, and pull requests all need a signed-in GitHub account.",
       canCommitLocally: (params.stagedFilesCount ?? 0) > 0,
       canPush: false,
       canForcePush: false,

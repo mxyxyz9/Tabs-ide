@@ -101,9 +101,7 @@ export const TestingOverview = memo(function TestingOverview({
           </Button>
           <p className="text-xs text-muted-foreground sm:col-span-4">
             Next generated ID:{" "}
-            <span className="font-mono text-foreground">
-              {caseIdPolicy?.example ?? "TC-00001"}
-            </span>
+            <span className="font-mono text-foreground">{caseIdPolicy?.example ?? "TC-00001"}</span>
             . Leave the prefix blank for numeric-only IDs.
           </p>
         </CardContent>
@@ -130,8 +128,8 @@ export const TestingOverview = memo(function TestingOverview({
               I have a test plan
             </span>
             <span className="mt-2 block text-sm leading-6 text-muted-foreground">
-              Import an Excel workbook, map its case IDs to the live app, and review only differences
-              or blocked steps.
+              Import an Excel workbook, map its case IDs to the live app, and review only
+              differences or blocked steps.
             </span>
           </div>
           <span className="mt-5 flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground">
@@ -169,8 +167,8 @@ export const TestingOverview = memo(function TestingOverview({
               I need to understand an app
             </span>
             <span className="mt-2 block text-sm leading-6 text-muted-foreground">
-              Connect a web or Electron target and explore one page, one section, or the whole origin
-              with safe limits.
+              Connect a web or Electron target and explore one page, one section, or the whole
+              origin with safe limits.
             </span>
           </div>
           <span className="mt-5 flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground">
@@ -186,9 +184,7 @@ export const TestingOverview = memo(function TestingOverview({
         <button
           type="button"
           onClick={() => onNavigate(recommendedTestingSection)}
-          disabled={
-            recommendedTestingSection === "discover" && (status?.nodeCount ?? 0) === 0
-          }
+          disabled={recommendedTestingSection === "discover" && (status?.nodeCount ?? 0) === 0}
           className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border/70 bg-card p-5 text-left shadow-sm transition-all duration-200 hover:border-violet-500/50 hover:bg-muted/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span

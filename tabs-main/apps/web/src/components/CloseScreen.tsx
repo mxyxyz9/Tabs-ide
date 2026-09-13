@@ -28,10 +28,17 @@ const CLOSE_SOLARI_MESSAGES = [
   "SHUTTING DOWN (PROBABLY)",
 ];
 
-function resolveAnimationFonts(fontComboId?: string | undefined, customFontProp?: string | undefined): { headingFont?: string | undefined; uiFont?: string | undefined } {
+function resolveAnimationFonts(
+  fontComboId?: string | undefined,
+  customFontProp?: string | undefined,
+): { headingFont?: string | undefined; uiFont?: string | undefined } {
   if (!fontComboId || fontComboId === "app-default") return {};
   if (fontComboId === "custom") {
-    const customFont = customFontProp || (typeof window !== "undefined" ? window.localStorage?.getItem("tabs.customAnimationFont") ?? "'Inter', sans-serif" : "'Inter', sans-serif");
+    const customFont =
+      customFontProp ||
+      (typeof window !== "undefined"
+        ? (window.localStorage?.getItem("tabs.customAnimationFont") ?? "'Inter', sans-serif")
+        : "'Inter', sans-serif");
     return {
       headingFont: customFont,
       uiFont: customFont,
@@ -178,11 +185,18 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAn
   }, [phase, runDrain, prefersReducedMotion]);
 
   const animating = phase === "closing" || phase === "holding";
-  const headingStyle = fonts?.headingFont ? { fontFamily: fonts.headingFont, filter: `url(#${filterId})` } : { filter: `url(#${filterId})` };
+  const headingStyle = fonts?.headingFont
+    ? { fontFamily: fonts.headingFont, filter: `url(#${filterId})` }
+    : { filter: `url(#${filterId})` };
 
   return (
     <div className="close-screen relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
-      <svg width="1" height="1" style={{ position: "absolute", opacity: 0.001, pointerEvents: "none" }} aria-hidden="true">
+      <svg
+        width="1"
+        height="1"
+        style={{ position: "absolute", opacity: 0.001, pointerEvents: "none" }}
+        aria-hidden="true"
+      >
         <defs>
           <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
             <feTurbulence
@@ -227,8 +241,12 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAn
               "text-[80px] font-light tracking-[-0.02em] transform-origin-[center_bottom]",
               animating && "cq-word-drain",
               isBlock
-                ? (isDark ? "text-[#1c0f0e]" : "text-white")
-                : (isDark ? "text-white" : "text-black"),
+                ? isDark
+                  ? "text-[#1c0f0e]"
+                  : "text-white"
+                : isDark
+                  ? "text-white"
+                  : "text-black",
             )}
             style={headingStyle}
           >
@@ -243,8 +261,12 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAn
           uiFont={fonts?.uiFont}
           className={
             isBlock
-              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-              : (isDark ? "text-[#a1a1aa]" : "text-[#52525b]")
+              ? isDark
+                ? "text-[#1c0f0e]/85"
+                : "text-white/75"
+              : isDark
+                ? "text-[#a1a1aa]"
+                : "text-[#52525b]"
           }
         />
       </div>
@@ -299,8 +321,12 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAni
             className={cn(
               "relative z-10 grid grid-cols-4 gap-[6px]",
               isBlock
-                ? (isDark ? "text-[#1c0f0e]" : "text-white")
-                : (isDark ? "text-white" : "text-black"),
+                ? isDark
+                  ? "text-[#1c0f0e]"
+                  : "text-white"
+                : isDark
+                  ? "text-white"
+                  : "text-black",
             )}
           >
             {tiles.map((ch, i) => (
@@ -311,14 +337,21 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAni
                   animating && (isDark ? "cq-tile-dim" : "cq-tile-dim-light"),
                   isBlock
                     ? "border-white/24 bg-white/12"
-                    : (isDark ? "border-white/10 bg-white/4" : "border-black/10 bg-black/4"),
+                    : isDark
+                      ? "border-white/10 bg-white/4"
+                      : "border-black/10 bg-black/4",
                 )}
                 style={{
                   ...(animating ? { transitionDelay: `${i * 70}ms` } : {}),
                   ...(tileFont ? { fontFamily: tileFont } : {}),
                 }}
               >
-                <div className={cn("absolute inset-x-0 top-1/2 h-px", isDark ? "bg-black/35" : "bg-black/15")} />
+                <div
+                  className={cn(
+                    "absolute inset-x-0 top-1/2 h-px",
+                    isDark ? "bg-black/35" : "bg-black/15",
+                  )}
+                />
                 {ch === " " ? "\u00A0" : ch}
               </div>
             ))}
@@ -332,8 +365,12 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAni
           uiFont={fonts?.uiFont}
           className={
             isBlock
-              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-              : (isDark ? "text-[#a1a1aa]" : "text-[#52525b]")
+              ? isDark
+                ? "text-[#1c0f0e]/85"
+                : "text-white/75"
+              : isDark
+                ? "text-[#a1a1aa]"
+                : "text-[#52525b]"
           }
         />
       </div>
@@ -365,23 +402,24 @@ export function CloseScreen({
   customFont,
 }: CloseScreenProps) {
   const { resolvedTheme } = useTheme();
-  const effectiveTheme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
+  const effectiveTheme =
+    overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
   const isDark = effectiveTheme === "dark";
   const isBlock = palette === "block";
 
   const storedComboId =
     fontComboId ||
     (typeof window !== "undefined"
-      ? window.localStorage?.getItem("tabs.closeAnimationFontComboId") ??
+      ? (window.localStorage?.getItem("tabs.closeAnimationFontComboId") ??
         window.localStorage?.getItem("tabs.animationFontComboId") ??
-        "app-default"
+        "app-default")
       : "app-default");
   const storedCustomFont =
     customFont ||
     (typeof window !== "undefined"
-      ? (window.localStorage?.getItem("tabs.closeCustomAnimationFont") ||
-         window.localStorage?.getItem("tabs.customAnimationFont")) ??
-        undefined
+      ? ((window.localStorage?.getItem("tabs.closeCustomAnimationFont") ||
+          window.localStorage?.getItem("tabs.customAnimationFont")) ??
+        undefined)
       : undefined);
 
   const fonts = resolveAnimationFonts(storedComboId, storedCustomFont);
@@ -390,7 +428,7 @@ export function CloseScreen({
     <div
       className={cn(
         "flex h-full w-full flex-col items-center justify-center",
-        isBlock ? "bg-[#2563eb]" : (isDark ? "bg-[#09090b]" : "bg-white"),
+        isBlock ? "bg-[#2563eb]" : isDark ? "bg-[#09090b]" : "bg-white",
       )}
     >
       {loader === "solari" ? (

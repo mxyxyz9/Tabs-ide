@@ -34,7 +34,9 @@ describe("BackgroundService", () => {
     expect(unit).toContain("[Service]");
     expect(unit).toContain("Environment=NODE_ENV=production");
     expect(unit).toContain("Environment=TABS_HOME=/var/tabs");
-    expect(unit).toContain('ExecStart="/usr/local/bin/node" "/opt/tabs/dist/index.mjs" serve --home-dir "/var/tabs"');
+    expect(unit).toContain(
+      'ExecStart="/usr/local/bin/node" "/opt/tabs/dist/index.mjs" serve --home-dir "/var/tabs"',
+    );
     expect(unit).toContain("Restart=always");
     expect(unit).toContain("[Install]");
     expect(unit).toContain("WantedBy=default.target");

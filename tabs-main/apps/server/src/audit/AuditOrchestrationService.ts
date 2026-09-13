@@ -39,7 +39,9 @@ import { deduplicateAndRankFindings } from "./FindingDeduper.ts";
 import { attachFixPlans } from "./SafeFixPlanner.ts";
 
 export interface AuditOrchestratorOptions {
-  readonly onProgress?: ((event: ReviewProgressEvent) => Effect.Effect<void, never, never>) | undefined;
+  readonly onProgress?:
+    | ((event: ReviewProgressEvent) => Effect.Effect<void, never, never>)
+    | undefined;
 }
 
 export function calculateHealthScore(findings: ReadonlyArray<AuditFinding>): number {
@@ -127,7 +129,7 @@ export async function executeAuditScan(
   // 6. Stage 4 Deduplication, False-Positive Discount & Severity Ranking
   const rankedFindings = deduplicateAndRankFindings(verifiedFindings, {
     repoPath,
-    minConfidence: 0.60,
+    minConfidence: 0.6,
   });
 
   // 7. Stage 5 Safe Patch Plan Generation
@@ -165,5 +167,4 @@ export async function executeAuditScan(
 export const runAuditScan = (
   input: AuditScanInput,
   options?: AuditOrchestratorOptions,
-): Effect.Effect<AuditScanResult> =>
-  Effect.promise(() => executeAuditScan(input, options));
+): Effect.Effect<AuditScanResult> => Effect.promise(() => executeAuditScan(input, options));

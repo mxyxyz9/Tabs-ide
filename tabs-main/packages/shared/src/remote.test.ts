@@ -221,4 +221,3 @@ describe("remote", () => {
     expect((hostError as RemoteBackendUrlInvalidError).cause).toBeInstanceOf(TypeError);
   });
 });
-

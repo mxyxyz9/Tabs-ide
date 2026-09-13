@@ -15,9 +15,7 @@ export interface ReviewPassContext {
   readonly contextPack: TokenBudgetedContextPack;
 }
 
-export function runCorrectnessPass(
-  ctx: ReviewPassContext,
-): ReadonlyArray<AuditFinding> {
+export function runCorrectnessPass(ctx: ReviewPassContext): ReadonlyArray<AuditFinding> {
   const findings: AuditFinding[] = [];
   const lines = ctx.contextPack.primaryFileContent.split("\n");
   const filePath = ctx.contextPack.targetScope;
@@ -27,10 +25,15 @@ export function runCorrectnessPass(
     const lineNum = idx + 1;
 
     // Pattern 1: Potential null pointer dereference on optional property access without check
-    if (/\b([A-Za-z0-9_$]+)\.([A-Za-z0-9_$]+)\.([A-Za-z0-9_$]+)\(/.test(line) && !line.includes("?.") && !line.includes("if (") && !line.includes("&&")) {
+    if (
+      /\b([A-Za-z0-9_$]+)\.([A-Za-z0-9_$]+)\.([A-Za-z0-9_$]+)\(/.test(line) &&
+      !line.includes("?.") &&
+      !line.includes("if (") &&
+      !line.includes("&&")
+    ) {
       const match = /\b([A-Za-z0-9_$]+)\.([A-Za-z0-9_$]+)\.([A-Za-z0-9_$]+)\(/.exec(line);
       const targetObj = match?.[1] ?? "object";
-      
+
       const title = `Potential Null Dereference in '${targetObj}' chain`;
       const fingerprint = computeFindingFingerprint({
         filePath,
@@ -58,7 +61,13 @@ export function runCorrectnessPass(
     }
 
     // Pattern 2: Unhandled Promise rejection (async call without await/catch)
-    if (/\b(fetch|fs\.promises|axios|api\.[A-Za-z0-9_$]+)\(/.test(line) && !line.includes("await") && !line.includes(".then") && !line.includes(".catch") && !line.includes("return")) {
+    if (
+      /\b(fetch|fs\.promises|axios|api\.[A-Za-z0-9_$]+)\(/.test(line) &&
+      !line.includes("await") &&
+      !line.includes(".then") &&
+      !line.includes(".catch") &&
+      !line.includes("return")
+    ) {
       const title = "Unawaited Async Promise Execution";
       const fingerprint = computeFindingFingerprint({
         filePath,
@@ -76,7 +85,7 @@ export function runCorrectnessPass(
         endLine: lineNum,
         category: "correctness",
         severity: "warning",
-        confidence: 0.80,
+        confidence: 0.8,
         title,
         explanation: `Async promise call on line ${lineNum} is neither awaited nor handled with .catch(). Unhandled rejections can crash the process or leave state inconsistent.`,
         evidenceSnippet: line.trim(),

@@ -125,8 +125,8 @@ export function LimitsTab() {
         <InfoIcon className="mt-0.5 size-4 shrink-0 text-primary" />
         <p className="leading-relaxed">
           Usage is read locally from each provider CLI&apos;s stored credentials and fetched
-          directly from the provider. Short-lived tokens are refreshed through the
-          provider&apos;s own CLI or official token endpoint.
+          directly from the provider. Short-lived tokens are refreshed through the provider&apos;s
+          own CLI or official token endpoint.
         </p>
       </div>
     </div>

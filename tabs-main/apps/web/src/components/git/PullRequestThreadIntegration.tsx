@@ -1,9 +1,5 @@
 import { useState, useMemo } from "react";
-import type {
-  EnvironmentId,
-  GitPullRequestReviewThread,
-  ThreadId,
-} from "@tabs/contracts";
+import type { EnvironmentId, GitPullRequestReviewThread, ThreadId } from "@tabs/contracts";
 import type { Thread } from "../../types";
 import { Sparkles, Link2, Unlink, ExternalLink } from "lucide-react";
 import { Button } from "../ui/button";
@@ -22,12 +18,15 @@ export function formatReviewFixPrompt(
 
   unresolved.forEach((thread, index) => {
     const firstComment = thread.comments[0]?.body ?? "(no comment text)";
-    const author = thread.comments[0]?.author?.login ? `@${thread.comments[0].author.login}` : "Reviewer";
+    const author = thread.comments[0]?.author?.login
+      ? `@${thread.comments[0].author.login}`
+      : "Reviewer";
     prompt += `### ${index + 1}. ${thread.path} (line ${thread.line})\n`;
     prompt += `**${author}**: ${firstComment}\n\n`;
   });
 
-  prompt += "Please inspect the codebase, fix the issues described in each comment, and run the verification tests.";
+  prompt +=
+    "Please inspect the codebase, fix the issues described in each comment, and run the verification tests.";
   return prompt;
 }
 
@@ -52,8 +51,14 @@ export function PullRequestThreadIntegration({
   threads: ReadonlyArray<Thread>;
   environmentId?: EnvironmentId | string | null | undefined;
   onOpenThread: (thread: Thread) => void;
-  onLinkThread: (threadId: ThreadId, threadEnvId?: EnvironmentId | null | undefined) => Promise<void>;
-  onUnlinkThread: (threadId: ThreadId, threadEnvId?: EnvironmentId | null | undefined) => Promise<void>;
+  onLinkThread: (
+    threadId: ThreadId,
+    threadEnvId?: EnvironmentId | null | undefined,
+  ) => Promise<void>;
+  onUnlinkThread: (
+    threadId: ThreadId,
+    threadEnvId?: EnvironmentId | null | undefined,
+  ) => Promise<void>;
   onCreateFixThread: (prompt: string) => void;
 }) {
   const [isLinking, setIsLinking] = useState(false);
@@ -158,7 +163,9 @@ export function PullRequestThreadIntegration({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No agent threads linked to this pull request yet.</p>
+        <p className="text-xs text-muted-foreground">
+          No agent threads linked to this pull request yet.
+        </p>
       )}
 
       {/* Link Thread form */}

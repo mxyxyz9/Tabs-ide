@@ -110,7 +110,10 @@ export function SourceControlSettingsPanel({
       <div className="space-y-6">
         <div className="mb-2 space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn(
+              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+              activeFontCombo.sansClass,
+            )}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Source Control
@@ -133,7 +136,10 @@ export function SourceControlSettingsPanel({
       <div className="space-y-6">
         <div className="mb-2 space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn(
+              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+              activeFontCombo.sansClass,
+            )}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Source Control
@@ -170,7 +176,10 @@ export function SourceControlSettingsPanel({
       <div>
         <div className="space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn(
+              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+              activeFontCombo.sansClass,
+            )}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Source Control
@@ -179,8 +188,14 @@ export function SourceControlSettingsPanel({
             Manage version control systems, code hosting providers, and authentication status.
           </p>
         </div>
-        <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-        <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+        <div
+          className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+          style={{ background: "linear-gradient(to right, rgba(255,255,255,0.25), transparent)" }}
+        />
+        <div
+          className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+          style={{ background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)" }}
+        />
       </div>
 
       <SettingsSection title="Version Control" headerAction={scanButton}>
@@ -408,7 +423,9 @@ export function SourceControlSettingsPanel({
       </SettingsSection>
 
       <p className="text-xs text-muted-foreground/60 px-0.5">
-        Install the required CLI tools to enable provider authentication and pull request integrations. Tabs scans your environment automatically — hit the refresh icon above to re-scan.
+        Install the required CLI tools to enable provider authentication and pull request
+        integrations. Tabs scans your environment automatically — hit the refresh icon above to
+        re-scan.
       </p>
     </div>
   );

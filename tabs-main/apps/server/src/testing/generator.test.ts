@@ -20,9 +20,7 @@ async function runCommand(command: string, args: ReadonlyArray<string>) {
     return await execFile(command, [...args]);
   } catch (error) {
     const output = error as Error & { stdout?: string; stderr?: string };
-    throw new Error(
-      [output.message, output.stdout, output.stderr].filter(Boolean).join("\n"),
-    );
+    throw new Error([output.message, output.stdout, output.stderr].filter(Boolean).join("\n"));
   }
 }
 
@@ -100,10 +98,7 @@ function seedAcceptedCase(store: TestingGraphStore): TestingCaseSummary {
         externalId: "QA-101",
         description: "Open account settings",
         steps: ["Open Settings", "Choose Account"],
-        expectedResults: [
-          "Settings are visible",
-          "Account Settings page is visible",
-        ],
+        expectedResults: ["Settings are visible", "Account Settings page is visible"],
         expectedResult: "Account Settings page is visible",
         sourceSheet: "Cases",
         sourceRow: 2,
@@ -217,10 +212,8 @@ describe("TestingGenerator", () => {
       expect(spec).not.toContain("Open account settings");
       // Verify the prompt sent to the LLM was enriched with the expected result.
       const promptArg =
-        (
-          localGenerate.mock.calls[0]?.[0] as
-            { sanitizedPrompt?: string } | undefined
-        )?.sanitizedPrompt ?? "";
+        (localGenerate.mock.calls[0]?.[0] as { sanitizedPrompt?: string } | undefined)
+          ?.sanitizedPrompt ?? "";
       expect(promptArg).toContain("Expected Result:");
       if (process.env.TABS_VERIFY_GENERATED_SUITE) {
         await runCommand("bunx", [
@@ -304,9 +297,9 @@ describe("TestingGenerator", () => {
       expect(job.artifacts[0]?.pageObjectPath).toContain(
         join("generated", "qa", "pages", "account-settings", "qa-101.page.ts"),
       );
-      expect(
-        await readFile(job.artifacts[0]!.pageObjectPath, "utf8"),
-      ).toContain("class AccountSettingsScreen");
+      expect(await readFile(job.artifacts[0]!.pageObjectPath, "utf8")).toContain(
+        "class AccountSettingsScreen",
+      );
     } finally {
       locatorStore.close();
       store.close();

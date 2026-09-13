@@ -24,7 +24,13 @@ export interface ContextWindowMeterProps {
 }
 
 export function ContextWindowMeter(props: ContextWindowMeterProps) {
-  const { usage, modelDisplayName, onCompact, compactDisabled = false, compactDisabledReason } = props;
+  const {
+    usage,
+    modelDisplayName,
+    onCompact,
+    compactDisabled = false,
+    compactDisabledReason,
+  } = props;
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
   const radius = 9.75;

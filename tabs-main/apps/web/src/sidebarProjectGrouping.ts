@@ -115,14 +115,12 @@ export function buildSidebarProjectSnapshots(input: {
     const isWsl = input.isWslEnvironment ?? (() => false);
     const allRemoteMembersAreDesktopLocal =
       remoteMembers.length > 0 &&
-      remoteMembers.every(
-        (member) => Boolean(member.environmentId && isDesktopLocal(member.environmentId)),
+      remoteMembers.every((member) =>
+        Boolean(member.environmentId && isDesktopLocal(member.environmentId)),
       );
     const allRemoteMembersAreWsl =
       remoteMembers.length > 0 &&
-      remoteMembers.every(
-        (member) => Boolean(member.environmentId && isWsl(member.environmentId)),
-      );
+      remoteMembers.every((member) => Boolean(member.environmentId && isWsl(member.environmentId)));
 
     return {
       ...representative,

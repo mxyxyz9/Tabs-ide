@@ -26,18 +26,13 @@ describe("reasoningOrdering", () => {
         "EXTRA",
         "HIGH",
       ]);
-      expect(formatThinkingHeaderWords({ id: "xhigh", label: "xhigh" })).toEqual([
-        "EXTRA",
-        "HIGH",
-      ]);
-      expect(formatThinkingHeaderWords({ id: "instantthinking", label: "instantthinking" })).toEqual([
-        "INSTANT",
-        "THINK",
-      ]);
-      expect(formatThinkingHeaderWords({ id: "instant_thinking", label: "Instant Thinking" })).toEqual([
-        "INSTANT",
-        "THINKING",
-      ]);
+      expect(formatThinkingHeaderWords({ id: "xhigh", label: "xhigh" })).toEqual(["EXTRA", "HIGH"]);
+      expect(
+        formatThinkingHeaderWords({ id: "instantthinking", label: "instantthinking" }),
+      ).toEqual(["INSTANT", "THINK"]);
+      expect(
+        formatThinkingHeaderWords({ id: "instant_thinking", label: "Instant Thinking" }),
+      ).toEqual(["INSTANT", "THINKING"]);
     });
 
     it("handles single-word terms without splitting unnecessarily", () => {
@@ -209,7 +204,8 @@ describe("reasoningOrdering", () => {
     });
 
     it("getComposerProviderState only activates ultrathink frame when promptEffort is ultrathink", async () => {
-      const { getComposerProviderState } = await import("./components/chat/composerProviderRegistry");
+      const { getComposerProviderState } =
+        await import("./components/chat/composerProviderRegistry");
       const { createModelCapabilities } = await import("@tabs/shared/model");
 
       const claudeCaps = createModelCapabilities({

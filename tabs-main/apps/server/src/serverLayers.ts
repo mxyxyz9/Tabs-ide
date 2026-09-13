@@ -182,9 +182,7 @@ export function makeServerRuntimeServicesLayer() {
   );
 
   const usageLayer = UsageServiceLive.pipe(Layer.provide(FetchHttpClient.layer));
-  const usageLimitSourcesLayer = UsageLimitSources.layer.pipe(
-    Layer.provide(FetchHttpClient.layer),
-  );
+  const usageLimitSourcesLayer = UsageLimitSources.layer.pipe(Layer.provide(FetchHttpClient.layer));
 
   const agentSessionScannerLayer = AgentSessionScanner.layer.pipe(
     Layer.provideMerge(runtimeServicesLayer),

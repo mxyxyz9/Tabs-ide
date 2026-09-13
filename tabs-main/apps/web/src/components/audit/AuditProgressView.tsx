@@ -46,7 +46,9 @@ export function AuditProgressView({
         {progressLogs.map((log, idx) => (
           <div key={idx} className="flex items-center justify-between">
             <span className="truncate max-w-xs">&gt; {log.message}</span>
-            <span className="text-muted-foreground text-[10px]">{new Date(log.timestamp).toLocaleTimeString()}</span>
+            <span className="text-muted-foreground text-[10px]">
+              {new Date(log.timestamp).toLocaleTimeString()}
+            </span>
           </div>
         ))}
       </div>

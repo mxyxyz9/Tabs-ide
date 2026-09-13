@@ -175,4 +175,3 @@ export function parseGitHubRepositoryNameWithOwnerFromRemoteUrl(url: string | nu
   const repositoryNameWithOwner = match?.[1]?.trim() ?? "";
   return repositoryNameWithOwner.length > 0 ? repositoryNameWithOwner : null;
 }
-

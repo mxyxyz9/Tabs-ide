@@ -376,9 +376,7 @@ export const TestingAutomate = memo(function TestingAutomate({ onNavigate }: Tes
                     {job.engine && job.engine !== "standard" ? (
                       <Badge variant="outline">{job.engine}</Badge>
                     ) : null}
-                    {job.stage ? (
-                      <Badge variant="secondary">{job.stage}</Badge>
-                    ) : null}
+                    {job.stage ? <Badge variant="secondary">{job.stage}</Badge> : null}
                     <Badge variant={job.status === "completed" ? "success" : "outline"}>
                       {job.status.replace("-", " ")}
                     </Badge>

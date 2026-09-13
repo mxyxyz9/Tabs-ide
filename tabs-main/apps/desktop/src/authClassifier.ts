@@ -50,8 +50,11 @@ const BLOCKED_UNSAFE_SCHEMES = new Set([
 ]);
 
 const ALLOWED_WEB_SCHEMES = new Set(["http:", "https:"]);
+// Add a scheme only after the desktop main process has a state-bound OAuth
+// callback handler for it. Merely registering a protocol with the OS is not enough.
+const ALLOWED_CALLBACK_SCHEMES = new Set<string>();
 
-const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]", "::1", "0.0.0.0"]);
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 
 /**
  * Providers whose OAuth 2.0 authorization endpoints strictly prohibit developer-controlled
@@ -170,10 +173,7 @@ export function hasSameRegistrableOrigin(urlA: string, urlB: string): boolean {
   try {
     const a = new URL(urlA);
     const b = new URL(urlB);
-    if (a.protocol !== b.protocol) return false;
-    const hostA = a.hostname.toLowerCase().replace(/^www\./, "");
-    const hostB = b.hostname.toLowerCase().replace(/^www\./, "");
-    return hostA === hostB;
+    return a.origin === b.origin;
   } catch {
     return false;
   }
@@ -210,8 +210,16 @@ export function classifyAuthNavigation(request: AuthNavigationRequest): AuthClas
     };
   }
 
-  // 2. Custom application protocol handlers (e.g. tabs://, vscode://)
+  // 2. Only application-owned callback protocols may enter the callback path.
   if (!ALLOWED_WEB_SCHEMES.has(scheme)) {
+    if (!ALLOWED_CALLBACK_SCHEMES.has(scheme)) {
+      return {
+        kind: "blockedUnsafeScheme",
+        reason: `Scheme ${scheme} is not an application-owned callback protocol.`,
+        sanitizedUrl,
+        scheme,
+      };
+    }
     return {
       kind: "customSchemeCallback",
       reason: `Custom application URL scheme: ${scheme}`,

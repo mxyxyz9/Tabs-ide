@@ -120,9 +120,7 @@ export const make = Effect.gen(function* () {
       ),
     );
 
-    let project = input.projectId
-      ? snapshot.projects.find((p) => p.id === input.projectId)
-      : null;
+    let project = input.projectId ? snapshot.projects.find((p) => p.id === input.projectId) : null;
 
     if (!project && input.projectCwd) {
       const normalizedCwd = normalizeProjectPathForComparison(input.projectCwd);

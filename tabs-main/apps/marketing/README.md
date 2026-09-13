@@ -58,11 +58,11 @@ Create/select a Vercel project for this website. The workflow builds locally and
 
 Add exactly these repository Actions secrets (Settings → Secrets and variables → Actions):
 
-| Secret | Where to get the value |
-| --- | --- |
-| `VERCEL_TOKEN` | Vercel account settings → Tokens; create a token authorized for the target project/team |
-| `VERCEL_ORG_ID` | Target Vercel team/account settings → General → Team ID; alternatively the `orgId` in `.vercel/project.json` created by `vercel link` |
-| `VERCEL_PROJECT_ID` | Vercel project settings → General → Project ID; alternatively `projectId` in `.vercel/project.json` |
+| Secret              | Where to get the value                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `VERCEL_TOKEN`      | Vercel account settings → Tokens; create a token authorized for the target project/team                                               |
+| `VERCEL_ORG_ID`     | Target Vercel team/account settings → General → Team ID; alternatively the `orgId` in `.vercel/project.json` created by `vercel link` |
+| `VERCEL_PROJECT_ID` | Vercel project settings → General → Project ID; alternatively `projectId` in `.vercel/project.json`                                   |
 
 The normal built-in `GITHUB_TOKEN` is provided by Actions; no separate GitHub secret needs to be added for the public release lookup. No credentials are embedded in the client, build snapshot, or repository. After the workflow is on the default branch and the three secrets are configured, run “Deploy Tabs website” once to publish. Thereafter pushes and completed releases deploy automatically. No remote deployment was attempted as part of this local implementation.
 

@@ -54,8 +54,7 @@ describe("parseTscOutput", () => {
   });
 
   it("handles absolute paths from tsc", () => {
-    const stdout =
-      "/Users/dev/project/src/auth/UserService.ts(12,5): error TS2322: Type mismatch.";
+    const stdout = "/Users/dev/project/src/auth/UserService.ts(12,5): error TS2322: Type mismatch.";
 
     const findings = parseTscOutput(stdout, "");
 
@@ -151,13 +150,19 @@ describe("findingMatchesChangedFile", () => {
 
   it("matches when finding path is absolute and changed path is relative", () => {
     expect(
-      findingMatchesChangedFile("/Users/dev/project/src/auth/UserService.ts", "src/auth/UserService.ts"),
+      findingMatchesChangedFile(
+        "/Users/dev/project/src/auth/UserService.ts",
+        "src/auth/UserService.ts",
+      ),
     ).toBe(true);
   });
 
   it("matches when changed path is absolute and finding path is relative", () => {
     expect(
-      findingMatchesChangedFile("src/auth/UserService.ts", "/Users/dev/project/src/auth/UserService.ts"),
+      findingMatchesChangedFile(
+        "src/auth/UserService.ts",
+        "/Users/dev/project/src/auth/UserService.ts",
+      ),
     ).toBe(true);
   });
 

@@ -213,7 +213,6 @@ function $createComposerMentionNode(path: string, source?: string): ComposerMent
   return $applyNodeReplacement(new ComposerMentionNode(path, source));
 }
 
-
 function ComposerTerminalContextDecorator(props: { context: TerminalContextDraft }) {
   return <ComposerPendingTerminalContextChip context={props.context} />;
 }
@@ -290,7 +289,6 @@ function isComposerInlineTokenNode(candidate: unknown): candidate is ComposerInl
     candidate instanceof ComposerTerminalContextNode
   );
 }
-
 
 function terminalContextSignature(contexts: ReadonlyArray<TerminalContextDraft>): string {
   return contexts
@@ -634,7 +632,9 @@ function ComposerInlineTokenPastePlugin() {
           if (!clipboardData || clipboardData.files.length > 0) return false;
           const text = clipboardData.getData("text/plain");
           const segments = splitPastedPromptIntoComposerSegments(text);
-          if (!segments.some((segment) => segment.type === "mention" || segment.type === "citation")) {
+          if (
+            !segments.some((segment) => segment.type === "mention" || segment.type === "citation")
+          ) {
             return false;
           }
           const selection = $getSelection();
@@ -644,7 +644,9 @@ function ComposerInlineTokenPastePlugin() {
           if (segments[0]?.type === "mention" || segments[0]?.type === "citation") {
             const start = selection.isBackward() ? selection.focus : selection.anchor;
             const offset = getExpandedAbsoluteOffsetForPoint(start.getNode(), start.offset);
-            const preceding = $getRoot().getTextContent().slice(offset - 1, offset);
+            const preceding = $getRoot()
+              .getTextContent()
+              .slice(offset - 1, offset);
             if (preceding && !/\s/.test(preceding)) nodes.push($createTextNode(" "));
           }
           for (const segment of segments) {

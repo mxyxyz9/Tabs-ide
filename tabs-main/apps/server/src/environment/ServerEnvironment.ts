@@ -1,7 +1,4 @@
-import {
-  EnvironmentId,
-  type ExecutionEnvironmentDescriptor,
-} from "@tabs/contracts";
+import { EnvironmentId, type ExecutionEnvironmentDescriptor } from "@tabs/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@tabs/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -37,7 +34,9 @@ function platformOs(platform: NodeJS.Platform): ExecutionEnvironmentDescriptor["
   return platform === "win32" ? "windows" : "unknown";
 }
 
-function platformArch(architecture: NodeJS.Architecture): ExecutionEnvironmentDescriptor["platform"]["arch"] {
+function platformArch(
+  architecture: NodeJS.Architecture,
+): ExecutionEnvironmentDescriptor["platform"]["arch"] {
   return architecture === "arm64" || architecture === "x64" ? architecture : "other";
 }
 
@@ -50,34 +49,45 @@ export const make = Effect.gen(function* () {
   const hostArchitecture = yield* HostProcessArchitecture;
 
   const existing = yield* fileSystem.exists(config.environmentIdPath).pipe(
-    Effect.mapError((cause) => new ServerEnvironmentIdPersistenceError({
-      operation: "check",
-      environmentIdPath: config.environmentIdPath,
-      cause,
-    })),
+    Effect.mapError(
+      (cause) =>
+        new ServerEnvironmentIdPersistenceError({
+          operation: "check",
+          environmentIdPath: config.environmentIdPath,
+          cause,
+        }),
+    ),
     Effect.flatMap((exists) =>
       exists
         ? fileSystem.readFileString(config.environmentIdPath).pipe(
             Effect.map((value) => value.trim() || null),
-            Effect.mapError((cause) => new ServerEnvironmentIdPersistenceError({
-              operation: "read",
-              environmentIdPath: config.environmentIdPath,
-              cause,
-            })),
+            Effect.mapError(
+              (cause) =>
+                new ServerEnvironmentIdPersistenceError({
+                  operation: "read",
+                  environmentIdPath: config.environmentIdPath,
+                  cause,
+                }),
+            ),
           )
         : Effect.succeed(null),
     ),
   );
   const rawId = existing ?? (yield* crypto.randomUUIDv4);
   if (existing === null) {
-    yield* fileSystem.makeDirectory(path.dirname(config.environmentIdPath), { recursive: true }).pipe(
-      Effect.andThen(fileSystem.writeFileString(config.environmentIdPath, `${rawId}\n`)),
-      Effect.mapError((cause) => new ServerEnvironmentIdPersistenceError({
-        operation: "write",
-        environmentIdPath: config.environmentIdPath,
-        cause,
-      })),
-    );
+    yield* fileSystem
+      .makeDirectory(path.dirname(config.environmentIdPath), { recursive: true })
+      .pipe(
+        Effect.andThen(fileSystem.writeFileString(config.environmentIdPath, `${rawId}\n`)),
+        Effect.mapError(
+          (cause) =>
+            new ServerEnvironmentIdPersistenceError({
+              operation: "write",
+              environmentIdPath: config.environmentIdPath,
+              cause,
+            }),
+        ),
+      );
   }
 
   const environmentId = EnvironmentId.make(rawId);

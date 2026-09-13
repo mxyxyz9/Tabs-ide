@@ -268,7 +268,11 @@ describe("assistant citation references", () => {
   });
 
   it("gives multiple quotes distinct inline references", () => {
-    const second = { ...citation, text: "Another response", messageId: MessageId.makeUnsafe("two") };
+    const second = {
+      ...citation,
+      text: "Another response",
+      messageId: MessageId.makeUnsafe("two"),
+    };
     const expanded = expandAssistantCitationsForProvider(
       `${serializeAssistantCitation(citation)} ${serializeAssistantCitation(second)}`,
     );

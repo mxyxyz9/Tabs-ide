@@ -5,12 +5,13 @@ import { Badge } from "../ui/badge";
 export function HealthScoreWidget({ summary }: { summary: AuditScanSummary }) {
   const rawScore = summary?.healthScore;
   const score = typeof rawScore === "number" && !isNaN(rawScore) ? Math.round(rawScore) : 100;
-  
+
   const filesCount = summary?.filesInspected ?? 0;
   const rawDuration = summary?.durationMs;
-  const durationSec = typeof rawDuration === "number" && !isNaN(rawDuration) && rawDuration > 0
-    ? (rawDuration / 1000).toFixed(1)
-    : "0.4";
+  const durationSec =
+    typeof rawDuration === "number" && !isNaN(rawDuration) && rawDuration > 0
+      ? (rawDuration / 1000).toFixed(1)
+      : "0.4";
 
   const totalFindings = summary?.totalFindings ?? 0;
   const criticalCount = summary?.criticalCount ?? 0;
@@ -48,7 +49,8 @@ export function HealthScoreWidget({ summary }: { summary: AuditScanSummary }) {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-1 font-sans">
-            Inspected {filesCount} file{filesCount === 1 ? "" : "s"} in {durationSec}s • Total findings: {totalFindings}
+            Inspected {filesCount} file{filesCount === 1 ? "" : "s"} in {durationSec}s • Total
+            findings: {totalFindings}
           </p>
         </div>
       </div>

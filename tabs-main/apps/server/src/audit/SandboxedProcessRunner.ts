@@ -62,7 +62,8 @@ export class SandboxSecurityError extends Data.TaggedError(SANDBOX_SECURITY_ERRO
  * Validate executable against security allowlist to prevent unapproved binary execution.
  */
 export function validateExecutable(executable: string): void {
-  const binaryName = executable.split("/").pop()?.split("\\").pop()?.toLowerCase() ?? executable.toLowerCase();
+  const binaryName =
+    executable.split("/").pop()?.split("\\").pop()?.toLowerCase() ?? executable.toLowerCase();
   // Strip .exe / .cmd / .bat suffixes on Windows
   const cleanName = binaryName.replace(/\.(exe|cmd|bat|sh)$/i, "");
 

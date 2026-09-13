@@ -1,7 +1,4 @@
-import type {
-  DesktopSshEnvironmentBootstrap,
-  DesktopSshEnvironmentTarget,
-} from "@tabs/contracts";
+import type { DesktopSshEnvironmentBootstrap, DesktopSshEnvironmentTarget } from "@tabs/contracts";
 import {
   describeReadinessCause,
   waitForHttpReady as waitForHttpReadyShared,
@@ -1626,4 +1623,3 @@ export class SshEnvironmentManager extends Context.Service<
   static readonly layer = (options: SshEnvironmentManagerOptions = {}) =>
     Layer.effect(SshEnvironmentManager, makeSshEnvironmentManager(options));
 }
-

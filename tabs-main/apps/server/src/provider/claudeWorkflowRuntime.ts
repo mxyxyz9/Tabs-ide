@@ -234,7 +234,12 @@ export const readClaudeWorkflowNewLines = (
   path: string,
   offset: number,
 ): Effect.Effect<
-  { readonly lines: ReadonlyArray<string>; readonly nextOffset: number; readonly skipped: boolean } | undefined
+  | {
+      readonly lines: ReadonlyArray<string>;
+      readonly nextOffset: number;
+      readonly skipped: boolean;
+    }
+  | undefined
 > =>
   Effect.gen(function* () {
     const info = yield* fileSystem.stat(path);
@@ -248,7 +253,9 @@ export const readClaudeWorkflowNewLines = (
     const file = yield* fileSystem.open(path);
     yield* file.seek(offset, "start");
     const chunkOption = yield* file.readAlloc(Math.min(size - offset, MAX_CHUNK_BYTES));
-    const chunk = (Option.isSome(chunkOption) ? chunkOption.value : undefined) as Uint8Array | undefined;
+    const chunk = (Option.isSome(chunkOption) ? chunkOption.value : undefined) as
+      | Uint8Array
+      | undefined;
     if (chunk === undefined || chunk.length === 0) {
       return undefined;
     }
@@ -278,7 +285,9 @@ export const readClaudeWorkflowOutputText = (
     }
     const file = yield* fileSystem.open(path);
     const bytesOption = yield* file.readAlloc(size);
-    const bytes = (Option.isSome(bytesOption) ? bytesOption.value : undefined) as Uint8Array | undefined;
+    const bytes = (Option.isSome(bytesOption) ? bytesOption.value : undefined) as
+      | Uint8Array
+      | undefined;
     return bytes && bytes.length > 0 ? new TextDecoder().decode(bytes) : undefined;
   }).pipe(
     Effect.scoped,

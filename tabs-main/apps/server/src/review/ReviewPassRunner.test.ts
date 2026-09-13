@@ -77,7 +77,7 @@ describe("VerificationFilter", () => {
         severity: "warning",
         title: "Low confidence noise",
         body: "Maybe bug",
-        confidence: 0.40,
+        confidence: 0.4,
         isInDiff: true,
       },
     ];
@@ -97,7 +97,7 @@ describe("VerificationFilter", () => {
         severity: "error",
         title: "SQL injection (pass 1)",
         body: "Lower confidence match",
-        confidence: 0.70,
+        confidence: 0.7,
         isInDiff: true,
       },
       {

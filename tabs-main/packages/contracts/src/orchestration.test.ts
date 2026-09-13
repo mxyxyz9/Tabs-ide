@@ -913,53 +913,56 @@ it.effect("ProjectIconOverride decodes lucide icon and emoji configurations", ()
   }),
 );
 
-it.effect("ProjectCreatedPayload decodes with optional faviconPath, projectIcon, and defaultThreadEnvMode", () =>
-  Effect.gen(function* () {
-    const payload = yield* decodeProjectCreatedPayload({
-      projectId: "project-1",
-      title: "Tabs Project",
-      workspaceRoot: "/workspace/tabs",
-      defaultModelSelection: null,
-      defaultThreadEnvMode: "worktree",
-      autoPull: true,
-      faviconPath: "public/favicon.svg",
-      projectIcon: {
+it.effect(
+  "ProjectCreatedPayload decodes with optional faviconPath, projectIcon, and defaultThreadEnvMode",
+  () =>
+    Effect.gen(function* () {
+      const payload = yield* decodeProjectCreatedPayload({
+        projectId: "project-1",
+        title: "Tabs Project",
+        workspaceRoot: "/workspace/tabs",
+        defaultModelSelection: null,
+        defaultThreadEnvMode: "worktree",
+        autoPull: true,
+        faviconPath: "public/favicon.svg",
+        projectIcon: {
+          kind: "lucide",
+          name: "code-2",
+          color: "violet",
+        },
+        scripts: [],
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      });
+      assert.strictEqual(payload.defaultThreadEnvMode, "worktree");
+      assert.strictEqual(payload.faviconPath, "public/favicon.svg");
+      assert.deepStrictEqual(payload.projectIcon, {
         kind: "lucide",
         name: "code-2",
         color: "violet",
-      },
-      scripts: [],
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(payload.defaultThreadEnvMode, "worktree");
-    assert.strictEqual(payload.faviconPath, "public/favicon.svg");
-    assert.deepStrictEqual(payload.projectIcon, {
-      kind: "lucide",
-      name: "code-2",
-      color: "violet",
-    });
-  }),
+      });
+    }),
 );
 
-it.effect("ProjectMetaUpdatedPayload decodes updates to faviconPath, projectIcon, and defaultThreadEnvMode", () =>
-  Effect.gen(function* () {
-    const payload = yield* decodeProjectMetaUpdatedPayload({
-      projectId: "project-1",
-      defaultThreadEnvMode: null,
-      faviconPath: null,
-      projectIcon: {
+it.effect(
+  "ProjectMetaUpdatedPayload decodes updates to faviconPath, projectIcon, and defaultThreadEnvMode",
+  () =>
+    Effect.gen(function* () {
+      const payload = yield* decodeProjectMetaUpdatedPayload({
+        projectId: "project-1",
+        defaultThreadEnvMode: null,
+        faviconPath: null,
+        projectIcon: {
+          kind: "emoji",
+          emoji: "⚡",
+        },
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      });
+      assert.strictEqual(payload.defaultThreadEnvMode, null);
+      assert.strictEqual(payload.faviconPath, null);
+      assert.deepStrictEqual(payload.projectIcon, {
         kind: "emoji",
         emoji: "⚡",
-      },
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(payload.defaultThreadEnvMode, null);
-    assert.strictEqual(payload.faviconPath, null);
-    assert.deepStrictEqual(payload.projectIcon, {
-      kind: "emoji",
-      emoji: "⚡",
-    });
-  }),
+      });
+    }),
 );
-

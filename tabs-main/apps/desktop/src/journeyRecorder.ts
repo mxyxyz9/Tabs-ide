@@ -27,10 +27,7 @@ export type JourneyStep = {
   locatorEntryId?: string | undefined;
 };
 
-export function journeyCode(
-  url: string,
-  steps: readonly JourneyStep[],
-): string {
+export function journeyCode(url: string, steps: readonly JourneyStep[]): string {
   let input = 0;
   const lines: string[] = [
     'import { test, expect } from "playwright/test";',
@@ -65,9 +62,7 @@ export function journeyCode(
       }
       case "selectOption": {
         if (step.value !== undefined && step.value !== "") {
-          lines.push(
-            `  await ${locator}.selectOption(${JSON.stringify(step.value)});`,
-          );
+          lines.push(`  await ${locator}.selectOption(${JSON.stringify(step.value)});`);
         } else {
           const name = step.placeholder || `RECORDED_INPUT_${++input}`;
           lines.push(
@@ -83,9 +78,7 @@ export function journeyCode(
         lines.push(`  await ${locator}.uncheck();`);
         break;
       case "press":
-        lines.push(
-          `  await ${locator}.press(${JSON.stringify(step.key || "Enter")});`,
-        );
+        lines.push(`  await ${locator}.press(${JSON.stringify(step.key || "Enter")});`);
         break;
       case "assertVisible":
         lines.push(`  await expect(${locator}).toBeVisible();`);
@@ -105,12 +98,8 @@ export function journeyCode(
 
   const hasAssertion = steps.some((s) => s.action.startsWith("assert"));
   if (!hasAssertion) {
-    lines.push(
-      "  // Replace this guard with reviewed business assertions before running.",
-    );
-    lines.push(
-      '  throw new Error("Add expected-result assertions to this recording");',
-    );
+    lines.push("  // Replace this guard with reviewed business assertions before running.");
+    lines.push('  throw new Error("Add expected-result assertions to this recording");');
   }
 
   lines.push("});");
@@ -120,8 +109,7 @@ export function journeyCode(
 
 function safeUrl(value: string): string {
   const url = new URL(value);
-  if (!["https:", "http:"].includes(url.protocol))
-    throw new Error("Record an HTTP(S) page");
+  if (!["https:", "http:"].includes(url.protocol)) throw new Error("Record an HTTP(S) page");
   url.username = "";
   url.password = "";
   url.search = "";
@@ -168,8 +156,7 @@ export class JourneyRecorder {
         "assertValue",
       ];
       if (!validActions.includes(step.action)) return;
-      if (typeof step.selector !== "string" && typeof step.url !== "string")
-        return;
+      if (typeof step.selector !== "string" && typeof step.url !== "string") return;
       if (step.selector && step.selector.length > 2000) return;
 
       // Deduplicate consecutive fill on identical selector
@@ -315,10 +302,7 @@ export class JourneyRecorder {
           delete window[${JSON.stringify(this.binding + "Stop")}];
         };
       })();`;
-      const script = await debug.sendCommand(
-        "Page.addScriptToEvaluateOnNewDocument",
-        { source },
-      );
+      const script = await debug.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source });
       this.scriptId = script.identifier;
       await this.contents.executeJavaScript(source);
     } catch (error) {
@@ -347,9 +331,7 @@ export class JourneyRecorder {
     }
     if (!this.contents.isDestroyed()) {
       await this.contents
-        .executeJavaScript(
-          `window[${JSON.stringify(this.binding + "Stop")}]?.()`,
-        )
+        .executeJavaScript(`window[${JSON.stringify(this.binding + "Stop")}]?.()`)
         .catch(() => undefined);
       if (this.scriptId)
         await debug

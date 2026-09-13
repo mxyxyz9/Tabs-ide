@@ -6,7 +6,10 @@ import { useAppClosing } from "./hooks/useAppClosing";
 import { useClientSettings } from "./state/settings";
 import { useTheme } from "./hooks/useTheme";
 import { CloseScreen } from "./components/CloseScreen";
-import { QuitConfirmationModal, type QuitConfirmationChoice } from "./components/QuitConfirmationModal";
+import {
+  QuitConfirmationModal,
+  type QuitConfirmationChoice,
+} from "./components/QuitConfirmationModal";
 import type { ClosePhase } from "./components/CloseScreen";
 import type { AppRouter } from "./router";
 

@@ -272,8 +272,8 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
 
           const isInteractive = Boolean(
             toast.actionProps ||
-              (toast.type === "error" && typeof toast.description === "string") ||
-              toast.data?.interactive,
+            (toast.type === "error" && typeof toast.description === "string") ||
+            toast.data?.interactive,
           );
 
           return (
@@ -446,7 +446,7 @@ function AnchoredToasts() {
                       : "rounded-lg shadow-lg/5 before:rounded-[calc(var(--radius-lg)-1px)]",
                   )}
                   data-slot="toast-popup"
-                  data-interactive={Boolean(toast.actionProps || toast.data?.interactive) ? "true" : "false"}
+                  data-interactive={toast.actionProps || toast.data?.interactive ? "true" : "false"}
                   toast={toast}
                 >
                   {tooltipStyle ? (

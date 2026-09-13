@@ -474,4 +474,3 @@ export const makeCloudflaredRelayClient = Effect.fn("cloudflared.make")(function
 
 export const layerCloudflared = (options: CloudflaredRelayClientOptions) =>
   Layer.effect(RelayClient, makeCloudflaredRelayClient(options));
-

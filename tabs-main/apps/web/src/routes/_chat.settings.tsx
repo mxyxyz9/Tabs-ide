@@ -913,7 +913,9 @@ export function SettingsSection({
   const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
 
   return (
-    <section className={cn("space-y-3", activeFontCombo.isNeutral ? "pt-2" : "pt-0 -mt-2", className)}>
+    <section
+      className={cn("space-y-3", activeFontCombo.isNeutral ? "pt-2" : "pt-0 -mt-2", className)}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           {activeFontCombo.isNeutral ? (
@@ -932,9 +934,7 @@ export function SettingsSection({
             </h2>
           )}
           {description ? (
-            <div className="mt-1 text-xs text-muted-foreground leading-normal">
-              {description}
-            </div>
+            <div className="mt-1 text-xs text-muted-foreground leading-normal">{description}</div>
           ) : null}
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
@@ -3647,7 +3647,8 @@ function SettingsRouteView() {
                         title="Panel animations"
                         description="Set how fast workspace panels open and close (0 ms suppresses panel transitions)."
                         resetAction={
-                          (settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS) !==
+                          (settings.panelAnimationDurationMs ??
+                            DEFAULT_PANEL_ANIMATION_DURATION_MS) !==
                           DEFAULT_PANEL_ANIMATION_DURATION_MS ? (
                             <SettingResetButton
                               label="panel animations"
@@ -3665,7 +3666,9 @@ function SettingsRouteView() {
                               htmlFor="panel-animation-duration"
                               className="min-w-16 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground border border-border/50"
                             >
-                              {settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS} ms
+                              {settings.panelAnimationDurationMs ??
+                                DEFAULT_PANEL_ANIMATION_DURATION_MS}{" "}
+                              ms
                             </output>
                             <input
                               id="panel-animation-duration"
@@ -3673,7 +3676,10 @@ function SettingsRouteView() {
                               min={0}
                               max={400}
                               step={25}
-                              value={settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS}
+                              value={
+                                settings.panelAnimationDurationMs ??
+                                DEFAULT_PANEL_ANIMATION_DURATION_MS
+                              }
                               onChange={(e) => {
                                 const val = Number(e.target.value);
                                 if (Number.isInteger(val) && val >= 0 && val <= 400) {
@@ -4726,7 +4732,10 @@ function SettingsRouteView() {
                                       </p>
                                     </div>
                                     <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
-                                      {fontPreferences.fontSizeInterface ?? settings.fontSizeInterface ?? DEFAULT_INTERFACE_FONT_SIZE} px
+                                      {fontPreferences.fontSizeInterface ??
+                                        settings.fontSizeInterface ??
+                                        DEFAULT_INTERFACE_FONT_SIZE}{" "}
+                                      px
                                     </span>
                                   </div>
                                   <input
@@ -4734,10 +4743,17 @@ function SettingsRouteView() {
                                     min={MIN_INTERFACE_FONT_SIZE}
                                     max={MAX_INTERFACE_FONT_SIZE}
                                     step={1}
-                                    value={fontPreferences.fontSizeInterface ?? settings.fontSizeInterface ?? DEFAULT_INTERFACE_FONT_SIZE}
+                                    value={
+                                      fontPreferences.fontSizeInterface ??
+                                      settings.fontSizeInterface ??
+                                      DEFAULT_INTERFACE_FONT_SIZE
+                                    }
                                     onChange={(e) => {
                                       const val = Number(e.target.value);
-                                      setFontPreferences((prev) => ({ ...prev, fontSizeInterface: val }));
+                                      setFontPreferences((prev) => ({
+                                        ...prev,
+                                        fontSizeInterface: val,
+                                      }));
                                       updateSettings({ fontSizeInterface: val });
                                     }}
                                     aria-label="Interface font size slider"
@@ -4762,7 +4778,10 @@ function SettingsRouteView() {
                                       </p>
                                     </div>
                                     <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
-                                      {fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE} px
+                                      {fontPreferences.fontSizeCode ??
+                                        settings.fontSizeCode ??
+                                        DEFAULT_CODE_FONT_SIZE}{" "}
+                                      px
                                     </span>
                                   </div>
                                   <input
@@ -4770,10 +4789,17 @@ function SettingsRouteView() {
                                     min={MIN_CODE_FONT_SIZE}
                                     max={MAX_CODE_FONT_SIZE}
                                     step={1}
-                                    value={fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE}
+                                    value={
+                                      fontPreferences.fontSizeCode ??
+                                      settings.fontSizeCode ??
+                                      DEFAULT_CODE_FONT_SIZE
+                                    }
                                     onChange={(e) => {
                                       const val = Number(e.target.value);
-                                      setFontPreferences((prev) => ({ ...prev, fontSizeCode: val }));
+                                      setFontPreferences((prev) => ({
+                                        ...prev,
+                                        fontSizeCode: val,
+                                      }));
                                       updateSettings({ fontSizeCode: val });
                                     }}
                                     aria-label="Code font size slider"
@@ -4798,7 +4824,10 @@ function SettingsRouteView() {
                                       </p>
                                     </div>
                                     <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
-                                      {fontPreferences.fontSizePrompt ?? settings.fontSizePrompt ?? DEFAULT_PROMPT_FONT_SIZE} px
+                                      {fontPreferences.fontSizePrompt ??
+                                        settings.fontSizePrompt ??
+                                        DEFAULT_PROMPT_FONT_SIZE}{" "}
+                                      px
                                     </span>
                                   </div>
                                   <input
@@ -4806,10 +4835,17 @@ function SettingsRouteView() {
                                     min={MIN_PROMPT_FONT_SIZE}
                                     max={MAX_PROMPT_FONT_SIZE}
                                     step={1}
-                                    value={fontPreferences.fontSizePrompt ?? settings.fontSizePrompt ?? DEFAULT_PROMPT_FONT_SIZE}
+                                    value={
+                                      fontPreferences.fontSizePrompt ??
+                                      settings.fontSizePrompt ??
+                                      DEFAULT_PROMPT_FONT_SIZE
+                                    }
                                     onChange={(e) => {
                                       const val = Number(e.target.value);
-                                      setFontPreferences((prev) => ({ ...prev, fontSizePrompt: val }));
+                                      setFontPreferences((prev) => ({
+                                        ...prev,
+                                        fontSizePrompt: val,
+                                      }));
                                       updateSettings({ fontSizePrompt: val });
                                     }}
                                     aria-label="Prompt font size slider"
@@ -4832,7 +4868,8 @@ function SettingsRouteView() {
                                     Prompt Composer Font
                                   </h4>
                                   <p className="text-xs text-muted-foreground mt-0.5">
-                                    Font family for the chat message composer (defaults to interface font).
+                                    Font family for the chat message composer (defaults to interface
+                                    font).
                                   </p>
                                 </div>
                                 <div className="shrink-0 w-full sm:w-52">
@@ -6177,8 +6214,6 @@ function SettingsRouteView() {
                                       </Button>
                                     ) : null}
 
-
-
                                     <Button
                                       size="sm"
                                       variant="ghost"
@@ -6328,7 +6363,8 @@ function SettingsRouteView() {
                                             <span className="text-xs font-medium text-foreground">
                                               API key
                                             </span>
-                                            {"apiKey" in providerCard.providerConfig && providerCard.providerConfig.apiKey ? (
+                                            {"apiKey" in providerCard.providerConfig &&
+                                            providerCard.providerConfig.apiKey ? (
                                               <RedactedSensitiveText
                                                 value={providerCard.providerConfig.apiKey}
                                                 ariaLabel={`Toggle ${providerDisplayName} API key visibility`}
@@ -6487,7 +6523,8 @@ function SettingsRouteView() {
                                             Account Session
                                           </span>
                                           <span className="mt-0.5 block text-xs text-muted-foreground">
-                                            Currently authenticated. Disconnect and log out of {providerDisplayName}.
+                                            Currently authenticated. Disconnect and log out of{" "}
+                                            {providerDisplayName}.
                                           </span>
                                         </div>
                                         <Button
@@ -6568,7 +6605,8 @@ function SettingsRouteView() {
                                     <div className="border-t border-border/60 px-4 py-4 sm:px-5">
                                       <div className="rounded-xl border border-border/50 bg-muted/10 overflow-hidden shadow-2xs">
                                         {(() => {
-                                          const filterValue = modelFilters[providerCard.provider] ?? "";
+                                          const filterValue =
+                                            modelFilters[providerCard.provider] ?? "";
                                           const isFiltering = filterValue.trim().length > 0;
                                           const normalizedFilter = filterValue.trim().toLowerCase();
                                           const filteredModels = isFiltering
@@ -6580,8 +6618,9 @@ function SettingsRouteView() {
                                             : providerCard.models;
 
                                           const hiddenModelsList =
-                                            settings.providerModelPreferences?.[providerCard.provider as any]
-                                              ?.hiddenModels ?? [];
+                                            settings.providerModelPreferences?.[
+                                              providerCard.provider as any
+                                            ]?.hiddenModels ?? [];
                                           const hiddenSet = new Set(hiddenModelsList);
                                           const hiddenCount = providerCard.models.filter(
                                             (m: ServerProviderModel) =>
@@ -6632,7 +6671,8 @@ function SettingsRouteView() {
                                                         ({filteredModels.length} shown)
                                                       </span>
                                                     ) : null}
-                                                    {providerCard.liveProvider?.catalogStatus === "stale" ? (
+                                                    {providerCard.liveProvider?.catalogStatus ===
+                                                    "stale" ? (
                                                       <Badge
                                                         variant="secondary"
                                                         className="text-[10px] px-1.5 py-0"
@@ -6642,7 +6682,8 @@ function SettingsRouteView() {
                                                     ) : null}
                                                   </div>
                                                   <div className="mt-0.5 text-[11px] text-muted-foreground truncate">
-                                                    {providerCard.liveProvider?.catalogStatus === "stale"
+                                                    {providerCard.liveProvider?.catalogStatus ===
+                                                    "stale"
                                                       ? "Showing the last successful catalog. Refresh to retry discovery."
                                                       : isFiltering
                                                         ? "Filtered results. Clear search to reorder models."
@@ -6690,18 +6731,20 @@ function SettingsRouteView() {
                                                       variant="ghost"
                                                       className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground font-medium cursor-pointer border border-border/40"
                                                       onClick={() => {
-                                                        const nextHidden = nextHiddenModelsForBulkToggle(
-                                                          filteredModels,
-                                                          hiddenModelsList,
-                                                          { preserveSlugs },
-                                                        );
+                                                        const nextHidden =
+                                                          nextHiddenModelsForBulkToggle(
+                                                            filteredModels,
+                                                            hiddenModelsList,
+                                                            { preserveSlugs },
+                                                          );
                                                         const nextPrefs = updateHiddenModels(
                                                           settings.providerModelPreferences,
                                                           providerCard.provider,
                                                           nextHidden,
                                                         );
                                                         updateSettings({
-                                                          providerModelPreferences: nextPrefs as any,
+                                                          providerModelPreferences:
+                                                            nextPrefs as any,
                                                         });
                                                       }}
                                                       title={
@@ -6717,12 +6760,16 @@ function SettingsRouteView() {
                                                       {allTargetHidden ? (
                                                         <>
                                                           <EyeIcon className="size-3" />
-                                                          {isFiltering ? "Enable shown" : "Enable all"}
+                                                          {isFiltering
+                                                            ? "Enable shown"
+                                                            : "Enable all"}
                                                         </>
                                                       ) : (
                                                         <>
                                                           <EyeOffIcon className="size-3" />
-                                                          {isFiltering ? "Disable shown" : "Disable all"}
+                                                          {isFiltering
+                                                            ? "Disable shown"
+                                                            : "Disable all"}
                                                         </>
                                                       )}
                                                     </Button>
@@ -6762,7 +6809,8 @@ function SettingsRouteView() {
                                                           providerCard.provider,
                                                         );
                                                         updateSettings({
-                                                          providerModelPreferences: nextPrefs as any,
+                                                          providerModelPreferences:
+                                                            nextPrefs as any,
                                                         });
                                                       }}
                                                       title="Restore default model order"
@@ -6800,10 +6848,12 @@ function SettingsRouteView() {
                                                     const { active, over } = event;
                                                     if (!over || active.id === over.id) return;
                                                     const oldIndex = providerCard.models.findIndex(
-                                                      (m: ServerProviderModel) => m.slug === active.id,
+                                                      (m: ServerProviderModel) =>
+                                                        m.slug === active.id,
                                                     );
                                                     const newIndex = providerCard.models.findIndex(
-                                                      (m: ServerProviderModel) => m.slug === over.id,
+                                                      (m: ServerProviderModel) =>
+                                                        m.slug === over.id,
                                                     );
                                                     if (oldIndex !== -1 && newIndex !== -1) {
                                                       const reordered = arrayMove(
@@ -6846,7 +6896,8 @@ function SettingsRouteView() {
                                                           model.slug,
                                                         );
                                                         const isHidden =
-                                                          !model.isCustom && hiddenSet.has(model.slug);
+                                                          !model.isCustom &&
+                                                          hiddenSet.has(model.slug);
 
                                                         return (
                                                           <SortableModelRowItem
@@ -6857,7 +6908,8 @@ function SettingsRouteView() {
                                                               <div
                                                                 className={cn(
                                                                   "group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all",
-                                                                  isHidden && "opacity-60 bg-muted/20",
+                                                                  isHidden &&
+                                                                    "opacity-60 bg-muted/20",
                                                                 )}
                                                               >
                                                                 <div className="flex items-center gap-2 min-w-0">
@@ -6914,7 +6966,8 @@ function SettingsRouteView() {
                                                                           model.slug,
                                                                         );
                                                                       updateSettings({
-                                                                        pinnedModels: nextPinned as any,
+                                                                        pinnedModels:
+                                                                          nextPinned as any,
                                                                       });
                                                                     }}
                                                                   >
@@ -6974,7 +7027,9 @@ function SettingsRouteView() {
                                                                           <span className="flex items-center pl-1">
                                                                             <Switch
                                                                               checked={!isHidden}
-                                                                              onCheckedChange={(checked) => {
+                                                                              onCheckedChange={(
+                                                                                checked,
+                                                                              ) => {
                                                                                 const nextPrefs =
                                                                                   toggleHiddenModel(
                                                                                     settings.providerModelPreferences,

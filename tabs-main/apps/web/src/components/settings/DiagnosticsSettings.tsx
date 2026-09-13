@@ -207,7 +207,9 @@ function ResourcesExplorerOverview({
             </div>
 
             <div className="my-2 flex items-center gap-2">
-              <span className="text-[10px] sm:text-[10.5px] font-medium text-muted-foreground/70 shrink-0">Tabs usage</span>
+              <span className="text-[10px] sm:text-[10.5px] font-medium text-muted-foreground/70 shrink-0">
+                Tabs usage
+              </span>
               <div className="h-px w-full bg-border/50" />
             </div>
 
@@ -272,7 +274,9 @@ function ResourcesExplorerOverview({
             </div>
 
             <div className="my-2 flex items-center gap-2">
-              <span className="text-[10px] sm:text-[10.5px] font-medium text-muted-foreground/70 shrink-0">Tabs usage</span>
+              <span className="text-[10px] sm:text-[10.5px] font-medium text-muted-foreground/70 shrink-0">
+                Tabs usage
+              </span>
               <div className="h-px w-full bg-border/50" />
             </div>
 
@@ -333,11 +337,16 @@ function ResourcesExplorerOverview({
               </button>
             </div>
             <div className="font-mono text-xs sm:text-sm font-bold tracking-tight text-foreground truncate">
-              87% <span className="text-[11px] font-normal text-muted-foreground">Available 57.06 GB / 460.43 GB</span>
+              87%{" "}
+              <span className="text-[11px] font-normal text-muted-foreground">
+                Available 57.06 GB / 460.43 GB
+              </span>
             </div>
 
             <div className="my-2 flex items-center gap-2">
-              <span className="text-[10px] sm:text-[10.5px] font-medium text-muted-foreground/70 shrink-0">Tabs usage</span>
+              <span className="text-[10px] sm:text-[10.5px] font-medium text-muted-foreground/70 shrink-0">
+                Tabs usage
+              </span>
               <div className="h-px w-full bg-border/50" />
             </div>
 
@@ -381,14 +390,21 @@ function ResourcesExplorerOverview({
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
             </span>
-            <div className="text-xs font-semibold text-foreground tracking-tight">System Overview</div>
+            <div className="text-xs font-semibold text-foreground tracking-tight">
+              System Overview
+            </div>
           </div>
           <span className="text-[10.5px] sm:text-[11px] text-muted-foreground">
-            Thermal: <span className="font-medium text-foreground">{snapshot?.power.thermalState ?? "nominal"}</span>
+            Thermal:{" "}
+            <span className="font-medium text-foreground">
+              {snapshot?.power.thermalState ?? "nominal"}
+            </span>
           </span>
         </div>
         <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-          CPU, memory, and disk are in healthy ranges. Background collection interval adjusts dynamically with machine state. All core services (Backend, Agents, Terminal, Desktop Shell) are operating normally.
+          CPU, memory, and disk are in healthy ranges. Background collection interval adjusts
+          dynamically with machine state. All core services (Backend, Agents, Terminal, Desktop
+          Shell) are operating normally.
         </p>
       </div>
     </div>
@@ -474,11 +490,7 @@ function StatBlock({
 }
 
 function StatsGrid({ children }: { children: ReactNode }) {
-  return (
-    <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
-      {children}
-    </div>
-  );
+  return <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">{children}</div>;
 }
 
 function EmptyRows({ label }: { label: string }) {
@@ -519,7 +531,11 @@ function TraceIdCell({ traceId }: { traceId: string }) {
             className="cursor-pointer text-muted-foreground hover:text-foreground"
             title="Copy trace ID"
           >
-            {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
+            {copied ? (
+              <CheckIcon className="size-3 text-emerald-500" />
+            ) : (
+              <CopyIcon className="size-3" />
+            )}
           </button>
         </TooltipPopup>
       </Tooltip>
@@ -532,7 +548,11 @@ function TraceIdCell({ traceId }: { traceId: string }) {
               aria-label={copied ? "Copied trace ID" : "Copy trace ID"}
               onClick={() => void copy()}
             >
-              {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
+              {copied ? (
+                <CheckIcon className="size-3 text-emerald-500" />
+              ) : (
+                <CopyIcon className="size-3" />
+              )}
             </Button>
           }
         />
@@ -798,7 +818,10 @@ function ProcessDiagnosticsTable({
         <tbody className="divide-y divide-border/50">
           {visibleProcesses.length === 0 ? (
             <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-xs text-muted-foreground sm:px-5">
+              <td
+                colSpan={7}
+                className="px-4 py-6 text-center text-xs text-muted-foreground sm:px-5"
+              >
                 {emptyLabel ?? "No live descendant processes found."}
               </td>
             </tr>
@@ -821,7 +844,11 @@ function ProcessDiagnosticsTable({
               <td className="px-3 py-2 align-middle text-muted-foreground">
                 <Tooltip>
                   <TooltipTrigger
-                    render={<span className="block truncate font-mono text-[11px]">{process.command}</span>}
+                    render={
+                      <span className="block truncate font-mono text-[11px]">
+                        {process.command}
+                      </span>
+                    }
                   />
                   <TooltipPopup
                     side="top"
@@ -946,7 +973,10 @@ function ProcessResourceHistoryTable({
         <tbody className="divide-y divide-border/50">
           {processes.length === 0 ? (
             <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-xs text-muted-foreground sm:px-5">
+              <td
+                colSpan={7}
+                className="px-4 py-6 text-center text-xs text-muted-foreground sm:px-5"
+              >
                 {emptyLabel}
               </td>
             </tr>
@@ -1083,8 +1113,12 @@ export function DiagnosticsSettings() {
           status: "warning",
           summary: "Elevated resource footprint detected across active subsystems.",
           details: [
-            isHighCpu ? `Tabs CPU usage is elevated at ${allCpu.toFixed(1)}%.` : "CPU usage is within acceptable range.",
-            isHighMem ? `Total Tabs memory is ${formatBytes(allMemBytes)}. Consider terminating inactive terminal or agent sessions.` : "Memory footprint is normal.",
+            isHighCpu
+              ? `Tabs CPU usage is elevated at ${allCpu.toFixed(1)}%.`
+              : "CPU usage is within acceptable range.",
+            isHighMem
+              ? `Total Tabs memory is ${formatBytes(allMemBytes)}. Consider terminating inactive terminal or agent sessions.`
+              : "Memory footprint is normal.",
             "Process tree health is responsive; no unresponsive daemon or sidecar loops found.",
           ],
         });
@@ -1227,7 +1261,9 @@ export function DiagnosticsSettings() {
   const handleSignalProcess = useCallback(
     async (pid: number, signal: ServerProcessSignal) => {
       if (signal === "SIGKILL") {
-        const confirmed = await confirm(`Are you sure you want to force terminate process PID ${pid}?`);
+        const confirmed = await confirm(
+          `Are you sure you want to force terminate process PID ${pid}?`,
+        );
         if (!confirmed) return;
       }
       setSignalingPid(pid);
@@ -1380,7 +1416,8 @@ export function DiagnosticsSettings() {
                   </h2>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Inspect system footprint, live process trees, internal I/O attribution, and structured execution traces.
+                  Inspect system footprint, live process trees, internal I/O attribution, and
+                  structured execution traces.
                 </p>
               </div>
             </div>
@@ -1411,7 +1448,9 @@ export function DiagnosticsSettings() {
                       </Button>
                     }
                   />
-                  <TooltipPopup side="bottom">Open Resources Explorer in a standalone window</TooltipPopup>
+                  <TooltipPopup side="bottom">
+                    Open Resources Explorer in a standalone window
+                  </TooltipPopup>
                 </Tooltip>
                 <Button
                   size="xs"
@@ -1422,7 +1461,12 @@ export function DiagnosticsSettings() {
                   <DownloadIcon className="mr-1 size-3.5" />
                   {exporting ? "Exporting…" : "Export support bundle"}
                 </Button>
-                <Button size="xs" variant="outline" disabled={loading} onClick={() => void refresh()}>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={loading}
+                  onClick={() => void refresh()}
+                >
                   <RefreshCwIcon className={cn("mr-1 size-3.5", loading && "animate-spin")} />
                   Refresh
                 </Button>
@@ -1478,9 +1522,13 @@ export function DiagnosticsSettings() {
                 <div>
                   <div className="text-xs font-semibold tracking-tight">
                     AI Diagnostic Assessment —{" "}
-                    {aiDiagnoseResult.status === "healthy" ? "All Systems Healthy" : "Attention Recommended"}
+                    {aiDiagnoseResult.status === "healthy"
+                      ? "All Systems Healthy"
+                      : "Attention Recommended"}
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed opacity-90">{aiDiagnoseResult.summary}</p>
+                  <p className="mt-1 text-xs leading-relaxed opacity-90">
+                    {aiDiagnoseResult.summary}
+                  </p>
                   <ul className="mt-2 space-y-1 text-[11.5px] opacity-80 list-disc list-inside">
                     {aiDiagnoseResult.details.map((detail, idx) => (
                       <li key={idx}>{detail}</li>
@@ -1523,399 +1571,410 @@ export function DiagnosticsSettings() {
               onRefresh={() => void refresh()}
             />
 
-          {/* Section 2: Host & collection section */}
-          <HostAndCollectionSection
-            snapshot={telemetry}
-            isRetrying={loading}
-            onRetry={() => void handleRetrySidecar()}
-          />
-
-          {/* Background Activity Profile Settings */}
-          <SettingsSection
-            title="Background activity"
-            description="Balance provider checks and repository refreshes against power consumption for this environment."
-          >
-            <SettingsRow
-              title="Activity Profile"
-              description="Select power and polling profile for repository refresh and background provider checks."
-              control={
-                <SegmentedControl
-                  value={backgroundProfile}
-                  onValueChange={async (profile) => {
-                    await ensureNativeApi().server.updateSettings({
-                      backgroundActivity: { schemaVersion: 1, profile, overrides: {} },
-                      backgroundActivityProfile: profile,
-                    });
-                    setBackgroundProfile(profile);
-                  }}
-                  options={[
-                    { value: "battery-saver", label: "Battery saver" },
-                    { value: "balanced", label: "Balanced" },
-                    { value: "performance", label: "Performance" },
-                  ]}
-                  aria-label="Background activity profile"
-                />
-              }
+            {/* Section 2: Host & collection section */}
+            <HostAndCollectionSection
+              snapshot={telemetry}
+              isRetrying={loading}
+              onRetry={() => void handleRetrySidecar()}
             />
-          </SettingsSection>
-        </div>
-      ) : null}
 
-      {/* TAB 2: RESOURCE TIMELINE (Sections 3 & 7) */}
-      {activeTab === "timeline" ? (
-        <div className="space-y-6">
-          {/* Section 3: Resource timeline */}
-          <SettingsSection
-            title="Resource timeline"
-            description="Multi-metric CPU average, I/O read throughput, and I/O write throughput history."
-            headerAction={
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 p-0.5 text-xs">
-                  {HISTORY_WINDOWS.map((win, idx) => (
-                    <button
-                      key={win.label}
-                      type="button"
-                      onClick={() => setHistoryWindowIndex(idx)}
-                      className={cn(
-                        "rounded px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
-                        historyWindowIndex === idx
-                          ? "bg-background text-foreground shadow-xs font-semibold"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {win.label}
-                    </button>
-                  ))}
-                </div>
-                <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
-                  <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
-                </Button>
-              </div>
-            }
-          >
-            <ResourceHistoryChart buckets={telemetryHistory?.buckets ?? []} />
-            <HistoryProcessTable processes={telemetryHistory?.topProcesses ?? []} />
-          </SettingsSection>
-
-          {/* Section 7: Resource History (Server Root Process Diagnostics History) */}
-          <SettingsSection
-            title="Server Process History"
-            description="Active CPU time and retained in-memory samples for the Tabs backend server root process."
-          >
-            <StatsGrid>
-              <StatBlock
-                label="CPU Time"
-                value={history ? formatCpuTime(history.totalCpuSecondsApprox * 1000) : "—"}
-                tooltip="Approximate active CPU time for the Tabs server root process and its descendants during the window."
-              />
-              <StatBlock
-                label="Samples"
-                value={history ? formatCount(history.retainedSampleCount) : "—"}
-                tooltip="In-memory process samples retained by the server. Resets when server restarts."
-              />
-              <StatBlock
-                label="Interval"
-                value={history ? formatDuration(history.sampleIntervalMs) : "—"}
-              />
-              <StatBlock
-                label="Processes"
-                value={history ? formatCount(history.topProcesses.length) : "—"}
-              />
-            </StatsGrid>
-            {history && history.buckets.length > 0 ? (
-              <ProcessResourceHistoryChart buckets={history.buckets} />
-            ) : null}
-            {history ? (
-              <ProcessResourceHistoryTable
-                processes={history.topProcesses}
-                emptyLabel="No process resource samples found for this window."
-              />
-            ) : null}
-          </SettingsSection>
-        </div>
-      ) : null}
-
-      {/* TAB 3: PROCESS TREE (Section 4) */}
-      {activeTab === "process-tree" ? (
-        <div className="space-y-6">
-          <SettingsSection
-            title="Live process tree"
-            description="Process hierarchy across Tabs server, desktop shells, and child processes. Identity is tracked by PID + start time to prevent stale recycling."
-            headerAction={
-              <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
-                <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
-              </Button>
-            }
-          >
-            <ProcessTable
-              processes={telemetry?.processes ?? []}
-              onSignal={(process: ResourceTelemetryProcess, signal: ServerProcessSignal) => {
-                void handleSignalProcess(process.identity.pid, signal);
-              }}
-            />
-          </SettingsSection>
-        </div>
-      ) : null}
-
-      {/* TAB 4: APPLICATION I/O (Section 5) */}
-      {activeTab === "application-io" ? (
-        <div className="space-y-6">
-          <SettingsSection
-            title="Instrumented application I/O"
-            description="Internal application read and write call sites (e.g. structured trace streaming and support bundle exports)."
-            headerAction={
-              <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
-                <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
-              </Button>
-            }
-          >
-            <AttributionTable entries={telemetry?.attribution?.entries ?? []} />
-          </SettingsSection>
-        </div>
-      ) : null}
-
-      {/* TAB 5: LIVE PROCESSES (Section 6) */}
-      {activeTab === "live-processes" ? (
-        <div className="space-y-6">
-          <SettingsSection
-            title="Live Processes"
-            description="Live descendant and provider processes spawned by the active server instance."
-            headerAction={
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-mono">
-                  Checked {formatRelative(processes?.readAt ?? null)}
-                </span>
-                <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
-                  <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
-                </Button>
-              </div>
-            }
-          >
-            <StatsGrid>
-              <StatBlock
-                label="Child Processes"
-                value={processes ? formatCount(processes.processCount) : "—"}
-              />
-              <StatBlock
-                label="Aggregate CPU"
-                value={processes ? `${processes.totalCpuPercent.toFixed(1)}%` : "—"}
-              />
-              <StatBlock
-                label="Aggregate Memory"
-                value={processes ? formatBytes(processes.totalRssBytes) : "—"}
-              />
-              <StatBlock
-                label="Server PID"
-                value={processes ? String(processes.serverPid) : "—"}
-              />
-            </StatsGrid>
-            {processes && Option.isSome(processes.error) ? (
-              <p role="alert" className="border-t border-border/60 px-4 py-3 text-xs text-destructive sm:px-5">
-                {processes.error.value.message}
-              </p>
-            ) : null}
-            <ProcessDiagnosticsTable
-              processes={processes?.processes ?? []}
-              signalingPid={signalingPid}
-              onSignal={(pid, signal) => void handleSignalProcess(pid, signal)}
-              emptyLabel="No live descendant processes found."
-            />
-          </SettingsSection>
-        </div>
-      ) : null}
-
-      {/* TAB 6: TRACES (Section 8) */}
-      {activeTab === "traces" ? (
-        <div className="space-y-6">
-          <SettingsSection
-            title="Trace Diagnostics"
-            description={
-              traces?.traceFilePath ? (
-                <TraceFilePathPill path={traces.traceFilePath} />
-              ) : (
-                "Trace storage is loading…"
-              )
-            }
-            headerAction={
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-mono">
-                  Checked {formatRelative(traces?.readAt ?? null)}
-                </span>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        disabled={!traces?.traceFilePath}
-                        onClick={openLogsDirectory}
-                        aria-label="Open logs folder"
-                      >
-                        <FolderOpenIcon className="size-3.5" />
-                      </Button>
-                    }
+            {/* Background Activity Profile Settings */}
+            <SettingsSection
+              title="Background activity"
+              description="Balance provider checks and repository refreshes against power consumption for this environment."
+            >
+              <SettingsRow
+                title="Activity Profile"
+                description="Select power and polling profile for repository refresh and background provider checks."
+                control={
+                  <SegmentedControl
+                    value={backgroundProfile}
+                    onValueChange={async (profile) => {
+                      await ensureNativeApi().server.updateSettings({
+                        backgroundActivity: { schemaVersion: 1, profile, overrides: {} },
+                        backgroundActivityProfile: profile,
+                      });
+                      setBackgroundProfile(profile);
+                    }}
+                    options={[
+                      { value: "battery-saver", label: "Battery saver" },
+                      { value: "balanced", label: "Balanced" },
+                      { value: "performance", label: "Performance" },
+                    ]}
+                    aria-label="Background activity profile"
                   />
-                  <TooltipPopup side="top">Open logs folder</TooltipPopup>
-                </Tooltip>
+                }
+              />
+            </SettingsSection>
+          </div>
+        ) : null}
+
+        {/* TAB 2: RESOURCE TIMELINE (Sections 3 & 7) */}
+        {activeTab === "timeline" ? (
+          <div className="space-y-6">
+            {/* Section 3: Resource timeline */}
+            <SettingsSection
+              title="Resource timeline"
+              description="Multi-metric CPU average, I/O read throughput, and I/O write throughput history."
+              headerAction={
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 p-0.5 text-xs">
+                    {HISTORY_WINDOWS.map((win, idx) => (
+                      <button
+                        key={win.label}
+                        type="button"
+                        onClick={() => setHistoryWindowIndex(idx)}
+                        className={cn(
+                          "rounded px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                          historyWindowIndex === idx
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {win.label}
+                      </button>
+                    ))}
+                  </div>
+                  <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
+                    <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
+                  </Button>
+                </div>
+              }
+            >
+              <ResourceHistoryChart buckets={telemetryHistory?.buckets ?? []} />
+              <HistoryProcessTable processes={telemetryHistory?.topProcesses ?? []} />
+            </SettingsSection>
+
+            {/* Section 7: Resource History (Server Root Process Diagnostics History) */}
+            <SettingsSection
+              title="Server Process History"
+              description="Active CPU time and retained in-memory samples for the Tabs backend server root process."
+            >
+              <StatsGrid>
+                <StatBlock
+                  label="CPU Time"
+                  value={history ? formatCpuTime(history.totalCpuSecondsApprox * 1000) : "—"}
+                  tooltip="Approximate active CPU time for the Tabs server root process and its descendants during the window."
+                />
+                <StatBlock
+                  label="Samples"
+                  value={history ? formatCount(history.retainedSampleCount) : "—"}
+                  tooltip="In-memory process samples retained by the server. Resets when server restarts."
+                />
+                <StatBlock
+                  label="Interval"
+                  value={history ? formatDuration(history.sampleIntervalMs) : "—"}
+                />
+                <StatBlock
+                  label="Processes"
+                  value={history ? formatCount(history.topProcesses.length) : "—"}
+                />
+              </StatsGrid>
+              {history && history.buckets.length > 0 ? (
+                <ProcessResourceHistoryChart buckets={history.buckets} />
+              ) : null}
+              {history ? (
+                <ProcessResourceHistoryTable
+                  processes={history.topProcesses}
+                  emptyLabel="No process resource samples found for this window."
+                />
+              ) : null}
+            </SettingsSection>
+          </div>
+        ) : null}
+
+        {/* TAB 3: PROCESS TREE (Section 4) */}
+        {activeTab === "process-tree" ? (
+          <div className="space-y-6">
+            <SettingsSection
+              title="Live process tree"
+              description="Process hierarchy across Tabs server, desktop shells, and child processes. Identity is tracked by PID + start time to prevent stale recycling."
+              headerAction={
                 <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
                   <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
                 </Button>
-              </div>
-            }
-          >
-            <StatsGrid>
-              <StatBlock label="Spans" value={traces ? formatCount(traces.recordCount) : "—"} />
-              <StatBlock
-                label="Failures"
-                value={traces ? formatCount(traces.failureCount) : "—"}
-                tone={traces && traces.failureCount > 0 ? "danger" : "default"}
+              }
+            >
+              <ProcessTable
+                processes={telemetry?.processes ?? []}
+                onSignal={(process: ResourceTelemetryProcess, signal: ServerProcessSignal) => {
+                  void handleSignalProcess(process.identity.pid, signal);
+                }}
               />
-              <StatBlock
-                label="Slow Spans"
-                value={traces ? formatCount(traces.slowSpanCount) : "—"}
-                tooltip={
-                  traces
-                    ? `Spans with a duration of ${formatDuration(traces.slowSpanThresholdMs)} or longer.`
-                    : "Spans at or above the configured slow-span threshold."
-                }
-                tone={traces && traces.slowSpanCount > 0 ? "warning" : "default"}
+            </SettingsSection>
+          </div>
+        ) : null}
+
+        {/* TAB 4: APPLICATION I/O (Section 5) */}
+        {activeTab === "application-io" ? (
+          <div className="space-y-6">
+            <SettingsSection
+              title="Instrumented application I/O"
+              description="Internal application read and write call sites (e.g. structured trace streaming and support bundle exports)."
+              headerAction={
+                <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
+                  <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
+                </Button>
+              }
+            >
+              <AttributionTable entries={telemetry?.attribution?.entries ?? []} />
+            </SettingsSection>
+          </div>
+        ) : null}
+
+        {/* TAB 5: LIVE PROCESSES (Section 6) */}
+        {activeTab === "live-processes" ? (
+          <div className="space-y-6">
+            <SettingsSection
+              title="Live Processes"
+              description="Live descendant and provider processes spawned by the active server instance."
+              headerAction={
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground font-mono">
+                    Checked {formatRelative(processes?.readAt ?? null)}
+                  </span>
+                  <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
+                    <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
+                  </Button>
+                </div>
+              }
+            >
+              <StatsGrid>
+                <StatBlock
+                  label="Child Processes"
+                  value={processes ? formatCount(processes.processCount) : "—"}
+                />
+                <StatBlock
+                  label="Aggregate CPU"
+                  value={processes ? `${processes.totalCpuPercent.toFixed(1)}%` : "—"}
+                />
+                <StatBlock
+                  label="Aggregate Memory"
+                  value={processes ? formatBytes(processes.totalRssBytes) : "—"}
+                />
+                <StatBlock
+                  label="Server PID"
+                  value={processes ? String(processes.serverPid) : "—"}
+                />
+              </StatsGrid>
+              {processes && Option.isSome(processes.error) ? (
+                <p
+                  role="alert"
+                  className="border-t border-border/60 px-4 py-3 text-xs text-destructive sm:px-5"
+                >
+                  {processes.error.value.message}
+                </p>
+              ) : null}
+              <ProcessDiagnosticsTable
+                processes={processes?.processes ?? []}
+                signalingPid={signalingPid}
+                onSignal={(pid, signal) => void handleSignalProcess(pid, signal)}
+                emptyLabel="No live descendant processes found."
               />
-              <StatBlock
-                label="Parse Errors"
-                value={traces ? formatCount(traces.parseErrorCount) : "—"}
-                tone={traces && traces.parseErrorCount > 0 ? "warning" : "default"}
-              />
-            </StatsGrid>
-            {traces && Option.isSome(traces.error) ? (
-              <p role="alert" className="border-t border-border/60 px-4 py-3 text-xs text-destructive sm:px-5">
-                {traces.error.value.message}
-              </p>
-            ) : null}
-            {traces && Option.isSome(traces.partialFailure) ? (
-              <p role="status" className="border-t border-border/60 px-4 py-3 text-xs text-amber-500 sm:px-5">
-                Some rotated trace files could not be read, so these diagnostics may be incomplete.
-              </p>
-            ) : null}
-          </SettingsSection>
+            </SettingsSection>
+          </div>
+        ) : null}
 
-          {/* Latest Failures Table with Expandable Full Error Stack */}
-          <SettingsSection title="Latest Failures">
-            {traces && traces.latestFailures.length > 0 ? (
-              <DiagnosticsTable headers={["Span", "Cause", "Duration", "Ended"]}>
-                {traces.latestFailures.map((failure) => (
-                  <tr key={`${failure.traceId}:${failure.spanId}`}>
-                    <td className="px-4 py-3 align-top text-xs font-medium text-foreground first:sm:pl-5">
-                      {failure.name}
-                    </td>
-                    <td className="max-w-[420px] px-4 py-3 align-top text-muted-foreground">
-                      <ExpandableText text={failure.cause} />
-                    </td>
-                    <td className="px-4 py-3 align-top font-mono tabular-nums">
-                      {formatDuration(failure.durationMs)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 align-top font-mono tabular-nums text-muted-foreground last:sm:pr-5">
-                      {formatRelativeNoWrap(failure.endedAt)}
-                    </td>
-                  </tr>
-                ))}
-              </DiagnosticsTable>
-            ) : (
-              <EmptyRows label={loading ? "Loading failures..." : "No failed spans found."} />
-            )}
-          </SettingsSection>
+        {/* TAB 6: TRACES (Section 8) */}
+        {activeTab === "traces" ? (
+          <div className="space-y-6">
+            <SettingsSection
+              title="Trace Diagnostics"
+              description={
+                traces?.traceFilePath ? (
+                  <TraceFilePathPill path={traces.traceFilePath} />
+                ) : (
+                  "Trace storage is loading…"
+                )
+              }
+              headerAction={
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground font-mono">
+                    Checked {formatRelative(traces?.readAt ?? null)}
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          disabled={!traces?.traceFilePath}
+                          onClick={openLogsDirectory}
+                          aria-label="Open logs folder"
+                        >
+                          <FolderOpenIcon className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipPopup side="top">Open logs folder</TooltipPopup>
+                  </Tooltip>
+                  <Button size="icon-xs" variant="ghost" onClick={() => void refresh()}>
+                    <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
+                  </Button>
+                </div>
+              }
+            >
+              <StatsGrid>
+                <StatBlock label="Spans" value={traces ? formatCount(traces.recordCount) : "—"} />
+                <StatBlock
+                  label="Failures"
+                  value={traces ? formatCount(traces.failureCount) : "—"}
+                  tone={traces && traces.failureCount > 0 ? "danger" : "default"}
+                />
+                <StatBlock
+                  label="Slow Spans"
+                  value={traces ? formatCount(traces.slowSpanCount) : "—"}
+                  tooltip={
+                    traces
+                      ? `Spans with a duration of ${formatDuration(traces.slowSpanThresholdMs)} or longer.`
+                      : "Spans at or above the configured slow-span threshold."
+                  }
+                  tone={traces && traces.slowSpanCount > 0 ? "warning" : "default"}
+                />
+                <StatBlock
+                  label="Parse Errors"
+                  value={traces ? formatCount(traces.parseErrorCount) : "—"}
+                  tone={traces && traces.parseErrorCount > 0 ? "warning" : "default"}
+                />
+              </StatsGrid>
+              {traces && Option.isSome(traces.error) ? (
+                <p
+                  role="alert"
+                  className="border-t border-border/60 px-4 py-3 text-xs text-destructive sm:px-5"
+                >
+                  {traces.error.value.message}
+                </p>
+              ) : null}
+              {traces && Option.isSome(traces.partialFailure) ? (
+                <p
+                  role="status"
+                  className="border-t border-border/60 px-4 py-3 text-xs text-amber-500 sm:px-5"
+                >
+                  Some rotated trace files could not be read, so these diagnostics may be
+                  incomplete.
+                </p>
+              ) : null}
+            </SettingsSection>
 
-          {/* Most Common Failures */}
-          <SettingsSection title="Most Common Failures">
-            {traces && traces.commonFailures.length > 0 ? (
-              <DiagnosticsTable
-                headers={["Span", "Count", "Cause", "Last Seen"]}
-                minTableWidth="min-w-[760px]"
-              >
-                {traces.commonFailures.map((failure) => (
-                  <tr key={`${failure.name}:${failure.cause}`}>
-                    <td className="px-4 py-3 align-top text-xs font-medium text-foreground first:sm:pl-5">
-                      {failure.name}
-                    </td>
-                    <td className="px-4 py-3 align-top font-mono tabular-nums">
-                      {formatCount(failure.count)}
-                    </td>
-                    <td className="max-w-[420px] px-4 py-3 align-top text-muted-foreground">
-                      <ExpandableText text={failure.cause} />
-                    </td>
-                    <td className="w-px whitespace-nowrap px-4 py-3 align-top font-mono tabular-nums text-muted-foreground last:sm:pr-5">
-                      {formatRelativeNoWrap(failure.lastSeenAt)}
-                    </td>
-                  </tr>
-                ))}
-              </DiagnosticsTable>
-            ) : (
-              <EmptyRows label={loading ? "Loading failure groups..." : "No repeated failures found."} />
-            )}
-          </SettingsSection>
+            {/* Latest Failures Table with Expandable Full Error Stack */}
+            <SettingsSection title="Latest Failures">
+              {traces && traces.latestFailures.length > 0 ? (
+                <DiagnosticsTable headers={["Span", "Cause", "Duration", "Ended"]}>
+                  {traces.latestFailures.map((failure) => (
+                    <tr key={`${failure.traceId}:${failure.spanId}`}>
+                      <td className="px-4 py-3 align-top text-xs font-medium text-foreground first:sm:pl-5">
+                        {failure.name}
+                      </td>
+                      <td className="max-w-[420px] px-4 py-3 align-top text-muted-foreground">
+                        <ExpandableText text={failure.cause} />
+                      </td>
+                      <td className="px-4 py-3 align-top font-mono tabular-nums">
+                        {formatDuration(failure.durationMs)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 align-top font-mono tabular-nums text-muted-foreground last:sm:pr-5">
+                        {formatRelativeNoWrap(failure.endedAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </DiagnosticsTable>
+              ) : (
+                <EmptyRows label={loading ? "Loading failures..." : "No failed spans found."} />
+              )}
+            </SettingsSection>
 
-          {/* Slowest Spans */}
-          <SettingsSection title="Slowest Spans">
-            {traces && traces.slowestSpans.length > 0 ? (
-              <DiagnosticsTable
-                headers={["Span", "Duration", "Ended", "Trace"]}
-                minTableWidth="min-w-[900px]"
-                columnWidths={["w-[40%]", "w-[15%]", "w-[15%]", "w-[30%]"]}
-              >
-                {traces.slowestSpans.map((span) => (
-                  <tr key={`${span.traceId}:${span.spanId}`}>
-                    <td className="px-4 py-3 align-top text-xs font-medium text-foreground first:sm:pl-5">
-                      {span.name}
-                    </td>
-                    <td className="px-4 py-3 align-top font-mono tabular-nums">
-                      {formatDuration(span.durationMs)}
-                    </td>
-                    <td className="w-px whitespace-nowrap px-4 py-3 align-top font-mono tabular-nums text-muted-foreground">
-                      {formatRelativeNoWrap(span.endedAt)}
-                    </td>
-                    <td className="min-w-0 whitespace-nowrap px-4 py-3 align-top text-muted-foreground last:sm:pr-5">
-                      <TraceIdCell traceId={span.traceId} />
-                    </td>
-                  </tr>
-                ))}
-              </DiagnosticsTable>
-            ) : (
-              <EmptyRows label={loading ? "Loading slow spans..." : "No slow spans found."} />
-            )}
-          </SettingsSection>
+            {/* Most Common Failures */}
+            <SettingsSection title="Most Common Failures">
+              {traces && traces.commonFailures.length > 0 ? (
+                <DiagnosticsTable
+                  headers={["Span", "Count", "Cause", "Last Seen"]}
+                  minTableWidth="min-w-[760px]"
+                >
+                  {traces.commonFailures.map((failure) => (
+                    <tr key={`${failure.name}:${failure.cause}`}>
+                      <td className="px-4 py-3 align-top text-xs font-medium text-foreground first:sm:pl-5">
+                        {failure.name}
+                      </td>
+                      <td className="px-4 py-3 align-top font-mono tabular-nums">
+                        {formatCount(failure.count)}
+                      </td>
+                      <td className="max-w-[420px] px-4 py-3 align-top text-muted-foreground">
+                        <ExpandableText text={failure.cause} />
+                      </td>
+                      <td className="w-px whitespace-nowrap px-4 py-3 align-top font-mono tabular-nums text-muted-foreground last:sm:pr-5">
+                        {formatRelativeNoWrap(failure.lastSeenAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </DiagnosticsTable>
+              ) : (
+                <EmptyRows
+                  label={loading ? "Loading failure groups..." : "No repeated failures found."}
+                />
+              )}
+            </SettingsSection>
 
-          {/* Top Span Names */}
-          <SettingsSection title="Top Span Names">
-            {traces && traces.topSpansByCount.length > 0 ? (
-              <DiagnosticsTable headers={["Span", "Count", "Failures", "Average Duration"]}>
-                {traces.topSpansByCount.map((span) => (
-                  <tr key={span.name} className="hover:bg-muted/20">
-                    <td className="px-4 py-2.5 font-mono text-foreground/90 first:sm:pl-5">
-                      {span.name}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                      {formatCount(span.count)}
-                    </td>
-                    <td
-                      className={cn(
-                        "px-3 py-2.5 text-right font-mono tabular-nums",
-                        span.failureCount > 0 && "font-medium text-destructive",
-                      )}
-                    >
-                      {span.failureCount}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground last:sm:pr-5">
-                      {span.averageDurationMs.toFixed(1)} ms
-                    </td>
-                  </tr>
-                ))}
-              </DiagnosticsTable>
-            ) : (
-              <EmptyRows label={loading ? "Loading span counts..." : "No spans recorded."} />
-            )}
-          </SettingsSection>
-        </div>
-      ) : null}
+            {/* Slowest Spans */}
+            <SettingsSection title="Slowest Spans">
+              {traces && traces.slowestSpans.length > 0 ? (
+                <DiagnosticsTable
+                  headers={["Span", "Duration", "Ended", "Trace"]}
+                  minTableWidth="min-w-[900px]"
+                  columnWidths={["w-[40%]", "w-[15%]", "w-[15%]", "w-[30%]"]}
+                >
+                  {traces.slowestSpans.map((span) => (
+                    <tr key={`${span.traceId}:${span.spanId}`}>
+                      <td className="px-4 py-3 align-top text-xs font-medium text-foreground first:sm:pl-5">
+                        {span.name}
+                      </td>
+                      <td className="px-4 py-3 align-top font-mono tabular-nums">
+                        {formatDuration(span.durationMs)}
+                      </td>
+                      <td className="w-px whitespace-nowrap px-4 py-3 align-top font-mono tabular-nums text-muted-foreground">
+                        {formatRelativeNoWrap(span.endedAt)}
+                      </td>
+                      <td className="min-w-0 whitespace-nowrap px-4 py-3 align-top text-muted-foreground last:sm:pr-5">
+                        <TraceIdCell traceId={span.traceId} />
+                      </td>
+                    </tr>
+                  ))}
+                </DiagnosticsTable>
+              ) : (
+                <EmptyRows label={loading ? "Loading slow spans..." : "No slow spans found."} />
+              )}
+            </SettingsSection>
 
+            {/* Top Span Names */}
+            <SettingsSection title="Top Span Names">
+              {traces && traces.topSpansByCount.length > 0 ? (
+                <DiagnosticsTable headers={["Span", "Count", "Failures", "Average Duration"]}>
+                  {traces.topSpansByCount.map((span) => (
+                    <tr key={span.name} className="hover:bg-muted/20">
+                      <td className="px-4 py-2.5 font-mono text-foreground/90 first:sm:pl-5">
+                        {span.name}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {formatCount(span.count)}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-3 py-2.5 text-right font-mono tabular-nums",
+                          span.failureCount > 0 && "font-medium text-destructive",
+                        )}
+                      >
+                        {span.failureCount}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-muted-foreground last:sm:pr-5">
+                        {span.averageDurationMs.toFixed(1)} ms
+                      </td>
+                    </tr>
+                  ))}
+                </DiagnosticsTable>
+              ) : (
+                <EmptyRows label={loading ? "Loading span counts..." : "No spans recorded."} />
+              )}
+            </SettingsSection>
+          </div>
+        ) : null}
       </div>
       {/* useConfirm Modal Dialog */}
       {confirmDialog}

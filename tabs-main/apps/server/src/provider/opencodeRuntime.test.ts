@@ -257,7 +257,9 @@ describe("OpenCodeRuntime startup diagnostics", () => {
     );
 
     expect(OpenCodeRuntimeError.is(error)).toBe(true);
-    expect((error as any).detail).toContain("Timed out waiting for OpenCode server start after 5ms.");
+    expect((error as any).detail).toContain(
+      "Timed out waiting for OpenCode server start after 5ms.",
+    );
     expect((error as any).detail).toContain(
       "command: /custom/bin/opencode serve --hostname 127.0.0.1 --port 58123",
     );
@@ -416,13 +418,13 @@ describe("OpenCodeRuntime local server pool", () => {
           const first = yield* runtime
             .connectToOpenCodeServer({
               binaryPath: "opencode",
-              ...( { cwd: "/repo", poolIsolationKey: "synara-thread-a" } as any ),
+              ...({ cwd: "/repo", poolIsolationKey: "synara-thread-a" } as any),
             })
             .pipe(Effect.provideService(Scope.Scope, firstScope));
           const second = yield* runtime
             .connectToOpenCodeServer({
               binaryPath: "opencode",
-              ...( { cwd: "/repo", poolIsolationKey: "synara-thread-b" } as any ),
+              ...({ cwd: "/repo", poolIsolationKey: "synara-thread-b" } as any),
             })
             .pipe(Effect.provideService(Scope.Scope, secondScope));
 
@@ -540,13 +542,13 @@ describe("OpenCodeRuntime local server pool", () => {
           const thirdScope = yield* Scope.make();
 
           const first = yield* runtime
-            .connectToOpenCodeServer({ binaryPath: "opencode", ...( { cwd: "/repo/alpha" } as any ) })
+            .connectToOpenCodeServer({ binaryPath: "opencode", ...({ cwd: "/repo/alpha" } as any) })
             .pipe(Effect.provideService(Scope.Scope, firstScope));
           const second = yield* runtime
-            .connectToOpenCodeServer({ binaryPath: "opencode", ...( { cwd: "/repo/beta" } as any ) })
+            .connectToOpenCodeServer({ binaryPath: "opencode", ...({ cwd: "/repo/beta" } as any) })
             .pipe(Effect.provideService(Scope.Scope, secondScope));
           const third = yield* runtime
-            .connectToOpenCodeServer({ binaryPath: "opencode", ...( { cwd: "/repo/alpha" } as any ) })
+            .connectToOpenCodeServer({ binaryPath: "opencode", ...({ cwd: "/repo/alpha" } as any) })
             .pipe(Effect.provideService(Scope.Scope, thirdScope));
 
           expect(first.url).toBe("http://127.0.0.1:59000");

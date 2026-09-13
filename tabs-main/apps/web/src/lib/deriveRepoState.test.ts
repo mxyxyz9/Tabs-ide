@@ -42,14 +42,24 @@ describe("deriveRepoState — Isolated State Tests", () => {
   });
 
   it("4. merge_in_progress (unresolved conflicts)", () => {
-    const res = deriveRepoState({ ...defaultParams, hasConflict: true, conflictedFilesCount: 2, stagedFilesCount: 1 });
+    const res = deriveRepoState({
+      ...defaultParams,
+      hasConflict: true,
+      conflictedFilesCount: 2,
+      stagedFilesCount: 1,
+    });
     expect(res.kind).toBe("merge_in_progress");
     expect(res.canCommitLocally).toBe(false);
     expect(res.commitButtonLabel).toBe("Commit staged");
   });
 
   it("5. merge_in_progress (all conflicts resolved & staged)", () => {
-    const res = deriveRepoState({ ...defaultParams, hasConflict: true, conflictedFilesCount: 0, stagedFilesCount: 3 });
+    const res = deriveRepoState({
+      ...defaultParams,
+      hasConflict: true,
+      conflictedFilesCount: 0,
+      stagedFilesCount: 3,
+    });
     expect(res.kind).toBe("merge_in_progress");
     expect(res.canCommitLocally).toBe(true);
     expect(res.commitButtonLabel).toBe("Complete merge");
@@ -114,7 +124,8 @@ describe("deriveRepoState — Isolated State Tests", () => {
       expect(res.canPush).toBe(false);
 
       const commitStagedDisabled = !params.stagedFilesCount || !res.canCommitLocally;
-      const commitAndPushDisabled = !params.stagedFilesCount || !res.canCommitLocally || !res.canPush;
+      const commitAndPushDisabled =
+        !params.stagedFilesCount || !res.canCommitLocally || !res.canPush;
 
       expect(commitStagedDisabled).toBe(false);
       expect(commitAndPushDisabled).toBe(true);
@@ -122,7 +133,12 @@ describe("deriveRepoState — Isolated State Tests", () => {
   });
 
   it("12. diverged", () => {
-    const res = deriveRepoState({ ...defaultParams, aheadCount: 3, behindCount: 2, stagedFilesCount: 1 });
+    const res = deriveRepoState({
+      ...defaultParams,
+      aheadCount: 3,
+      behindCount: 2,
+      stagedFilesCount: 1,
+    });
     expect(res.kind).toBe("diverged");
     expect(res.canCommitLocally).toBe(true);
     expect(res.canPush).toBe(true);

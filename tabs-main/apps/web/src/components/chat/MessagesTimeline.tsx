@@ -375,7 +375,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                         <button
                           type="button"
                           aria-expanded={isExpanded}
-                          aria-label={isExpanded ? `Hide details for ${groupLabel}` : `View details for ${groupLabel}`}
+                          aria-label={
+                            isExpanded
+                              ? `Hide details for ${groupLabel}`
+                              : `View details for ${groupLabel}`
+                          }
                           className="flex items-center gap-1 rounded-sm text-[11px] font-mono text-muted-foreground/40 hover:text-foreground/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 motion-reduce:transition-none"
                           onClick={() => onToggleWorkGroup(groupId)}
                         >
@@ -477,7 +481,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 <div className="mb-1.5 flex items-center justify-end gap-2 opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none">
                   <div className="flex items-center gap-1.5">
                     {displayedUserMessage.copyText && (
-                      <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" size="icon-xs" />
+                      <MessageCopyButton
+                        text={displayedUserMessage.copyText}
+                        variant="ghost"
+                        size="icon-xs"
+                      />
                     )}
                     {canRevertAgentWork && (
                       <button

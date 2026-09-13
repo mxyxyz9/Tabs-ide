@@ -72,7 +72,10 @@ export function filterAndDeduplicateFindings(
     }
 
     const existing = bestByFingerprint.get(fingerprint);
-    if (!existing || effectiveConfidence > (existing.confidence * getDiscount(getFindingFingerprint(existing)))) {
+    if (
+      !existing ||
+      effectiveConfidence > existing.confidence * getDiscount(getFindingFingerprint(existing))
+    ) {
       bestByFingerprint.set(fingerprint, {
         ...finding,
         confidence: effectiveConfidence,

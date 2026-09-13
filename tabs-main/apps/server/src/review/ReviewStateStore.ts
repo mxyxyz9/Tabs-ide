@@ -105,11 +105,7 @@ export function saveReviewState(state: ReviewState, stateDir?: string): void {
 /**
  * Clear saved ReviewState for a repo and branch (e.g. when force-push detected).
  */
-export function clearReviewState(
-  cwd: string,
-  branchName: string,
-  stateDir?: string,
-): void {
+export function clearReviewState(cwd: string, branchName: string, stateDir?: string): void {
   const dir = stateDir ?? getDefaultReviewStateDir();
   const filePath = path.join(dir, stateFileKey(cwd, branchName));
   try {

@@ -84,7 +84,8 @@ describe("recallableComposerPrompt", () => {
   });
 
   it("strips only the review comments appended at the end", () => {
-    const comment = '<review_comment path="src/app.ts">\nKeep this configurable.\n</review_comment>';
+    const comment =
+      '<review_comment path="src/app.ts">\nKeep this configurable.\n</review_comment>';
     const sent = `Please update this.\n\n${comment}`;
     expect(recallableComposerPrompt(sent)).toBe("Please update this.");
     const midPrompt = `Before\n\n${comment}\n\nAfter`;

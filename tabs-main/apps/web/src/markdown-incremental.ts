@@ -67,10 +67,7 @@ export function createIncrementalMarkdownParser(
       if (root.position) root.position.start = { line: 1, column: 1, offset: 0 };
       // Remark transforms mutate their input. The cache owns pristine nodes and
       // each render receives its own copy, including source positions.
-      root.children = [
-        ...structuredClone(prefix.children),
-        ...(root.children ?? []),
-      ];
+      root.children = [...structuredClone(prefix.children), ...(root.children ?? [])];
     } else {
       root = parse(source, file);
       if (hasDefinitions(root)) return root;

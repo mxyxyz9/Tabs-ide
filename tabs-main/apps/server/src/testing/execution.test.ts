@@ -287,27 +287,31 @@ describe("TestingExecutor", () => {
     roots.push(root);
     const { store, jobId } = await seedExecutableArtifact(root, "http://127.0.0.1:4173/");
     let executorRef: TestingExecutor | null = null;
-    const executor = new TestingExecutor(store, join(root, "testing"), async (_cmd, _args, opts) => {
-      // Simulate slow execution that gets cancelled
-      if (executorRef) {
-        // Trigger cancellation while running
-        const runs = store.executionRuns("project").runs;
-        const currentRun = runs[0];
-        if (currentRun) {
-          executorRef.cancel("project", currentRun.id);
+    const executor = new TestingExecutor(
+      store,
+      join(root, "testing"),
+      async (_cmd, _args, opts) => {
+        // Simulate slow execution that gets cancelled
+        if (executorRef) {
+          // Trigger cancellation while running
+          const runs = store.executionRuns("project").runs;
+          const currentRun = runs[0];
+          if (currentRun) {
+            executorRef.cancel("project", currentRun.id);
+          }
         }
-      }
-      if (opts?.signal?.aborted) {
-        throw new Error("Execution cancelled");
-      }
-      return {
-        stdout: "",
-        stderr: "cancelled",
-        code: 1,
-        signal: "SIGTERM",
-        timedOut: false,
-      };
-    });
+        if (opts?.signal?.aborted) {
+          throw new Error("Execution cancelled");
+        }
+        return {
+          stdout: "",
+          stderr: "cancelled",
+          code: 1,
+          signal: "SIGTERM",
+          timedOut: false,
+        };
+      },
+    );
     executorRef = executor;
     try {
       const run = await executor.execute({

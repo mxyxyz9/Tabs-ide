@@ -103,8 +103,10 @@ describe("official Playwright candidate integration (no model calls)", () => {
           } as unknown as TestingCaseSummary,
           outputDirectory: root,
           textGeneration: {} as unknown as TextGenerationShape,
-          previousSpec: 'import { test, expect } from "playwright/test"; test("x", () => { expect(1).toBe(1); });',
-          failureEvidence: "Error: expect(received).toEqual(expected) - Expected '404', Received '200'",
+          previousSpec:
+            'import { test, expect } from "playwright/test"; test("x", () => { expect(1).toBe(1); });',
+          failureEvidence:
+            "Error: expect(received).toEqual(expected) - Expected '404', Received '200'",
         }),
       ).rejects.toThrow("failure classified as product-assertion");
     } finally {
@@ -143,8 +145,10 @@ describe("official Playwright candidate integration (no model calls)", () => {
           } as unknown as TestingCaseSummary,
           outputDirectory: root,
           textGeneration,
-          previousSpec: 'import { test, expect } from "playwright/test"; test("x", () => { expect(1).toBe(1); expect(2).toBe(2); });',
-          failureEvidence: "TimeoutError: locator.click: Timeout 5000ms waiting for locator('#button')",
+          previousSpec:
+            'import { test, expect } from "playwright/test"; test("x", () => { expect(1).toBe(1); expect(2).toBe(2); });',
+          failureEvidence:
+            "TimeoutError: locator.click: Timeout 5000ms waiting for locator('#button')",
         }),
       ).rejects.toThrow("Weakened assertions");
     } finally {

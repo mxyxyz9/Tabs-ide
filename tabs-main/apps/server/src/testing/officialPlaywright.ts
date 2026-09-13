@@ -128,8 +128,7 @@ export async function generateOfficialPlaywright(input: {
   if (/\btest\s*\.\s*(skip|fixme|fail|only)\s*\(/.test(source))
     throw new Error("Agent output contains excluded/expected-failure tests");
 
-  if (!/\bexpect\s*\(/.test(source))
-    throw new Error("Generated spec has missing assertions");
+  if (!/\bexpect\s*\(/.test(source)) throw new Error("Generated spec has missing assertions");
 
   if (/\b(password|apiKey|api_key|secret|token)\s*[:=]\s*["'][^"']+["']/i.test(source))
     throw new Error("Invented credentials detected in generated spec");
@@ -156,9 +155,16 @@ export async function generateOfficialPlaywright(input: {
   );
 
   if (listResult.code !== 0) {
-    throw new Error(`Validation failed with exit code ${listResult.code}: ${listResult.stderr || listResult.stdout}`);
+    throw new Error(
+      `Validation failed with exit code ${listResult.code}: ${listResult.stderr || listResult.stdout}`,
+    );
   }
-  if (/Total:\s*0\b/i.test(listResult.stdout ?? "") || (listResult.stdout && !listResult.stdout.includes("›") && !listResult.stdout.includes("Listing tests:"))) {
+  if (
+    /Total:\s*0\b/i.test(listResult.stdout ?? "") ||
+    (listResult.stdout &&
+      !listResult.stdout.includes("›") &&
+      !listResult.stdout.includes("Listing tests:"))
+  ) {
     throw new Error("Zero tests discovered in generated spec");
   }
 
@@ -169,7 +175,12 @@ export async function generateOfficialPlaywright(input: {
   let diff: string | undefined;
   let diffPath: string | undefined;
   if (input.previousSpec) {
-    diff = createUnifiedDiff("tests/previous.spec.ts", "tests/generated.spec.ts", input.previousSpec, source);
+    diff = createUnifiedDiff(
+      "tests/previous.spec.ts",
+      "tests/generated.spec.ts",
+      input.previousSpec,
+      source,
+    );
     diffPath = join(cwd, "candidate.diff");
     await writeFile(diffPath, diff, "utf8");
   }

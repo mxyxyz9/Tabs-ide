@@ -11,7 +11,8 @@ export function getProviderStatusBannerKey(status: ServerProvider | null): strin
     status.installed &&
     status.status === "warning" &&
     status.auth.status === "unknown"
-  ) return null;
+  )
+    return null;
   return [status.instanceId, status.status, status.auth.status, status.message ?? ""].join("\0");
 }
 

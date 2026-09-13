@@ -2,10 +2,7 @@
   "mcpServers": {
     "playwright-test": {
       "command": "bun",
-      "args": [
-        "../node_modules/playwright/cli.js",
-        "run-test-mcp-server"
-      ]
+      "args": ["../node_modules/playwright/cli.js", "run-test-mcp-server"]
     }
   }
 }

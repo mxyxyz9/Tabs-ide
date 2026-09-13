@@ -66,12 +66,7 @@ export function projectSearchEntriesQueryOptions(input: {
   const limit = input.limit ?? DEFAULT_SEARCH_ENTRIES_LIMIT;
   return queryOptions({
     queryKey: [
-      ...projectQueryKeys.searchEntries(
-        input.environmentId ?? null,
-        input.cwd,
-        input.query,
-        limit,
-      ),
+      ...projectQueryKeys.searchEntries(input.environmentId ?? null, input.cwd, input.query, limit),
       input.kind ?? null,
       input.imageOnly ?? null,
     ] as const,
@@ -163,4 +158,3 @@ export function projectSearchContentsQueryOptions(input: {
     placeholderData: (previous) => previous ?? EMPTY_SEARCH_CONTENTS_RESULT,
   });
 }
-

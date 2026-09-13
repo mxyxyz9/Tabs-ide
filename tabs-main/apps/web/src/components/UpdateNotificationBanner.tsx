@@ -56,7 +56,8 @@ export function UpdateNotificationBanner({
       <div className="flex items-center gap-2 overflow-hidden">
         <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
         <span className="truncate">
-          <strong>Update available:</strong> Server is running v{mismatch.serverVersion}, but client is v{mismatch.clientVersion}.
+          <strong>Update available:</strong> Server is running v{mismatch.serverVersion}, but client
+          is v{mismatch.clientVersion}.
         </span>
       </div>
       <div className="flex items-center gap-2 shrink-0">

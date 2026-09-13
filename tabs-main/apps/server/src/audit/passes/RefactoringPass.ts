@@ -8,9 +8,7 @@ import type { AuditFinding } from "@tabs/contracts";
 import { computeFindingFingerprint } from "@tabs/contracts";
 import type { ReviewPassContext } from "./CorrectnessPass.ts";
 
-export function runRefactoringPass(
-  ctx: ReviewPassContext,
-): ReadonlyArray<AuditFinding> {
+export function runRefactoringPass(ctx: ReviewPassContext): ReadonlyArray<AuditFinding> {
   const findings: AuditFinding[] = [];
   const lines = ctx.contextPack.primaryFileContent.split("\n");
   const filePath = ctx.contextPack.targetScope;

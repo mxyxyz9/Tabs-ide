@@ -48,16 +48,25 @@ function isMatchingFilter(
   filter?: Partial<PullRequestReadCacheScope>,
 ): boolean {
   if (!filter) return true;
-  if (filter.provider !== undefined && filter.provider.toLowerCase() !== scope.provider.toLowerCase()) {
+  if (
+    filter.provider !== undefined &&
+    filter.provider.toLowerCase() !== scope.provider.toLowerCase()
+  ) {
     return false;
   }
-  if (filter.account !== undefined && filter.account.toLowerCase() !== scope.account.toLowerCase()) {
+  if (
+    filter.account !== undefined &&
+    filter.account.toLowerCase() !== scope.account.toLowerCase()
+  ) {
     return false;
   }
   if (filter.environmentId !== undefined && filter.environmentId !== scope.environmentId) {
     return false;
   }
-  if (filter.repository !== undefined && filter.repository.toLowerCase() !== scope.repository.toLowerCase()) {
+  if (
+    filter.repository !== undefined &&
+    filter.repository.toLowerCase() !== scope.repository.toLowerCase()
+  ) {
     return false;
   }
   if (filter.prIdentity !== undefined) {
@@ -87,9 +96,9 @@ export const makePullRequestReadCache = Effect.gen(function* () {
   // Initialize directory and hydrate existing valid cache files
   yield* fs.makeDirectory(cacheDir, { recursive: true }).pipe(Effect.orElseSucceed(() => void 0));
 
-  const existingFiles = yield* fs.readDirectory(cacheDir).pipe(
-    Effect.orElseSucceed(() => [] as string[]),
-  );
+  const existingFiles = yield* fs
+    .readDirectory(cacheDir)
+    .pipe(Effect.orElseSucceed(() => [] as string[]));
 
   for (const filename of existingFiles) {
     if (!filename.endsWith(".json")) continue;
@@ -247,7 +256,11 @@ export const makePullRequestReadCache = Effect.gen(function* () {
       );
     });
 
-  const markRateLimited: PullRequestReadCacheShape["markRateLimited"] = (provider, account, retryAfterMs) =>
+  const markRateLimited: PullRequestReadCacheShape["markRateLimited"] = (
+    provider,
+    account,
+    retryAfterMs,
+  ) =>
     Effect.sync(() => {
       const rateLimitKey = `${provider.toLowerCase()}::${account.toLowerCase()}`;
       rateLimits.set(rateLimitKey, Date.now() + (retryAfterMs ?? DEFAULT_RATE_LIMIT_BACKOFF_MS));
@@ -364,7 +377,9 @@ export const makePullRequestReadCache = Effect.gen(function* () {
 
   const invalidateAll: PullRequestReadCacheShape["invalidateAll"] = Effect.gen(function* () {
     memoryCache.clear();
-    const files = yield* fs.readDirectory(cacheDir).pipe(Effect.orElseSucceed(() => [] as string[]));
+    const files = yield* fs
+      .readDirectory(cacheDir)
+      .pipe(Effect.orElseSucceed(() => [] as string[]));
     for (const file of files) {
       if (file.endsWith(".json")) {
         yield* fs.remove(path.join(cacheDir, file)).pipe(Effect.orElseSucceed(() => void 0));

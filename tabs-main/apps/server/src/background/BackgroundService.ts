@@ -25,8 +25,9 @@ export interface BackgroundServiceStatus {
 }
 
 export function renderSystemdUnit(options: ServiceOptions): string {
-  const envPairs = Object.entries(options.environment ?? {})
-    .map(([k, v]) => `Environment=${k}=${v}`);
+  const envPairs = Object.entries(options.environment ?? {}).map(
+    ([k, v]) => `Environment=${k}=${v}`,
+  );
   envPairs.push(`Environment=TABS_HOME=${options.baseDir}`);
   const envLines = envPairs.join("\n");
 
@@ -152,7 +153,11 @@ export async function stopDaemon(
 
   if (!isProcessRunning(pid)) {
     await removePidFile(baseDir);
-    return { stopped: true, pid, message: `Process ${pid} was not running; cleaned up stale PID file.` };
+    return {
+      stopped: true,
+      pid,
+      message: `Process ${pid} was not running; cleaned up stale PID file.`,
+    };
   }
 
   try {

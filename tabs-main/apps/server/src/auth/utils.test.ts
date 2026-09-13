@@ -133,4 +133,3 @@ describe("session cookie isolation", () => {
     expect(isRemoteReachableHost("192.168.1.50")).toBe(true);
   });
 });
-

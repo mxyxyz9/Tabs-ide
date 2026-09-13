@@ -91,7 +91,9 @@ const PROJECT_ICON_COLOR_BY_NAME: Record<ProjectIconName, ProjectIconColor> = {
 
 export function getServerHttpOrigin(): string {
   if (typeof window === "undefined") return "";
-  const bridgeUrl = (window as unknown as { desktopBridge?: { getWsUrl?: () => string } }).desktopBridge?.getWsUrl?.();
+  const bridgeUrl = (
+    window as unknown as { desktopBridge?: { getWsUrl?: () => string } }
+  ).desktopBridge?.getWsUrl?.();
   const envUrl = (import.meta.env?.VITE_WS_URL as string | undefined) ?? "";
   const wsUrl =
     bridgeUrl && bridgeUrl.length > 0
@@ -224,7 +226,9 @@ function ProjectFaviconFallback({
   }
 
   if (!Icon) return null;
-  return <Icon className={cn("size-3.5 shrink-0 text-muted-foreground/60", colorClassName, className)} />;
+  return (
+    <Icon className={cn("size-3.5 shrink-0 text-muted-foreground/60", colorClassName, className)} />
+  );
 }
 
 function ProjectFaviconImage({

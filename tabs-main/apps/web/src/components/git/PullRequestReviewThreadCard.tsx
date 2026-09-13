@@ -60,7 +60,9 @@ export function PullRequestReviewThreadCard({
   const [isExpanded, setIsExpanded] = useState(!thread.resolved);
   const [isReplying, setIsReplying] = useState(false);
   const [replyBody, setReplyBody] = useState("");
-  const [showReactionPickerForCommentId, setShowReactionPickerForCommentId] = useState<string | null>(null);
+  const [showReactionPickerForCommentId, setShowReactionPickerForCommentId] = useState<
+    string | null
+  >(null);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
   const comments = thread.comments ?? [];
@@ -128,7 +130,10 @@ export function PullRequestReviewThreadCard({
             · {commentCount} {commentCount === 1 ? "comment" : "comments"}
           </span>
           {thread.outdated ? (
-            <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-600 dark:text-amber-400">
+            <Badge
+              variant="outline"
+              className="border-amber-500/40 text-[10px] text-amber-600 dark:text-amber-400"
+            >
               Outdated
             </Badge>
           ) : null}
@@ -206,18 +211,12 @@ export function PullRequestReviewThreadCard({
             return (
               <div
                 key={comment.id}
-                className={`space-y-1.5 ${
-                  index > 0 ? "border-t border-border/40 pt-2.5" : ""
-                }`}
+                className={`space-y-1.5 ${index > 0 ? "border-t border-border/40 pt-2.5" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
                     {comment.author?.avatarUrl ? (
-                      <img
-                        src={comment.author.avatarUrl}
-                        alt=""
-                        className="size-4 rounded-full"
-                      />
+                      <img src={comment.author.avatarUrl} alt="" className="size-4 rounded-full" />
                     ) : null}
                     <span className="font-semibold text-foreground">@{authorLogin}</span>
                     {dateLabel ? (
@@ -250,19 +249,25 @@ export function PullRequestReviewThreadCard({
                 {showReactionPickerForCommentId === comment.id ? (
                   <div className="flex flex-wrap gap-1 rounded-md border border-border/60 bg-muted/40 p-1">
                     {REACTION_OPTIONS.map(([content, emoji]) => {
-                      const existingReaction = comment.reactions?.find((r) => r.content === content);
+                      const existingReaction = comment.reactions?.find(
+                        (r) => r.content === content,
+                      );
                       return (
                         <button
                           key={content}
                           type="button"
                           className={`rounded px-1.5 py-0.5 text-xs hover:bg-background ${
-                            existingReaction?.viewerHasReacted ? "bg-primary/10 ring-1 ring-primary/40" : ""
+                            existingReaction?.viewerHasReacted
+                              ? "bg-primary/10 ring-1 ring-primary/40"
+                              : ""
                           }`}
                           disabled={isPending}
                           onClick={() => {
                             setShowReactionPickerForCommentId(null);
                             void onMutate(
-                              existingReaction?.viewerHasReacted ? "remove_reaction" : "add_reaction",
+                              existingReaction?.viewerHasReacted
+                                ? "remove_reaction"
+                                : "add_reaction",
                               undefined,
                               undefined,
                               { subjectId: comment.id, reaction: content },

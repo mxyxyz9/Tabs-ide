@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  STARTUP_ANIMATION_HOLD_MS,
-  STARTUP_ANIMATION_EXIT_MS,
-} from "../components/SplashScreen";
+import { STARTUP_ANIMATION_HOLD_MS, STARTUP_ANIMATION_EXIT_MS } from "../components/SplashScreen";
 
 describe("Startup splash timing constraints", () => {
   it("preserves the short anti-flash period without arbitrary multi-second hold", () => {

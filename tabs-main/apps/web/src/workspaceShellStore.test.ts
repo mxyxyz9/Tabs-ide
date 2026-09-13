@@ -448,10 +448,14 @@ describe("workspaceShellStore", () => {
     expect(state.browserStateBySessionKey[`${project.id}:custom-figma`]?.devicePreset).toBe("wide");
     expect(state.browserStateBySessionKey[`${project.id}:custom-figma`]?.landscape).toBe(false);
 
-    expect(state.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.devicePreset).toBe("desktop");
+    expect(state.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.devicePreset).toBe(
+      "desktop",
+    );
     expect(state.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.landscape).toBe(true);
 
-    expect(state.browserStateBySessionKey[`${project.id}:custom-preview`]?.devicePreset).toBe("custom");
+    expect(state.browserStateBySessionKey[`${project.id}:custom-preview`]?.devicePreset).toBe(
+      "custom",
+    );
     expect(state.browserStateBySessionKey[`${project.id}:custom-preview`]?.customWidth).toBe(500);
     expect(state.browserStateBySessionKey[`${project.id}:custom-preview`]?.customHeight).toBe(600);
 
@@ -466,10 +470,16 @@ describe("workspaceShellStore", () => {
     );
 
     const nextState = useWorkspaceShellStore.getState();
-    expect(nextState.browserStateBySessionKey[`${project.id}:browser`]?.devicePreset).toBe("mobile-s");
-    expect(nextState.browserStateBySessionKey[`${project.id}:custom-figma`]?.devicePreset).toBe("tablet");
+    expect(nextState.browserStateBySessionKey[`${project.id}:browser`]?.devicePreset).toBe(
+      "mobile-s",
+    );
+    expect(nextState.browserStateBySessionKey[`${project.id}:custom-figma`]?.devicePreset).toBe(
+      "tablet",
+    );
     expect(nextState.browserStateBySessionKey[`${project.id}:custom-figma`]?.landscape).toBe(true);
-    expect(nextState.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.devicePreset).toBe("desktop");
+    expect(nextState.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.devicePreset).toBe(
+      "desktop",
+    );
   });
 
   it("preserves per-session browser viewport state across syncWorkspaceShellState", () => {

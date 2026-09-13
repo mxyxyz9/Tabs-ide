@@ -51,10 +51,7 @@ export function FirstRunGate({ enabled = true, children }: FirstRunGateProps) {
   });
 
   const [gateState, setGateState] = useState<FirstRunGateState>(() => ({
-    decision:
-      !enabled || onboardingCompletedAt !== null
-        ? "app"
-        : "pending",
+    decision: !enabled || onboardingCompletedAt !== null ? "app" : "pending",
     stalled: false,
   }));
 

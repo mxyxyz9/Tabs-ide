@@ -106,9 +106,7 @@ describe("parseCodeControlClientMessage / coerceChromeState", () => {
       }),
     ).toMatchObject({
       activeViewId: null,
-      activityBarItems: [
-        { id: "provider.sidebar", label: "Provider", location: "auxiliaryBar" },
-      ],
+      activityBarItems: [{ id: "provider.sidebar", label: "Provider", location: "auxiliaryBar" }],
     });
   });
 

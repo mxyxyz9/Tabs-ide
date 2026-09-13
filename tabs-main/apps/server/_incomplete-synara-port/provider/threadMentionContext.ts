@@ -2,11 +2,7 @@
 // Purpose: Resolve thread:// composer references into bounded transcript prompt context.
 // Layer: Provider prompt compatibility
 
-import {
-  ThreadId,
-  type OrchestrationThread,
-  type ProviderMentionReference,
-} from "@tabs/contracts";
+import { ThreadId, type OrchestrationThread, type ProviderMentionReference } from "@tabs/contracts";
 import { isThreadMentionPath, threadIdFromThreadMentionPath } from "@tabs/shared/threadMentions";
 import { Effect, Option } from "effect";
 

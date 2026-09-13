@@ -480,7 +480,12 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
               alert.borderClassName,
             )}
           >
-            <p className={cn("flex items-center gap-1.5 font-medium text-xs mb-1", alert.titleClassName)}>
+            <p
+              className={cn(
+                "flex items-center gap-1.5 font-medium text-xs mb-1",
+                alert.titleClassName,
+              )}
+            >
               <alert.Icon aria-hidden className="size-3.5 shrink-0" />
               {alert.label}
             </p>
@@ -588,8 +593,7 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
     [activeProjectId, browserLinkTarget, cwd, diffThemeName, isStreaming, resolvedTheme],
   );
 
-  const incrementalParsing =
-    isStreaming === true && /(?:^|\n) {0,3}(?:`{3}|~{3})/.test(text);
+  const incrementalParsing = isStreaming === true && /(?:^|\n) {0,3}(?:`{3}|~{3})/.test(text);
 
   const remarkPlugins = useMemo(
     () => [

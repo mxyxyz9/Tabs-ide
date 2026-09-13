@@ -39,14 +39,14 @@ export const ComposerStashBadge = memo(function ComposerStashBadge({
         className,
       )}
     >
-      <BookmarkIcon className={cn("size-3.5", pulsing && "animate-pulse motion-reduce:animate-none")} />
+      <BookmarkIcon
+        className={cn("size-3.5", pulsing && "animate-pulse motion-reduce:animate-none")}
+      />
       <span>Stash</span>
       <span
         className={cn(
           "inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1 py-0.5 text-[10px] tabular-nums font-semibold leading-none",
-          pulsing
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground",
+          pulsing ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
         )}
       >
         {count}

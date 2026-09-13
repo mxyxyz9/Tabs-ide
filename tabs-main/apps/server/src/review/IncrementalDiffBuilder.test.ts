@@ -9,11 +9,7 @@ import path from "node:path";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 
 import type { ReviewFinding } from "@tabs/contracts";
-import {
-  getReviewState,
-  saveReviewState,
-  clearReviewState,
-} from "./ReviewStateStore";
+import { getReviewState, saveReviewState, clearReviewState } from "./ReviewStateStore";
 import {
   prepareIncrementalDiff,
   isAncestorCommit,
@@ -186,7 +182,7 @@ describe("IncrementalDiffBuilder (Real Git Repo Tests)", () => {
     console.log(`[Phase 4 Cost Test] Ratio: ${(costRatio * 100).toFixed(1)}%`);
 
     // Verify incremental is <= 30% of full review cost (per design doc)
-    expect(costRatio).toBeLessThanOrEqual(0.30);
+    expect(costRatio).toBeLessThanOrEqual(0.3);
   });
 
   it("Force-push scenario: history rewrite triggers fallback and emits review_info event", () => {

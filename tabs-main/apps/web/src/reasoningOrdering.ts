@@ -84,7 +84,12 @@ export function collectReasoningChoices(
         d.id.toLowerCase().includes("variant"),
     );
 
-    if (primary && primary.type === "select" && Array.isArray(primary.options) && primary.options.length > 0) {
+    if (
+      primary &&
+      primary.type === "select" &&
+      Array.isArray(primary.options) &&
+      primary.options.length > 0
+    ) {
       hasAnyReasoningDescriptor = true;
       for (const rawChoice of primary.options) {
         if (!rawChoice) continue;
@@ -139,4 +144,3 @@ export function formatThinkingHeaderWords(stop: { id: string; label?: string }):
   const mid = Math.ceil(words.length / 2);
   return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
 }
-

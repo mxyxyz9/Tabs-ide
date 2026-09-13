@@ -1,9 +1,5 @@
 import { scopedProjectKey, scopeProjectRef } from "../environment/scoped.ts";
-import type {
-  EnvironmentId,
-  ScopedProjectRef,
-  SidebarProjectGroupingMode,
-} from "@tabs/contracts";
+import type { EnvironmentId, ScopedProjectRef, SidebarProjectGroupingMode } from "@tabs/contracts";
 import type { ClientSettings } from "@tabs/contracts/settings";
 import { normalizeProjectPathForComparison } from "@tabs/shared/path";
 

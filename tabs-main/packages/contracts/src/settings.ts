@@ -2,12 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import {
-  TrimmedNonEmptyString,
-  TrimmedString,
-  ProjectId,
-  ThreadId,
-} from "./baseSchemas.ts";
+import { TrimmedNonEmptyString, TrimmedString, ProjectId, ThreadId } from "./baseSchemas.ts";
 import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { ModelSelection, ProjectScript } from "./orchestration.ts";
 import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance.ts";
@@ -242,16 +237,13 @@ export const ClientSettingsSchema = Schema.Struct({
   fontSizeInterface: Schema.Int.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_INTERFACE_FONT_SIZE)),
   ),
-  fontSizeCode: Schema.Int.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODE_FONT_SIZE)),
-  ),
+  fontSizeCode: Schema.Int.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODE_FONT_SIZE))),
   fontSizePrompt: Schema.Int.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROMPT_FONT_SIZE)),
   ),
-  environmentThemeOverrides: Schema.Record(
-    TrimmedNonEmptyString,
-    TrimmedNonEmptyString,
-  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  environmentThemeOverrides: Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   onboardingCompletedAt: Schema.NullOr(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),

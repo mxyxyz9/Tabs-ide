@@ -34,18 +34,13 @@ describe("embedded journey recorder", () => {
       expect(debug.listenerCount("message")).toBe(0);
       expect(contents.listenerCount("destroyed")).toBe(0);
     }
-    expect(debug.sendCommand).toHaveBeenCalledWith(
-      "Page.removeScriptToEvaluateOnNewDocument",
-      {
-        identifier: "script-1",
-      },
-    );
+    expect(debug.sendCommand).toHaveBeenCalledWith("Page.removeScriptToEvaluateOnNewDocument", {
+      identifier: "script-1",
+    });
   });
   it("cleans up a failed injection", async () => {
     const { recorder, debug, contents } = fixture();
-    contents.executeJavaScript.mockRejectedValueOnce(
-      new Error("navigation interrupted"),
-    );
+    contents.executeJavaScript.mockRejectedValueOnce(new Error("navigation interrupted"));
     await expect(recorder.start()).rejects.toThrow("navigation interrupted");
     expect(debug.listenerCount("message")).toBe(0);
     expect(recorder.status().recording).toBe(false);
@@ -54,13 +49,9 @@ describe("embedded journey recorder", () => {
     const { recorder, debug } = fixture();
     await recorder.start();
     const injection = debug.sendCommand.mock.calls.find(
-      (call: unknown) =>
-        Array.isArray(call) &&
-        call[0] === "Page.addScriptToEvaluateOnNewDocument",
+      (call: unknown) => Array.isArray(call) && call[0] === "Page.addScriptToEvaluateOnNewDocument",
     ) as [string, { source: string }] | undefined;
-    expect(injection?.[1].source).toContain(
-      "['data-testid', 'data-test', 'data-cy']",
-    );
+    expect(injection?.[1].source).toContain("['data-testid', 'data-test', 'data-cy']");
     expect(injection?.[1].source).toContain("'[' + testIdAttribute");
     await recorder.stop();
   });
@@ -102,19 +93,13 @@ describe("embedded journey recorder", () => {
     expect(code).toContain(".uncheck();");
     expect(code).toContain('.selectOption("manager");');
     expect(code).toContain(".click();");
-    expect(code).toContain(
-      'await expect(page.locator("h1.dashboard")).toBeVisible();',
-    );
+    expect(code).toContain('await expect(page.locator("h1.dashboard")).toBeVisible();');
     expect(code).toContain(
       'await expect(page.locator("h1.dashboard")).toHaveText("Welcome Admin");',
     );
-    expect(code).toContain(
-      'await expect(page.locator("input#status")).toHaveValue("Active");',
-    );
+    expect(code).toContain('await expect(page.locator("input#status")).toHaveValue("Active");');
     // Guard is omitted because business assertions were reviewed and provided
-    expect(code).not.toContain(
-      'throw new Error("Add expected-result assertions',
-    );
+    expect(code).not.toContain('throw new Error("Add expected-result assertions');
   });
 
   it("deduplicates consecutive fill messages and tracks in-preview navigation", async () => {
@@ -122,8 +107,7 @@ describe("embedded journey recorder", () => {
     await recorder.start();
 
     const addBindingCall = debug.sendCommand.mock.calls.find(
-      (call: unknown) =>
-        Array.isArray(call) && call[0] === "Runtime.addBinding",
+      (call: unknown) => Array.isArray(call) && call[0] === "Runtime.addBinding",
     ) as [string, { name: string }] | undefined;
     const bindingName = addBindingCall?.[1]?.name ?? "__tabsJourneyRecorder";
 

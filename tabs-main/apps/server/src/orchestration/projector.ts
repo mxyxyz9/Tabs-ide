@@ -546,7 +546,12 @@ export function projectEvent(
       );
 
     case "thread.pull-request-linked":
-      return decodeForEvent(ThreadPullRequestLinkedPayload, event.payload, event.type, "payload").pipe(
+      return decodeForEvent(
+        ThreadPullRequestLinkedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
         Effect.map((payload) => ({
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, (thread) => ({
@@ -583,7 +588,12 @@ export function projectEvent(
       );
 
     case "thread.pull-request-synced":
-      return decodeForEvent(ThreadPullRequestSyncedPayload, event.payload, event.type, "payload").pipe(
+      return decodeForEvent(
+        ThreadPullRequestSyncedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
         Effect.map((payload) => ({
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, (thread) => {

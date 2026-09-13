@@ -26,7 +26,12 @@ async function resolveDroidSignedIn(ctx: ProviderUsageContext): Promise<string |
     nodePath.join(ctx.homeDir, ".config", "droid"),
   ].filter((p): p is string => Boolean(p));
   for (const home of candidateHomes) {
-    for (const fileName of ["auth.json", "session.json", "credentials.json", "device-pairing.json"]) {
+    for (const fileName of [
+      "auth.json",
+      "session.json",
+      "credentials.json",
+      "device-pairing.json",
+    ]) {
       const filePath = nodePath.join(home, fileName);
       if (await jsonObjectHasKeys(filePath)) {
         return `file:${fileName}`;

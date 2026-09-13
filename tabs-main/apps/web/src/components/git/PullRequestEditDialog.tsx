@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  Dialog,
-  DialogPopup,
-} from "../ui/dialog";
+import { Dialog, DialogPopup } from "../ui/dialog";
 import { Button } from "../ui/button";
 import ChatMarkdown from "../ChatMarkdown";
 import { Eye, Edit3 } from "lucide-react";
@@ -132,13 +129,7 @@ export function PullRequestEditForm({
       </div>
 
       <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isPending}
-          onClick={onCancel}
-        >
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
           Cancel
         </Button>
         <Button

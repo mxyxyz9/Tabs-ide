@@ -27,7 +27,10 @@ function AccountRow({
         <div className="text-xs font-mono text-foreground/90 flex items-center gap-2">
           {a.login}
           {isActive && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "var(--overlay-10)", color: "var(--fg-80)" }}>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full"
+              style={{ backgroundColor: "var(--overlay-10)", color: "var(--fg-80)" }}
+            >
               used here
             </span>
           )}
@@ -35,19 +38,32 @@ function AccountRow({
         <div className="text-[10px] text-muted-foreground/70 flex items-center gap-1.5 mt-0.5">
           {a.host}
           {a.scopes.map((s) => (
-            <span key={s} className="font-mono px-1 py-px rounded bg-muted/50 border border-border/50">
+            <span
+              key={s}
+              className="font-mono px-1 py-px rounded bg-muted/50 border border-border/50"
+            >
               {s}
             </span>
           ))}
         </div>
       </div>
       {!isActive && (
-        <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => onSwitch(a.login)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={Boolean(action)}
+          onClick={() => onSwitch(a.login)}
+        >
           {action === "switch" ? <Loader2 size={12} className="animate-spin" /> : null}
           {action === "switch" ? "Switching…" : "Switch to this account"}
         </Button>
       )}
-      <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => onRemove(a.login)}>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={Boolean(action)}
+        onClick={() => onRemove(a.login)}
+      >
         {action === "remove" ? <Loader2 size={12} className="animate-spin" /> : null}
         {action === "remove" ? "Removing…" : "Remove"}
       </Button>
@@ -126,12 +142,17 @@ export function AccountsPanel({
             onRemove={(login) => void handleRemove(login)}
           />
         ))}
-        {accounts.length === 0 && <div className="text-center text-[11px] text-muted-foreground/50 py-4">No accounts connected</div>}
+        {accounts.length === 0 && (
+          <div className="text-center text-[11px] text-muted-foreground/50 py-4">
+            No accounts connected
+          </div>
+        )}
       </Card>
 
       <SectionLabel>This project</SectionLabel>
       <p className="text-xs text-muted-foreground/70 leading-relaxed mb-2">
-        {repoName} pushes and opens pull requests as this account. Changing it here only affects this project.
+        {repoName} pushes and opens pull requests as this account. Changing it here only affects
+        this project.
       </p>
       <div className="flex items-center gap-2.5 bg-muted/50 border border-border rounded-lg px-3 py-2.5">
         <KeyRound size={13} className="text-muted-foreground/70 shrink-0" />

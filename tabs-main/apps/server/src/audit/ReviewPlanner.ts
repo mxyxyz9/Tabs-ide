@@ -67,10 +67,10 @@ export function filterFilesForScope(
 
   if (scope.kind === "selected_files" || scope.kind === "changed_files_only") {
     if (scope.targetPaths && scope.targetPaths.length > 0) {
-      const normTargets = new Set(scope.targetPaths.map((p) => p.replace(/\\/g, "/").replace(/^\.\//, "")));
-      return inventory.files
-        .map((f) => f.filePath)
-        .filter((fp) => normTargets.has(fp));
+      const normTargets = new Set(
+        scope.targetPaths.map((p) => p.replace(/\\/g, "/").replace(/^\.\//, "")),
+      );
+      return inventory.files.map((f) => f.filePath).filter((fp) => normTargets.has(fp));
     }
   }
 

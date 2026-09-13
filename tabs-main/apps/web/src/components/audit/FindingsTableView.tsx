@@ -1,5 +1,10 @@
 import React from "react";
-import type { AuditCategory, AuditFinding, AuditSeverity, FindingVerificationState } from "@tabs/contracts";
+import type {
+  AuditCategory,
+  AuditFinding,
+  AuditSeverity,
+  FindingVerificationState,
+} from "@tabs/contracts";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
 import { CheckCircle2, ShieldCheck, FilterX } from "lucide-react";
@@ -48,7 +53,11 @@ export function FindingsTableView({
     return true;
   });
 
-  const hasActiveFilters = filterSeverity !== "all" || filterCategory !== "all" || filterVerification !== "all" || searchQuery.trim() !== "";
+  const hasActiveFilters =
+    filterSeverity !== "all" ||
+    filterCategory !== "all" ||
+    filterVerification !== "all" ||
+    searchQuery.trim() !== "";
 
   const handleResetFilters = () => {
     onFilterSeverityChange("all");
@@ -70,7 +79,10 @@ export function FindingsTableView({
           />
 
           {/* Custom App Select Dropdown: Severity */}
-          <Select value={filterSeverity} onValueChange={(val) => onFilterSeverityChange(val as any)}>
+          <Select
+            value={filterSeverity}
+            onValueChange={(val) => onFilterSeverityChange(val as any)}
+          >
             <SelectTrigger className="w-36 text-xs font-sans bg-background border-border">
               <SelectValue placeholder="All Severities" />
             </SelectTrigger>
@@ -84,7 +96,10 @@ export function FindingsTableView({
           </Select>
 
           {/* Custom App Select Dropdown: Category */}
-          <Select value={filterCategory} onValueChange={(val) => onFilterCategoryChange(val as any)}>
+          <Select
+            value={filterCategory}
+            onValueChange={(val) => onFilterCategoryChange(val as any)}
+          >
             <SelectTrigger className="w-40 text-xs font-sans bg-background border-border">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
@@ -101,7 +116,10 @@ export function FindingsTableView({
           </Select>
 
           {/* Custom App Select Dropdown: Verification */}
-          <Select value={filterVerification} onValueChange={(val) => onFilterVerificationChange(val as any)}>
+          <Select
+            value={filterVerification}
+            onValueChange={(val) => onFilterVerificationChange(val as any)}
+          >
             <SelectTrigger className="w-44 text-xs font-sans bg-background border-border">
               <SelectValue placeholder="All Verification States" />
             </SelectTrigger>
@@ -133,7 +151,8 @@ export function FindingsTableView({
               Clean Audit Passed
             </h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              No security vulnerabilities, correctness bugs, or performance issues were detected in this codebase scan scope.
+              No security vulnerabilities, correctness bugs, or performance issues were detected in
+              this codebase scan scope.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-[11px] font-mono text-muted-foreground">
@@ -165,10 +184,14 @@ export function FindingsTableView({
           {filtered.map((finding) => {
             const isSelected = selectedFindingId === finding.id;
             let sevBadgeClass = "bg-muted text-muted-foreground border-border";
-            if (finding.severity === "critical") sevBadgeClass = "bg-red-500/10 text-red-500 border-red-500/30";
-            else if (finding.severity === "error") sevBadgeClass = "bg-orange-500/10 text-orange-500 border-orange-500/30";
-            else if (finding.severity === "warning") sevBadgeClass = "bg-amber-500/10 text-amber-500 border-amber-500/30";
-            else if (finding.severity === "info") sevBadgeClass = "bg-blue-500/10 text-blue-500 border-blue-500/30";
+            if (finding.severity === "critical")
+              sevBadgeClass = "bg-red-500/10 text-red-500 border-red-500/30";
+            else if (finding.severity === "error")
+              sevBadgeClass = "bg-orange-500/10 text-orange-500 border-orange-500/30";
+            else if (finding.severity === "warning")
+              sevBadgeClass = "bg-amber-500/10 text-amber-500 border-amber-500/30";
+            else if (finding.severity === "info")
+              sevBadgeClass = "bg-blue-500/10 text-blue-500 border-blue-500/30";
 
             return (
               <div
@@ -184,10 +207,16 @@ export function FindingsTableView({
                 {/* Finding Header */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={`text-[10px] uppercase font-bold px-2 py-0.5 ${sevBadgeClass}`}>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] uppercase font-bold px-2 py-0.5 ${sevBadgeClass}`}
+                    >
                       {finding.severity}
                     </Badge>
-                    <Badge variant="secondary" className="text-[10px] bg-muted text-muted-foreground border border-border">
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] bg-muted text-muted-foreground border border-border"
+                    >
                       {finding.category}
                     </Badge>
                     <h3 className="text-sm font-semibold text-foreground">{finding.title}</h3>
@@ -198,8 +227,8 @@ export function FindingsTableView({
                       finding.verificationState === "verified_passed"
                         ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
                         : finding.verificationState === "verified_disproven"
-                        ? "bg-muted text-muted-foreground border-border line-through"
-                        : "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                          ? "bg-muted text-muted-foreground border-border line-through"
+                          : "bg-amber-500/10 text-amber-500 border-amber-500/30"
                     }`}
                   >
                     {finding.verificationState}

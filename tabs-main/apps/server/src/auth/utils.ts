@@ -182,4 +182,3 @@ export function deriveAuthClientMetadata(input: {
     ...(browser ? { browser } : {}),
   };
 }
-

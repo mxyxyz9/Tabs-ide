@@ -4,9 +4,7 @@ import { MessageCopyButton } from "./MessageCopyButton";
 
 describe("MessageCopyButton accessibility & touch polish", () => {
   it("renders with accessible aria-label and type='button'", () => {
-    const markup = renderToStaticMarkup(
-      <MessageCopyButton text="Test message text" />,
-    );
+    const markup = renderToStaticMarkup(<MessageCopyButton text="Test message text" />);
 
     expect(markup).toContain('type="button"');
     expect(markup).toContain('aria-label="Copy message to clipboard"');

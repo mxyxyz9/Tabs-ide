@@ -65,19 +65,28 @@ export function PullRequestReviewersSection({
             let stateBadge = null;
             if (reviewState === "APPROVED") {
               stateBadge = (
-                <span className="inline-flex items-center text-emerald-600 dark:text-emerald-400 text-[10px]" title="Approved">
+                <span
+                  className="inline-flex items-center text-emerald-600 dark:text-emerald-400 text-[10px]"
+                  title="Approved"
+                >
                   <Check className="size-3" />
                 </span>
               );
             } else if (reviewState === "CHANGES_REQUESTED") {
               stateBadge = (
-                <span className="inline-flex items-center text-red-600 dark:text-red-400 text-[10px]" title="Changes requested">
+                <span
+                  className="inline-flex items-center text-red-600 dark:text-red-400 text-[10px]"
+                  title="Changes requested"
+                >
                   <AlertCircle className="size-3" />
                 </span>
               );
             } else if (reviewState === "COMMENTED") {
               stateBadge = (
-                <span className="inline-flex items-center text-muted-foreground text-[10px]" title="Commented">
+                <span
+                  className="inline-flex items-center text-muted-foreground text-[10px]"
+                  title="Commented"
+                >
                   <MessageSquare className="size-3" />
                 </span>
               );
@@ -148,7 +157,11 @@ export function PullRequestLabelsSection({
   isPending,
   isOpen = true,
 }: {
-  labels: ReadonlyArray<{ readonly name: string; readonly color?: string | null | undefined; readonly description?: string | null | undefined }>;
+  labels: ReadonlyArray<{
+    readonly name: string;
+    readonly color?: string | null | undefined;
+    readonly description?: string | null | undefined;
+  }>;
   supportsAction: (action: GitPullRequestAction) => boolean;
   onAddLabel: (name: string) => Promise<boolean | void>;
   onRemoveLabel: (name: string) => Promise<boolean | void>;
@@ -278,7 +291,8 @@ export function PullRequestActivityView({
 
               if (state === "APPROVED") {
                 badgeVariant = "default";
-                badgeClass = "bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
+                badgeClass =
+                  "bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
               } else if (state === "CHANGES_REQUESTED") {
                 badgeVariant = "destructive";
               } else if (state === "COMMENTED") {

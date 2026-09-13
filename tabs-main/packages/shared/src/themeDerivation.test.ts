@@ -62,7 +62,10 @@ describe("themeDerivation shared module", () => {
     expect(tokens["editor.background"]).toBe("#000000");
     expect(tokens["editorLineNumber.foreground"]).toBe("#ff0000");
     expect(tokens["app.primaryBackground"]).toBe("#ec4899");
-    const contrast = calculateContrastRatio(tokens["app.primaryForeground"]!, tokens["app.primaryBackground"]!);
+    const contrast = calculateContrastRatio(
+      tokens["app.primaryForeground"]!,
+      tokens["app.primaryBackground"]!,
+    );
     expect(contrast.ratio).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -135,12 +138,24 @@ describe("themeDerivation shared module", () => {
     const customThemes: CustomThemeConfig[] = [
       {
         baseVariant: "dark",
-        colors: { background: "#101010", card: "#181818", foreground: "#ffffff", border: "#333333", primary: "#ff5500" },
+        colors: {
+          background: "#101010",
+          card: "#181818",
+          foreground: "#ffffff",
+          border: "#333333",
+          primary: "#ff5500",
+        },
         fonts: { uiFont: "sans-serif", editorFont: "monospace" },
       },
       {
         baseVariant: "light",
-        colors: { background: "#f0f0f0", card: "#ffffff", foreground: "#111111", border: "#cccccc", primary: "#ffcc00" },
+        colors: {
+          background: "#f0f0f0",
+          card: "#ffffff",
+          foreground: "#111111",
+          border: "#cccccc",
+          primary: "#ffcc00",
+        },
         fonts: { uiFont: "sans-serif", editorFont: "monospace" },
       },
     ];
@@ -194,4 +209,3 @@ describe("themeDerivation shared module", () => {
     expect(tokens["diffEditor.removedTextBackground"]).toBe("#fb923c40");
   });
 });
-

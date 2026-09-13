@@ -28,7 +28,10 @@ export function ComposerPendingReviewComments({
       {comments.map((comment) => {
         const label = `${comment.filePath} ${comment.rangeLabel}`;
         const chip = (
-          <span key={comment.id} className={cn(COMPOSER_INLINE_CHIP_CLASS_NAME, onRemove ? "pr-1" : "")}>
+          <span
+            key={comment.id}
+            className={cn(COMPOSER_INLINE_CHIP_CLASS_NAME, onRemove ? "pr-1" : "")}
+          >
             <MessageCircle className={cn(COMPOSER_INLINE_CHIP_ICON_CLASS_NAME, "size-3.5")} />
             <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>{label}</span>
             {onRemove && (

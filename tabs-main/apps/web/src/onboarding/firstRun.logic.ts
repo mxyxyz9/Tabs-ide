@@ -80,9 +80,7 @@ export function transitionFirstRunGateState(
   }
 
   if (event.type === "timeout") {
-    return state.decision === "pending"
-      ? { decision: "app", stalled: true }
-      : state;
+    return state.decision === "pending" ? { decision: "app", stalled: true } : state;
   }
 
   if (state.decision === "wizard" && event.decision === "pending") {

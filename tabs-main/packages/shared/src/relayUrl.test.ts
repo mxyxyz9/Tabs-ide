@@ -24,4 +24,3 @@ describe("normalizeSecureRelayUrl", () => {
     expect(isSecureRelayUrl(value)).toBe(false);
   });
 });
-

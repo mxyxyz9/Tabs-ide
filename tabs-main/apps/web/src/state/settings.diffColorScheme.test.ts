@@ -1,9 +1,5 @@
 import { describe, expect, it, beforeEach, beforeAll, afterAll } from "vitest";
-import {
-  clientSettingsAtom,
-  hydrateClientSettings,
-  updateClientSettings,
-} from "./settings";
+import { clientSettingsAtom, hydrateClientSettings, updateClientSettings } from "./settings";
 import { appAtomRegistry } from "./atomRegistry";
 import { DEFAULT_CLIENT_SETTINGS } from "@tabs/contracts/settings";
 import { getStoredDiffColorScheme } from "../hooks/useTheme";
@@ -68,7 +64,9 @@ describe("diffColorScheme settings and DOM dataset sync", () => {
 
     const settings = appAtomRegistry.get(clientSettingsAtom);
     expect(settings.diffColorScheme).toBe("blue-orange");
-    expect((globalThis as any).document.documentElement.dataset.diffColorScheme).toBe("blue-orange");
+    expect((globalThis as any).document.documentElement.dataset.diffColorScheme).toBe(
+      "blue-orange",
+    );
     expect(getStoredDiffColorScheme()).toBe("blue-orange");
 
     // Verify localStorage persistence
@@ -85,7 +83,9 @@ describe("diffColorScheme settings and DOM dataset sync", () => {
     );
 
     hydrateClientSettings(true);
-    expect((globalThis as any).document.documentElement.dataset.diffColorScheme).toBe("blue-orange");
+    expect((globalThis as any).document.documentElement.dataset.diffColorScheme).toBe(
+      "blue-orange",
+    );
     expect(getStoredDiffColorScheme()).toBe("blue-orange");
   });
 });

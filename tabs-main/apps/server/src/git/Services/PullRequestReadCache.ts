@@ -61,9 +61,7 @@ export interface PullRequestReadCacheShape {
   /**
    * Invalidate cached entries matching the provided filter criteria.
    */
-  readonly invalidate: (
-    filter?: Partial<PullRequestReadCacheScope>,
-  ) => Effect.Effect<number>;
+  readonly invalidate: (filter?: Partial<PullRequestReadCacheScope>) => Effect.Effect<number>;
 
   /**
    * Invalidate all cached entries.
@@ -82,10 +80,7 @@ export interface PullRequestReadCacheShape {
   /**
    * Check if provider/account is currently rate limited.
    */
-  readonly isRateLimited: (
-    provider: string,
-    account: string,
-  ) => Effect.Effect<boolean>;
+  readonly isRateLimited: (provider: string, account: string) => Effect.Effect<boolean>;
 }
 
 export class PullRequestReadCache extends Context.Service<

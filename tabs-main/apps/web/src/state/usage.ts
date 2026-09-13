@@ -34,20 +34,14 @@ export const usageSummaryStateAtom = Atom.make<AsyncState<UsageSummary>>({
   loading: false,
   error: null,
   lastFetchedAt: null,
-}).pipe(
-  Atom.withLabel("tabs-usage-summary-state"),
-  Atom.keepAlive,
-);
+}).pipe(Atom.withLabel("tabs-usage-summary-state"), Atom.keepAlive);
 
 export const providerUsageSnapshotsAtom = Atom.make<AsyncState<ServerListProviderUsageResult>>({
   data: null,
   loading: false,
   error: null,
   lastFetchedAt: null,
-}).pipe(
-  Atom.withLabel("tabs-provider-usage-snapshots"),
-  Atom.keepAlive,
-);
+}).pipe(Atom.withLabel("tabs-provider-usage-snapshots"), Atom.keepAlive);
 
 export function presetToSummaryInput(preset: UsageWindowPreset): UsageSummaryInput {
   switch (preset) {
@@ -88,10 +82,16 @@ export function initUsageListeners() {
   });
 }
 
-export async function fetchUsageSummary(customPreset?: UsageWindowPreset): Promise<UsageSummary | null> {
+export async function fetchUsageSummary(
+  customPreset?: UsageWindowPreset,
+): Promise<UsageSummary | null> {
   const presetToFetch = customPreset ?? appAtomRegistry.get(usageTimeWindowAtom);
   const input = presetToSummaryInput(presetToFetch);
-  appAtomRegistry.update(usageSummaryStateAtom, (prev) => ({ ...prev, loading: true, error: null }));
+  appAtomRegistry.update(usageSummaryStateAtom, (prev) => ({
+    ...prev,
+    loading: true,
+    error: null,
+  }));
 
   try {
     const api = ensureNativeApi();
@@ -116,7 +116,11 @@ export async function fetchUsageSummary(customPreset?: UsageWindowPreset): Promi
 }
 
 export async function fetchProviderUsageSnapshots(): Promise<ServerListProviderUsageResult | null> {
-  appAtomRegistry.update(providerUsageSnapshotsAtom, (prev) => ({ ...prev, loading: true, error: null }));
+  appAtomRegistry.update(providerUsageSnapshotsAtom, (prev) => ({
+    ...prev,
+    loading: true,
+    error: null,
+  }));
 
   try {
     const api = ensureNativeApi();
@@ -141,7 +145,11 @@ export async function fetchProviderUsageSnapshots(): Promise<ServerListProviderU
 }
 
 export async function refreshAllProviderUsage(): Promise<ServerListProviderUsageResult | null> {
-  appAtomRegistry.update(providerUsageSnapshotsAtom, (prev) => ({ ...prev, loading: true, error: null }));
+  appAtomRegistry.update(providerUsageSnapshotsAtom, (prev) => ({
+    ...prev,
+    loading: true,
+    error: null,
+  }));
 
   try {
     const api = ensureNativeApi();

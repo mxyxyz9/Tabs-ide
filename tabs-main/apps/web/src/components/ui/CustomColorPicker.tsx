@@ -142,7 +142,7 @@ function formatColorString(hexStr: string, mode: ColorMode): string {
   }
   if (mode === "hsl") {
     const { h, s, v } = hexToHsv(cleanHex);
-    const l = (v / 100) * (1 - (s / 100) / 2);
+    const l = (v / 100) * (1 - s / 100 / 2);
     const sHsl = l === 0 || l === 1 ? 0 : (v / 100 - l) / Math.min(l, 1 - l);
     return `hsl(${h}, ${Math.round(sHsl * 100)}%, ${Math.round(l * 100)}%)`;
   }
@@ -325,9 +325,7 @@ export const CustomColorPicker: React.FC<CustomColorPickerProps> = ({
         >
           {/* Header & Mode Switcher */}
           <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
-            <span className="text-xs font-bold text-foreground tracking-tight">
-              Color Studio
-            </span>
+            <span className="text-xs font-bold text-foreground tracking-tight">Color Studio</span>
 
             <SegmentedControl
               size="sm"
@@ -414,7 +412,11 @@ export const CustomColorPicker: React.FC<CustomColorPickerProps> = ({
                 className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <span>{showSwatches ? "Less" : "More"}</span>
-                {showSwatches ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                {showSwatches ? (
+                  <ChevronUp className="size-3" />
+                ) : (
+                  <ChevronDown className="size-3" />
+                )}
               </button>
             </div>
             <div className="grid grid-cols-6 gap-1.5">
@@ -482,7 +484,11 @@ export const CustomColorPicker: React.FC<CustomColorPickerProps> = ({
                 title="Copy Color String"
                 className="flex size-8.5 items-center justify-center rounded-xl border border-border/80 bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0"
               >
-                {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+                {copied ? (
+                  <Check className="size-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
               </button>
             </div>
           </div>

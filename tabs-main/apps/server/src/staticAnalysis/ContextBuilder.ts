@@ -22,10 +22,7 @@ import type { StaticAnalysisFinding } from "./StaticAnalysisService.ts";
  * and then suffix, which handles the common case where tsc/eslint return
  * absolute paths but the diff uses relative ones.
  */
-export function findingMatchesChangedFile(
-  findingPath: string,
-  changedPath: string,
-): boolean {
+export function findingMatchesChangedFile(findingPath: string, changedPath: string): boolean {
   if (!findingPath || !changedPath) return false;
   // Normalise separators to forward slashes for cross-platform safety.
   const normFinding = findingPath.replace(/\\/g, "/").replace(/\/$/, "");
@@ -96,9 +93,7 @@ export function buildStaticAnalysisContext(
   const relevantByFile = new Map<string, StaticAnalysisFinding[]>();
 
   for (const finding of allFindings) {
-    const matchedFile = changedFiles.find((cf) =>
-      findingMatchesChangedFile(finding.file, cf),
-    );
+    const matchedFile = changedFiles.find((cf) => findingMatchesChangedFile(finding.file, cf));
     if (matchedFile !== undefined) {
       const existing = relevantByFile.get(matchedFile);
       if (existing) {
@@ -116,7 +111,11 @@ export function buildStaticAnalysisContext(
   const excludedFindingCount = allFindings.length - relevantFindingCount;
 
   if (relevantFindingCount === 0) {
-    return { contextSection: "", relevantFindingCount: 0, excludedFindingCount: allFindings.length };
+    return {
+      contextSection: "",
+      relevantFindingCount: 0,
+      excludedFindingCount: allFindings.length,
+    };
   }
 
   // Build the markdown section

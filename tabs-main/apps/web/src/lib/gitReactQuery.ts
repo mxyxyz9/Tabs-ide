@@ -242,7 +242,10 @@ export function gitResolvePullRequestQueryOptions(input: {
       if (!input.cwd || !input.reference) {
         throw new Error("Pull request lookup is unavailable.");
       }
-      const result = await api.git.resolvePullRequest({ cwd: input.cwd, reference: input.reference });
+      const result = await api.git.resolvePullRequest({
+        cwd: input.cwd,
+        reference: input.reference,
+      });
       writePullRequestSnapshot(input, result);
       return result;
     },

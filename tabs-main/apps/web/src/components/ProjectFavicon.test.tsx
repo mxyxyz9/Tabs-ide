@@ -43,9 +43,7 @@ describe("ProjectFavicon", () => {
   });
 
   it("renders with legacy cwd prop", () => {
-    const markup = renderToStaticMarkup(
-      <ProjectFavicon cwd="/workspace/shop-frontend" />,
-    );
+    const markup = renderToStaticMarkup(<ProjectFavicon cwd="/workspace/shop-frontend" />);
     // shop-frontend is classified as 'shopping' with rose color
     expect(markup).toContain("text-rose-600");
   });

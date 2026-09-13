@@ -18,4 +18,3 @@ export function normalizeDpopHtu(url: string): string | null {
     return null;
   }
 }
-

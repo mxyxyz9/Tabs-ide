@@ -47,7 +47,9 @@ export function GitCheckingState({
 
   if (inline) {
     return (
-      <div className={`flex items-center gap-2.5 text-xs text-muted-foreground/70 ${className ?? ""}`}>
+      <div
+        className={`flex items-center gap-2.5 text-xs text-muted-foreground/70 ${className ?? ""}`}
+      >
         <MercuryChromeLoader size={size} color="var(--primary)" />
         <span className="transition-all duration-300">{displayMessage}</span>
       </div>
@@ -55,7 +57,9 @@ export function GitCheckingState({
   }
 
   return (
-    <div className={`flex flex-col items-center justify-center p-8 gap-4 text-center ${className ?? ""}`}>
+    <div
+      className={`flex flex-col items-center justify-center p-8 gap-4 text-center ${className ?? ""}`}
+    >
       <MercuryChromeLoader size={size} color="var(--primary)" />
       <span className="text-xs text-muted-foreground/70 font-medium transition-all duration-300 min-h-[20px] flex items-center justify-center">
         {displayMessage}

@@ -7,35 +7,59 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from ".
 
 export interface AuditConfigProps {
   readonly activeMode: AuditMode;
-  readonly scopeKind: "full_repository" | "workspace_package" | "folder" | "selected_files" | "changed_files_only";
+  readonly scopeKind:
+    | "full_repository"
+    | "workspace_package"
+    | "folder"
+    | "selected_files"
+    | "changed_files_only";
   readonly depth: AuditScanDepth;
   readonly isRunning: boolean;
   readonly cwd?: string;
   readonly api?: any;
   readonly onSelectMode: (mode: AuditMode) => void;
-  readonly onScopeChange: (scope: "full_repository" | "workspace_package" | "folder" | "selected_files" | "changed_files_only") => void;
+  readonly onScopeChange: (
+    scope:
+      | "full_repository"
+      | "workspace_package"
+      | "folder"
+      | "selected_files"
+      | "changed_files_only",
+  ) => void;
   readonly onDepthChange: (depth: AuditScanDepth) => void;
   readonly onRunScan: () => void;
 }
 
 const DEPTH_OPTIONS: { id: AuditScanDepth; label: string; hint: string }[] = [
-  { id: "quick",    label: "Quick",    hint: "Static pattern scan — results in seconds." },
+  { id: "quick", label: "Quick", hint: "Static pattern scan — results in seconds." },
   { id: "standard", label: "Standard", hint: "2-pass AI review across symbols & imports." },
-  { id: "deep",     label: "Deep",     hint: "Full AST graph + disproof verifier pass." },
+  { id: "deep", label: "Deep", hint: "Full AST graph + disproof verifier pass." },
 ];
 
 const SCOPES = [
-  { id: "changed_files_only" as const, title: "Working Tree & PR Changes", subtitle: "Git diff — modified files & uncommitted changes" },
-  { id: "full_repository"   as const, title: "Full Repository",            subtitle: "Complete codebase across all modules" },
-  { id: "folder"            as const, title: "Subsystem / Target Folder",  subtitle: "Restricted to a specific package or directory" },
+  {
+    id: "changed_files_only" as const,
+    title: "Working Tree & PR Changes",
+    subtitle: "Git diff — modified files & uncommitted changes",
+  },
+  {
+    id: "full_repository" as const,
+    title: "Full Repository",
+    subtitle: "Complete codebase across all modules",
+  },
+  {
+    id: "folder" as const,
+    title: "Subsystem / Target Folder",
+    subtitle: "Restricted to a specific package or directory",
+  },
 ];
 
 const MODE_LABELS: Record<string, string> = {
-  pr_review:    "Git Diff & Working Tree",
-  full_audit:   "Full Codebase Audit",
-  security:     "Security Audit",
+  pr_review: "Git Diff & Working Tree",
+  full_audit: "Full Codebase Audit",
+  security: "Security Audit",
   architecture: "Architecture Review",
-  refactoring:  "Refactoring Review",
+  refactoring: "Refactoring Review",
 };
 
 export function AuditConfigPanel({
@@ -57,15 +81,20 @@ export function AuditConfigPanel({
     const trimmed = inputPath.trim();
     setTargetFolderPath(trimmed);
 
-    if (!trimmed) { setScopeError("Path cannot be empty."); return; }
+    if (!trimmed) {
+      setScopeError("Path cannot be empty.");
+      return;
+    }
 
     if (cwd) {
-      const normCwd   = cwd.replace(/\\/g, "/").replace(/\/$/, "");
+      const normCwd = cwd.replace(/\\/g, "/").replace(/\/$/, "");
       const normInput = trimmed.replace(/\\/g, "/");
 
       if (normInput.startsWith("/") || normInput.includes(":\\")) {
         if (!normInput.startsWith(normCwd)) {
-          setScopeError("Directory is outside the workspace root — must stay inside the repository.");
+          setScopeError(
+            "Directory is outside the workspace root — must stay inside the repository.",
+          );
           return;
         }
       } else if (normInput.startsWith("..") || normInput.includes("/../")) {
@@ -90,7 +119,6 @@ export function AuditConfigPanel({
 
   return (
     <div className="space-y-12 font-sans">
-
       {/* ── Title row ────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-6">
         <div>
@@ -103,7 +131,9 @@ export function AuditConfigPanel({
         </div>
 
         <div className="shrink-0 flex items-center gap-2 pt-1">
-          <span className="text-xs text-muted-foreground font-sans whitespace-nowrap">Review Type:</span>
+          <span className="text-xs text-muted-foreground font-sans whitespace-nowrap">
+            Review Type:
+          </span>
           <Select value={activeMode} onValueChange={(v) => onSelectMode(v as typeof activeMode)}>
             <SelectTrigger className="h-8 text-xs font-sans bg-transparent border-border text-foreground w-44">
               <SelectValue>{MODE_LABELS[activeMode]}</SelectValue>
@@ -133,9 +163,7 @@ export function AuditConfigPanel({
                 <button
                   onClick={() => onScopeChange(scope.id)}
                   className={`group w-full flex items-center gap-4 py-3.5 rounded-lg text-left transition-all cursor-pointer pl-3 ${
-                    selected
-                      ? "bg-muted/30"
-                      : "hover:bg-muted/15"
+                    selected ? "bg-muted/30" : "hover:bg-muted/15"
                   }`}
                 >
                   {/* Left accent bar */}
@@ -168,7 +196,10 @@ export function AuditConfigPanel({
                   <div className="ml-8 mt-2 mb-1 space-y-2 max-w-sm">
                     <div className="flex items-center gap-2">
                       <div className="relative flex-1">
-                        <Folder size={12} className="text-muted-foreground absolute left-2.5 top-2.5" />
+                        <Folder
+                          size={12}
+                          className="text-muted-foreground absolute left-2.5 top-2.5"
+                        />
                         <Input
                           value={targetFolderPath}
                           onChange={(e) => validateAndSetFolder(e.target.value)}
@@ -216,10 +247,14 @@ export function AuditConfigPanel({
                     : "border-border/50 bg-transparent text-muted-foreground/50 hover:border-border hover:text-muted-foreground hover:bg-muted/20"
                 }`}
               >
-                <span className={`text-sm font-semibold font-sans ${active ? "text-foreground" : ""}`}>
+                <span
+                  className={`text-sm font-semibold font-sans ${active ? "text-foreground" : ""}`}
+                >
                   {d.label}
                 </span>
-                <span className={`text-[11px] font-sans leading-snug ${active ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
+                <span
+                  className={`text-[11px] font-sans leading-snug ${active ? "text-muted-foreground" : "text-muted-foreground/40"}`}
+                >
                   {d.hint}
                 </span>
               </button>

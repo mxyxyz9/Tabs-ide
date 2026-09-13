@@ -96,9 +96,7 @@ export function coalesceLiveToolUpdatedEvents(
   return survivors;
 }
 
-export type CoalescedStreamItem =
-  | OrchestrationThreadStreamItem
-  | { readonly kind: "synchronized" };
+export type CoalescedStreamItem = OrchestrationThreadStreamItem | { readonly kind: "synchronized" };
 
 export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoalescer")(
   function* (options?: {

@@ -118,7 +118,12 @@ export function extractASTSymbols(
   const lines = content.split("\n");
   const symbols: RepoSymbolDefinition[] = [];
 
-  if (language === "typescript" || language === "typescriptreact" || language === "javascript" || language === "javascriptreact") {
+  if (
+    language === "typescript" ||
+    language === "typescriptreact" ||
+    language === "javascript" ||
+    language === "javascriptreact"
+  ) {
     const tsSymbolRe =
       /^(export\s+)?(async\s+|abstract\s+|declare\s+)*(function|class|interface|type|const|let|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)/;
 
@@ -195,7 +200,8 @@ export function extractASTSymbols(
       }
     }
   } else if (language === "go") {
-    const goSymbolRe = /^func\s+(?:\([^\)]+\)\s+)?([A-Za-z0-9_]+)|^type\s+([A-Za-z0-9_]+)\s+(struct|interface)/;
+    const goSymbolRe =
+      /^func\s+(?:\([^)]+\)\s+)?([A-Za-z0-9_]+)|^type\s+([A-Za-z0-9_]+)\s+(struct|interface)/;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!.trim();
@@ -203,7 +209,8 @@ export function extractASTSymbols(
       if (m) {
         const name = m[1] || m[2] || "unknown";
         const isExported = /^[A-Z]/.test(name);
-        const kind: SymbolKind = m[3] === "interface" ? "interface" : m[3] === "struct" ? "struct" : "function";
+        const kind: SymbolKind =
+          m[3] === "interface" ? "interface" : m[3] === "struct" ? "struct" : "function";
 
         symbols.push({
           id: `${filePath}#${name}`,
@@ -235,13 +242,19 @@ export function extractImports(
   const imports: RepoImportReference[] = [];
 
   if (language.includes("typescript") || language.includes("javascript")) {
-    const importRe = /import\s+?(?:type\s+)?(?:\{([^}]+)\}|([A-Za-z0-9_$]+))\s+from\s+["']([^"']+)["']/;
+    const importRe =
+      /import\s+?(?:type\s+)?(?:\{([^}]+)\}|([A-Za-z0-9_$]+))\s+from\s+["']([^"']+)["']/;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!.trim();
       const m = importRe.exec(line);
       if (m) {
-        const namedSymbols = m[1] ? m[1].split(",").map((s) => s.trim().split(" as ")[0]!).filter(Boolean) : [];
+        const namedSymbols = m[1]
+          ? m[1]
+              .split(",")
+              .map((s) => s.trim().split(" as ")[0]!)
+              .filter(Boolean)
+          : [];
         const defaultSymbol = m[2] ? [m[2].trim()] : [];
         const modulePath = m[3]!;
         const isRelative = modulePath.startsWith("./") || modulePath.startsWith("../");
@@ -250,7 +263,12 @@ export function extractImports(
         if (isRelative) {
           const dir = path.dirname(filePath);
           const rawResolved = path.normalize(path.join(dir, modulePath)).replace(/\\/g, "/");
-          resolvedFilePath = rawResolved.endsWith(".ts") || rawResolved.endsWith(".tsx") || rawResolved.endsWith(".js") ? rawResolved : `${rawResolved}.ts`;
+          resolvedFilePath =
+            rawResolved.endsWith(".ts") ||
+            rawResolved.endsWith(".tsx") ||
+            rawResolved.endsWith(".js")
+              ? rawResolved
+              : `${rawResolved}.ts`;
         }
 
         imports.push({
@@ -411,9 +429,15 @@ export async function buildTokenBudgetedContextPack(
 
   // 1. AST Symbol Summary
   const symbols = targetMeta?.symbols ?? [];
-  const symbolDefsText = symbols.length > 0
-    ? symbols.map((s) => `- ${s.kind} ${s.name} (L${s.startLine}-L${s.endLine}) ${s.isExported ? "[exported]" : ""}`).join("\n")
-    : "No AST symbols extracted.";
+  const symbolDefsText =
+    symbols.length > 0
+      ? symbols
+          .map(
+            (s) =>
+              `- ${s.kind} ${s.name} (L${s.startLine}-L${s.endLine}) ${s.isExported ? "[exported]" : ""}`,
+          )
+          .join("\n")
+      : "No AST symbols extracted.";
 
   // 2. Imported Symbol Definitions from Dependencies
   const importsTextLines: string[] = [];
@@ -422,29 +446,44 @@ export async function buildTokenBudgetedContextPack(
       if (imp.resolvedFilePath) {
         const depMeta = input.inventory.files.find((f) => f.filePath === imp.resolvedFilePath);
         if (depMeta && depMeta.symbols.length > 0) {
-          const exported = depMeta.symbols.filter((s) => s.isExported).map((s) => s.name).join(", ");
+          const exported = depMeta.symbols
+            .filter((s) => s.isExported)
+            .map((s) => s.name)
+            .join(", ");
           importsTextLines.push(`Dependency '${imp.resolvedFilePath}': exports [${exported}]`);
         }
       }
     }
   }
-  const importedContextText = importsTextLines.length > 0 ? importsTextLines.join("\n") : "No local dependencies.";
+  const importedContextText =
+    importsTextLines.length > 0 ? importsTextLines.join("\n") : "No local dependencies.";
 
   // 3. Reverse Callers (Files that import targetFilePath)
   const callerFiles = input.inventory.files
-    .filter((f) => f.imports.some((imp) => imp.resolvedFilePath === normTarget || imp.importedModule.includes(normTarget)))
+    .filter((f) =>
+      f.imports.some(
+        (imp) => imp.resolvedFilePath === normTarget || imp.importedModule.includes(normTarget),
+      ),
+    )
     .map((f) => f.filePath);
-  const callerReferencesText = callerFiles.length > 0 ? `Callers: ${callerFiles.join(", ")}` : "No callers detected.";
+  const callerReferencesText =
+    callerFiles.length > 0 ? `Callers: ${callerFiles.join(", ")}` : "No callers detected.";
 
   // Packing & Compression
-  let totalChars = primaryFileContent.length + symbolDefsText.length + importedContextText.length + callerReferencesText.length;
+  let totalChars =
+    primaryFileContent.length +
+    symbolDefsText.length +
+    importedContextText.length +
+    callerReferencesText.length;
   let isComplete = true;
   let truncatedReason: string | undefined = undefined;
 
   if (totalChars > budgetChars) {
     isComplete = false;
     const maxPrimaryLen = Math.max(1_000, budgetChars - 3_000);
-    primaryFileContent = primaryFileContent.slice(0, maxPrimaryLen) + "\n[... file content truncated to fit token budget ...]";
+    primaryFileContent =
+      primaryFileContent.slice(0, maxPrimaryLen) +
+      "\n[... file content truncated to fit token budget ...]";
     truncatedReason = `Context packed to fit ${budgetChars} char budget limit (~${Math.round(budgetChars / 4)} tokens).`;
     totalChars = budgetChars;
   }
@@ -470,9 +509,7 @@ export async function buildTokenBudgetedContextPack(
 // Effect Entry Points
 // ---------------------------------------------------------------------------
 
-export const runRepoInventory = (
-  options: InventoryOptions,
-): Effect.Effect<RepoFileInventory> =>
+export const runRepoInventory = (options: InventoryOptions): Effect.Effect<RepoFileInventory> =>
   Effect.promise(() => buildRepositoryInventory(options));
 
 export const runContextPacker = (

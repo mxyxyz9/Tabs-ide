@@ -1235,14 +1235,10 @@ export const makeGitManager = Effect.gen(function* () {
           status: pullResult.status,
           branch: pullResult.branch,
         });
-      }).pipe(
-        Effect.ensuring(Effect.sync(() => inFlightPulls.delete(cwd))),
-      );
+      }).pipe(Effect.ensuring(Effect.sync(() => inFlightPulls.delete(cwd))));
     }).pipe(
       Effect.catch((cause) =>
-        Effect.logWarning("Automatic project pull failed", { cwd, cause }).pipe(
-          Effect.asVoid,
-        ),
+        Effect.logWarning("Automatic project pull failed", { cwd, cause }).pipe(Effect.asVoid),
       ),
     );
 
@@ -1315,7 +1311,9 @@ export const makeGitManager = Effect.gen(function* () {
                   reference: String(details.number),
                   repository,
                 });
-                const targetIndex = stack ? stack.layers.findIndex((layer) => layer.number === details.number) : -1;
+                const targetIndex = stack
+                  ? stack.layers.findIndex((layer) => layer.number === details.number)
+                  : -1;
                 const stackMembership = stack
                   ? {
                       number: stack.number,
@@ -1452,7 +1450,10 @@ export const makeGitManager = Effect.gen(function* () {
           "Inline comments require a file path and positive line number.",
         );
       }
-      if (["reply_to_thread", "resolve_thread", "unresolve_thread"].includes(input.action) && !input.threadId?.trim()) {
+      if (
+        ["reply_to_thread", "resolve_thread", "unresolve_thread"].includes(input.action) &&
+        !input.threadId?.trim()
+      ) {
         return yield* gitManagerError("mutatePullRequest", `${input.action} requires a thread id.`);
       }
       if (
@@ -1482,7 +1483,10 @@ export const makeGitManager = Effect.gen(function* () {
       } satisfies typeof input;
       if (input.action === "stack_rebase" || input.action === "stack_merge") {
         if (provider !== "github") {
-          return yield* gitManagerError("mutatePullRequest", "Stacks are only supported for GitHub.");
+          return yield* gitManagerError(
+            "mutatePullRequest",
+            "Stacks are only supported for GitHub.",
+          );
         }
         const remoteUrl = yield* repositoryRemoteUrl(input.cwd);
         const repository = parseRepositoryIdentifier(remoteUrl, input.cwd);
@@ -1523,7 +1527,9 @@ export const makeGitManager = Effect.gen(function* () {
                 reference: String(details.number),
                 repository,
               });
-              const targetIndex = stack ? stack.layers.findIndex((layer) => layer.number === details.number) : -1;
+              const targetIndex = stack
+                ? stack.layers.findIndex((layer) => layer.number === details.number)
+                : -1;
               const stackMembership = stack
                 ? {
                     number: stack.number,

@@ -65,15 +65,17 @@ export function FindingDetailDrawer({
                 finding.verificationState === "verified_passed"
                   ? "text-emerald-500"
                   : finding.verificationState === "verified_disproven"
-                  ? "text-muted-foreground line-through"
-                  : "text-amber-500"
+                    ? "text-muted-foreground line-through"
+                    : "text-amber-500"
               }`}
             >
               {finding.verificationState}
             </span>
           </div>
           {finding.disproofReason && (
-            <p className="text-[11px] text-muted-foreground italic mt-1">{finding.disproofReason}</p>
+            <p className="text-[11px] text-muted-foreground italic mt-1">
+              {finding.disproofReason}
+            </p>
           )}
         </div>
 
@@ -99,10 +101,21 @@ export function FindingDetailDrawer({
 
         {/* Source Metadata */}
         <div className="text-xs font-mono space-y-1 text-muted-foreground bg-muted/20 p-3 rounded-lg border border-border">
-          <div>Source Tool: <span className="text-foreground">{finding.sourceTool}</span></div>
-          {finding.ruleId && <div>Rule ID: <span className="text-foreground">{finding.ruleId}</span></div>}
-          <div>Confidence Score: <span className="text-foreground">{(finding.confidence * 100).toFixed(0)}%</span></div>
-          <div>Fingerprint: <span className="text-muted-foreground">{finding.fingerprint}</span></div>
+          <div>
+            Source Tool: <span className="text-foreground">{finding.sourceTool}</span>
+          </div>
+          {finding.ruleId && (
+            <div>
+              Rule ID: <span className="text-foreground">{finding.ruleId}</span>
+            </div>
+          )}
+          <div>
+            Confidence Score:{" "}
+            <span className="text-foreground">{(finding.confidence * 100).toFixed(0)}%</span>
+          </div>
+          <div>
+            Fingerprint: <span className="text-muted-foreground">{finding.fingerprint}</span>
+          </div>
         </div>
 
         {/* Suggested Fix Summary */}

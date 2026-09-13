@@ -1394,10 +1394,14 @@ export class TestingGraphStore {
             ? (JSON.parse(row.validation_summary_json) as TestingGenerationJob["validationSummary"])
             : undefined,
           immutableArtifactPaths: row.immutable_artifact_paths_json
-            ? (JSON.parse(row.immutable_artifact_paths_json) as TestingGenerationJob["immutableArtifactPaths"])
+            ? (JSON.parse(
+                row.immutable_artifact_paths_json,
+              ) as TestingGenerationJob["immutableArtifactPaths"])
             : undefined,
           providerProvenance: row.provider_provenance_json
-            ? (JSON.parse(row.provider_provenance_json) as TestingGenerationJob["providerProvenance"])
+            ? (JSON.parse(
+                row.provider_provenance_json,
+              ) as TestingGenerationJob["providerProvenance"])
             : undefined,
           usageMeasured: Boolean(row.usage_measured),
           framework: row.framework,

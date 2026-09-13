@@ -108,8 +108,6 @@ const DIFF_PANEL_UNSAFE_CSS = `
 }
 `;
 
-
-
 function buildFileDiffRenderKey(fileDiff: FileDiffMetadata): string {
   return fileDiff.cacheKey ?? `${fileDiff.prevName ?? "none"}:${fileDiff.name}`;
 }

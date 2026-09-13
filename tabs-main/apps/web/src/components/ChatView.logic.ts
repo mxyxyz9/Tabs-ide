@@ -365,4 +365,3 @@ export function resetRememberedThreadScrollTops(): void {
   rememberedScrollTops = new Map();
   rememberedScrollTopOrder = [];
 }
-

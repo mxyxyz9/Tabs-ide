@@ -83,12 +83,7 @@ describe("ResourceTelemetryDiagnostics logic", () => {
 
   it("computes resourceHistoryCpuScaleMax correctly", () => {
     expect(resourceHistoryCpuScaleMax([])).toBe(1);
-    expect(
-      resourceHistoryCpuScaleMax([
-        { avgCpuPercent: 120 },
-        { avgCpuPercent: 80 },
-      ]),
-    ).toBe(120);
+    expect(resourceHistoryCpuScaleMax([{ avgCpuPercent: 120 }, { avgCpuPercent: 80 }])).toBe(120);
   });
 
   it("filters collapsed children in visibleResourceTelemetryProcesses", () => {

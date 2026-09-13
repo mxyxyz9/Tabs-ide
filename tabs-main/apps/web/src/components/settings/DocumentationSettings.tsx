@@ -74,7 +74,10 @@ export interface DocTopic {
   readonly steps?: ReadonlyArray<DocStep>;
   readonly codeBlocks?: ReadonlyArray<DocCodeBlock>;
   readonly tips?: ReadonlyArray<DocTip>;
-  readonly shortcuts?: ReadonlyArray<{ readonly label: string; readonly keys: ReadonlyArray<string> }>;
+  readonly shortcuts?: ReadonlyArray<{
+    readonly label: string;
+    readonly keys: ReadonlyArray<string>;
+  }>;
   readonly action?: {
     readonly label: string;
     readonly section: string;
@@ -113,22 +116,26 @@ export const DOC_TOPICS: ReadonlyArray<DocTopic> = [
       {
         step: 1,
         title: "Create a thread",
-        description: "Press ⌘T or click the + button in the sidebar. Choose Local for direct edits, or Worktree to isolate work.",
+        description:
+          "Press ⌘T or click the + button in the sidebar. Choose Local for direct edits, or Worktree to isolate work.",
       },
       {
         step: 2,
         title: "Select a model & reasoning level",
-        description: "Use the model picker below the composer. Set reasoning effort to Low, Medium, or High depending on task complexity.",
+        description:
+          "Use the model picker below the composer. Set reasoning effort to Low, Medium, or High depending on task complexity.",
       },
       {
         step: 3,
         title: "Write your prompt",
-        description: "Describe what you want the agent to build or fix. Attach relevant files with @ mentions or drag-and-drop.",
+        description:
+          "Describe what you want the agent to build or fix. Attach relevant files with @ mentions or drag-and-drop.",
       },
       {
         step: 4,
         title: "Review & approve",
-        description: "Agent-proposed shell commands and file diffs appear in verification cards. Click Approve to execute, or Reject to skip.",
+        description:
+          "Agent-proposed shell commands and file diffs appear in verification cards. Click Approve to execute, or Reject to skip.",
       },
     ],
     codeBlocks: [
@@ -191,19 +198,22 @@ tabs-server start --port 8080`,
       {
         step: 2,
         title: "Open Connections in Tabs",
-        description: "Go to Settings → Connections and click Add Environment. Choose your connection method.",
+        description:
+          "Go to Settings → Connections and click Add Environment. Choose your connection method.",
       },
       {
         step: 3,
         title: "Enter the pairing URL",
-        description: "Copy the pairing URL printed by tabs-server and paste it into the connection dialog.",
+        description:
+          "Copy the pairing URL printed by tabs-server and paste it into the connection dialog.",
         code: `# The server prints something like:
 Pairing URL: https://192.168.1.42:8080/pair/abc123xyz`,
       },
       {
         step: 4,
         title: "Verify the fingerprint",
-        description: "Tabs shows a cryptographic fingerprint. Confirm it matches what the server printed to prevent MITM attacks.",
+        description:
+          "Tabs shows a cryptographic fingerprint. Confirm it matches what the server printed to prevent MITM attacks.",
       },
     ],
     codeBlocks: [
@@ -253,22 +263,26 @@ tabs-server start --tailscale
       {
         step: 1,
         title: "Open the Browser panel",
-        description: "In the thread composer, click the Browser icon or press ⌘⇧B to attach a browser session to the current thread.",
+        description:
+          "In the thread composer, click the Browser icon or press ⌘⇧B to attach a browser session to the current thread.",
       },
       {
         step: 2,
         title: "Navigate to your target page",
-        description: "Use the address bar in the browser panel to navigate. The agent sees this as context for web-related tasks.",
+        description:
+          "Use the address bar in the browser panel to navigate. The agent sees this as context for web-related tasks.",
       },
       {
         step: 3,
         title: "Use Pick Element for precise targeting",
-        description: "Click the crosshair icon, then hover any element on the page. Tabs captures its CSS selector, computed styles, and bounding box.",
+        description:
+          "Click the crosshair icon, then hover any element on the page. Tabs captures its CSS selector, computed styles, and bounding box.",
       },
       {
         step: 4,
         title: "Annotate with visual ink",
-        description: "Switch to the Annotation tool to draw arrows, circles, or highlight areas. These annotations attach to your next message.",
+        description:
+          "Switch to the Annotation tool to draw arrows, circles, or highlight areas. These annotations attach to your next message.",
       },
     ],
     tips: [
@@ -303,22 +317,26 @@ tabs-server start --tailscale
       {
         step: 1,
         title: "Connect a Git provider",
-        description: "Go to Settings → Connections and link your GitHub or GitLab account with OAuth.",
+        description:
+          "Go to Settings → Connections and link your GitHub or GitLab account with OAuth.",
       },
       {
         step: 2,
         title: "Open Source Control panel",
-        description: "Click the Git icon in the left sidebar or press ⌘⇧G to view staged changes, branches, and recent commits.",
+        description:
+          "Click the Git icon in the left sidebar or press ⌘⇧G to view staged changes, branches, and recent commits.",
       },
       {
         step: 3,
         title: "Stage and commit",
-        description: "Click the + next to any file to stage it. Write a commit message and press ⌘Enter to commit.",
+        description:
+          "Click the + next to any file to stage it. Write a commit message and press ⌘Enter to commit.",
       },
       {
         step: 4,
         title: "Review a pull request",
-        description: "Open the PR tab, select a pull request. Use the diff viewer to add inline comments, then submit your review verdict.",
+        description:
+          "Open the PR tab, select a pull request. Use the diff viewer to add inline comments, then submit your review verdict.",
       },
     ],
     codeBlocks: [
@@ -371,22 +389,26 @@ and write a conventional commit message"
       {
         step: 1,
         title: "Settle a completed thread",
-        description: "Right-click a thread → Settle. It moves to the Settled archive but remains searchable via ⌘K.",
+        description:
+          "Right-click a thread → Settle. It moves to the Settled archive but remains searchable via ⌘K.",
       },
       {
         step: 2,
         title: "Snooze a thread",
-        description: "Right-click → Snooze. Pick a duration or specific time. The thread reappears with a notification badge when time is up.",
+        description:
+          "Right-click → Snooze. Pick a duration or specific time. The thread reappears with a notification badge when time is up.",
       },
       {
         step: 3,
         title: "Branch a thread",
-        description: "Right-click any message → Branch from here. A new thread opens with the full conversation up to that point.",
+        description:
+          "Right-click any message → Branch from here. A new thread opens with the full conversation up to that point.",
       },
       {
         step: 4,
         title: "Auto-generate a title",
-        description: "Right-click → Generate Title. Tabs runs a fast model summarization pass and renames the thread.",
+        description:
+          "Right-click → Generate Title. Tabs runs a fast model summarization pass and renames the thread.",
       },
     ],
     tips: [
@@ -421,22 +443,26 @@ and write a conventional commit message"
       {
         step: 1,
         title: "Open Diagnostics",
-        description: "Go to Settings → Diagnostics, or press the Pop Out button to open a standalone diagnostics window.",
+        description:
+          "Go to Settings → Diagnostics, or press the Pop Out button to open a standalone diagnostics window.",
       },
       {
         step: 2,
         title: "Inspect live resource usage",
-        description: "The Overview tab shows real-time CPU, memory, disk, and network metrics split by process category.",
+        description:
+          "The Overview tab shows real-time CPU, memory, disk, and network metrics split by process category.",
       },
       {
         step: 3,
         title: "Trace slow operations",
-        description: "Switch to the Traces tab to see structured execution spans. Look for long-running spans to identify bottlenecks.",
+        description:
+          "Switch to the Traces tab to see structured execution spans. Look for long-running spans to identify bottlenecks.",
       },
       {
         step: 4,
         title: "Export a support bundle",
-        description: "Click Export Support Bundle to download a redacted ZIP with logs, telemetry, and system info for support reporting.",
+        description:
+          "Click Export Support Bundle to download a redacted ZIP with logs, telemetry, and system info for support reporting.",
       },
     ],
     codeBlocks: [
@@ -488,17 +514,20 @@ and write a conventional commit message"
       {
         step: 1,
         title: "Open the Command Palette",
-        description: "Press ⌘K from anywhere in the app. Start typing to fuzzy-search commands, threads, or settings sections.",
+        description:
+          "Press ⌘K from anywhere in the app. Start typing to fuzzy-search commands, threads, or settings sections.",
       },
       {
         step: 2,
         title: "Customize a keybinding",
-        description: "Go to Settings → Keybindings. Click the pencil icon next to any action to record a new key combination.",
+        description:
+          "Go to Settings → Keybindings. Click the pencil icon next to any action to record a new key combination.",
       },
       {
         step: 3,
         title: "Bind a project script",
-        description: "In project settings, find a npm script and click the keyboard icon to assign a custom hotkey.",
+        description:
+          "In project settings, find a npm script and click the keyboard icon to assign a custom hotkey.",
       },
     ],
     codeBlocks: [
@@ -597,7 +626,9 @@ function CodeBlock({ block }: { readonly block: DocCodeBlock }) {
             {copied ? (
               <>
                 <CheckIcon className="size-3 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied!</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                  Copied!
+                </span>
               </>
             ) : (
               <>
@@ -628,7 +659,9 @@ function TipBlock({ tip }: { readonly tip: DocTip }) {
     },
     warning: {
       container: "border-amber-500/25 bg-amber-500/[0.04] dark:bg-amber-500/[0.06]",
-      icon: <TriangleAlertIcon className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />,
+      icon: (
+        <TriangleAlertIcon className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+      ),
       prefix: "Warning:",
       prefixClass: "font-semibold text-amber-800 dark:text-amber-300 mr-1.5 text-xs",
     },
@@ -672,7 +705,9 @@ function StepCodeSnippet({ code }: { readonly code: string }) {
   return (
     <div className="group/code mt-2 flex items-center justify-between gap-3 rounded-lg border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/80 dark:bg-zinc-900/40 px-3 py-2">
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="select-none font-mono text-xs text-zinc-400 dark:text-zinc-500 font-medium">$</span>
+        <span className="select-none font-mono text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+          $
+        </span>
         <code className="font-mono text-[11px] leading-relaxed text-zinc-900 dark:text-zinc-100 whitespace-pre overflow-x-auto select-text">
           {code}
         </code>
@@ -708,8 +743,12 @@ function StepList({ steps }: { readonly steps: ReadonlyArray<DocStep> }) {
             <span className="font-mono text-[9.5px] font-semibold">{step.step}</span>
           </div>
           <div className="space-y-1.5 min-w-0 flex-1">
-            <p className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">{step.title}</p>
-            <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{step.description}</p>
+            <p className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">
+              {step.title}
+            </p>
+            <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+              {step.description}
+            </p>
             {step.code ? <StepCodeSnippet code={step.code} /> : null}
           </div>
         </div>
@@ -755,8 +794,7 @@ export function DocumentationSettings() {
   const visibleTopics = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return DOC_TOPICS.filter((topic) => {
-      const matchesCategory =
-        selectedCategory === "all" || topic.category === selectedCategory;
+      const matchesCategory = selectedCategory === "all" || topic.category === selectedCategory;
       if (!matchesCategory) return false;
       if (!needle) return true;
       const searchable =
@@ -832,7 +870,9 @@ export function DocumentationSettings() {
               <SparklesIcon className="size-3.5 text-muted-foreground" />
               <span>
                 Showing{" "}
-                <span className="font-mono font-medium text-foreground">{visibleTopics.length}</span>{" "}
+                <span className="font-mono font-medium text-foreground">
+                  {visibleTopics.length}
+                </span>{" "}
                 of {DOC_TOPICS.length} topics
               </span>
             </div>

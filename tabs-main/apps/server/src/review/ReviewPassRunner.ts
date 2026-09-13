@@ -37,9 +37,13 @@ export interface ReviewPassInput {
   /** Configured list of passes to run. Default: ["correctness", "security"]. */
   readonly configuredPasses?: ReadonlyArray<string> | undefined;
   /** Callback emitted before any pass fires to surface estimated cost. */
-  readonly onCostPreview?: ((preview: ReviewCostPreviewEvent) => Effect.Effect<void, never, never>) | undefined;
+  readonly onCostPreview?:
+    | ((preview: ReviewCostPreviewEvent) => Effect.Effect<void, never, never>)
+    | undefined;
   /** Callback emitted during multi-pass execution to report live backend progress. */
-  readonly onProgress?: ((event: ReviewProgressEvent) => Effect.Effect<void, never, never>) | undefined;
+  readonly onProgress?:
+    | ((event: ReviewProgressEvent) => Effect.Effect<void, never, never>)
+    | undefined;
 }
 
 export interface ReviewPassRunnerResult {
@@ -64,7 +68,9 @@ export const ReviewFindingRawSchema = Schema.Struct({
 });
 export type ReviewFindingRaw = typeof ReviewFindingRawSchema.Type;
 
-export function resolvePassesToRun(configuredPasses?: ReadonlyArray<string>): ReadonlyArray<string> {
+export function resolvePassesToRun(
+  configuredPasses?: ReadonlyArray<string>,
+): ReadonlyArray<string> {
   if (!configuredPasses || configuredPasses.length === 0) {
     return [...DEFAULT_REVIEW_PASSES];
   }
@@ -160,7 +166,9 @@ export function runReviewPasses(
         diffPatch: input.diffPatch,
         ...(input.commitMessage ? { commitMessage: input.commitMessage } : {}),
         userHint: passHint,
-        ...(input.staticAnalysisContext ? { staticAnalysisContext: input.staticAnalysisContext } : {}),
+        ...(input.staticAnalysisContext
+          ? { staticAnalysisContext: input.staticAnalysisContext }
+          : {}),
         ...(input.repoContext ? { repoContext: input.repoContext } : {}),
         ...(input.projectRules ? { projectRules: input.projectRules } : {}),
         modelSelection: input.modelSelection,
@@ -175,7 +183,10 @@ export function runReviewPasses(
         aggregatedKeyChanges = result.keyChanges;
         aggregatedNotesAndRisk = result.notesAndRisk;
       } else {
-        if (result.notesAndRisk?.trim() && !aggregatedNotesAndRisk.includes(result.notesAndRisk.trim())) {
+        if (
+          result.notesAndRisk?.trim() &&
+          !aggregatedNotesAndRisk.includes(result.notesAndRisk.trim())
+        ) {
           aggregatedNotesAndRisk = [aggregatedNotesAndRisk, result.notesAndRisk.trim()]
             .filter(Boolean)
             .join("\n\n");

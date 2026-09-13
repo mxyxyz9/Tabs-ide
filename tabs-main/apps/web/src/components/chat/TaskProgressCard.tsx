@@ -166,10 +166,7 @@ export const TaskProgressCard = memo(function TaskProgressCard({
       {/* Task rows */}
       <AnimatedHeight>
         {expanded && (
-          <div
-            id={contentId}
-            className="flex flex-col gap-0 px-4 pb-3"
-          >
+          <div id={contentId} className="flex flex-col gap-0 px-4 pb-3">
             {tasks.map((task) => (
               <TaskRow key={task.taskId} task={task} />
             ))}

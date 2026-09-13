@@ -41,7 +41,11 @@ function normalizeProviderName(provider: string): string {
 }
 
 /** Monotone cubic spline curve generator for smooth, non-overshooting curves */
-function buildSmoothPath(points: readonly Point[], height: number, bottomY: number): { linePath: string; areaPath: string } {
+function buildSmoothPath(
+  points: readonly Point[],
+  height: number,
+  bottomY: number,
+): { linePath: string; areaPath: string } {
   if (points.length === 0) return { linePath: "", areaPath: "" };
   if (points.length === 1) {
     const pt = points[0]!;
@@ -114,12 +118,7 @@ function buildSmoothPath(points: readonly Point[], height: number, bottomY: numb
   return { linePath: lineD, areaPath: areaD };
 }
 
-export function UsageDailyChart({
-  days,
-  daily,
-  metric = "cost",
-  className,
-}: UsageDailyChartProps) {
+export function UsageDailyChart({ days, daily, metric = "cost", className }: UsageDailyChartProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -364,7 +363,9 @@ export function UsageDailyChart({
                 </span>
               </div>
               <div className="flex items-baseline justify-between gap-4">
-                <span className="text-muted-foreground">Total {metric === "cost" ? "Cost" : "Tokens"}:</span>
+                <span className="text-muted-foreground">
+                  Total {metric === "cost" ? "Cost" : "Tokens"}:
+                </span>
                 <span className="font-semibold text-foreground tabular-nums">
                   {metric === "cost"
                     ? formatUsd(activePoint.entry?.costUsd ?? 0)
@@ -392,7 +393,9 @@ export function UsageDailyChart({
                         {normalizeProviderName(prov)}
                       </span>
                       <span className="font-medium text-foreground">
-                        {metric === "cost" ? formatUsd(stats.costUsd) : formatTokens(stats.totalTokens)}
+                        {metric === "cost"
+                          ? formatUsd(stats.costUsd)
+                          : formatTokens(stats.totalTokens)}
                       </span>
                     </div>
                   ))}

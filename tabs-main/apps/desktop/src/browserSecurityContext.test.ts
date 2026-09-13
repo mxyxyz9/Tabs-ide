@@ -19,6 +19,8 @@ describe("browserSecurityContext", () => {
       expect(deriveRegistrableDomain("news.bbc.co.uk")).toBe("bbc.co.uk");
       expect(deriveRegistrableDomain("service.gov.uk")).toBe("service.gov.uk");
       expect(deriveRegistrableDomain("tokyo.ac.jp")).toBe("tokyo.ac.jp");
+      expect(deriveRegistrableDomain("accounts.example.co.in")).toBe("example.co.in");
+      expect(deriveRegistrableDomain("tenant.github.io")).toBe("tenant.github.io");
     });
 
     it("preserves localhost and IP addresses", () => {

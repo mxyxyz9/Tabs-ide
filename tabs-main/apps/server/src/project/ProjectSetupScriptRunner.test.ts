@@ -132,11 +132,7 @@ describe("ProjectSetupScriptRunner", () => {
           projectId: "project-1",
           worktreePath: "/repo/worktrees/a",
         });
-      }).pipe(
-        Effect.provide(
-          testLayer(makeProject([]), {}),
-        ),
-      ),
+      }).pipe(Effect.provide(testLayer(makeProject([]), {}))),
     );
 
     expect(result).toEqual({ status: "no-script" });
@@ -152,11 +148,7 @@ describe("ProjectSetupScriptRunner", () => {
             projectId: "missing-project",
             worktreePath: "/repo/worktrees/a",
           });
-        }).pipe(
-          Effect.provide(
-            testLayer(null, {}),
-          ),
-        ),
+        }).pipe(Effect.provide(testLayer(null, {}))),
       ),
     ).rejects.toThrow();
   });

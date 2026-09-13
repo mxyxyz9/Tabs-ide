@@ -7,13 +7,7 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
-export const BROWSER_IMPORT_SOURCE_IDS = [
-  "chrome",
-  "edge",
-  "brave",
-  "firefox",
-  "safari",
-] as const;
+export const BROWSER_IMPORT_SOURCE_IDS = ["chrome", "edge", "brave", "firefox", "safari"] as const;
 
 export const BrowserImportSourceId = Schema.Literals(BROWSER_IMPORT_SOURCE_IDS);
 export type BrowserImportSourceId = typeof BrowserImportSourceId.Type;
@@ -70,7 +64,8 @@ export type BrowserImportResult = typeof BrowserImportResult.Type;
 
 export const BROWSER_IMPORT_FAILURE_COPY: Readonly<Record<BrowserImportFailureReason, string>> = {
   notInstalled: "Browser is not installed on this system.",
-  browserRunning: "Please quit the browser first so its cookie database can be safely read without lock contention.",
+  browserRunning:
+    "Please quit the browser first so its cookie database can be safely read without lock contention.",
   databaseLocked: "The browser's cookie database is locked by another process.",
   corruptDatabase: "The cookie database appears corrupt or unreadable.",
   needsKeychainApproval: "Keychain approval required to decrypt cookies.",

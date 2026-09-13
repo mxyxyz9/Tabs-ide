@@ -25,7 +25,8 @@ export function QuitConfirmationModal(props: {
         <DialogHeader>
           <DialogTitle>Quit Tabs?</DialogTitle>
           <DialogDescription id="quit-confirmation-description">
-            Tabs will save open editor changes before quitting. Running terminals and tasks will stop.
+            Tabs will save open editor changes before quitting. Running terminals and tasks will
+            stop.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

@@ -279,4 +279,3 @@ describe("searchWorkspaceContents", () => {
     assert.strictEqual(invalidRegex.matches.length, 0);
   });
 });
-

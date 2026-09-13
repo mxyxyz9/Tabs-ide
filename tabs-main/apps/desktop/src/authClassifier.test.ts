@@ -26,18 +26,25 @@ describe("authClassifier", () => {
       expect(isLoopbackHostname("[::1]")).toBe(true);
       expect(isLoopbackHostname("sub.localhost")).toBe(true);
       expect(isLoopbackHostname("127.0.1.5")).toBe(true);
+      expect(isLoopbackHostname("0.0.0.0")).toBe(false);
       expect(isLoopbackHostname("example.com")).toBe(false);
     });
   });
 
   describe("hasSameRegistrableOrigin", () => {
-    it("matches same origin and ignores www", () => {
+    it("requires an exact web origin including scheme, host, and port", () => {
+      expect(
+        hasSameRegistrableOrigin("https://example.com/page", "https://example.com/login"),
+      ).toBe(true);
       expect(
         hasSameRegistrableOrigin("https://example.com/page", "https://www.example.com/login"),
-      ).toBe(true);
+      ).toBe(false);
       expect(hasSameRegistrableOrigin("https://example.com/page", "http://example.com/login")).toBe(
         false,
       );
+      expect(
+        hasSameRegistrableOrigin("https://example.com:8443", "https://example.com:9443/login"),
+      ).toBe(false);
       expect(hasSameRegistrableOrigin("https://example.com", "https://other.com")).toBe(false);
     });
   });
@@ -57,12 +64,15 @@ describe("authClassifier", () => {
       }
     });
 
-    it("identifies custom scheme callbacks", () => {
-      const result = classifyAuthNavigation({
-        url: "tabs://oauth-callback?code=abc",
-      });
-      expect(result.kind).toBe("customSchemeCallback");
-      expect(result.scheme).toBe("tabs:");
+    it("blocks protocols that are not owned callback schemes", () => {
+      for (const url of [
+        "tabs://oauth-callback?code=abc",
+        "vscode://settings",
+        "mailto:user@example.com",
+        "ssh://host",
+      ]) {
+        expect(classifyAuthNavigation({ url }).kind).toBe("blockedUnsafeScheme");
+      }
     });
 
     it("identifies loopback callbacks", () => {

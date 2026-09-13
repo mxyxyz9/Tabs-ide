@@ -70,8 +70,7 @@ export const TabsProjectFile = Schema.Struct({
   iconPath: Schema.optionalKey(
     trimmedNonEmpty(
       {
-        description:
-          'Workspace-relative path to the project icon (e.g. "assets/logo.svg").',
+        description: 'Workspace-relative path to the project icon (e.g. "assets/logo.svg").',
       },
       TABS_PROJECT_FILE_PATH_MAX_LENGTH,
     ),

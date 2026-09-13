@@ -8,7 +8,10 @@ import {
 
 describe("PullRequestMetadataControls", () => {
   it("renders reviewers list and remove buttons when supported", () => {
-    const reviewers = [{ login: "alice", id: "1" }, { login: "bob", id: "2" }];
+    const reviewers = [
+      { login: "alice", id: "1" },
+      { login: "bob", id: "2" },
+    ];
     const html = renderToStaticMarkup(
       <PullRequestReviewersSection
         reviewers={reviewers}

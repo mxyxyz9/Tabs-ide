@@ -91,7 +91,11 @@ describe("projectScripts", () => {
   });
 
   it("checks if project inherits defaults", () => {
-    expect(projectScriptsInheritDefaults(defaultSettings, { id: "p1" as ProjectId, scripts: [] })).toBe(true);
-    expect(projectScriptsInheritDefaults(defaultSettings, { id: "p1" as ProjectId, scripts: [scriptB] })).toBe(false);
+    expect(
+      projectScriptsInheritDefaults(defaultSettings, { id: "p1" as ProjectId, scripts: [] }),
+    ).toBe(true);
+    expect(
+      projectScriptsInheritDefaults(defaultSettings, { id: "p1" as ProjectId, scripts: [scriptB] }),
+    ).toBe(false);
   });
 });

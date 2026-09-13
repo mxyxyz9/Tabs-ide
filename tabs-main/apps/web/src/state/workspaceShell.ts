@@ -42,9 +42,8 @@ export function useWorkspaceActiveProjectId(): ProjectId | null {
 }
 
 export function useRememberedThreadId(projectId: ProjectId | null): ThreadId | null {
-  return useAtomValue(
-    workspaceShellAtom,
-    (state) => (projectId ? (state.session.rememberedThreadIdByProjectId[projectId] ?? null) : null),
+  return useAtomValue(workspaceShellAtom, (state) =>
+    projectId ? (state.session.rememberedThreadIdByProjectId[projectId] ?? null) : null,
   );
 }
 

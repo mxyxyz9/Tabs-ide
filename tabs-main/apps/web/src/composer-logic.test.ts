@@ -353,4 +353,3 @@ describe("assistant citation cursor offsets", () => {
     expect(result).toEqual({ text: `(),${citationSource}!`, cursor: 1 });
   });
 });
-

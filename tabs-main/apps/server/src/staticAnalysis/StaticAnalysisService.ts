@@ -102,9 +102,7 @@ export function parseTscOutput(
  * Attempt to parse ESLint JSON output (eslint --format json).
  * ESLint JSON is an array of file objects each with a `messages` array.
  */
-export function parseEslintJsonOutput(
-  stdout: string,
-): ReadonlyArray<StaticAnalysisFinding> {
+export function parseEslintJsonOutput(stdout: string): ReadonlyArray<StaticAnalysisFinding> {
   const trimmed = stdout.trim();
   if (!trimmed) return [];
 

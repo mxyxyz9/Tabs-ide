@@ -37,7 +37,10 @@ export function clearPushAccessCache(): void {
  *  - `gh` returns an auth/login error (not authenticated)
  *  - The call times out (3 second hard cap to avoid blocking the loading gate)
  */
-export async function resolvePushAccess(cwd: string, remoteUrl: string | null): Promise<GitPushAccess> {
+export async function resolvePushAccess(
+  cwd: string,
+  remoteUrl: string | null,
+): Promise<GitPushAccess> {
   const cached = getCachedPushAccess(cwd);
   if (cached) return cached;
 

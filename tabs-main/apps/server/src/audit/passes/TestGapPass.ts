@@ -8,9 +8,7 @@ import type { AuditFinding } from "@tabs/contracts";
 import { computeFindingFingerprint } from "@tabs/contracts";
 import type { ReviewPassContext } from "./CorrectnessPass.ts";
 
-export function runTestGapPass(
-  ctx: ReviewPassContext,
-): ReadonlyArray<AuditFinding> {
+export function runTestGapPass(ctx: ReviewPassContext): ReadonlyArray<AuditFinding> {
   const findings: AuditFinding[] = [];
   const filePath = ctx.contextPack.targetScope;
 
@@ -21,7 +19,9 @@ export function runTestGapPass(
 
   // Check if file has exported symbols but no caller or test reference
   const hasExportedSymbols = ctx.contextPack.symbolDefinitionsText.includes("[exported]");
-  const hasTestCaller = ctx.contextPack.callerReferencesText.includes(".test.") || ctx.contextPack.callerReferencesText.includes(".spec.");
+  const hasTestCaller =
+    ctx.contextPack.callerReferencesText.includes(".test.") ||
+    ctx.contextPack.callerReferencesText.includes(".spec.");
 
   if (hasExportedSymbols && !hasTestCaller) {
     const title = "Exported Module Missing Unit Tests";
@@ -41,10 +41,11 @@ export function runTestGapPass(
       endLine: 1,
       category: "test_gap",
       severity: "warning",
-      confidence: 0.80,
+      confidence: 0.8,
       title,
       explanation: `Module '${filePath}' exports public API symbols but has no referencing unit tests in the repository graph.`,
-      evidenceSnippet: ctx.contextPack.symbolDefinitionsText.split("\n")[0] ?? "Exported API symbols",
+      evidenceSnippet:
+        ctx.contextPack.symbolDefinitionsText.split("\n")[0] ?? "Exported API symbols",
       sourceTool: "agent-testgap-pass",
       verificationState: "unverified",
     });

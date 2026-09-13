@@ -15,7 +15,10 @@ import type {
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
-import { readResourceAttributionSnapshot, recordResourceAttribution } from "./ResourceAttribution.ts";
+import {
+  readResourceAttributionSnapshot,
+  recordResourceAttribution,
+} from "./ResourceAttribution.ts";
 import { readEventLoopLag } from "./EventLoopMonitor.ts";
 import { type ProcessRow, readSystemProcessRows } from "./ProcessEnumerator.ts";
 
@@ -135,9 +138,7 @@ function sumAggregate(
   };
 }
 
-function computeGroups(
-  processes: readonly ResourceTelemetryProcess[],
-): ResourceTelemetryGroups {
+function computeGroups(processes: readonly ResourceTelemetryProcess[]): ResourceTelemetryGroups {
   let backend = emptyAggregate();
   let electron = emptyAggregate();
   let monitor = emptyAggregate();
@@ -301,7 +302,8 @@ export async function readResourceTelemetrySnapshot(
       processes,
       groups,
       power,
-      speedLimitPercent: speedLimitPercent === null ? Option.none() : Option.some(speedLimitPercent),
+      speedLimitPercent:
+        speedLimitPercent === null ? Option.none() : Option.some(speedLimitPercent),
       attribution,
       health,
     };
@@ -377,7 +379,8 @@ export async function readResourceTelemetryHistory(
         const first = observations[0]!;
         const last = observations.at(-1)!;
         const avgCpu =
-          observations.reduce((sum, item) => sum + item.process.cpuPercent, 0) / observations.length;
+          observations.reduce((sum, item) => sum + item.process.cpuPercent, 0) /
+          observations.length;
         const maxCpu = Math.max(...observations.map((item) => item.process.cpuPercent));
         const peakRss = Math.max(...observations.map((item) => item.process.residentBytes));
 

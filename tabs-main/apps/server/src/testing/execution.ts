@@ -12,11 +12,7 @@ import type {
 } from "@tabs/contracts";
 
 import { runProcess, type ProcessRunResult } from "../processRunner";
-import type {
-  StoredGraphEdge,
-  TestingExecutionArtifact,
-  TestingGraphStore,
-} from "./graphStore";
+import type { StoredGraphEdge, TestingExecutionArtifact, TestingGraphStore } from "./graphStore";
 import { shortDigest } from "./security";
 import { playwrightOutcome, runBounded } from "./batchExecution";
 
@@ -32,18 +28,14 @@ function normalized(value: string): string {
 }
 
 function editDistance(left: string, right: string): number {
-  const previous = Array.from(
-    { length: right.length + 1 },
-    (_, index) => index,
-  );
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
   for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
     const current = [leftIndex];
     for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
       current[rightIndex] = Math.min(
         current[rightIndex - 1]! + 1,
         previous[rightIndex]! + 1,
-        previous[rightIndex - 1]! +
-          (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+        previous[rightIndex - 1]! + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
       );
     }
     previous.splice(0, previous.length, ...current);
@@ -77,10 +69,7 @@ export function rankHealingCandidates(
     .sort((left, right) => right.confidence - left.confidence);
 }
 
-async function findEvidence(
-  root: string,
-  suffix: string,
-): Promise<string | null> {
+async function findEvidence(root: string, suffix: string): Promise<string | null> {
   try {
     for (const entry of await readdir(root, { withFileTypes: true })) {
       const path = join(root, entry.name);
@@ -110,9 +99,7 @@ export class TestingExecutor {
   }
 
   cancel(projectId: string, runId: string): TestingExecutionRun {
-    const run = this.#store
-      .executionRuns(projectId)
-      .runs.find((item) => item.id === runId);
+    const run = this.#store.executionRuns(projectId).runs.find((item) => item.id === runId);
     if (!run) throw new Error("Execution run was not found");
     const controller = this.#activeRuns.get(runId);
     if (controller) {
@@ -128,26 +115,15 @@ export class TestingExecutor {
     }
     const target = new URL(input.targetUrl);
     if (target.protocol !== "http:" && target.protocol !== "https:") {
-      throw new Error(
-        "Test execution requires an http:// or https:// target URL",
-      );
+      throw new Error("Test execution requires an http:// or https:// target URL");
     }
-    const job = this.#store.generationJob(
-      input.projectId,
-      input.generationJobId,
-    );
-    if (!job || job.status !== "completed")
-      throw new Error("Choose a completed generation job");
-    const artifacts = this.#store.executionArtifacts(
-      input.generationJobId,
-      input.caseIds,
-    );
+    const job = this.#store.generationJob(input.projectId, input.generationJobId);
+    if (!job || job.status !== "completed") throw new Error("Choose a completed generation job");
+    const artifacts = this.#store.executionArtifacts(input.generationJobId, input.caseIds);
     if (artifacts.length === 0)
       throw new Error("The selected generation job has no matching cases");
     const artifactRevision = shortDigest(
-      artifacts
-        .map((artifact) => `${artifact.caseId}:${artifact.specPath}`)
-        .join("|"),
+      artifacts.map((artifact) => `${artifact.caseId}:${artifact.specPath}`).join("|"),
     );
     const runId = crypto.randomUUID();
     const abortController = new AbortController();
@@ -182,10 +158,7 @@ export class TestingExecutor {
           try {
             const caseOutput = join(runRoot, artifact.caseId);
             await mkdir(caseOutput, { recursive: true });
-            const configPath = join(
-              runRoot,
-              `${artifact.caseId}.playwright.config.mjs`,
-            );
+            const configPath = join(runRoot, `${artifact.caseId}.playwright.config.mjs`);
             const reportPath = join(runRoot, `${artifact.caseId}.results.json`);
             const storageStatePath = join(
               this.#testingRoot,
@@ -196,9 +169,7 @@ export class TestingExecutor {
             const useOptions = {
               trace: "retain-on-failure",
               screenshot: input.visualComparison ? "on" : "only-on-failure",
-              ...(existsSync(storageStatePath)
-                ? { storageState: storageStatePath }
-                : {}),
+              ...(existsSync(storageStatePath) ? { storageState: storageStatePath } : {}),
             };
             await writeFile(
               configPath,
@@ -208,14 +179,7 @@ export class TestingExecutor {
             const caseStartedAt = Date.now();
             const processResult = await this.#run(
               process.execPath,
-              [
-                cliPath,
-                "test",
-                basename(artifact.specPath),
-                "--config",
-                configPath,
-                "--workers=1",
-              ],
+              [cliPath, "test", basename(artifact.specPath), "--config", configPath, "--workers=1"],
               {
                 cwd: dirname(artifact.specPath),
                 timeoutMs: (input.timeoutSeconds ?? 120) * 1_000,
@@ -244,21 +208,14 @@ export class TestingExecutor {
             }
             const status = playwrightOutcome(processResult, report);
             const history = [
-              ...this.#store.comparableCaseStatuses(
-                artifact.caseId,
-                artifactRevision,
-              ),
+              ...this.#store.comparableCaseStatuses(artifact.caseId, artifactRevision),
               status,
             ].filter(
-              (value): value is "passed" | "failed" =>
-                value === "passed" || value === "failed",
+              (value): value is "passed" | "failed" => value === "passed" || value === "failed",
             );
             const flaky =
-              history.length >= 3 &&
-              history.includes("passed") &&
-              history.includes("failed");
-            let visualStatus: TestingExecutionCaseResult["visualStatus"] =
-              "disabled";
+              history.length >= 3 && history.includes("passed") && history.includes("failed");
+            let visualStatus: TestingExecutionCaseResult["visualStatus"] = "disabled";
             if (input.visualComparison && screenshotPath) {
               const hash = createHash("sha256")
                 .update(await readFile(screenshotPath))
@@ -304,10 +261,8 @@ export class TestingExecutor {
                   continue;
                 const margin = best.confidence - (ranked[1]?.confidence ?? 0);
                 const attempts =
-                  this.#store.consecutiveHealingAttempts(
-                    artifact.caseId,
-                    fingerprint.locatorKey,
-                  ) + 1;
+                  this.#store.consecutiveHealingAttempts(artifact.caseId, fingerprint.locatorKey) +
+                  1;
                 const eligible =
                   best.confidence >= TESTING_HEAL_CONFIDENCE &&
                   margin >= TESTING_HEAL_MARGIN &&
@@ -363,9 +318,7 @@ export class TestingExecutor {
             externalId: artifact.externalId,
             status: "blocked",
             durationMs: 0,
-            error: signal.aborted
-              ? "Execution cancelled"
-              : "Execution not reached",
+            error: signal.aborted ? "Execution cancelled" : "Execution not reached",
             tracePath: null,
             screenshotPath: null,
             flaky: false,
@@ -375,9 +328,7 @@ export class TestingExecutor {
         }
       }
 
-      const order = new Map(
-        artifacts.map((artifact, index) => [artifact.caseId, index]),
-      );
+      const order = new Map(artifacts.map((artifact, index) => [artifact.caseId, index]));
       results.sort((a, b) => order.get(a.caseId)! - order.get(b.caseId)!);
 
       const durationMs = Date.now() - startedAt;
@@ -404,9 +355,7 @@ export class TestingExecutor {
         results,
         proposals,
       });
-      return this.#store
-        .executionRuns(input.projectId)
-        .runs.find((run) => run.id === runId)!;
+      return this.#store.executionRuns(input.projectId).runs.find((run) => run.id === runId)!;
     } finally {
       this.#activeRuns.delete(runId);
     }

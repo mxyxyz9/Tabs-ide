@@ -213,7 +213,8 @@ export async function readProcessResourceHistory(
       topProcesses: [],
       error: Option.some({
         failureTag: "ProcessDiagnosticsQueryFailedError",
-        message: error instanceof Error ? error.message : "Could not read process resource history.",
+        message:
+          error instanceof Error ? error.message : "Could not read process resource history.",
       }),
     };
   }

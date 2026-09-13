@@ -197,4 +197,3 @@ export function verifyDpopProof(input: {
     return { ok: false, code: "invalid_proof", reason: "Invalid DPoP proof." };
   }
 }
-

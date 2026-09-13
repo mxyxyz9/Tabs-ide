@@ -54,8 +54,6 @@ import type {
   GitListTagsResult,
   GitWatchedBranchStatusesInput,
   GitWatchedBranchStatusesResult,
-
-
 } from "@tabs/contracts";
 
 import type { GitCommandError } from "../Errors.ts";
@@ -240,9 +238,7 @@ export interface GitCoreShape {
   /**
    * List all tags in the repository using git tag -l.
    */
-  readonly listTags: (
-    input: GitListTagsInput,
-  ) => Effect.Effect<GitListTagsResult, GitCommandError>;
+  readonly listTags: (input: GitListTagsInput) => Effect.Effect<GitListTagsResult, GitCommandError>;
 
   /**
    * Compare HEAD against watched branches to surface divergence (ahead/behind counts).
@@ -250,8 +246,6 @@ export interface GitCoreShape {
   readonly watchedBranchStatuses: (
     input: GitWatchedBranchStatusesInput,
   ) => Effect.Effect<GitWatchedBranchStatusesResult, GitCommandError>;
-
-
 
   /**
    * Save a stash entry.

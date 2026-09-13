@@ -176,13 +176,12 @@ export function resolveProviderDispatchAttachments(input: {
       }
 
       return input.repository.findClaimedById({ attachmentId: attachment.id }).pipe(
-        Effect.mapError(
-          () =>
-            resolutionError({
-              provider: input.provider,
-              operation: input.operation,
-              attachmentId: attachment.id,
-            }),
+        Effect.mapError(() =>
+          resolutionError({
+            provider: input.provider,
+            operation: input.operation,
+            attachmentId: attachment.id,
+          }),
         ),
         Effect.flatMap(
           Option.match({

@@ -50,7 +50,10 @@ export function AuditAskAIChat({ selectedFinding, isOpen, onClose }: AuditAskAIC
             </p>
           )}
         </div>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm font-bold cursor-pointer">
+        <button
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground text-sm font-bold cursor-pointer"
+        >
           ✕
         </button>
       </div>
@@ -61,9 +64,24 @@ export function AuditAskAIChat({ selectedFinding, isOpen, onClose }: AuditAskAIC
           <div className="text-xs text-muted-foreground italic p-4 text-center border border-dashed border-border rounded-lg">
             Ask follow-up questions about this finding, such as:
             <ul className="mt-2 text-left text-purple-500 space-y-1 not-italic">
-              <li onClick={() => setInputQuery("Why is this a security risk?")} className="cursor-pointer hover:underline">• Why is this a security risk?</li>
-              <li onClick={() => setInputQuery("Show safe refactoring alternatives")} className="cursor-pointer hover:underline">• Show safe refactoring alternatives</li>
-              <li onClick={() => setInputQuery("What callers could break if I change this?")} className="cursor-pointer hover:underline">• What callers could break if I change this?</li>
+              <li
+                onClick={() => setInputQuery("Why is this a security risk?")}
+                className="cursor-pointer hover:underline"
+              >
+                • Why is this a security risk?
+              </li>
+              <li
+                onClick={() => setInputQuery("Show safe refactoring alternatives")}
+                className="cursor-pointer hover:underline"
+              >
+                • Show safe refactoring alternatives
+              </li>
+              <li
+                onClick={() => setInputQuery("What callers could break if I change this?")}
+                className="cursor-pointer hover:underline"
+              >
+                • What callers could break if I change this?
+              </li>
             </ul>
           </div>
         ) : (
@@ -76,7 +94,9 @@ export function AuditAskAIChat({ selectedFinding, isOpen, onClose }: AuditAskAIC
                   : "bg-muted/60 text-foreground border border-border mr-6"
               }`}
             >
-              <div className="font-semibold text-[10px] text-muted-foreground uppercase mb-1">{m.sender}</div>
+              <div className="font-semibold text-[10px] text-muted-foreground uppercase mb-1">
+                {m.sender}
+              </div>
               <div className="whitespace-pre-wrap font-mono">{m.text}</div>
             </div>
           ))
@@ -92,7 +112,10 @@ export function AuditAskAIChat({ selectedFinding, isOpen, onClose }: AuditAskAIC
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
           className="text-xs bg-background border-border text-foreground"
         />
-        <Button onClick={handleSend} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5">
+        <Button
+          onClick={handleSend}
+          className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5"
+        >
           Send
         </Button>
       </div>

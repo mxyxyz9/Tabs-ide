@@ -243,4 +243,3 @@ export const resolveRemotePairingTarget = (input: {
     wsBaseUrl: toWsBaseUrl(normalizedHost),
   };
 };
-

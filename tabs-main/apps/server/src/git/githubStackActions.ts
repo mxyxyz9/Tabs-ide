@@ -137,7 +137,10 @@ function normalizePullRequestState(input: {
 }): "open" | "closed" | "merged" {
   const mergedAt = input.mergedAt;
   const state = input.state;
-  if ((typeof mergedAt === "string" && mergedAt.trim().length > 0) || state?.toUpperCase() === "MERGED") {
+  if (
+    (typeof mergedAt === "string" && mergedAt.trim().length > 0) ||
+    state?.toUpperCase() === "MERGED"
+  ) {
     return "merged";
   }
   if (state?.toUpperCase() === "CLOSED") {
@@ -156,7 +159,7 @@ export function decodePullRequestStacksJson(raw: string): GitPullRequestStack | 
     const stack = decoded[0];
     if (!stack || !Array.isArray(stack.pull_requests)) return null;
     return {
-      id: stack.id != null ? String(stack.id) : (stack.node_id?.trim() || String(stack.number)),
+      id: stack.id != null ? String(stack.id) : stack.node_id?.trim() || String(stack.number),
       number: stack.number,
       url: stack.html_url?.trim() || stack.url,
       base: typeof stack.base === "string" ? stack.base : stack.base.ref,
@@ -283,12 +286,14 @@ export const runGitHubStackAction = (input: {
       return yield* new GitHubStackUnsupportedError({ ...identity });
     }
     const endpoint = `repos/${input.repository}`;
-    const read = yield* github.execute({
-      cwd: input.cwd,
-      args: ["api", "--hostname", host, `${endpoint}/stacks?pull_request=${input.number}`],
-    }).pipe(
-      Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
-    );
+    const read = yield* github
+      .execute({
+        cwd: input.cwd,
+        args: ["api", "--hostname", host, `${endpoint}/stacks?pull_request=${input.number}`],
+      })
+      .pipe(
+        Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
+      );
     const stack = decodePullRequestStacksJson(read.stdout);
     if (!stack) {
       return yield* new GitHubStackResponseInvalidError({ ...identity });
@@ -300,7 +305,11 @@ export const runGitHubStackAction = (input: {
       target === undefined ||
       (input.action === "stack_rebase" && targetIndex !== stack.layers.length - 1)
     ) {
-      return yield* new GitHubStackChangedError({ ...identity, number: input.number, completed: 0 });
+      return yield* new GitHubStackChangedError({
+        ...identity,
+        number: input.number,
+        completed: 0,
+      });
     }
     const affectedLayers =
       input.action === "stack_merge" ? stack.layers.slice(0, targetIndex + 1) : stack.layers;
@@ -320,7 +329,11 @@ export const runGitHubStackAction = (input: {
           ),
       )
     ) {
-      return yield* new GitHubStackChangedError({ ...identity, number: input.number, completed: 0 });
+      return yield* new GitHubStackChangedError({
+        ...identity,
+        number: input.number,
+        completed: 0,
+      });
     }
     if (open.length === 0 || open.some((layer) => layer.state !== "open")) {
       return yield* new GitHubStackUnsupportedError({ ...identity });
@@ -328,28 +341,30 @@ export const runGitHubStackAction = (input: {
 
     if (input.action === "stack_rebase") {
       const [owner, name] = input.repository.split("/");
-      const permissions = yield* github.execute({
-        cwd: input.cwd,
-        args: [
-          "api",
-          "--hostname",
-          host,
-          "graphql",
-          "-f",
-          `owner=${owner}`,
-          "-f",
-          `name=${name}`,
-          "-f",
-          `query=query($owner:String!,$name:String!){repository(owner:$owner,name:$name){${open
-            .map(
-              (layer) =>
-                `pr${layer.number}:pullRequest(number:${layer.number}){headRepository{viewerPermission} maintainerCanModify}`,
-            )
-            .join(" ")}}}`,
-        ],
-      }).pipe(
-        Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
-      );
+      const permissions = yield* github
+        .execute({
+          cwd: input.cwd,
+          args: [
+            "api",
+            "--hostname",
+            host,
+            "graphql",
+            "-f",
+            `owner=${owner}`,
+            "-f",
+            `name=${name}`,
+            "-f",
+            `query=query($owner:String!,$name:String!){repository(owner:$owner,name:$name){${open
+              .map(
+                (layer) =>
+                  `pr${layer.number}:pullRequest(number:${layer.number}){headRepository{viewerPermission} maintainerCanModify}`,
+              )
+              .join(" ")}}}`,
+          ],
+        })
+        .pipe(
+          Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
+        );
       const access = yield* decodeBranchAccess(permissions.stdout).pipe(
         Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
       );
@@ -369,31 +384,35 @@ export const runGitHubStackAction = (input: {
       const processed: Array<{ id: string; number: number; headSha: string }> = [];
       for (const [index, layer] of open.entries()) {
         yield* Effect.gen(function* () {
-          const readBranch = yield* github.execute({
-            cwd: input.cwd,
-            args: [
-              "api",
-              "--hostname",
-              host,
-              "graphql",
-              "-f",
-              `owner=${owner}`,
-              "-f",
-              `name=${name}`,
-              "-F",
-              `number=${layer.number}`,
-              "-f",
-              `sha=${layer.headSha}`,
-              "-f",
-              `query=query($owner:String!,$name:String!,$number:Int!,$sha:String!){${
-                processed.length === 0
-                  ? ""
-                  : `processed:nodes(ids:${JSON.stringify(processed.map((head) => head.id))}){... on PullRequest{headRefOid}}`
-              } repository(owner:$owner,name:$name){pullRequest(number:$number){id headRefOid baseRef{compare(headRef:$sha){behindBy}}}}}`,
-            ],
-          }).pipe(
-            Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
-          );
+          const readBranch = yield* github
+            .execute({
+              cwd: input.cwd,
+              args: [
+                "api",
+                "--hostname",
+                host,
+                "graphql",
+                "-f",
+                `owner=${owner}`,
+                "-f",
+                `name=${name}`,
+                "-F",
+                `number=${layer.number}`,
+                "-f",
+                `sha=${layer.headSha}`,
+                "-f",
+                `query=query($owner:String!,$name:String!,$number:Int!,$sha:String!){${
+                  processed.length === 0
+                    ? ""
+                    : `processed:nodes(ids:${JSON.stringify(processed.map((head) => head.id))}){... on PullRequest{headRefOid}}`
+                } repository(owner:$owner,name:$name){pullRequest(number:$number){id headRefOid baseRef{compare(headRef:$sha){behindBy}}}}}`,
+              ],
+            })
+            .pipe(
+              Effect.mapError(
+                (cause) => new GitHubStackResponseInvalidError({ ...identity, cause }),
+              ),
+            );
           const {
             data: {
               processed: observed,
@@ -402,9 +421,7 @@ export const runGitHubStackAction = (input: {
           } = yield* decodeRebaseBranch(readBranch.stdout).pipe(
             Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
           );
-          const changed = processed.find(
-            (head, i) => observed?.[i]?.headRefOid !== head.headSha,
-          );
+          const changed = processed.find((head, i) => observed?.[i]?.headRefOid !== head.headSha);
           if (changed !== undefined) {
             return yield* new GitHubStackChangedError({
               ...identity,
@@ -423,23 +440,27 @@ export const runGitHubStackAction = (input: {
             processed.push({ id: pr.id, number: layer.number, headSha: pr.headRefOid });
             return;
           }
-          const updated = yield* github.execute({
-            cwd: input.cwd,
-            args: [
-              "api",
-              "--hostname",
-              host,
-              "graphql",
-              "-f",
-              `id=${pr.id}`,
-              "-f",
-              `sha=${layer.headSha}`,
-              "-f",
-              "query=mutation($id:ID!,$sha:GitObjectID!){updatePullRequestBranch(input:{pullRequestId:$id,expectedHeadOid:$sha,updateMethod:REBASE}){pullRequest{headRefOid}}}",
-            ],
-          }).pipe(
-            Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
-          );
+          const updated = yield* github
+            .execute({
+              cwd: input.cwd,
+              args: [
+                "api",
+                "--hostname",
+                host,
+                "graphql",
+                "-f",
+                `id=${pr.id}`,
+                "-f",
+                `sha=${layer.headSha}`,
+                "-f",
+                "query=mutation($id:ID!,$sha:GitObjectID!){updatePullRequestBranch(input:{pullRequestId:$id,expectedHeadOid:$sha,updateMethod:REBASE}){pullRequest{headRefOid}}}",
+              ],
+            })
+            .pipe(
+              Effect.mapError(
+                (cause) => new GitHubStackResponseInvalidError({ ...identity, cause }),
+              ),
+            );
           const response = yield* decodeRebaseResponse(updated.stdout).pipe(
             Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
           );
@@ -472,25 +493,27 @@ export const runGitHubStackAction = (input: {
       decodeMergeResponse(raw).pipe(
         Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
       );
-    const request = yield* github.execute({
-      cwd: input.cwd,
-      args: [
-        "api",
-        "--hostname",
-        host,
-        "--method",
-        "PUT",
-        `${endpoint}/pulls/${input.number}/merge-async`,
-        "-f",
-        `merge_method=${input.mergeMethod ?? "merge"}`,
-        "-f",
-        "merge_action=default",
-        "-f",
-        `sha=${target.headSha}`,
-      ],
-    }).pipe(
-      Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
-    );
+    const request = yield* github
+      .execute({
+        cwd: input.cwd,
+        args: [
+          "api",
+          "--hostname",
+          host,
+          "--method",
+          "PUT",
+          `${endpoint}/pulls/${input.number}/merge-async`,
+          "-f",
+          `merge_method=${input.mergeMethod ?? "merge"}`,
+          "-f",
+          "merge_action=default",
+          "-f",
+          `sha=${target.headSha}`,
+        ],
+      })
+      .pipe(
+        Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
+      );
     let result = yield* decode(request.stdout);
     const deadline = (yield* Clock.currentTimeMillis) + 5 * 60_000;
     for (
@@ -501,17 +524,19 @@ export const runGitHubStackAction = (input: {
       const uuid = result.details.uuid;
       if (!uuid) return yield* new GitHubStackResponseInvalidError({ ...identity });
       yield* Effect.sleep(Math.min(1_000 * 2 ** attempt, 10_000));
-      const poll = yield* github.execute({
-        cwd: input.cwd,
-        args: [
-          "api",
-          "--hostname",
-          host,
-          `${endpoint}/pulls/${input.number}/merge-async/${encodeURIComponent(uuid)}`,
-        ],
-      }).pipe(
-        Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
-      );
+      const poll = yield* github
+        .execute({
+          cwd: input.cwd,
+          args: [
+            "api",
+            "--hostname",
+            host,
+            `${endpoint}/pulls/${input.number}/merge-async/${encodeURIComponent(uuid)}`,
+          ],
+        })
+        .pipe(
+          Effect.mapError((cause) => new GitHubStackResponseInvalidError({ ...identity, cause })),
+        );
       result = yield* decode(poll.stdout);
     }
     if (result.status === "pending") {

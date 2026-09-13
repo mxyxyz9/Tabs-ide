@@ -15,4 +15,3 @@ export function stableStringify(value: unknown): string {
   }
   return JSON.stringify(value) ?? "null";
 }
-

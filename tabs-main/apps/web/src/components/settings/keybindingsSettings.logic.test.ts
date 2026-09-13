@@ -152,7 +152,13 @@ describe("keybindingsSettings.logic", () => {
   it("builds known when variable options", () => {
     const options = buildWhenVariableOptions();
     expect(options).toEqual(
-      expect.arrayContaining(["terminalFocus", "terminalOpen", "shellChromeFocus", "true", "false"]),
+      expect.arrayContaining([
+        "terminalFocus",
+        "terminalOpen",
+        "shellChromeFocus",
+        "true",
+        "false",
+      ]),
     );
   });
 
@@ -172,11 +178,7 @@ describe("keybindingsSettings.logic", () => {
     ] satisfies ResolvedKeybindingsConfig);
 
     expect(options).toEqual(
-      expect.arrayContaining([
-        "terminal.toggle",
-        "chat.new",
-        "script.setup-db.run",
-      ]),
+      expect.arrayContaining(["terminal.toggle", "chat.new", "script.setup-db.run"]),
     );
   });
 

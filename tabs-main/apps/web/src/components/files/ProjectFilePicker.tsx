@@ -142,7 +142,7 @@ function OpenProjectFilePicker(props: ProjectFilePickerProps & { target: ActiveP
 
   const isPending = debouncer.state.isPending || searchResult.isFetching;
   const errorMessage = searchResult.error
-    ? (searchResult.error as Error).message ?? "Search failed"
+    ? ((searchResult.error as Error).message ?? "Search failed")
     : null;
   const emptyStateMessage = getEmptyStateMessage(query, errorMessage, isPending);
 

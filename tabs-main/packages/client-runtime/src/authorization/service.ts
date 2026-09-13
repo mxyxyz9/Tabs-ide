@@ -314,8 +314,7 @@ export const make = Effect.gen(function* () {
     authorizeBearer,
     authorizeDpop: (
       input: Parameters<RemoteEnvironmentAuthorization["Service"]["authorizeDpop"]>[0],
-    ) =>
-      authorizeDpop(input).pipe(Effect.withSpan("environment.authorization")),
+    ) => authorizeDpop(input).pipe(Effect.withSpan("environment.authorization")),
   } as unknown as RemoteEnvironmentAuthorization["Service"]);
 });
 

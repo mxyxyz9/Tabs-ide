@@ -7,7 +7,8 @@ describe("captureDesktopToComposer", () => {
     id: "capture-test-123",
     name: "Screenshot 2026-09-12.png",
     mimeType: "image/png",
-    dataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    dataUrl:
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
     sizeBytes: 120,
     width: 1920,
     height: 1080,

@@ -17,14 +17,12 @@ export type WindowOpenDecision =
   | {
       readonly action: "deny";
       readonly handledExternally?: boolean | undefined;
+      readonly externalOAuthRequired?: boolean | undefined;
     };
 
-const POPUP_ALLOWED_PROTOCOLS = new Set(["http:", "https:", "about:"]);
+const POPUP_ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 
 export function isSafePopupProtocol(rawUrl: string): boolean {
-  if (rawUrl === "about:blank" || rawUrl.startsWith("about:")) {
-    return true;
-  }
   try {
     const parsed = new URL(rawUrl);
     return POPUP_ALLOWED_PROTOCOLS.has(parsed.protocol.toLowerCase());
@@ -49,9 +47,29 @@ export function decideWindowOpenAction(
     return { action: "deny" };
   }
 
-  // Handle about:blank bootstrap popups used by OAuth SDKs
-  if (rawUrl === "about:blank" || rawUrl.startsWith("about:")) {
-    if (details.disposition === "new-window") {
+  // about:blank cannot be classified before its opener navigates it. Allowing
+  // it here would let any site bypass the provider policy and inherit the
+  // authenticated partition, so direct provider URLs are required.
+  if (rawUrl === "about:blank") {
+    return { action: "deny" };
+  }
+
+  const classification = classifyAuthNavigation({
+    url: rawUrl,
+    initiatingUrl,
+    disposition: details.disposition,
+    isWindowOpen: details.disposition === "new-window",
+  });
+
+  // Scripted popups with disposition "new-window"
+  if (details.disposition === "new-window") {
+    // If the provider actively prohibits embedded user agents (e.g. Google OAuth 2.0 authorization),
+    // we cannot safely keep it in an embedded popup. Launch system browser.
+    if (classification.kind === "externalOAuthRequired") {
+      return { action: "deny", externalOAuthRequired: true };
+    }
+
+    if (classification.kind === "embeddedPopupCandidate") {
       return {
         action: "allow",
         overrideBrowserWindowOptions: {
@@ -71,44 +89,10 @@ export function decideWindowOpenAction(
         },
       };
     }
+
+    // Do not give an unclassified scripted popup an opener or surprise the user
+    // by launching it externally. Explicit target=_blank links remain external.
     return { action: "deny" };
-  }
-
-  const classification = classifyAuthNavigation({
-    url: rawUrl,
-    initiatingUrl,
-    disposition: details.disposition,
-    isWindowOpen: details.disposition === "new-window",
-  });
-
-  // Scripted popups with disposition "new-window"
-  if (details.disposition === "new-window") {
-    // If the provider actively prohibits embedded user agents (e.g. Google OAuth 2.0 authorization),
-    // we cannot safely keep it in an embedded popup. Launch system browser.
-    if (classification.kind === "externalOAuthRequired") {
-      void shell?.openExternal?.(rawUrl)?.catch?.(() => {});
-      return { action: "deny", handledExternally: true };
-    }
-
-    // Allow genuine OAuth / login popups and dialogs as child windows with shared partition and opener
-    return {
-      action: "allow",
-      overrideBrowserWindowOptions: {
-        width: 800,
-        height: 700,
-        minWidth: 360,
-        minHeight: 400,
-        autoHideMenuBar: true,
-        webPreferences: {
-          partition: parentPartition,
-          contextIsolation: true,
-          sandbox: true,
-          nodeIntegration: false,
-          webSecurity: true,
-          allowRunningInsecureContent: false,
-        },
-      },
-    };
   }
 
   // Plain target=_blank links (disposition foreground-tab / background-tab) open in external browser

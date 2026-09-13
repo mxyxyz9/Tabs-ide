@@ -33,7 +33,10 @@ export interface GitleaksReportItem {
 export async function runGitleaksScan(
   cwd: string,
   auditId: string,
-): Promise<{ readonly findings: ReadonlyArray<AuditFinding>; readonly skippedReason?: string | undefined }> {
+): Promise<{
+  readonly findings: ReadonlyArray<AuditFinding>;
+  readonly skippedReason?: string | undefined;
+}> {
   const result = await executeSandboxedProcess({
     cwd,
     executable: "gitleaks",
@@ -42,7 +45,10 @@ export async function runGitleaksScan(
   });
 
   if (result.exitCode === 127 || result.stderr.includes("not found")) {
-    return { findings: [], skippedReason: "Gitleaks not installed on PATH — skipping secret scan." };
+    return {
+      findings: [],
+      skippedReason: "Gitleaks not installed on PATH — skipping secret scan.",
+    };
   }
 
   const rawJson = result.stdout.trim();

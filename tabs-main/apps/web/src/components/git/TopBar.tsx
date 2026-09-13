@@ -31,7 +31,10 @@ export function TopBar({
   const [accountOpen, setAccountOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border/50 shrink-0" style={{ backgroundColor: "var(--bg-base)" }}>
+    <div
+      className="flex items-center gap-3 px-5 py-2.5 border-b border-border/50 shrink-0"
+      style={{ backgroundColor: "var(--bg-base)" }}
+    >
       <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground/70 min-w-0">
         <FolderGit2 size={13} className="text-muted-foreground/70 shrink-0" />
         <span className="text-foreground/90 truncate">{repoName}</span>
@@ -59,14 +62,21 @@ export function TopBar({
             <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-[10px] font-mono font-semibold text-foreground/90">
               {activeAccountLogin ? activeAccountLogin[0]?.toUpperCase() : "–"}
             </span>
-            <span className="text-xs font-mono text-foreground/90">{activeAccountLogin || "signed out"}</span>
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: TONE[accentDotTone].dot }} />
+            <span className="text-xs font-mono text-foreground/90">
+              {activeAccountLogin || "signed out"}
+            </span>
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: TONE[accentDotTone].dot }}
+            />
           </button>
         )}
       >
         {activeAccountLogin ? (
           <>
-            <div className="px-3 pt-3 pb-2 text-[10px] uppercase tracking-widest text-muted-foreground/70 font-mono">Switch account</div>
+            <div className="px-3 pt-3 pb-2 text-[10px] uppercase tracking-widest text-muted-foreground/70 font-mono">
+              Switch account
+            </div>
             <div className="pb-1">
               {accounts.map((a) => (
                 <button
@@ -81,8 +91,12 @@ export function TopBar({
                   <span className="w-6 h-6 rounded-full bg-accent flex items-center justify-center text-[10px] font-mono font-semibold text-foreground/90 shrink-0">
                     {a.login[0]?.toUpperCase()}
                   </span>
-                  <span className="text-xs font-mono text-foreground/90 flex-1 truncate">{a.login}</span>
-                  {a.login === activeAccountLogin && <Check size={12} className="text-muted-foreground/70 shrink-0" />}
+                  <span className="text-xs font-mono text-foreground/90 flex-1 truncate">
+                    {a.login}
+                  </span>
+                  {a.login === activeAccountLogin && (
+                    <Check size={12} className="text-muted-foreground/70 shrink-0" />
+                  )}
                 </button>
               ))}
             </div>
@@ -100,7 +114,9 @@ export function TopBar({
           </>
         ) : (
           <div className="p-3">
-            <div className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">No GitHub account is signed in. Sign in to push, pull, or open pull requests.</div>
+            <div className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">
+              No GitHub account is signed in. Sign in to push, pull, or open pull requests.
+            </div>
             <Button
               size="sm"
               className="w-full justify-center"
@@ -121,7 +137,9 @@ export function TopBar({
         onClick={onToggleTerminal}
         title={terminalOpen ? "Hide terminal" : "Open terminal"}
         className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-mono transition-all cursor-pointer ${
-          terminalOpen ? "bg-accent border border-border text-foreground" : "bg-muted/50 hover:bg-muted border border-border text-muted-foreground hover:text-foreground"
+          terminalOpen
+            ? "bg-accent border border-border text-foreground"
+            : "bg-muted/50 hover:bg-muted border border-border text-muted-foreground hover:text-foreground"
         }`}
       >
         <Terminal size={12} />

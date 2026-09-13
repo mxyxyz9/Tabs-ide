@@ -73,4 +73,3 @@ export function parseAllowedOAuthScope<Scope extends string>(input: {
   }
   return scopes;
 }
-

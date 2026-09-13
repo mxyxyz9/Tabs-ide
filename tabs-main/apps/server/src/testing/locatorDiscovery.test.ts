@@ -168,7 +168,8 @@ describe("DOM locator coverage", () => {
       projectId: "p",
       coverage: "actions-only",
       maxElements: 50,
-      snapshot: '- button "\uE001 Save"\n- button "\uF015 Home \uE002"\n- button "\u{F0000} Настройки \u{100000}"',
+      snapshot:
+        '- button "\uE001 Save"\n- button "\uF015 Home \uE002"\n- button "\u{F0000} Настройки \u{100000}"',
     });
 
     expect(parsed.candidates).toHaveLength(3);

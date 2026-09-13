@@ -34,6 +34,8 @@ import {
 } from "./browserDiagnostics";
 
 export const defaultPermissionMediator = new PermissionMediator();
+const EXTERNAL_OAUTH_REQUIRED_MESSAGE =
+  "This provider does not permit sign-in inside embedded browsers. Open the page in your system browser, but note that its login session cannot be transferred automatically back into this Tabs browser profile.";
 
 import {
   app,
@@ -1674,7 +1676,11 @@ export class BrowserHostManager {
       }
       if (classification.kind === "externalOAuthRequired") {
         event.preventDefault();
-        void shell.openExternal(url).catch(() => undefined);
+        // Preserve the blocked destination so the explicit "Open In Browser"
+        // action launches the authorization page rather than the previous URL.
+        session.currentUrl = url;
+        session.lastError = EXTERNAL_OAUTH_REQUIRED_MESSAGE;
+        this.emitState(session);
         return;
       }
     });
@@ -1823,16 +1829,28 @@ export class BrowserHostManager {
     });
     contents.setWindowOpenHandler((details) => {
       const decision = decideWindowOpenAction(details, session.partition, contents.getURL());
+      if (decision.action === "deny" && decision.externalOAuthRequired) {
+        session.currentUrl = details.url;
+        session.lastError = EXTERNAL_OAUTH_REQUIRED_MESSAGE;
+        this.emitState(session);
+      }
       this.diagnostics.record({
         profileId: session.partition,
         stage: "popup_opened",
-        navigationType: decision.action === "allow" ? "new_window" : "external_browser",
+        navigationType:
+          decision.action === "allow"
+            ? "new_window"
+            : decision.handledExternally
+              ? "external_browser"
+              : "new_window",
         rawUrl: details.url,
         outcome: decision.action === "allow" ? "in_progress" : "completed",
         summary:
           decision.action === "allow"
             ? "Scripted popup allowed with shared partition"
-            : "Routed to external browser",
+            : decision.handledExternally
+              ? "Routed to external browser"
+              : "Popup blocked by browser security policy",
       });
       if (decision.action === "allow") {
         return {

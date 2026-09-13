@@ -203,7 +203,9 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
                   Click to select a JSON file or drag and drop here
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Accepts standard VS Code <code className="font-mono text-primary">*-color-theme.json</code> or Tabs custom theme files (max 256 KB)
+                  Accepts standard VS Code{" "}
+                  <code className="font-mono text-primary">*-color-theme.json</code> or Tabs custom
+                  theme files (max 256 KB)
                 </p>
               </div>
 
@@ -247,7 +249,9 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
                         </div>
                       </div>
                       <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                        {lowContrastCount === 0 ? "Contrast Compliant" : `${lowContrastCount} low-contrast notices`}
+                        {lowContrastCount === 0
+                          ? "Contrast Compliant"
+                          : `${lowContrastCount} low-contrast notices`}
                       </span>
                     </div>
 
@@ -296,7 +300,8 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
           ) : (
             <div className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                This JSON includes the complete palette configuration, token overrides, and font preferences for <strong className="text-foreground">{currentName}</strong>.
+                This JSON includes the complete palette configuration, token overrides, and font
+                preferences for <strong className="text-foreground">{currentName}</strong>.
               </p>
               <div className="relative">
                 <textarea
@@ -329,21 +334,15 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
             </Button>
           ) : (
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyJson}
-                className="gap-1.5"
-              >
-                {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+              <Button variant="outline" size="sm" onClick={handleCopyJson} className="gap-1.5">
+                {copied ? (
+                  <Check className="size-3.5 text-emerald-500" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
                 <span>{copied ? "Copied!" : "Copy JSON"}</span>
               </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleDownloadJson}
-                className="gap-1.5"
-              >
+              <Button variant="default" size="sm" onClick={handleDownloadJson} className="gap-1.5">
                 <Download className="size-3.5" />
                 <span>Download .json</span>
               </Button>

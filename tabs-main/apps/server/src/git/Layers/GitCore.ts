@@ -1858,7 +1858,10 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         "--format=%(refname:short)|%(objectname:short)|%(contents:subject)",
       ]).pipe(
         Effect.map((stdout) => {
-          const rawLines = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+          const rawLines = stdout
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean);
           const tags = rawLines
             .map((line) => {
               const parts = line.split("|");
@@ -1872,7 +1875,6 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
           return { tags };
         }),
       );
-
 
     const prepareCommitContext: GitCoreShape["prepareCommitContext"] = (cwd, filePaths) =>
       Effect.gen(function* () {
@@ -2051,7 +2053,8 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
       }).pipe(
         Effect.tapError((error) =>
           Effect.sync(() => {
-            const detail = (error as { detail?: string })?.detail ?? error?.message ?? String(error);
+            const detail =
+              (error as { detail?: string })?.detail ?? error?.message ?? String(error);
             const lower = detail.toLowerCase();
             if (
               lower.includes("permission to") ||
@@ -2323,19 +2326,32 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
             : [];
 
         const branches = [...localBranches, ...remoteBranches];
-        const primaryRemoteName = remoteNames.includes("origin") ? "origin" : (remoteNames[0] ?? null);
+        const primaryRemoteName = remoteNames.includes("origin")
+          ? "origin"
+          : (remoteNames[0] ?? null);
         const hasOriginRemote = remoteNames.length > 0;
         let pushAccess: GitPushAccess = getCachedPushAccess(input.cwd) ?? "unknown";
 
         if (hasOriginRemote && primaryRemoteName && pushAccess === "unknown") {
-          const remoteUrlRes = yield* executeGit("GitCore.getRemoteUrl", input.cwd, ["remote", "get-url", primaryRemoteName], {
-            allowNonZeroExit: true,
-          });
+          const remoteUrlRes = yield* executeGit(
+            "GitCore.getRemoteUrl",
+            input.cwd,
+            ["remote", "get-url", primaryRemoteName],
+            {
+              allowNonZeroExit: true,
+            },
+          );
           const remoteUrl = remoteUrlRes.code === 0 ? remoteUrlRes.stdout.trim() : null;
           pushAccess = yield* Effect.promise(() => resolvePushAccess(input.cwd, remoteUrl));
         }
 
-        return { branches, isRepo: true, hasOriginRemote, pushAccess, remoteName: primaryRemoteName };
+        return {
+          branches,
+          isRepo: true,
+          hasOriginRemote,
+          pushAccess,
+          remoteName: primaryRemoteName,
+        };
       });
 
     const watchedBranchStatuses: GitCoreShape["watchedBranchStatuses"] = (input) =>
@@ -2366,14 +2382,22 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
           return true;
         });
 
-        const isFullScanRequested = input.maxCandidates === 0 || (input.maxCandidates !== undefined && input.maxCandidates < 0);
-        const maxCandidates = isFullScanRequested ? allCandidates.length : (input.maxCandidates ?? 30);
+        const isFullScanRequested =
+          input.maxCandidates === 0 ||
+          (input.maxCandidates !== undefined && input.maxCandidates < 0);
+        const maxCandidates = isFullScanRequested
+          ? allCandidates.length
+          : (input.maxCandidates ?? 30);
         const defaultBranchCandidate = allCandidates.find(
-          (b) => b.isDefault || b.name === "main" || b.name === "master" || b.name === "origin/main",
+          (b) =>
+            b.isDefault || b.name === "main" || b.name === "master" || b.name === "origin/main",
         );
 
         let boundedCandidates = allCandidates.slice(0, maxCandidates);
-        if (defaultBranchCandidate && !boundedCandidates.some((b) => b.name === defaultBranchCandidate.name)) {
+        if (
+          defaultBranchCandidate &&
+          !boundedCandidates.some((b) => b.name === defaultBranchCandidate.name)
+        ) {
           boundedCandidates = [defaultBranchCandidate, ...boundedCandidates];
         }
 
@@ -2580,7 +2604,8 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
             operation: "GitCore.createFork",
             command: `gh repo fork --remote --remote-name ${remoteName}`,
             cwd: input.cwd,
-            detail: stderr.length > 0 ? stderr : `gh repo fork failed with exit code ${ghResult.code}`,
+            detail:
+              stderr.length > 0 ? stderr : `gh repo fork failed with exit code ${ghResult.code}`,
           });
         }
       });
@@ -2731,7 +2756,9 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
             ),
           catch: () => ({ code: 1, stdout: "[]", stderr: "", signal: null, timedOut: false }),
         }).pipe(
-          Effect.catch(() => Effect.succeed({ code: 1, stdout: "[]", stderr: "", signal: null, timedOut: false })),
+          Effect.catch(() =>
+            Effect.succeed({ code: 1, stdout: "[]", stderr: "", signal: null, timedOut: false }),
+          ),
         );
 
         if (ghResult.code !== 0) {
@@ -2740,7 +2767,8 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
             operation: "GitCore.listWorkflowRuns",
             command: "gh run list",
             cwd: input.cwd,
-            detail: stderr.length > 0 ? stderr : `gh run list failed with exit code ${ghResult.code}`,
+            detail:
+              stderr.length > 0 ? stderr : `gh run list failed with exit code ${ghResult.code}`,
           });
         }
 
@@ -2754,9 +2782,7 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
             return Array.isArray(parsed) ? parsed : [];
           },
           catch: () => [] as Array<GitWorkflowRun>,
-        }).pipe(
-          Effect.catch(() => Effect.succeed([] as Array<GitWorkflowRun>)),
-        );
+        }).pipe(Effect.catch(() => Effect.succeed([] as Array<GitWorkflowRun>)));
 
         return { hasWorkflows: true, runs };
       });
@@ -2777,7 +2803,6 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
       createTag,
       listTags,
       watchedBranchStatuses,
-
 
       saveStash,
       listStashes,

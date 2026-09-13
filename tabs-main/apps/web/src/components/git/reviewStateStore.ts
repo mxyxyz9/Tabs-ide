@@ -1,4 +1,8 @@
-import type { GitGenerateReviewInput, GitGenerateReviewResult, ReviewProgressEvent } from "@tabs/contracts";
+import type {
+  GitGenerateReviewInput,
+  GitGenerateReviewResult,
+  ReviewProgressEvent,
+} from "@tabs/contracts";
 import { useEffect, useState } from "react";
 import { toastManager } from "../ui/toast";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
@@ -22,7 +26,16 @@ function notify() {
 }
 
 export function getActiveReviewState(cwd: string): ActiveReviewState {
-  return store[cwd] ?? { status: "idle", result: null, error: null, isIncremental: false, latestProgress: null, progressLogs: [] };
+  return (
+    store[cwd] ?? {
+      status: "idle",
+      result: null,
+      error: null,
+      isIncremental: false,
+      latestProgress: null,
+      progressLogs: [],
+    }
+  );
 }
 
 export function getUnreadReviewCount(cwd: string): number | null {

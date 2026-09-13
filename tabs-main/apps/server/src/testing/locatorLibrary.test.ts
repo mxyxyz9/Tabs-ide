@@ -10,9 +10,7 @@ import { LocatorLibraryStore } from "./locatorLibrary";
 const roots: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(
-    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-  );
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
 async function stores() {
@@ -41,10 +39,7 @@ describe("LocatorLibraryStore", () => {
         padding: 4,
         nextSequence: 42,
       });
-      expect(library.allocateCaseIds("project-a", 2)).toEqual([
-        "QA-0042",
-        "QA-0043",
-      ]);
+      expect(library.allocateCaseIds("project-a", 2)).toEqual(["QA-0042", "QA-0043"]);
       expect(library.caseIdPolicy("project-a").nextSequence).toBe(44);
       expect(library.caseIdPolicy("project-b").example).toBe("TC-00001");
     } finally {
@@ -72,8 +67,7 @@ describe("LocatorLibraryStore", () => {
         }),
       ).toThrow(/disabled/);
     } finally {
-      if (previous === undefined)
-        delete process.env.TABS_TESTING_LOCATOR_FIRST_ENABLED;
+      if (previous === undefined) delete process.env.TABS_TESTING_LOCATOR_FIRST_ENABLED;
       else process.env.TABS_TESTING_LOCATOR_FIRST_ENABLED = previous;
       library.close();
       graph.close();
@@ -86,8 +80,7 @@ describe("LocatorLibraryStore", () => {
       library.saveCapturedPage({
         projectId: "project-a",
         sessionId: null,
-        rawUrl:
-          "https://example.test/account/sk_live_1234567890abcdefghijklmnop?token=raw",
+        rawUrl: "https://example.test/account/sk_live_1234567890abcdefghijklmnop?token=raw",
         environmentLabel: "uat",
         fingerprint: "page-a",
         captureSource: "manual",
@@ -148,12 +141,8 @@ describe("LocatorLibraryStore", () => {
 
       const captured = library.library("project-a");
       expect(captured.pages).toHaveLength(2);
-      const landing = captured.pages.find((page) =>
-        page.urlPattern.includes("/landing"),
-      )!;
-      const login = captured.pages.find((page) =>
-        page.urlPattern.includes("/login"),
-      )!;
+      const landing = captured.pages.find((page) => page.urlPattern.includes("/landing"))!;
+      const login = captured.pages.find((page) => page.urlPattern.includes("/login"))!;
       expect(landing.id).not.toBe(login.id);
       expect(landing.entries[0]?.id).not.toBe(login.entries[0]?.id);
 
@@ -164,13 +153,11 @@ describe("LocatorLibraryStore", () => {
       });
       const selected = library.library("project-a");
       expect(
-        selected.pages.find((page) => page.id === landing.id)?.entries[0]
-          ?.lifecycleStatus,
+        selected.pages.find((page) => page.id === landing.id)?.entries[0]?.lifecycleStatus,
       ).toBe("accepted");
-      expect(
-        selected.pages.find((page) => page.id === login.id)?.entries[0]
-          ?.lifecycleStatus,
-      ).toBe("draft");
+      expect(selected.pages.find((page) => page.id === login.id)?.entries[0]?.lifecycleStatus).toBe(
+        "draft",
+      );
     } finally {
       library.close();
       graph.close();
@@ -202,12 +189,10 @@ describe("LocatorLibraryStore", () => {
       });
 
       expect(library.markManagedOnly("project-a", new Set())).toBe(1);
-      expect(
-        library.library("project-a").pages[0]?.entries[0]?.syncStatus,
-      ).toBe("managed-only");
-      expect(
-        library.disconnectSources("project-a").pages[0]?.entries[0]?.syncStatus,
-      ).toBe("managed-only");
+      expect(library.library("project-a").pages[0]?.entries[0]?.syncStatus).toBe("managed-only");
+      expect(library.disconnectSources("project-a").pages[0]?.entries[0]?.syncStatus).toBe(
+        "managed-only",
+      );
     } finally {
       library.close();
       graph.close();
@@ -262,12 +247,10 @@ describe("LocatorLibraryStore", () => {
       );
       expect(library.caseLocatorIds("project-a", testCase.id)).toHaveLength(2);
       library.replaceCaseLocators("project-a", testCase.id, [entries[1]!.id]);
-      expect(library.caseLocatorIds("project-a", testCase.id)).toEqual([
-        entries[1]!.id,
-      ]);
-      expect(() =>
-        library.replaceCaseLocators("project-b", testCase.id, [entries[0]!.id]),
-      ).toThrow(/unavailable in this project/);
+      expect(library.caseLocatorIds("project-a", testCase.id)).toEqual([entries[1]!.id]);
+      expect(() => library.replaceCaseLocators("project-b", testCase.id, [entries[0]!.id])).toThrow(
+        /unavailable in this project/,
+      );
     } finally {
       library.close();
       graph.close();
@@ -372,9 +355,7 @@ describe("LocatorLibraryStore", () => {
       expect(page?.pageObject?.className).toBe("LandingPage");
       expect(page?.pageObject?.fileName).toBe("landing.page.ts");
 
-      const signIn = page?.entries.find(
-        (entry) => entry.locatorKey === "sign-in",
-      );
+      const signIn = page?.entries.find((entry) => entry.locatorKey === "sign-in");
       expect(signIn).toBeDefined();
       const selected = library.setPageSelection({
         projectId: "project-a",
@@ -382,9 +363,7 @@ describe("LocatorLibraryStore", () => {
         entryIds: [signIn!.id],
       });
       expect(selected.pages[0]?.pageObject?.code).toContain("signIn");
-      expect(selected.pages[0]?.pageObject?.code).not.toContain(
-        "createAccount",
-      );
+      expect(selected.pages[0]?.pageObject?.code).not.toContain("createAccount");
 
       const renamed = library.updatePage({
         projectId: "project-a",
@@ -392,9 +371,7 @@ describe("LocatorLibraryStore", () => {
         name: "Authentication",
       });
       expect(renamed.pages[0]?.name).toBe("Authentication");
-      expect(renamed.pages[0]?.pageObject?.className).toBe(
-        "AuthenticationPage",
-      );
+      expect(renamed.pages[0]?.pageObject?.className).toBe("AuthenticationPage");
       expect(renamed.pages[0]?.pageObject?.versionNumber).toBeGreaterThan(
         selected.pages[0]?.pageObject?.versionNumber ?? 0,
       );
@@ -444,12 +421,10 @@ describe("LocatorLibraryStore", () => {
       });
       expect(result.pages).toHaveLength(1);
       expect(result.pages[0]?.urlPattern).toBe("https://example.test/settings");
-      expect(result.pages[0]?.entries.map((entry) => entry.locatorKey)).toEqual(
-        ["save-settings"],
+      expect(result.pages[0]?.entries.map((entry) => entry.locatorKey)).toEqual(["save-settings"]);
+      expect(() => library.deletePage({ projectId: "project-a", pageId: loginPage!.id })).toThrow(
+        /not found/,
       );
-      expect(() =>
-        library.deletePage({ projectId: "project-a", pageId: loginPage!.id }),
-      ).toThrow(/not found/);
     } finally {
       library.close();
       graph.close();
@@ -497,9 +472,7 @@ describe("LocatorLibraryStore", () => {
         versionNumber: generated.versionNumber + 1,
         code: editedCode,
       });
-      expect(library.library("project-a").pages[0]?.pageObject?.origin).toBe(
-        "manual",
-      );
+      expect(library.library("project-a").pages[0]?.pageObject?.origin).toBe("manual");
       expect(() =>
         library.updatePageObjectCode({
           projectId: "project-a",
@@ -513,10 +486,7 @@ describe("LocatorLibraryStore", () => {
           projectId: "project-a",
           pageId: page.id,
           expectedSourceHash: edited.pages[0]!.pageObject!.sourceHash,
-          code: editedCode.replace(
-            "Help",
-            "sk_live_1234567890abcdefghijklmnop",
-          ),
+          code: editedCode.replace("Help", "sk_live_1234567890abcdefghijklmnop"),
         }),
       ).toThrow(/credentials/);
 
@@ -526,9 +496,7 @@ describe("LocatorLibraryStore", () => {
         entryIds: [],
       });
       expect(regenerated.pages[0]?.pageObject?.origin).toBe("generated");
-      expect(regenerated.pages[0]?.pageObject?.code).not.toContain(
-        "readonly help",
-      );
+      expect(regenerated.pages[0]?.pageObject?.code).not.toContain("readonly help");
     } finally {
       library.close();
       graph.close();
@@ -567,8 +535,7 @@ describe("LocatorLibraryStore", () => {
           },
         ],
       });
-      const code =
-        library.library("project-a").pages[0]?.pageObject?.code ?? "";
+      const code = library.library("project-a").pages[0]?.pageObject?.code ?? "";
       expect(code).toContain("saveButton");
       expect(code).not.toContain("PII_EMAIL");
       expect(code).not.toContain("emailLink");
@@ -626,17 +593,13 @@ describe("LocatorLibraryStore", () => {
         entryId: entry.id,
         decision: "archive",
       });
-      expect(
-        library.library("project-a").pages[0]!.entries[0]!.lifecycleStatus,
-      ).toBe("archived");
+      expect(library.library("project-a").pages[0]!.entries[0]!.lifecycleStatus).toBe("archived");
       library.reviewEntry({
         projectId: "project-a",
         entryId: entry.id,
         decision: "restore",
       });
-      expect(
-        library.library("project-a").pages[0]!.entries[0]!.lifecycleStatus,
-      ).toBe("draft");
+      expect(library.library("project-a").pages[0]!.entries[0]!.lifecycleStatus).toBe("draft");
 
       expect(() =>
         library.reviewEntry({

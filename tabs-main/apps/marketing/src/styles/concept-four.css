@@ -93,7 +93,9 @@
   font-size: 12px;
   border: 1px solid #c6d5cf50;
   border-radius: 6px;
-  transition: background 180ms, color 180ms;
+  transition:
+    background 180ms,
+    color 180ms;
 }
 
 .current .current-nav-download:hover {
@@ -112,7 +114,10 @@
   display: inline-flex;
   gap: 10px;
   align-items: center;
-  font: 500 11px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    500 11px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.045em;
 }
 
@@ -168,7 +173,9 @@
   padding: 14px 18px;
   gap: 33px;
   font-size: 12px;
-  transition: background 180ms, transform 180ms;
+  transition:
+    background 180ms,
+    transform 180ms;
 }
 
 .current .cta:hover {
@@ -179,7 +186,10 @@
 
 .current .download-meta {
   margin-top: 12px;
-  font: 10px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    10px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   color: var(--current-muted);
   opacity: 1;
 }
@@ -661,7 +671,10 @@
   border-top: 1px solid var(--current-line);
   border-bottom: 0;
   color: var(--current-muted);
-  font: 10px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    10px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.04em;
 }
 
@@ -671,7 +684,10 @@
 
 .current .tour-topline .eyebrow {
   color: var(--current-muted);
-  font: 10px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    10px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.04em;
 }
 
@@ -746,7 +762,10 @@
 }
 
 .current .tour-step-badge {
-  font: 9px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    9px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.035em;
   color: var(--current-muted);
   opacity: 1;
@@ -776,7 +795,10 @@
 }
 
 .current .tour-hint {
-  font: 8px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    8px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.03em;
   color: var(--current-muted);
   opacity: 1;
@@ -812,7 +834,10 @@
 }
 
 .current .diagnostics-kicker .eyebrow {
-  font: 9px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    9px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   color: var(--current-muted);
   letter-spacing: 0.04em;
 }
@@ -854,7 +879,10 @@
 
 .current .diagnostics-facts > div > b {
   color: var(--current-blue);
-  font: 10px "DM Sans", Arial, sans-serif;
+  font:
+    10px "DM Sans",
+    Arial,
+    sans-serif;
 }
 
 .current .diagnostics-facts strong {
@@ -876,7 +904,10 @@
 }
 
 .current .diag-meta-tag {
-  font: 8px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    8px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.02em;
   border-color: var(--current-line);
   color: var(--current-muted);
@@ -917,7 +948,10 @@
 }
 
 .current .release-log .eyebrow {
-  font: 10px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    10px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   color: var(--current-muted);
   letter-spacing: 0.03em;
 }
@@ -1045,13 +1079,19 @@
 }
 
 .current .hardware-card h3 {
-  font: 600 14px/1.2 "DM Sans", Arial, sans-serif;
+  font:
+    600 14px/1.2 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: -0.025em;
   color: inherit;
 }
 
 .current .hardware-name span {
-  font: 8px/1.4 "DM Sans", Arial, sans-serif;
+  font:
+    8px/1.4 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.02em;
   opacity: 0.75;
 }
@@ -1062,7 +1102,10 @@
   padding: 0;
   border: 0;
   background: transparent;
-  font: 9px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    9px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   opacity: 0.6;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1085,7 +1128,10 @@
   border-radius: 0;
   background: transparent;
   color: var(--current-ink);
-  font: 600 10px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    600 10px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.025em;
   box-shadow: none;
   opacity: 1;
@@ -1113,7 +1159,10 @@
 }
 
 .current .signature-nav .eyebrow {
-  font: 9px/1.5 "DM Sans", Arial, sans-serif;
+  font:
+    9px/1.5 "DM Sans",
+    Arial,
+    sans-serif;
   letter-spacing: 0.035em;
 }
 
@@ -1163,8 +1212,12 @@
 }
 
 @keyframes current-travel {
-  from { stroke-dashoffset: 1536; }
-  to { stroke-dashoffset: 0; }
+  from {
+    stroke-dashoffset: 1536;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 html.motion-paused .current .current-route-pulse,
@@ -1316,7 +1369,9 @@ html.motion-paused .current .current-route-pulse,
   border-color: rgba(229, 250, 98, 0.2);
 }
 
-.current .current-wf-url::after { display: none; }
+.current .current-wf-url::after {
+  display: none;
+}
 
 .current .current-wf-index {
   display: block;
@@ -1357,7 +1412,9 @@ html.motion-paused .current .current-route-pulse,
   border: 1px solid rgba(229, 250, 98, 0.25);
   border-radius: 8px;
   background: rgba(24, 39, 49, 0.9);
-  box-shadow: 0 0 0 1px rgba(229, 250, 98, 0.06), 0 6px 22px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(229, 250, 98, 0.06),
+    0 6px 22px rgba(0, 0, 0, 0.3);
 }
 
 .current .current-wf-label {
@@ -1421,7 +1478,9 @@ html.motion-paused .current .current-route-pulse,
   border: 1px solid var(--current-line);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.03);
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .current .current-wf-domains > span:hover {
@@ -1606,7 +1665,9 @@ html.motion-paused .current .current-route-pulse,
   border-color: rgba(229, 250, 98, 0.15);
 }
 
-.current .current-wf-preset::after { display: none; }
+.current .current-wf-preset::after {
+  display: none;
+}
 
 .current .current-wf-preset .current-wf-topline {
   border-color: rgba(255, 255, 255, 0.1);
@@ -1648,7 +1709,9 @@ html.motion-paused .current .current-route-pulse,
   border: 1px solid rgba(229, 250, 98, 0.18);
   border-radius: 8px;
   background: #0a1118;
-  box-shadow: 0 0 0 1px rgba(229, 250, 98, 0.06), 0 8px 28px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(229, 250, 98, 0.06),
+    0 8px 28px rgba(0, 0, 0, 0.4);
 }
 
 .current .current-wf-console-head {
@@ -1725,38 +1788,109 @@ html.motion-paused .current .current-route-pulse,
 }
 
 @media (min-width: 1600px) {
-  .current .current-hero { padding-top: 75px; }
-  .current .current-hero h1 { font-size: 152px; }
-  .current .current-hero-intro { margin-top: 40px; }
-  .current .current-graphic { min-height: 700px; }
+  .current .current-hero {
+    padding-top: 75px;
+  }
+  .current .current-hero h1 {
+    font-size: 152px;
+  }
+  .current .current-hero-intro {
+    margin-top: 40px;
+  }
+  .current .current-graphic {
+    min-height: 700px;
+  }
 }
 
-
 @media (max-width: 1100px) {
-  .current .current-container { width: calc(100% - 72px); }
-  .current .current-hero h1 { font-size: 10.2vw; }
-  .current .current-graphic { min-height: 605px; }
-  .current .current-lanes { top: 55px; height: 510px; left: -20px; width: 126%; }
-  .current .current-project-node { width: 240px; bottom: 105px; }
-  .current .current-node-body { gap: 16px; padding: 18px; min-height: 105px; }
-  .current .current-node-body > svg { width: 40px; }
-  .current .current-node-body > span:not(.current-node-index) { font-size: 22px; }
-  .current .current-perspective-top { gap: 50px; }
-  .current .current-project-story { gap: 35px; padding: 28px; }
-  .current .current-diagram-tabs > span { gap: 10px; padding: 12px 9px; font-size: 8px; }
-  .current .current-diagram-body { padding: 24px 15px 15px; }
-  .current .current-tool-grid > div { gap: 7px; padding: 10px; }
-  .current .tour-panel-layout { grid-template-columns: 1fr; gap: 22px; }
-  .current .tour-sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 40px; }
-  .current .tour-step-badge { grid-column: 1; }
-  .current .tour-tool-title { grid-column: 1; }
-  .current .tour-tool-desc { grid-column: 1; }
-  .current .tour-feature-list { grid-column: 2; grid-row: 1 / 4; justify-content: center; margin: 0; }
-  .current .tour-sidebar-footer { margin-top: 7px; }
-  .current .diagnostics-window-showcase { gap: 40px; }
-  .current .current-close-aside { padding-right: 0; }
-  .current .hardware-grid { grid-template-columns: repeat(2, 1fr); }
-  .current .hardware-card { min-height: 170px; }
+  .current .current-container {
+    width: calc(100% - 72px);
+  }
+  .current .current-hero h1 {
+    font-size: 10.2vw;
+  }
+  .current .current-graphic {
+    min-height: 605px;
+  }
+  .current .current-lanes {
+    top: 55px;
+    height: 510px;
+    left: -20px;
+    width: 126%;
+  }
+  .current .current-project-node {
+    width: 240px;
+    bottom: 105px;
+  }
+  .current .current-node-body {
+    gap: 16px;
+    padding: 18px;
+    min-height: 105px;
+  }
+  .current .current-node-body > svg {
+    width: 40px;
+  }
+  .current .current-node-body > span:not(.current-node-index) {
+    font-size: 22px;
+  }
+  .current .current-perspective-top {
+    gap: 50px;
+  }
+  .current .current-project-story {
+    gap: 35px;
+    padding: 28px;
+  }
+  .current .current-diagram-tabs > span {
+    gap: 10px;
+    padding: 12px 9px;
+    font-size: 8px;
+  }
+  .current .current-diagram-body {
+    padding: 24px 15px 15px;
+  }
+  .current .current-tool-grid > div {
+    gap: 7px;
+    padding: 10px;
+  }
+  .current .tour-panel-layout {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .current .tour-sidebar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 40px;
+  }
+  .current .tour-step-badge {
+    grid-column: 1;
+  }
+  .current .tour-tool-title {
+    grid-column: 1;
+  }
+  .current .tour-tool-desc {
+    grid-column: 1;
+  }
+  .current .tour-feature-list {
+    grid-column: 2;
+    grid-row: 1 / 4;
+    justify-content: center;
+    margin: 0;
+  }
+  .current .tour-sidebar-footer {
+    margin-top: 7px;
+  }
+  .current .diagnostics-window-showcase {
+    gap: 40px;
+  }
+  .current .current-close-aside {
+    padding-right: 0;
+  }
+  .current .hardware-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .current .hardware-card {
+    min-height: 170px;
+  }
   .current .current-workflow-heading,
   .current .current-wf-url-intro,
   .current .current-wf-cli-layout,
@@ -1769,129 +1903,453 @@ html.motion-paused .current .current-route-pulse,
 }
 
 @media (max-width: 760px) {
-  .current .current-container { width: calc(100% - 40px); }
-  .current .current-nav { min-height: 83px; gap: 20px; }
-  .current .current-brand { font-size: 27px; }
-  .current .current-brand > svg { width: 29px; height: 29px; }
-  .current .current-nav nav { display: none; }
-  .current .current-nav-download { gap: 15px; font-size: 11px; }
-  .current .current-hero { grid-template-columns: 1fr; padding-top: 42px; }
-  .current .current-eyebrow { font-size: 10px; }
-  .current .current-hero h1 { font-size: clamp(80px, 15vw, 112px); margin-top: 28px; }
-  .current .current-hero h1 br { display: none; }
-  .current .current-hero h1 span { display: block; }
-  .current .current-hero-copy { position: relative; z-index: 2; }
-  .current .current-hero-intro { margin-top: 27px; max-width: 350px; }
-  .current .current-hero-intro > p:first-child { font-size: 17px; }
-  .current .current-hero-intro > p:nth-child(2) { font-size: 13px; }
-  .current .current-hero-intro .download-block { margin-top: 22px; }
-  .current .current-graphic { margin-top: 44px; min-height: 480px; }
-  .current .current-graphic-label { margin: 0; }
-  .current .current-lanes { width: 108%; height: 490px; left: 26%; top: -30px; }
-  .current .current-project-node { width: 230px; bottom: 95px; left: 0; }
-  .current .current-node-body { min-height: 109px; }
-  .current .current-graphic-foot { bottom: 9px; }
-  .current .current-hero-baseline { margin-top: 27px; padding-block: 18px; font-size: 9px; align-items: start; }
-  .current .current-hero-baseline > span { max-width: 195px; }
-  .current .current-hero-baseline > a { gap: 10px; white-space: nowrap; }
-  .current .current-perspective { margin-top: 14px; padding-block: 70px 60px; border-radius: 18px 18px 0 0; }
-  .current .current-perspective-top { grid-template-columns: 1fr; gap: 28px; }
-  .current .current-perspective h2, .current .current-section-intro h2 { margin-top: 18px; font-size: clamp(49px, 8vw, 64px); }
-  .current .current-perspective-top > p { max-width: 450px; justify-self: start; font-size: 13px; }
-  .current .current-project-story { margin-top: 38px; padding: 27px 20px 20px; grid-template-columns: 1fr; gap: 24px; border-radius: 10px; }
-  .current .current-project-explanation h3 { margin-top: 20px; font-size: 35px; }
-  .current .current-project-explanation > p { max-width: 340px; }
-  .current .current-project-explanation > a { margin-top: 22px; }
-  .current .current-project-diagram { padding-top: 0; }
-  .current .current-diagram-tabs > span { font-size: 8px; gap: 9px; padding: 11px 8px; }
-  .current .current-diagram-tabs > span:nth-child(3) b { display: none; }
-  .current .current-diagram-body { padding: 24px 14px 15px; }
-  .current .current-tool-grid { margin-top: 18px; }
-  .current .current-tool-grid > div { min-height: 48px; }
-  .current .current-diagram-baseline { margin-top: 22px; gap: 8px; font-size: 7px; }
-  .current .current-principles { grid-template-columns: 1fr; gap: 30px; margin-top: 38px; }
-  .current .current-principles > div { padding-top: 23px; padding-right: 45px; }
-  .current .current-principle-icon { position: absolute; right: 0; top: 24px; }
-  .current .current-principles h3 { margin-top: 11px; font-size: 28px; }
-  .current .current-principles p { max-width: 390px; }
-  .current .current-agents { padding-block: 70px 55px; }
-  .current .current-section-intro { display: block; }
-  .current .current-section-intro > p { margin-top: 24px; font-size: 13px; max-width: 430px; }
-  .current .agent-roster { margin-top: 30px; }
-  .current .agent-roster-list { gap: 8px; }
-  .current .agent-roster-item { flex-basis: 140px; min-height: 58px; padding: 11px 13px; }
-  .current .current-agents-foot { font-size: 9px; line-height: 1.5; gap: 30px; }
-  .current .current-agents-foot > span { max-width: 150px; }
-  .current .current-agents-foot > span:last-child { text-align: right; }
-  .current .tour-kicker { font-size: 8px; gap: 30px; }
-  .current .tour-kicker > span:last-child { text-align: right; max-width: 175px; }
-  .current .tour-topline { padding-block: 37px 23px; display: block; }
-  .current .tour-topline .eyebrow { font-size: 9px; }
-  .current .tour-topline h2 { font-size: clamp(44px, 8vw, 60px); margin-top: 13px; }
-  .current .tour-theme { display: inline-flex; margin-top: 22px; }
-  .current .tour-tabs { grid-template-columns: repeat(3, 1fr); gap: 4px; }
-  .current .tour-tabs button { padding: 12px 5px; font-size: 10px; gap: 6px; }
-  .current .tour-tabs button svg { width: 14px; height: 14px; }
-  .current .tour-frame { padding: 22px 16px 16px; }
-  .current .tour-sidebar { display: flex; gap: 12px; }
-  .current .tour-tool-title { font-size: 32px; }
-  .current .tour-tool-desc { max-width: 410px; }
-  .current .tour-feature-list { gap: 9px; margin-top: 3px; }
-  .current .tour-sidebar-footer { margin-top: 2px; }
-  .current .tour-window-titlebar { padding: 0 9px; height: 29px; }
-  .current .tour-traffic-lights { gap: 4px; }
-  .current .tour-traffic-lights .light { width: 6px; height: 6px; }
-  .current .tour-window-title { font-size: 6px; letter-spacing: 0; }
-  .current .tour-window-badge { font-size: 6px; padding: 2px 4px; }
-  .current .diagnostics-window-showcase { grid-template-columns: 1fr; padding-top: 55px; gap: 32px; }
-  .current .diagnostics-heading { font-size: 39px; }
-  .current .diagnostics-intro { font-size: 13px; }
-  .current .diagnostics-facts strong { font-size: 12px; }
-  .current .diagnostics-facts small { font-size: 11px; }
-  .current .current-workspace { padding-bottom: 18px; }
-  .current .current-workflow { padding-block: 55px; }
-  .current .current-wf-domains { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .current .current-wf-card { padding: 18px 14px; }
+  .current .current-container {
+    width: calc(100% - 40px);
+  }
+  .current .current-nav {
+    min-height: 83px;
+    gap: 20px;
+  }
+  .current .current-brand {
+    font-size: 27px;
+  }
+  .current .current-brand > svg {
+    width: 29px;
+    height: 29px;
+  }
+  .current .current-nav nav {
+    display: none;
+  }
+  .current .current-nav-download {
+    gap: 15px;
+    font-size: 11px;
+  }
+  .current .current-hero {
+    grid-template-columns: 1fr;
+    padding-top: 42px;
+  }
+  .current .current-eyebrow {
+    font-size: 10px;
+  }
+  .current .current-hero h1 {
+    font-size: clamp(80px, 15vw, 112px);
+    margin-top: 28px;
+  }
+  .current .current-hero h1 br {
+    display: none;
+  }
+  .current .current-hero h1 span {
+    display: block;
+  }
+  .current .current-hero-copy {
+    position: relative;
+    z-index: 2;
+  }
+  .current .current-hero-intro {
+    margin-top: 27px;
+    max-width: 350px;
+  }
+  .current .current-hero-intro > p:first-child {
+    font-size: 17px;
+  }
+  .current .current-hero-intro > p:nth-child(2) {
+    font-size: 13px;
+  }
+  .current .current-hero-intro .download-block {
+    margin-top: 22px;
+  }
+  .current .current-graphic {
+    margin-top: 44px;
+    min-height: 480px;
+  }
+  .current .current-graphic-label {
+    margin: 0;
+  }
+  .current .current-lanes {
+    width: 108%;
+    height: 490px;
+    left: 26%;
+    top: -30px;
+  }
+  .current .current-project-node {
+    width: 230px;
+    bottom: 95px;
+    left: 0;
+  }
+  .current .current-node-body {
+    min-height: 109px;
+  }
+  .current .current-graphic-foot {
+    bottom: 9px;
+  }
+  .current .current-hero-baseline {
+    margin-top: 27px;
+    padding-block: 18px;
+    font-size: 9px;
+    align-items: start;
+  }
+  .current .current-hero-baseline > span {
+    max-width: 195px;
+  }
+  .current .current-hero-baseline > a {
+    gap: 10px;
+    white-space: nowrap;
+  }
+  .current .current-perspective {
+    margin-top: 14px;
+    padding-block: 70px 60px;
+    border-radius: 18px 18px 0 0;
+  }
+  .current .current-perspective-top {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .current .current-perspective h2,
+  .current .current-section-intro h2 {
+    margin-top: 18px;
+    font-size: clamp(49px, 8vw, 64px);
+  }
+  .current .current-perspective-top > p {
+    max-width: 450px;
+    justify-self: start;
+    font-size: 13px;
+  }
+  .current .current-project-story {
+    margin-top: 38px;
+    padding: 27px 20px 20px;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    border-radius: 10px;
+  }
+  .current .current-project-explanation h3 {
+    margin-top: 20px;
+    font-size: 35px;
+  }
+  .current .current-project-explanation > p {
+    max-width: 340px;
+  }
+  .current .current-project-explanation > a {
+    margin-top: 22px;
+  }
+  .current .current-project-diagram {
+    padding-top: 0;
+  }
+  .current .current-diagram-tabs > span {
+    font-size: 8px;
+    gap: 9px;
+    padding: 11px 8px;
+  }
+  .current .current-diagram-tabs > span:nth-child(3) b {
+    display: none;
+  }
+  .current .current-diagram-body {
+    padding: 24px 14px 15px;
+  }
+  .current .current-tool-grid {
+    margin-top: 18px;
+  }
+  .current .current-tool-grid > div {
+    min-height: 48px;
+  }
+  .current .current-diagram-baseline {
+    margin-top: 22px;
+    gap: 8px;
+    font-size: 7px;
+  }
+  .current .current-principles {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    margin-top: 38px;
+  }
+  .current .current-principles > div {
+    padding-top: 23px;
+    padding-right: 45px;
+  }
+  .current .current-principle-icon {
+    position: absolute;
+    right: 0;
+    top: 24px;
+  }
+  .current .current-principles h3 {
+    margin-top: 11px;
+    font-size: 28px;
+  }
+  .current .current-principles p {
+    max-width: 390px;
+  }
+  .current .current-agents {
+    padding-block: 70px 55px;
+  }
+  .current .current-section-intro {
+    display: block;
+  }
+  .current .current-section-intro > p {
+    margin-top: 24px;
+    font-size: 13px;
+    max-width: 430px;
+  }
+  .current .agent-roster {
+    margin-top: 30px;
+  }
+  .current .agent-roster-list {
+    gap: 8px;
+  }
+  .current .agent-roster-item {
+    flex-basis: 140px;
+    min-height: 58px;
+    padding: 11px 13px;
+  }
+  .current .current-agents-foot {
+    font-size: 9px;
+    line-height: 1.5;
+    gap: 30px;
+  }
+  .current .current-agents-foot > span {
+    max-width: 150px;
+  }
+  .current .current-agents-foot > span:last-child {
+    text-align: right;
+  }
+  .current .tour-kicker {
+    font-size: 8px;
+    gap: 30px;
+  }
+  .current .tour-kicker > span:last-child {
+    text-align: right;
+    max-width: 175px;
+  }
+  .current .tour-topline {
+    padding-block: 37px 23px;
+    display: block;
+  }
+  .current .tour-topline .eyebrow {
+    font-size: 9px;
+  }
+  .current .tour-topline h2 {
+    font-size: clamp(44px, 8vw, 60px);
+    margin-top: 13px;
+  }
+  .current .tour-theme {
+    display: inline-flex;
+    margin-top: 22px;
+  }
+  .current .tour-tabs {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .current .tour-tabs button {
+    padding: 12px 5px;
+    font-size: 10px;
+    gap: 6px;
+  }
+  .current .tour-tabs button svg {
+    width: 14px;
+    height: 14px;
+  }
+  .current .tour-frame {
+    padding: 22px 16px 16px;
+  }
+  .current .tour-sidebar {
+    display: flex;
+    gap: 12px;
+  }
+  .current .tour-tool-title {
+    font-size: 32px;
+  }
+  .current .tour-tool-desc {
+    max-width: 410px;
+  }
+  .current .tour-feature-list {
+    gap: 9px;
+    margin-top: 3px;
+  }
+  .current .tour-sidebar-footer {
+    margin-top: 2px;
+  }
+  .current .tour-window-titlebar {
+    padding: 0 9px;
+    height: 29px;
+  }
+  .current .tour-traffic-lights {
+    gap: 4px;
+  }
+  .current .tour-traffic-lights .light {
+    width: 6px;
+    height: 6px;
+  }
+  .current .tour-window-title {
+    font-size: 6px;
+    letter-spacing: 0;
+  }
+  .current .tour-window-badge {
+    font-size: 6px;
+    padding: 2px 4px;
+  }
+  .current .diagnostics-window-showcase {
+    grid-template-columns: 1fr;
+    padding-top: 55px;
+    gap: 32px;
+  }
+  .current .diagnostics-heading {
+    font-size: 39px;
+  }
+  .current .diagnostics-intro {
+    font-size: 13px;
+  }
+  .current .diagnostics-facts strong {
+    font-size: 12px;
+  }
+  .current .diagnostics-facts small {
+    font-size: 11px;
+  }
+  .current .current-workspace {
+    padding-bottom: 18px;
+  }
+  .current .current-workflow {
+    padding-block: 55px;
+  }
+  .current .current-wf-domains {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .current .current-wf-card {
+    padding: 18px 14px;
+  }
   .current .current-wf-url-builder,
   .current .current-wf-cmd-builder,
-  .current .current-wf-console { padding: 12px; }
+  .current .current-wf-console {
+    padding: 12px;
+  }
   .current .current-wf-stack > div {
     grid-template-columns: 16px 52px 1fr 38px;
     font-size: 8px;
     padding: 7px 8px;
     gap: 6px;
   }
-  .current .current-releases { padding-block: 36px 46px; margin-top: 28px; grid-template-columns: 1fr; gap: 26px; }
-  .current .current-release-mark { width: 62px; height: 62px; border-radius: 13px; }
-  .current .current-release-mark svg { width: 27px; height: 27px; }
-  .current .release-log .section-heading { display: block; }
-  .current .release-log h2 { margin-top: 14px; font-size: 37px; }
-  .current .release-log .section-heading > a { margin-top: 22px; }
-  .current .release-log > .small { font-size: 10px; }
-  .current .current-end { padding-top: 57px; border-radius: 18px 18px 0 0; }
-  .current .current-close-heading { display: block; margin-bottom: 33px; }
-  .current .current-close-heading h2 { font-size: clamp(65px, 12vw, 88px); margin-top: 20px; }
-  .current .current-close-aside { display: grid; grid-template-columns: 55px 1fr; gap: 15px 25px; margin-top: 31px; align-items: center; }
-  .current .current-close-aside > svg { width: 50px; height: 50px; margin: 0; }
-  .current .current-close-aside > p { font-size: 13px; }
-  .current .current-close-aside > a { grid-column: 2; margin-top: 0; font-size: 10px; }
-  .current .hardware-grid { gap: 9px; }
-  .current .hardware-card { min-width: 0; min-height: 158px; padding: 17px 12px 13px; gap: 22px; }
-  .current .hardware-card-header { align-items: start; gap: 6px; }
-  .current .hardware-card h3 { font-size: 11px; line-height: 1.4; }
-  .current .hardware-icon { width: 20px; height: 22px; }
-  .current .hardware-icon img { width: 17px; height: 17px; }
-  .current .hardware-name span { font-size: 6px; }
-  .current .hardware-arch { font-size: 7px; }
-  .current .hardware-card .platform-btn { font-size: 8px; }
-  .current .footer-signature { margin-top: 39px; }
-  .current .signature-nav { grid-template-columns: repeat(3, 1fr); gap: 24px 14px; padding-top: 21px; }
-  .current .signature-nav > div { grid-column: 1 / -1; }
-  .current .signature-nav > a:last-child { right: 0; top: 24px; }
-  .current .signature-nav a { font-size: 10px; }
-  .current .signature-stage { padding-top: 10px; }
-  .current .signature-type { font-size: 19vw; padding-bottom: 23px; }
-  .current .signature-baseline { font-size: 6px; gap: 15px; padding-top: 16px; padding-bottom: 95px; }
+  .current .current-releases {
+    padding-block: 36px 46px;
+    margin-top: 28px;
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+  .current .current-release-mark {
+    width: 62px;
+    height: 62px;
+    border-radius: 13px;
+  }
+  .current .current-release-mark svg {
+    width: 27px;
+    height: 27px;
+  }
+  .current .release-log .section-heading {
+    display: block;
+  }
+  .current .release-log h2 {
+    margin-top: 14px;
+    font-size: 37px;
+  }
+  .current .release-log .section-heading > a {
+    margin-top: 22px;
+  }
+  .current .release-log > .small {
+    font-size: 10px;
+  }
+  .current .current-end {
+    padding-top: 57px;
+    border-radius: 18px 18px 0 0;
+  }
+  .current .current-close-heading {
+    display: block;
+    margin-bottom: 33px;
+  }
+  .current .current-close-heading h2 {
+    font-size: clamp(65px, 12vw, 88px);
+    margin-top: 20px;
+  }
+  .current .current-close-aside {
+    display: grid;
+    grid-template-columns: 55px 1fr;
+    gap: 15px 25px;
+    margin-top: 31px;
+    align-items: center;
+  }
+  .current .current-close-aside > svg {
+    width: 50px;
+    height: 50px;
+    margin: 0;
+  }
+  .current .current-close-aside > p {
+    font-size: 13px;
+  }
+  .current .current-close-aside > a {
+    grid-column: 2;
+    margin-top: 0;
+    font-size: 10px;
+  }
+  .current .hardware-grid {
+    gap: 9px;
+  }
+  .current .hardware-card {
+    min-width: 0;
+    min-height: 158px;
+    padding: 17px 12px 13px;
+    gap: 22px;
+  }
+  .current .hardware-card-header {
+    align-items: start;
+    gap: 6px;
+  }
+  .current .hardware-card h3 {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .current .hardware-icon {
+    width: 20px;
+    height: 22px;
+  }
+  .current .hardware-icon img {
+    width: 17px;
+    height: 17px;
+  }
+  .current .hardware-name span {
+    font-size: 6px;
+  }
+  .current .hardware-arch {
+    font-size: 7px;
+  }
+  .current .hardware-card .platform-btn {
+    font-size: 8px;
+  }
+  .current .footer-signature {
+    margin-top: 39px;
+  }
+  .current .signature-nav {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px 14px;
+    padding-top: 21px;
+  }
+  .current .signature-nav > div {
+    grid-column: 1 / -1;
+  }
+  .current .signature-nav > a:last-child {
+    right: 0;
+    top: 24px;
+  }
+  .current .signature-nav a {
+    font-size: 10px;
+  }
+  .current .signature-stage {
+    padding-top: 10px;
+  }
+  .current .signature-type {
+    font-size: 19vw;
+    padding-bottom: 23px;
+  }
+  .current .signature-baseline {
+    font-size: 6px;
+    gap: 15px;
+    padding-top: 16px;
+    padding-bottom: 95px;
+  }
   .current .current-dl-grid,
   .current .current-dl-specs {
     grid-template-columns: 1fr;
@@ -1973,7 +2431,9 @@ html.motion-paused .current .current-route-pulse,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .current .current-dl-card:hover {
@@ -2173,7 +2633,9 @@ html.motion-paused .current .current-route-pulse,
   border-radius: 4px;
   text-decoration: none;
   border: 1px solid transparent;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .current .current-sidebar-tag-box {
@@ -2480,7 +2942,14 @@ html.motion-paused .current .current-route-pulse,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .current .current-route-pulse { animation: none; display: none; }
-  .current :is(.cta, .hardware-card, .current-nav-download) { transition: none; }
-  .current .cta:hover { transform: none; }
+  .current .current-route-pulse {
+    animation: none;
+    display: none;
+  }
+  .current :is(.cta, .hardware-card, .current-nav-download) {
+    transition: none;
+  }
+  .current .cta:hover {
+    transform: none;
+  }
 }

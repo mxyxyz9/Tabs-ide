@@ -155,7 +155,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
               Tabs Studio — Workspace
             </span>
           </div>
-          <div className="flex items-center gap-3 text-[10px]" style={{ color: titleFg, opacity: 0.7 }}>
+          <div
+            className="flex items-center gap-3 text-[10px]"
+            style={{ color: titleFg, opacity: 0.7 }}
+          >
             <span>File</span>
             <span>Edit</span>
             <span>View</span>
@@ -183,9 +186,15 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                   <Layers className="size-4" />
                 </div>
                 <Search className="size-4 opacity-70 hover:opacity-100" style={{ color: sideFg }} />
-                <GitBranch className="size-4 opacity-70 hover:opacity-100" style={{ color: sideFg }} />
+                <GitBranch
+                  className="size-4 opacity-70 hover:opacity-100"
+                  style={{ color: sideFg }}
+                />
                 <div className="mt-auto">
-                  <Settings className="size-4 opacity-70 hover:opacity-100" style={{ color: sideFg }} />
+                  <Settings
+                    className="size-4 opacity-70 hover:opacity-100"
+                    style={{ color: sideFg }}
+                  />
                 </div>
               </div>
 
@@ -207,7 +216,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                 </div>
 
                 <div className="flex-1 space-y-0.5 p-1.5 text-[11px]" style={{ color: sideFg }}>
-                  <div className="flex items-center gap-1 rounded-md px-1.5 py-1 font-semibold" style={{ color: sideFg }}>
+                  <div
+                    className="flex items-center gap-1 rounded-md px-1.5 py-1 font-semibold"
+                    style={{ color: sideFg }}
+                  >
                     <ChevronDown className="size-3" style={{ color: sideFg, opacity: 0.7 }} />
                     <Folder className="size-3 text-sky-400" />
                     <span style={{ color: sideFg }}>src</span>
@@ -218,17 +230,30 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
                       <FileCode className="size-3 text-sky-400" />
-                      <span className="truncate font-medium" style={{ color: sideFg }}>App.tsx</span>
+                      <span className="truncate font-medium" style={{ color: sideFg }}>
+                        App.tsx
+                      </span>
                     </div>
-                    <span className="size-1.5 rounded-full shrink-0" style={{ backgroundColor: gitModified }} />
+                    <span
+                      className="size-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: gitModified }}
+                    />
                   </div>
-                  <div className="flex items-center justify-between rounded-md px-2.5 py-1 hover:bg-white/5" style={{ color: sideFg }}>
+                  <div
+                    className="flex items-center justify-between rounded-md px-2.5 py-1 hover:bg-white/5"
+                    style={{ color: sideFg }}
+                  >
                     <div className="flex items-center gap-1.5 min-w-0">
                       <FileText className="size-3 text-amber-400" />
-                      <span className="truncate" style={{ color: sideFg }}>index.css</span>
+                      <span className="truncate" style={{ color: sideFg }}>
+                        index.css
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between rounded-md px-2.5 py-1 hover:bg-white/5" style={{ color: sideFg }}>
+                  <div
+                    className="flex items-center justify-between rounded-md px-2.5 py-1 hover:bg-white/5"
+                    style={{ color: sideFg }}
+                  >
                     <div className="flex items-center gap-1.5 min-w-0">
                       <FileCode className="size-3 text-emerald-400" />
                       <span className="truncate" style={{ color: gitUntracked }}>
@@ -243,7 +268,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
               </div>
 
               {/* Main Editor Area */}
-              <div className="flex flex-1 flex-col overflow-hidden" style={{ backgroundColor: editorBg }}>
+              <div
+                className="flex flex-1 flex-col overflow-hidden"
+                style={{ backgroundColor: editorBg }}
+              >
                 {/* Tabs Row */}
                 <div
                   className="flex h-7 items-center border-b overflow-x-auto shrink-0"
@@ -262,7 +290,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                   >
                     <span className="size-2 rounded-full bg-sky-400" />
                     <span style={{ color: tabActiveFg }}>App.tsx</span>
-                    <X className="size-3 ms-1 cursor-pointer" style={{ color: tabActiveFg, opacity: 0.7 }} />
+                    <X
+                      className="size-3 ms-1 cursor-pointer"
+                      style={{ color: tabActiveFg, opacity: 0.7 }}
+                    />
                   </div>
 
                   <div
@@ -274,7 +305,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                     }}
                   >
                     <span style={{ color: tabInactiveFg }}>index.css</span>
-                    <X className="size-3 ms-1 cursor-pointer" style={{ color: tabInactiveFg, opacity: 0.7 }} />
+                    <X
+                      className="size-3 ms-1 cursor-pointer"
+                      style={{ color: tabInactiveFg, opacity: 0.7 }}
+                    />
                   </div>
 
                   <div
@@ -345,10 +379,17 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                       >
                         3
                       </span>
-                      <span className="border-s ps-2 relative" style={{ borderColor: indentGuideBg }}>
+                      <span
+                        className="border-s ps-2 relative"
+                        style={{ borderColor: indentGuideBg }}
+                      >
                         <span style={{ color: config.colors.primary }}>return </span>
-                        <span style={{ backgroundColor: selectionBg, color: editorFg }} className="px-0.5 rounded-xs">
-                          &lt;<span style={{ color: config.colors.primary }}>CustomStudio</span> /&gt;
+                        <span
+                          style={{ backgroundColor: selectionBg, color: editorFg }}
+                          className="px-0.5 rounded-xs"
+                        >
+                          &lt;<span style={{ color: config.colors.primary }}>CustomStudio</span>{" "}
+                          /&gt;
                         </span>
                         <span
                           className="inline-block w-0.5 h-3.5 align-middle ms-0.5 animate-pulse"
@@ -375,7 +416,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                         color: cardFg,
                       }}
                     >
-                      <div className="text-[9px] font-bold uppercase tracking-wider px-1" style={{ color: cardFg, opacity: 0.6 }}>
+                      <div
+                        className="text-[9px] font-bold uppercase tracking-wider px-1"
+                        style={{ color: cardFg, opacity: 0.6 }}
+                      >
                         Completion Suggest
                       </div>
                       <div
@@ -386,14 +430,21 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                           <span className="text-[9px] font-bold text-sky-400">fn</span>
                           <span style={{ color: cardFg }}>renderTheme</span>
                         </div>
-                        <span className="text-[9px]" style={{ color: cardFg, opacity: 0.6 }}>React.Node</span>
+                        <span className="text-[9px]" style={{ color: cardFg, opacity: 0.6 }}>
+                          React.Node
+                        </span>
                       </div>
-                      <div className="flex items-center justify-between rounded-lg px-2 py-1 text-[10px]" style={{ color: cardFg }}>
+                      <div
+                        className="flex items-center justify-between rounded-lg px-2 py-1 text-[10px]"
+                        style={{ color: cardFg }}
+                      >
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] font-bold text-purple-400">v</span>
                           <span style={{ color: cardFg }}>tokenMap</span>
                         </div>
-                        <span className="text-[9px]" style={{ color: cardFg, opacity: 0.6 }}>Record</span>
+                        <span className="text-[9px]" style={{ color: cardFg, opacity: 0.6 }}>
+                          Record
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -403,10 +454,22 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                     className="w-10 border-s p-1.5 space-y-1 shrink-0"
                     style={{ backgroundColor: sideBg, borderColor: sideBorder }}
                   >
-                    <div className="h-1 w-full rounded-full bg-current opacity-80" style={{ color: sideFg }} />
-                    <div className="h-1 w-3/4 rounded-full bg-current opacity-60" style={{ color: sideFg }} />
-                    <div className="h-1.5 w-full rounded-full" style={{ backgroundColor: config.colors.primary }} />
-                    <div className="h-1 w-1/2 rounded-full bg-current opacity-50" style={{ color: sideFg }} />
+                    <div
+                      className="h-1 w-full rounded-full bg-current opacity-80"
+                      style={{ color: sideFg }}
+                    />
+                    <div
+                      className="h-1 w-3/4 rounded-full bg-current opacity-60"
+                      style={{ color: sideFg }}
+                    />
+                    <div
+                      className="h-1.5 w-full rounded-full"
+                      style={{ backgroundColor: config.colors.primary }}
+                    />
+                    <div
+                      className="h-1 w-1/2 rounded-full bg-current opacity-50"
+                      style={{ color: sideFg }}
+                    />
                   </div>
                 </div>
               </div>
@@ -436,36 +499,62 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
           </div>
         ) : surfaceMode === "chat" ? (
           /* ── 2. CHAT & APP SHELL SURFACE ────────────────────────────────── */
-          <div className="flex flex-col h-80 p-4 space-y-3 overflow-y-auto" style={{ backgroundColor: editorBg, color: editorFg }}>
+          <div
+            className="flex flex-col h-80 p-4 space-y-3 overflow-y-auto"
+            style={{ backgroundColor: editorBg, color: editorFg }}
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border" style={{ backgroundColor: cardBg, color: cardFg, borderColor: sideBorder }}>
+                <div
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border"
+                  style={{ backgroundColor: cardBg, color: cardFg, borderColor: sideBorder }}
+                >
                   <Bot className="size-3.5" style={{ color: config.colors.primary }} />
                   <span style={{ color: cardFg }}>Claude 3.5 Sonnet</span>
                 </div>
-                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-md font-bold" style={{ backgroundColor: primaryBg, color: primaryFg }}>
+                <span
+                  className="text-[10px] font-mono px-2.5 py-0.5 rounded-md font-bold"
+                  style={{ backgroundColor: primaryBg, color: primaryFg }}
+                >
                   FAST MODE
                 </span>
               </div>
             </div>
 
-            <div className="rounded-2xl border p-3.5 space-y-2 shadow-xs" style={{ backgroundColor: cardBg, color: cardFg, borderColor: sideBorder }}>
+            <div
+              className="rounded-2xl border p-3.5 space-y-2 shadow-xs"
+              style={{ backgroundColor: cardBg, color: cardFg, borderColor: sideBorder }}
+            >
               <div className="flex items-center gap-2">
                 <Wand2 className="size-4" style={{ color: config.colors.primary }} />
-                <span className="font-bold text-xs" style={{ color: cardFg }}>Antigravity Agent</span>
+                <span className="font-bold text-xs" style={{ color: cardFg }}>
+                  Antigravity Agent
+                </span>
               </div>
               <p className="text-xs leading-relaxed" style={{ color: cardFg, opacity: 0.9 }}>
-                I updated <code className="font-mono text-[11px] px-1.5 py-0.5 rounded" style={{ backgroundColor: sideBg, color: cardFg }}>useTheme.ts</code> to inject contrast-clamped custom properties.
+                I updated{" "}
+                <code
+                  className="font-mono text-[11px] px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: sideBg, color: cardFg }}
+                >
+                  useTheme.ts
+                </code>{" "}
+                to inject contrast-clamped custom properties.
               </p>
             </div>
 
-            <div className="rounded-xl border p-3.5 space-y-2" style={{ backgroundColor: sideBg, color: sideFg, borderColor: sideBorder }}>
+            <div
+              className="rounded-xl border p-3.5 space-y-2"
+              style={{ backgroundColor: sideBg, color: sideFg, borderColor: sideBorder }}
+            >
               <div className="flex items-center justify-between text-xs font-semibold">
                 <div className="flex items-center gap-1.5">
                   <Wrench className="size-3.5" style={{ color: config.colors.primary }} />
                   <span style={{ color: sideFg }}>Run Command</span>
                 </div>
-                <span className="text-[10px] font-mono" style={{ color: sideFg, opacity: 0.7 }}>bun run typecheck</span>
+                <span className="text-[10px] font-mono" style={{ color: sideFg, opacity: 0.7 }}>
+                  bun run typecheck
+                </span>
               </div>
               <div className="flex items-center gap-2 pt-1">
                 <button
@@ -485,7 +574,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
               </div>
             </div>
 
-            <div className="mt-auto flex items-center gap-2 rounded-2xl border p-2.5 shadow-sm" style={{ backgroundColor: cardBg, borderColor: sideBorder }}>
+            <div
+              className="mt-auto flex items-center gap-2 rounded-2xl border p-2.5 shadow-sm"
+              style={{ backgroundColor: cardBg, borderColor: sideBorder }}
+            >
               <input
                 type="text"
                 readOnly
@@ -504,9 +596,15 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
           </div>
         ) : (
           /* ── 3. CLEAN COLOR SYSTEM & WCAG AUDIT GRID (CLEAN SWATCHES) ────── */
-          <div className="flex flex-col h-80 p-4 space-y-3 overflow-y-auto" style={{ backgroundColor: editorBg, color: editorFg }}>
+          <div
+            className="flex flex-col h-80 p-4 space-y-3 overflow-y-auto"
+            style={{ backgroundColor: editorBg, color: editorFg }}
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: editorFg }}>
+              <span
+                className="text-xs font-bold uppercase tracking-wider"
+                style={{ color: editorFg }}
+              >
                 Derived Token System ({wcagResults.length} Pairs Audited)
               </span>
               <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
@@ -546,7 +644,10 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                       <span className="text-xs font-bold block truncate" style={{ color: cardFg }}>
                         {res.fgLabel}
                       </span>
-                      <span className="text-[10px] font-mono block truncate mt-0.5" style={{ color: cardFg, opacity: 0.65 }}>
+                      <span
+                        className="text-[10px] font-mono block truncate mt-0.5"
+                        style={{ color: cardFg, opacity: 0.65 }}
+                      >
                         {res.fgHex} vs {res.bgHex}
                       </span>
                     </div>

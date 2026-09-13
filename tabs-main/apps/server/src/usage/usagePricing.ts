@@ -129,7 +129,12 @@ export function priceUsage(
   overrides?: RateTable,
 ): { readonly costUsd: number; readonly costSource: UsageCostSource } {
   const override = overrides?.get(model.trim());
-  if (override === undefined && reportedCostUsd !== null && Number.isFinite(reportedCostUsd) && reportedCostUsd >= 0) {
+  if (
+    override === undefined &&
+    reportedCostUsd !== null &&
+    Number.isFinite(reportedCostUsd) &&
+    reportedCostUsd >= 0
+  ) {
     return { costUsd: reportedCostUsd, costSource: "providerReported" };
   }
 

@@ -87,7 +87,12 @@ export function PullRequestCheckStatusIcon({
   const status = check.status.toLowerCase();
 
   if (status === "queued" || status === "in_progress" || conclusion === "in_progress") {
-    return <Clock className={`${className} text-amber-500 animate-pulse shrink-0`} aria-label="In progress" />;
+    return (
+      <Clock
+        className={`${className} text-amber-500 animate-pulse shrink-0`}
+        aria-label="In progress"
+      />
+    );
   }
   if (
     conclusion === "failure" ||
@@ -98,12 +103,18 @@ export function PullRequestCheckStatusIcon({
     return <XCircle className={`${className} text-red-500 shrink-0`} aria-label="Failed" />;
   }
   if (conclusion === "success" || conclusion === "neutral") {
-    return <CheckCircle2 className={`${className} text-emerald-500 shrink-0`} aria-label="Passed" />;
+    return (
+      <CheckCircle2 className={`${className} text-emerald-500 shrink-0`} aria-label="Passed" />
+    );
   }
   if (conclusion === "skipped") {
-    return <MinusCircle className={`${className} text-muted-foreground shrink-0`} aria-label="Skipped" />;
+    return (
+      <MinusCircle className={`${className} text-muted-foreground shrink-0`} aria-label="Skipped" />
+    );
   }
-  return <HelpCircle className={`${className} text-muted-foreground shrink-0`} aria-label="Unknown" />;
+  return (
+    <HelpCircle className={`${className} text-muted-foreground shrink-0`} aria-label="Unknown" />
+  );
 }
 
 export function PullRequestChecksRollupBadge({
@@ -148,11 +159,7 @@ export function PullRequestChecksRollupBadge({
   );
 }
 
-export function PullRequestChecksView({
-  checks,
-}: {
-  checks: ReadonlyArray<GitPullRequestCheck>;
-}) {
+export function PullRequestChecksView({ checks }: { checks: ReadonlyArray<GitPullRequestCheck> }) {
   const [filter, setFilter] = useState<"all" | "failed" | "pending" | "passed">("all");
   const summary = useMemo(() => summarizePullRequestChecks(checks), [checks]);
 
@@ -178,7 +185,11 @@ export function PullRequestChecksView({
         );
       }
       if (filter === "passed") {
-        return conclusion === "success" || conclusion === "neutral" || (status === "completed" && !conclusion);
+        return (
+          conclusion === "success" ||
+          conclusion === "neutral" ||
+          (status === "completed" && !conclusion)
+        );
       }
       return true;
     });
@@ -209,8 +220,8 @@ export function PullRequestChecksView({
               {summary.state === "failure"
                 ? `${summary.failed} of ${summary.total} checks failed`
                 : summary.state === "pending"
-                ? `${summary.pending} of ${summary.total} checks pending`
-                : `All ${summary.total} checks passed`}
+                  ? `${summary.pending} of ${summary.total} checks pending`
+                  : `All ${summary.total} checks passed`}
             </div>
             <div className="text-xs text-muted-foreground">
               {summary.passed} successful, {summary.failed} failed, {summary.pending} in progress

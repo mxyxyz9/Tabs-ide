@@ -10,7 +10,10 @@ function parseStyle(style: unknown): CSSProperties | undefined {
   for (const rule of style.split(";")) {
     const colon = rule.indexOf(":");
     if (colon === -1) continue;
-    const prop = rule.slice(0, colon).trim().replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
+    const prop = rule
+      .slice(0, colon)
+      .trim()
+      .replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
     const val = rule.slice(colon + 1).trim();
     if (prop && val) result[prop] = val;
   }
@@ -36,7 +39,10 @@ function elementProps(properties: Record<string, unknown> | undefined): Record<s
 }
 
 function elementShell(node: Extract<HighlightedNode, { type: "element" }>) {
-  return React.createElement(node.tagName, elementProps(node.properties as Record<string, unknown>));
+  return React.createElement(
+    node.tagName,
+    elementProps(node.properties as Record<string, unknown>),
+  );
 }
 
 function escapeHtml(text: string): string {
@@ -48,7 +54,9 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function toHtml(node: HighlightedNode | { type: "root"; children: HighlightedNode[] }): string {
+export function toHtml(
+  node: HighlightedNode | { type: "root"; children: HighlightedNode[] },
+): string {
   if (node.type === "text") {
     return escapeHtml(node.value ?? "");
   }

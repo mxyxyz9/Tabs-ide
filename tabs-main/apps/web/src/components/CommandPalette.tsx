@@ -85,17 +85,11 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     openIntent: null,
   });
 
-  const toggleOpen = useCallback(
-    () => dispatch({ _tag: "ToggleMode", mode: "command" }),
-    [],
-  );
+  const toggleOpen = useCallback(() => dispatch({ _tag: "ToggleMode", mode: "command" }), []);
   const openAddProject = useCallback(() => {
     dispatch({ _tag: "OpenAddProject" });
   }, []);
-  const clearOpenIntent = useCallback(
-    () => dispatch({ _tag: "ClearOpenIntent" }),
-    [],
-  );
+  const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
 
   const keybindings = useKeybindings();
 
@@ -449,8 +443,7 @@ function OpenCommandPaletteDialog(props: {
       projects.map((project) => {
         const envId = project.environmentId ?? "local";
         const envLabel =
-          locationByEnvironmentId.get(envId)?.label ??
-          (envId === "local" ? "Local" : "Remote");
+          locationByEnvironmentId.get(envId)?.label ?? (envId === "local" ? "Local" : "Remote");
         const hasMultipleEnvironments =
           new Set(projects.map((p) => p.environmentId ?? "local")).size > 1;
         const isAmbiguous =
@@ -810,7 +803,11 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
-  if (currentThreadId && typeof window !== "undefined" && window.desktopBridge?.captureDesktopScreen) {
+  if (
+    currentThreadId &&
+    typeof window !== "undefined" &&
+    window.desktopBridge?.captureDesktopScreen
+  ) {
     actionItems.push({
       kind: "action",
       value: "action:capture-screen",

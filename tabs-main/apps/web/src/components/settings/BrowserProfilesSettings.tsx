@@ -476,9 +476,15 @@ export function BrowserProfilesSettings() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" onClick={openImportModal} className="gap-1.5 cursor-pointer">
+          <Button
+            variant="outline"
+            disabled
+            onClick={openImportModal}
+            title="Browser session import is not available in this build yet"
+            className="gap-1.5"
+          >
             <DownloadIcon className="size-4" />
-            Import Sessions
+            Import Sessions (Coming Soon)
           </Button>
           <Button onClick={openCreateModal} className="gap-1.5 cursor-pointer">
             <PlusIcon className="size-4" />

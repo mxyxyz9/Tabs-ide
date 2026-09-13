@@ -930,10 +930,7 @@ export function makeCursorAdapter(
         if (rawPrompt) {
           let cursorSkillNames = ctx.cursorSkillNames;
           if (hasCursorSkillMention(rawPrompt) && cursorSkillNames === undefined) {
-            const skills = yield* discoverCursorSkills(
-              ctx.session.cwd,
-              options?.environment,
-            ).pipe(
+            const skills = yield* discoverCursorSkills(ctx.session.cwd, options?.environment).pipe(
               Effect.provideService(FileSystem.FileSystem, fileSystem),
               Effect.provideService(Path.Path, path),
             );

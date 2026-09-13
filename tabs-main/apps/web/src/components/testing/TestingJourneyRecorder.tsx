@@ -52,9 +52,7 @@ function entryToSelector(entry: TestingLocatorEntry): string {
     return `[data-testid="${args.testId}"]`;
   }
   if (entry.strategy === "role" && args.role) {
-    return args.name
-      ? `role=${args.role}[name="${args.name}"]`
-      : `role=${args.role}`;
+    return args.name ? `role=${args.role}[name="${args.name}"]` : `role=${args.role}`;
   }
   if (entry.strategy === "label" && (args.text || args.label)) {
     return `getByLabel(${JSON.stringify(args.text || args.label)})`;
@@ -99,18 +97,14 @@ function validateRecordedCode(code: string): string | null {
   if (/\btest\s*\.\s*(skip|fixme|fail|only)\s*\(/.test(code)) {
     return "Skipped, expected-failure, and exclusive tests are not allowed";
   }
-  if (!/\bexpect\s*\(/.test(code))
-    return "At least one Playwright assertion is required";
+  if (!/\bexpect\s*\(/.test(code)) return "At least one Playwright assertion is required";
   if (code.includes('throw new Error("Add expected-result assertions')) {
     return "Replace the assertion-review guard with a business assertion";
   }
   return null;
 }
 
-function generatePlaywrightCode(
-  url: string,
-  steps: readonly EditableStep[],
-): string {
+function generatePlaywrightCode(url: string, steps: readonly EditableStep[]): string {
   let inputCount = 0;
   const lines: string[] = [
     'import { test, expect, type Page } from "playwright/test";',
@@ -144,9 +138,7 @@ function generatePlaywrightCode(
       }
       case "selectOption": {
         if (step.value !== undefined && step.value.trim() !== "") {
-          lines.push(
-            `  await ${locator}.selectOption(${JSON.stringify(step.value)});`,
-          );
+          lines.push(`  await ${locator}.selectOption(${JSON.stringify(step.value)});`);
         } else {
           const name = step.placeholder || `RECORDED_INPUT_${++inputCount}`;
           lines.push(
@@ -162,9 +154,7 @@ function generatePlaywrightCode(
         lines.push(`  await ${locator}.uncheck();`);
         break;
       case "press":
-        lines.push(
-          `  await ${locator}.press(${JSON.stringify(step.key || "Enter")});`,
-        );
+        lines.push(`  await ${locator}.press(${JSON.stringify(step.key || "Enter")});`);
         break;
       case "assertVisible":
         lines.push(`  await expect(${locator}).toBeVisible();`);
@@ -184,12 +174,8 @@ function generatePlaywrightCode(
 
   const hasAssertion = steps.some((s) => s.action.startsWith("assert"));
   if (!hasAssertion) {
-    lines.push(
-      "  // Replace this guard with reviewed business assertions before running.",
-    );
-    lines.push(
-      '  throw new Error("Add expected-result assertions to this recording");',
-    );
+    lines.push("  // Replace this guard with reviewed business assertions before running.");
+    lines.push('  throw new Error("Add expected-result assertions to this recording");');
   }
 
   lines.push("});");
@@ -212,18 +198,13 @@ export function TestingJourneyRecorder() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [steps, setSteps] = useState<EditableStep[]>([]);
-  const [targetUrl, setTargetUrl] = useState(
-    normalizedTarget || "https://example.com",
-  );
+  const [targetUrl, setTargetUrl] = useState(normalizedTarget || "https://example.com");
   const [showCodePreview, setShowCodePreview] = useState(false);
   const [manualCodeEdit, setManualCodeEdit] = useState<string | null>(null);
   const active = useRef(false);
 
-  const request = (
-    operation: "recordStart" | "recordStop" | "recordStatus",
-  ) => {
-    if (!window.desktopBridge)
-      throw new Error("Journey recording requires the Tabs desktop app.");
+  const request = (operation: "recordStart" | "recordStop" | "recordStatus") => {
+    if (!window.desktopBridge) throw new Error("Journey recording requires the Tabs desktop app.");
     return window.desktopBridge.runBrowserAutomation({
       projectId,
       sessionId: `testing:${projectId}`,
@@ -263,24 +244,13 @@ export function TestingJourneyRecorder() {
   }, [targetUrl, steps]);
 
   const displayedCode = manualCodeEdit ?? generatedCode;
-  const codeValidationError = useMemo(
-    () => validateRecordedCode(displayedCode),
-    [displayedCode],
-  );
+  const codeValidationError = useMemo(() => validateRecordedCode(displayedCode), [displayedCode]);
 
   // Validation gates:
   // 1. Must contain at least one action step
   const hasAction = useMemo(() => {
     return steps.some((s) =>
-      [
-        "goto",
-        "click",
-        "fill",
-        "selectOption",
-        "check",
-        "uncheck",
-        "press",
-      ].includes(s.action),
+      ["goto", "click", "fill", "selectOption", "check", "uncheck", "press"].includes(s.action),
     );
   }, [steps]);
 
@@ -300,10 +270,7 @@ export function TestingJourneyRecorder() {
     return steps.filter((s) => {
       if (s.action === "assertVisible") return s.selector.trim().length > 0;
       if (s.action === "assertText" || s.action === "assertValue") {
-        return (
-          s.selector.trim().length > 0 &&
-          (s.expectedValue ?? "").trim().length > 0
-        );
+        return s.selector.trim().length > 0 && (s.expectedValue ?? "").trim().length > 0;
       }
       return false;
     });
@@ -404,8 +371,7 @@ export function TestingJourneyRecorder() {
       id: `step-${Date.now()}`,
       action,
       selector: "",
-      expectedValue:
-        action === "assertText" || action === "assertValue" ? "" : undefined,
+      expectedValue: action === "assertText" || action === "assertValue" ? "" : undefined,
       isFragile: false,
       reviewed: true,
     };
@@ -422,25 +388,19 @@ export function TestingJourneyRecorder() {
 
       // Extract linked locator entry IDs
       const linkedLocatorEntryIds = [
-        ...new Set(
-          steps
-            .map((s) => s.locatorEntryId)
-            .filter((id): id is string => Boolean(id)),
-        ),
+        ...new Set(steps.map((s) => s.locatorEntryId).filter((id): id is string => Boolean(id))),
       ];
 
       // Formulate assertion summary for the reviewed case
       const assertionSummaries = reviewedAssertions.map((s) => {
-        if (s.action === "assertVisible")
-          return `Element ${s.selector} is visible`;
+        if (s.action === "assertVisible") return `Element ${s.selector} is visible`;
         if (s.action === "assertText")
           return `Element ${s.selector} text equals "${s.expectedValue}"`;
         if (s.action === "assertValue")
           return `Element ${s.selector} value equals "${s.expectedValue}"`;
         return `Assertion passed`;
       });
-      const assertionText =
-        assertionSummaries.join("; ") || "Recorded assertions pass";
+      const assertionText = assertionSummaries.join("; ") || "Recorded assertions pass";
 
       // 1. Write repository Playwright spec
       await ensureNativeApi().projects.writeFile({
@@ -457,9 +417,7 @@ export function TestingJourneyRecorder() {
         engine: "recording",
         recordedCode: finalCode,
         recordedExpectedResult: assertionText,
-        ...(linkedLocatorEntryIds.length > 0
-          ? { locatorEntryIds: linkedLocatorEntryIds }
-          : {}),
+        ...(linkedLocatorEntryIds.length > 0 ? { locatorEntryIds: linkedLocatorEntryIds } : {}),
         ...(normalizedTarget ? { targetUrl: normalizedTarget } : {}),
       });
 
@@ -522,10 +480,7 @@ export function TestingJourneyRecorder() {
       </div>
 
       {message && (
-        <div
-          role="status"
-          className="rounded-md bg-muted/40 px-3 py-2 text-xs text-foreground"
-        >
+        <div role="status" className="rounded-md bg-muted/40 px-3 py-2 text-xs text-foreground">
           {message}
         </div>
       )}
@@ -600,15 +555,11 @@ export function TestingJourneyRecorder() {
                       <button
                         type="button"
                         className={`rounded-full border px-2 py-0.5 text-[10px] ${step.reviewed ? "border-border" : "border-destructive bg-destructive text-destructive-foreground"}`}
-                        onClick={() =>
-                          updateStep(step.id, { reviewed: !step.reviewed })
-                        }
+                        onClick={() => updateStep(step.id, { reviewed: !step.reviewed })}
                         aria-pressed={Boolean(step.reviewed)}
                         aria-label={`Mark fragile selector for step ${index + 1} as ${step.reviewed ? "unreviewed" : "reviewed"}`}
                       >
-                        {step.reviewed
-                          ? "Fragile (Reviewed)"
-                          : "Fragile selector"}
+                        {step.reviewed ? "Fragile (Reviewed)" : "Fragile selector"}
                       </button>
                     )}
                   </div>
@@ -660,9 +611,7 @@ export function TestingJourneyRecorder() {
                       <Input
                         aria-label={`Target URL for step ${index + 1}`}
                         value={step.url || ""}
-                        onChange={(e) =>
-                          updateStep(step.id, { url: e.target.value })
-                        }
+                        onChange={(e) => updateStep(step.id, { url: e.target.value })}
                         placeholder="Target URL (e.g. https://example.com)"
                         className="h-7 text-xs font-mono"
                       />
@@ -671,9 +620,7 @@ export function TestingJourneyRecorder() {
                     <>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] text-muted-foreground">
-                            Selector
-                          </label>
+                          <label className="text-[10px] text-muted-foreground">Selector</label>
                           {savedLocators.length > 0 && (
                             <select
                               aria-label={`Saved locator for step ${index + 1}`}
@@ -723,8 +670,7 @@ export function TestingJourneyRecorder() {
                       </div>
 
                       {/* Action-specific fields */}
-                      {(step.action === "fill" ||
-                        step.action === "selectOption") && (
+                      {(step.action === "fill" || step.action === "selectOption") && (
                         <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">
                             Input Data (Value or Placeholder)
@@ -732,13 +678,8 @@ export function TestingJourneyRecorder() {
                           <Input
                             aria-label={`Input data for step ${index + 1}`}
                             value={step.value ?? ""}
-                            onChange={(e) =>
-                              updateStep(step.id, { value: e.target.value })
-                            }
-                            placeholder={
-                              step.placeholder ||
-                              "Enter test value or placeholder"
-                            }
+                            onChange={(e) => updateStep(step.id, { value: e.target.value })}
+                            placeholder={step.placeholder || "Enter test value or placeholder"}
                             className="h-7 text-xs font-mono"
                           />
                         </div>
@@ -746,27 +687,21 @@ export function TestingJourneyRecorder() {
 
                       {step.action === "press" && (
                         <div className="space-y-1">
-                          <label className="text-[10px] text-muted-foreground">
-                            Key
-                          </label>
+                          <label className="text-[10px] text-muted-foreground">Key</label>
                           <Input
                             aria-label={`Key for step ${index + 1}`}
                             value={step.key || "Enter"}
-                            onChange={(e) =>
-                              updateStep(step.id, { key: e.target.value })
-                            }
+                            onChange={(e) => updateStep(step.id, { key: e.target.value })}
                             placeholder="Enter, Tab, Escape..."
                             className="h-7 text-xs font-mono"
                           />
                         </div>
                       )}
 
-                      {(step.action === "assertText" ||
-                        step.action === "assertValue") && (
+                      {(step.action === "assertText" || step.action === "assertValue") && (
                         <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">
-                            Expected{" "}
-                            {step.action === "assertText" ? "Text" : "Value"}
+                            Expected {step.action === "assertText" ? "Text" : "Value"}
                           </label>
                           <Input
                             aria-label={`Expected value for step ${index + 1}`}
@@ -801,11 +736,7 @@ export function TestingJourneyRecorder() {
                   <AlertCircleIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                 )}
                 <span
-                  className={
-                    hasAction
-                      ? "text-foreground"
-                      : "text-amber-600 dark:text-amber-400"
-                  }
+                  className={hasAction ? "text-foreground" : "text-amber-600 dark:text-amber-400"}
                 >
                   Contains executable action(s)
                 </span>
@@ -818,9 +749,7 @@ export function TestingJourneyRecorder() {
                 )}
                 <span
                   className={
-                    placeholdersResolved
-                      ? "text-foreground"
-                      : "text-amber-600 dark:text-amber-400"
+                    placeholdersResolved ? "text-foreground" : "text-amber-600 dark:text-amber-400"
                   }
                 >
                   Input placeholders mapped
@@ -834,9 +763,7 @@ export function TestingJourneyRecorder() {
                 )}
                 <span
                   className={
-                    hasReviewedAssertion
-                      ? "text-foreground"
-                      : "text-amber-600 dark:text-amber-400"
+                    hasReviewedAssertion ? "text-foreground" : "text-amber-600 dark:text-amber-400"
                   }
                 >
                   Contains reviewed business assertion
@@ -855,8 +782,7 @@ export function TestingJourneyRecorder() {
                       : "text-amber-600 dark:text-amber-400"
                   }
                 >
-                  Fragile selectors reviewed ({unreviewedFragileSteps.length}{" "}
-                  unreviewed)
+                  Fragile selectors reviewed ({unreviewedFragileSteps.length} unreviewed)
                 </span>
               </div>
             </div>
@@ -865,10 +791,7 @@ export function TestingJourneyRecorder() {
           {/* Code Preview Collapsible */}
           {showCodePreview && (
             <div className="mt-3 space-y-1.5">
-              <label
-                htmlFor="recorded-journey-code"
-                className="text-xs font-medium"
-              >
+              <label htmlFor="recorded-journey-code" className="text-xs font-medium">
                 Playwright TypeScript Code Preview
               </label>
               <Textarea

@@ -613,13 +613,40 @@ function isWholeWordRange(
 }
 
 const BINARY_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".avif",
-  ".mp4", ".mov", ".webm", ".avi", ".mkv",
-  ".pdf", ".zip", ".tar", ".gz", ".tgz", ".7z",
-  ".exe", ".dll", ".dylib", ".so", ".wasm",
-  ".ttf", ".woff", ".woff2", ".eot",
-  ".pyc", ".class", ".o", ".obj",
-  ".db", ".sqlite", ".sqlite3",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".ico",
+  ".webp",
+  ".avif",
+  ".mp4",
+  ".mov",
+  ".webm",
+  ".avi",
+  ".mkv",
+  ".pdf",
+  ".zip",
+  ".tar",
+  ".gz",
+  ".tgz",
+  ".7z",
+  ".exe",
+  ".dll",
+  ".dylib",
+  ".so",
+  ".wasm",
+  ".ttf",
+  ".woff",
+  ".woff2",
+  ".eot",
+  ".pyc",
+  ".class",
+  ".o",
+  ".obj",
+  ".db",
+  ".sqlite",
+  ".sqlite3",
 ]);
 
 const CONTENT_SEARCH_TIME_BUDGET_MS = 2500;
@@ -660,9 +687,7 @@ export async function searchWorkspaceContents(
     const ext = path.extname(entry.path).toLowerCase();
     if (BINARY_EXTENSIONS.has(ext)) continue;
 
-    const fullPath = path.isAbsolute(entry.path)
-      ? entry.path
-      : path.join(input.cwd, entry.path);
+    const fullPath = path.isAbsolute(entry.path) ? entry.path : path.join(input.cwd, entry.path);
 
     let content: string;
     try {

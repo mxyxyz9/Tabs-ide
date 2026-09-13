@@ -23,7 +23,9 @@ const makeMockStorage = () => {
   } as Storage;
 };
 
-const sampleResult = (overrides?: Partial<GitResolvePullRequestResult["pullRequest"]>): GitResolvePullRequestResult => ({
+const sampleResult = (
+  overrides?: Partial<GitResolvePullRequestResult["pullRequest"]>,
+): GitResolvePullRequestResult => ({
   pullRequest: {
     number: 42,
     title: "Support persistent PR cache",

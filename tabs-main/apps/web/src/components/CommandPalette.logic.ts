@@ -98,7 +98,6 @@ export function reduceCommandPaletteUiState(
   }
 }
 
-
 export function resolveCommandPaletteWorkspaceContext(input: {
   projects: ReadonlyArray<Project>;
   threads: ReadonlyArray<Thread>;
@@ -170,7 +169,9 @@ export function resolveEnvironmentLabel(
 }
 
 export function buildCommandPaletteProjectMetadata(input: {
-  readonly projects: ReadonlyArray<Pick<Project, "name" | "cwd"> & { readonly environmentId?: string | undefined }>;
+  readonly projects: ReadonlyArray<
+    Pick<Project, "name" | "cwd"> & { readonly environmentId?: string | undefined }
+  >;
   readonly locationByEnvironmentId?: ReadonlyMap<string, { readonly label: string }>;
 }): { searchTerms: string[]; environmentLabels: string[] } {
   const searchTerms: string[] = [];
@@ -213,9 +214,7 @@ export function buildProjectActionItems(input: {
       (envId !== "local" && envId !== "default");
     const extraSearchTerms = input.searchTerms?.(project) ?? [];
 
-    const defaultDescription = isAmbiguous
-      ? `${project.cwd} · ${envLabel}`
-      : project.cwd;
+    const defaultDescription = isAmbiguous ? `${project.cwd} · ${envLabel}` : project.cwd;
 
     return {
       kind: "action",
@@ -224,7 +223,9 @@ export function buildProjectActionItems(input: {
       title: displayName,
       description: input.renderDescription?.(project) ?? defaultDescription,
       icon: input.icon(project),
-      ...(input.renderTrailingContent ? { titleTrailingContent: input.renderTrailingContent(project) } : {}),
+      ...(input.renderTrailingContent
+        ? { titleTrailingContent: input.renderTrailingContent(project) }
+        : {}),
       ...(input.shortcutCommand !== undefined ? { shortcutCommand: input.shortcutCommand } : {}),
       run: async () => {
         await input.runProject(project);

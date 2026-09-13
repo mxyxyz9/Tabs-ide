@@ -98,9 +98,9 @@ export function verifyExternalAuthReturnPath(rawTargetUrl: string): ExternalAuth
 
     if (redirectUrl.protocol === "tabs:" || redirectUrl.protocol === "vscode:") {
       return {
-        canCompleteExternally: true,
-        reason: `OAuth client supports custom scheme redirect (${redirectUrl.protocol}).`,
-        suggestedAction: "launchSystemBrowser",
+        canCompleteExternally: false,
+        reason: `The ${redirectUrl.protocol} callback is not connected to a state-bound OAuth completion handler.`,
+        suggestedAction: "manualOpen",
       };
     }
 

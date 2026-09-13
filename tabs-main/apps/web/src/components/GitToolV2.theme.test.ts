@@ -20,4 +20,3 @@ describe("GitToolV2 Theme Reactivity", () => {
     expect(cssContent).toContain("color-mix(in srgb, var(--foreground)");
   });
 });
-

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  classifyExecutionFailure,
-  createUnifiedDiff,
-} from "./failureClassification";
+import { classifyExecutionFailure, createUnifiedDiff } from "./failureClassification";
 
 describe("classifyExecutionFailure", () => {
   it("classifies selector drift as repairable", () => {
@@ -22,16 +19,14 @@ describe("classifyExecutionFailure", () => {
   });
 
   it("classifies navigation readiness as repairable", () => {
-    const error =
-      "page.goto: Timeout 30000ms exceeded waiting for load state 'load'";
+    const error = "page.goto: Timeout 30000ms exceeded waiting for load state 'load'";
     const result = classifyExecutionFailure(error);
     expect(result.classification).toBe("navigation-readiness");
     expect(result.isRepairable).toBe(true);
   });
 
   it("classifies fixture defect as repairable", () => {
-    const error =
-      "TypeError: Cannot read properties of undefined (reading 'testData')";
+    const error = "TypeError: Cannot read properties of undefined (reading 'testData')";
     const result = classifyExecutionFailure(error);
     expect(result.classification).toBe("fixture-defect");
     expect(result.isRepairable).toBe(true);
@@ -46,8 +41,7 @@ describe("classifyExecutionFailure", () => {
   });
 
   it("classifies network failures as non-repairable", () => {
-    const error =
-      "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000";
+    const error = "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000";
     const result = classifyExecutionFailure(error);
     expect(result.classification).toBe("network-failure");
     expect(result.isRepairable).toBe(false);
@@ -101,12 +95,7 @@ describe("createUnifiedDiff", () => {
   });
 
   it("handles reordered repeated lines without hanging", () => {
-    const diff = createUnifiedDiff(
-      "old.ts",
-      "new.ts",
-      "alpha\nbeta",
-      "beta\nalpha",
-    );
+    const diff = createUnifiedDiff("old.ts", "new.ts", "alpha\nbeta", "beta\nalpha");
     expect(diff).toContain("-alpha");
     expect(diff).toContain("+alpha");
   });

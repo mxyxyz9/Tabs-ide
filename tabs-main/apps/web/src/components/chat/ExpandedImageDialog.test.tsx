@@ -65,9 +65,7 @@ describe("buildExpandedImagePreview", () => {
   });
 
   it("identifies video attachments when present", () => {
-    const items = [
-      { id: "v-1", name: "recording.mp4", previewUrl: "blob:video", type: "video" },
-    ];
+    const items = [{ id: "v-1", name: "recording.mp4", previewUrl: "blob:video", type: "video" }];
     const preview = buildExpandedImagePreview(items, "v-1");
     expect(preview).not.toBeNull();
     expect(preview?.images[0]?.type).toBe("video");
@@ -172,5 +170,3 @@ describe("ExpandedImageDialog component markup", () => {
     expect(markup).toContain("Enter fullscreen");
   });
 });
-
-

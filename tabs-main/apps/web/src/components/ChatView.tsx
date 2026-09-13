@@ -211,10 +211,7 @@ import { projectsAtom, threadsAtom } from "../state/threads";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
 import { ComposerPromptLengthValidation } from "./chat/ComposerPromptLengthValidation";
 import { getComposerPromptLengthValidationMessage } from "./chat/composerSubmission";
-import {
-  appendReviewCommentsToPrompt,
-  type ReviewCommentContext,
-} from "~/reviewCommentContext";
+import { appendReviewCommentsToPrompt, type ReviewCommentContext } from "~/reviewCommentContext";
 import { ComposerPendingReviewComments } from "./chat/ComposerPendingReviewComments";
 import {
   appendPreviewAnnotationPrompt,
@@ -3349,10 +3346,7 @@ export default function ChatView({
       setOptimisticUserMessages((messages) =>
         messages.filter((message) => message.id !== messageId),
       );
-      setThreadError(
-        threadId,
-        err instanceof Error ? err.message : "Failed to compact context.",
-      );
+      setThreadError(threadId, err instanceof Error ? err.message : "Failed to compact context.");
     } finally {
       sendInFlightRef.current = false;
       resetSendPhase();
@@ -4415,9 +4409,7 @@ export default function ChatView({
         setPrompt(next.text);
       }
       setComposerCursor(nextCursor);
-      setComposerTrigger(
-        detectComposerTrigger(next.text, nextExpandedCursor),
-      );
+      setComposerTrigger(detectComposerTrigger(next.text, nextExpandedCursor));
       if (options?.focusEditorAfterReplace !== false) {
         window.requestAnimationFrame(() => {
           if (promptRef.current !== next.text) return;
@@ -4449,11 +4441,7 @@ export default function ChatView({
 
   const citeAssistantText = useCallback(
     (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor): boolean => {
-      if (
-        isComposerApprovalState ||
-        pendingUserInputs.length > 0 ||
-        !composerEditorRef.current
-      ) {
+      if (isComposerApprovalState || pendingUserInputs.length > 0 || !composerEditorRef.current) {
         toastManager.add({
           type: "warning",
           title: "The composer is not ready",
@@ -5052,7 +5040,11 @@ export default function ChatView({
                             variant="ghost"
                             size="sm"
                             className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
-                            disabled={!prompt.trim() && composerImages.length === 0 && composerFiles.length === 0}
+                            disabled={
+                              !prompt.trim() &&
+                              composerImages.length === 0 &&
+                              composerFiles.length === 0
+                            }
                             onClick={() => void stashCurrentPrompt()}
                             aria-label={`Stash current prompt (${typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"})`}
                           >
@@ -5061,7 +5053,11 @@ export default function ChatView({
                         }
                       />
                       <TooltipPopup side="top">
-                        Stash current prompt ({typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"})
+                        Stash current prompt (
+                        {typeof navigator !== "undefined" && isMacPlatform(navigator.platform)
+                          ? "⌘S"
+                          : "Ctrl+S"}
+                        )
                       </TooltipPopup>
                     </Tooltip>
                   ) : null}
@@ -5069,7 +5065,11 @@ export default function ChatView({
                     entries={promptStashEntries}
                     isOpen={isStashMenuOpen}
                     currentEnvironmentId={environmentId}
-                    stashShortcutLabel={typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"}
+                    stashShortcutLabel={
+                      typeof navigator !== "undefined" && isMacPlatform(navigator.platform)
+                        ? "⌘S"
+                        : "Ctrl+S"
+                    }
                     onRestore={(entry) => void restoreStashedPrompt(entry.id)}
                     onDelete={(entry) => removeStashedPrompt(entry.id)}
                     onClearAll={clearAllStashedPrompts}
@@ -5255,9 +5255,7 @@ export default function ChatView({
                 composerReviewComments.length > 0 && (
                   <ComposerPendingReviewComments
                     comments={composerReviewComments}
-                    onRemove={(commentId) =>
-                      removeComposerDraftReviewComment(threadId, commentId)
-                    }
+                    onRemove={(commentId) => removeComposerDraftReviewComment(threadId, commentId)}
                     className="mb-2.5"
                   />
                 )}
@@ -5595,9 +5593,7 @@ export default function ChatView({
                   threadId={activeThread.id}
                   citationRequest={citationRequest}
                   onCiteAssistantText={citeAssistantText}
-                  latestTaskDescription={
-                    paintOnlyDisplayedTimeline ? null : latestTaskDescription
-                  }
+                  latestTaskDescription={paintOnlyDisplayedTimeline ? null : latestTaskDescription}
                   providerInstanceId={selectedProvider}
                 />
               </div>

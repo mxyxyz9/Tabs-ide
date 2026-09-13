@@ -79,9 +79,7 @@ export function recordFeedback(
 
   const existingIndex = records.findIndex(
     (r) =>
-      r.repoPath === normRepo &&
-      r.findingFingerprint === normFingerprint &&
-      r.verdict === verdict,
+      r.repoPath === normRepo && r.findingFingerprint === normFingerprint && r.verdict === verdict,
   );
 
   let updatedCount = 1;
@@ -156,7 +154,7 @@ export function getFeedbackDiscountFactor(
 ): number {
   const fpCount = getFalsePositiveCount(cwd, findingFingerprint, stateDir);
   if (fpCount === 0) return 1.0;
-  if (fpCount === 1) return 0.80;
+  if (fpCount === 1) return 0.8;
   if (fpCount === 2) return 0.65;
   return 0.0; // 3 or more FPs completely suppresses the finding
 }

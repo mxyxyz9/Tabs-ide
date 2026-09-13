@@ -58,7 +58,11 @@ const CORE_PILLARS: readonly CorePillar[] = [
     badge: "Core Editor",
     description:
       "A full, zero-compromise VS Code engine embedded natively inside Tabs with extension host, language servers, breadcrumbs, and split editors.",
-    highlights: ["Native extensions support", "High-performance Monaco buffers", "Multi-file split views"],
+    highlights: [
+      "Native extensions support",
+      "High-performance Monaco buffers",
+      "Multi-file split views",
+    ],
   },
   {
     id: "agents",
@@ -67,7 +71,11 @@ const CORE_PILLARS: readonly CorePillar[] = [
     badge: "AI Pair Programmer",
     description:
       "Multi-turn coding agents (Codex, Claude, etc.) that inspect files, run terminal commands, and draft changes with live diff reviews.",
-    highlights: ["Parallel thread orchestration", "Visual checkpoint diffs", "Fine-grained approval gates"],
+    highlights: [
+      "Parallel thread orchestration",
+      "Visual checkpoint diffs",
+      "Fine-grained approval gates",
+    ],
   },
   {
     id: "server",
@@ -94,7 +102,11 @@ const CORE_PILLARS: readonly CorePillar[] = [
     badge: "Preview Engine",
     description:
       "Hardware-accelerated WebContentsView preview running alongside your code with responsive device emulation, console capture, and devtools.",
-    highlights: ["Isolated browser sessions", "Viewport frame emulation", "Built-in inspect & devtools"],
+    highlights: [
+      "Isolated browser sessions",
+      "Viewport frame emulation",
+      "Built-in inspect & devtools",
+    ],
   },
   {
     id: "testing",
@@ -156,18 +168,21 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
       const api = readNativeApi();
       if (api) {
         const projectId = newProjectId();
-        const title = selectedFolder.split(/[/\\]/).findLast((s) => s.trim().length > 0) ?? selectedFolder;
-        await api.orchestration.dispatchCommand({
-          type: "project.create",
-          commandId: newCommandId(),
-          projectId,
-          title,
-          workspaceRoot: selectedFolder,
-          defaultModelSelection: null,
-          createdAt: new Date().toISOString(),
-        }).catch((err) => {
-          console.warn("[Onboarding] Failed to auto-create selected project", err);
-        });
+        const title =
+          selectedFolder.split(/[/\\]/).findLast((s) => s.trim().length > 0) ?? selectedFolder;
+        await api.orchestration
+          .dispatchCommand({
+            type: "project.create",
+            commandId: newCommandId(),
+            projectId,
+            title,
+            workspaceRoot: selectedFolder,
+            defaultModelSelection: null,
+            createdAt: new Date().toISOString(),
+          })
+          .catch((err) => {
+            console.warn("[Onboarding] Failed to auto-create selected project", err);
+          });
       }
     }
 
@@ -187,7 +202,9 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
     onDone?.();
   }, [completeOnboarding, onDone]);
 
-  const [scannedCandidates, setScannedCandidates] = useState<readonly AgentSessionProjectCandidate[]>([]);
+  const [scannedCandidates, setScannedCandidates] = useState<
+    readonly AgentSessionProjectCandidate[]
+  >([]);
   const [isScanningSessions, setIsScanningSessions] = useState(false);
   const [importStatusByPath, setImportStatusByPath] = useState<
     Record<string, { status: "pending" | "success" | "error"; count?: number; message?: string }>
@@ -308,11 +325,7 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
             <div
               key={s}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                s === step
-                  ? "w-8 bg-primary"
-                  : s < step
-                    ? "w-4 bg-primary/40"
-                    : "w-4 bg-muted"
+                s === step ? "w-8 bg-primary" : s < step ? "w-4 bg-primary/40" : "w-4 bg-muted"
               }`}
             />
           ))}
@@ -342,12 +355,10 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 <span className="text-muted-foreground">•</span>
                 <span className="text-primary font-semibold">6 Core Pillars</span>
               </div>
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Welcome to Tabs.
-              </h2>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Welcome to Tabs.</h2>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Tabs is a high-performance, unified AI pair-programming workbench.
-                Here is how the core systems work together to accelerate your workflow.
+                Tabs is a high-performance, unified AI pair-programming workbench. Here is how the
+                core systems work together to accelerate your workflow.
               </p>
             </div>
 
@@ -363,12 +374,20 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                       Embedded Code-OSS Runtime
                     </span>
                     {codeHostState?.available ? (
-                      <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] gap-1">
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] gap-1"
+                      >
                         <CheckCircle2Icon className="size-3" /> Ready
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] gap-1">
-                        <RefreshCwIcon className={`size-3 ${isCheckingCodeHost ? "animate-spin" : ""}`} />
+                      <Badge
+                        variant="outline"
+                        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] gap-1"
+                      >
+                        <RefreshCwIcon
+                          className={`size-3 ${isCheckingCodeHost ? "animate-spin" : ""}`}
+                        />
                         {codeHostState?.mode === "external" ? "External Host" : "Connecting"}
                       </Badge>
                     )}
@@ -376,7 +395,7 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {codeHostState?.available
                       ? `Native electron workbench active (${codeHostState.mode} mode)`
-                      : codeHostState?.reason ?? "Checking embedded host..."}
+                      : (codeHostState?.reason ?? "Checking embedded host...")}
                   </p>
                 </div>
               </div>
@@ -387,7 +406,9 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 disabled={isCheckingCodeHost}
                 className="text-xs"
               >
-                <RefreshCwIcon className={`size-3 mr-1.5 ${isCheckingCodeHost ? "animate-spin" : ""}`} />
+                <RefreshCwIcon
+                  className={`size-3 mr-1.5 ${isCheckingCodeHost ? "animate-spin" : ""}`}
+                />
                 Re-check
               </Button>
             </div>
@@ -417,7 +438,10 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                     </div>
                     <div className="mt-3.5 pt-2.5 border-t border-border/40 space-y-1">
                       {pillar.highlights.map((h, i) => (
-                        <div key={i} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <div
+                          key={i}
+                          className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                        >
                           <span className="size-1 rounded-full bg-primary/60" />
                           <span>{h}</span>
                         </div>
@@ -442,8 +466,8 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 Coding Agents & Providers
               </h2>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Tabs supports multiple AI model providers. Detect active credentials, configure keys,
-                or use Tabs completely offline with local tools and embedded Code-OSS.
+                Tabs supports multiple AI model providers. Detect active credentials, configure
+                keys, or use Tabs completely offline with local tools and embedded Code-OSS.
               </p>
             </div>
 
@@ -454,9 +478,9 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 <span className="font-semibold text-emerald-700 dark:text-emerald-300">
                   Full Offline Resilience:
                 </span>{" "}
-                If you are working offline, in an air-gapped environment, or haven't configured an API key yet,
-                Tabs operates without error. You can still use the embedded editor, Git workflows, terminals,
-                and browser views at any time.
+                If you are working offline, in an air-gapped environment, or haven't configured an
+                API key yet, Tabs operates without error. You can still use the embedded editor, Git
+                workflows, terminals, and browser views at any time.
               </div>
             </div>
 
@@ -485,16 +509,21 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">GPT-4o, o3-mini, Codex App-Server</p>
+                      <p className="text-xs text-muted-foreground">
+                        GPT-4o, o3-mini, Codex App-Server
+                      </p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="text-[11px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
+                  <Badge
+                    variant="outline"
+                    className="text-[11px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+                  >
                     Active
                   </Badge>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
-                  Default native pair programmer. Uses official app-server daemon for autonomous code exploration,
-                  structured diffs, and tool calls.
+                  Default native pair programmer. Uses official app-server daemon for autonomous
+                  code exploration, structured diffs, and tool calls.
                 </p>
               </div>
 
@@ -521,15 +550,21 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">Claude 3.7 Sonnet, Claude 3.5 Haiku</p>
+                      <p className="text-xs text-muted-foreground">
+                        Claude 3.7 Sonnet, Claude 3.5 Haiku
+                      </p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="text-[11px] border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10">
+                  <Badge
+                    variant="outline"
+                    className="text-[11px] border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10"
+                  >
                     Ready
                   </Badge>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
-                  Deep reasoning and architect workflows. Supports MCP servers, custom skills, and computer-use tools.
+                  Deep reasoning and architect workflows. Supports MCP servers, custom skills, and
+                  computer-use tools.
                 </p>
               </div>
             </div>
@@ -545,10 +580,17 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 </div>
                 <div className="divide-y divide-border/40">
                   {providers.map((p) => (
-                    <div key={p.instanceId} className="flex items-center justify-between py-2 text-xs">
+                    <div
+                      key={p.instanceId}
+                      className="flex items-center justify-between py-2 text-xs"
+                    >
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-foreground">
-                          {p.displayName ?? PROVIDER_DISPLAY_NAMES[p.driver as keyof typeof PROVIDER_DISPLAY_NAMES] ?? p.driver}
+                          {p.displayName ??
+                            PROVIDER_DISPLAY_NAMES[
+                              p.driver as keyof typeof PROVIDER_DISPLAY_NAMES
+                            ] ??
+                            p.driver}
                         </span>
                         <span className="text-muted-foreground text-[11px]">
                           v{p.version ?? "latest"}
@@ -556,7 +598,10 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         {p.installed ? (
-                          <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                          >
                             Installed
                           </Badge>
                         ) : (
@@ -585,8 +630,8 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 Open or Add a Project
               </h2>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Pick an existing directory on your machine, clone a remote Git repository,
-                or start with a fresh blank workspace.
+                Pick an existing directory on your machine, clone a remote Git repository, or start
+                with a fresh blank workspace.
               </p>
             </div>
 
@@ -630,7 +675,8 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                     Start with Empty Workspace
                   </h3>
                   <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                    Proceed into Tabs without pre-loading a project folder. You can add or create projects anytime from the sidebar or Command Palette.
+                    Proceed into Tabs without pre-loading a project folder. You can add or create
+                    projects anytime from the sidebar or Command Palette.
                   </p>
                 </div>
                 <div className="mt-5">
@@ -654,8 +700,13 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-foreground">Selected Directory:</span>
-                      <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
+                      <span className="text-xs font-semibold text-foreground">
+                        Selected Directory:
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] border-primary/40 text-primary"
+                      >
                         Ready to load
                       </Badge>
                     </div>
@@ -681,7 +732,8 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                 <div className="flex items-center gap-2">
                   <BotIcon className="size-4 text-primary" />
                   <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider">
-                    Discovered Agent Projects {scannedCandidates.length > 0 ? `(${scannedCandidates.length})` : ""}
+                    Discovered Agent Projects{" "}
+                    {scannedCandidates.length > 0 ? `(${scannedCandidates.length})` : ""}
                   </span>
                 </div>
                 <Button
@@ -721,14 +773,20 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                           onClick={() => setSelectedFolder(candidate.path)}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground truncate">{candidate.title}</span>
+                            <span className="font-semibold text-foreground truncate">
+                              {candidate.title}
+                            </span>
                             {candidate.git?.repository && (
-                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-muted-foreground/30">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 h-4 border-muted-foreground/30"
+                              >
                                 {candidate.git.repository}
                               </Badge>
                             )}
                             <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
-                              {candidate.threadCount} {candidate.threadCount === 1 ? "thread" : "threads"}
+                              {candidate.threadCount}{" "}
+                              {candidate.threadCount === 1 ? "thread" : "threads"}
                             </Badge>
                           </div>
                           <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
@@ -851,9 +909,7 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                     {selectedProvider}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Offline fallback enabled
-                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Offline fallback enabled</p>
               </div>
 
               <div className="rounded-xl border border-border/70 bg-card/40 p-4">
@@ -864,7 +920,8 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
                   <FolderIcon className="size-4 text-amber-500" />
                   <span className="text-sm font-semibold text-foreground truncate">
                     {selectedFolder
-                      ? selectedFolder.split(/[/\\]/).findLast((s) => s.trim().length > 0) ?? selectedFolder
+                      ? (selectedFolder.split(/[/\\]/).findLast((s) => s.trim().length > 0) ??
+                        selectedFolder)
                       : "Default Workspace"}
                   </span>
                 </div>
@@ -881,19 +938,27 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">Cmd/Ctrl + K</kbd>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+                    Cmd/Ctrl + K
+                  </kbd>
                   <span>Open Command Palette</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">Cmd/Ctrl + B</kbd>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+                    Cmd/Ctrl + B
+                  </kbd>
                   <span>Toggle Sidebar</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">Cmd/Ctrl + `</kbd>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+                    Cmd/Ctrl + `
+                  </kbd>
                   <span>Toggle Embedded Terminal</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">Cmd/Ctrl + ,</kbd>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+                    Cmd/Ctrl + ,
+                  </kbd>
                   <span>Open Settings & Diagnostics</span>
                 </div>
               </div>

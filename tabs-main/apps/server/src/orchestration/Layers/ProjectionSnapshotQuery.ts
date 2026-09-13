@@ -685,10 +685,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             interactionMode: row.interactionMode,
             branch: row.branch,
             worktreePath: row.worktreePath,
-            ...mapThreadPullRequests(
-              pullRequestsByThread.get(row.threadId) ?? [],
-              row.projectId,
-            ),
+            ...mapThreadPullRequests(pullRequestsByThread.get(row.threadId) ?? [], row.projectId),
             latestTurn: latestTurnByThread.get(row.threadId) ?? null,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,

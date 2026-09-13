@@ -77,7 +77,8 @@ function fakeCli(responses: readonly unknown[]): {
     Effect.sync(() => {
       calls.push(req.args);
       const value = responses[calls.length - 1];
-      if (value === undefined) throw new Error(`Unexpected GitHub request #${calls.length}: ${req.args.join(" ")}`);
+      if (value === undefined)
+        throw new Error(`Unexpected GitHub request #${calls.length}: ${req.args.join(" ")}`);
       return {
         code: 0,
         signal: null,
@@ -233,9 +234,7 @@ describe("runGitHubStackAction", () => {
         action: "stack_rebase",
       }),
     );
-    const mutations = calls.filter((args) =>
-      args.some((arg) => arg.startsWith("query=mutation")),
-    );
+    const mutations = calls.filter((args) => args.some((arg) => arg.startsWith("query=mutation")));
     expect(mutations).toHaveLength(2);
     expect(mutations[0]).toContain("id=PR_2");
     expect(mutations[0]).toContain("sha=bbb");

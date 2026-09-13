@@ -56,4 +56,3 @@ describe("relayJwt", () => {
     expect(error.message).not.toContain("sensitive library detail");
   });
 });
-

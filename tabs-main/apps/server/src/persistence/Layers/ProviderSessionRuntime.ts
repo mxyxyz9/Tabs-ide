@@ -222,17 +222,16 @@ const makeProviderSessionRuntimeRepository = Effect.gen(function* () {
       ),
     );
 
-  const recordImportedTranscript: ProviderSessionRuntimeRepositoryShape["recordImportedTranscript"] = (
-    input,
-  ) =>
-    recordImportedTranscriptRow(input).pipe(
-      Effect.mapError(
-        toPersistenceSqlOrDecodeError(
-          "ProviderSessionRuntimeRepository.recordImportedTranscript:query",
-          "ProviderSessionRuntimeRepository.recordImportedTranscript:encodeRequest",
+  const recordImportedTranscript: ProviderSessionRuntimeRepositoryShape["recordImportedTranscript"] =
+    (input) =>
+      recordImportedTranscriptRow(input).pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProviderSessionRuntimeRepository.recordImportedTranscript:query",
+            "ProviderSessionRuntimeRepository.recordImportedTranscript:encodeRequest",
+          ),
         ),
-      ),
-    );
+      );
 
   const getByThreadId: ProviderSessionRuntimeRepositoryShape["getByThreadId"] = (input) =>
     getRuntimeRowByThreadId(input).pipe(

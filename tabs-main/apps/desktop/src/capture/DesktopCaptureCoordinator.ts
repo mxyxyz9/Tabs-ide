@@ -10,7 +10,12 @@ export class DesktopCaptureCoordinator {
     if (process.platform === "darwin") {
       try {
         const status = systemPreferences.getMediaAccessStatus("screen");
-        if (status === "granted" || status === "denied" || status === "restricted" || status === "not-determined") {
+        if (
+          status === "granted" ||
+          status === "denied" ||
+          status === "restricted" ||
+          status === "not-determined"
+        ) {
           return status;
         }
         return "unknown";
@@ -43,9 +48,11 @@ export class DesktopCaptureCoordinator {
         }
 
         // Direct user to System Settings -> Privacy & Security -> Screen Recording
-        await shell.openExternal(
-          "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
-        ).catch(() => undefined);
+        await shell
+          .openExternal(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+          )
+          .catch(() => undefined);
         return false;
       } catch {
         return false;
@@ -64,7 +71,8 @@ export class DesktopCaptureCoordinator {
 
     const width = Math.min(Math.max(options.thumbnailWidth ?? 1920, 320), 3840);
     const height = Math.min(Math.max(options.thumbnailHeight ?? 1080, 240), 2160);
-    const types: Array<"screen" | "window"> = options.target === "window" ? ["window"] : ["screen", "window"];
+    const types: Array<"screen" | "window"> =
+      options.target === "window" ? ["window"] : ["screen", "window"];
 
     const sources = await desktopCapturer.getSources({
       types,

@@ -125,9 +125,24 @@ export function resolveWindowsProcessTreeModule(): WindowsProcessTreeModule | nu
         )
       : null,
     // Development checkout: ../tabs-code-main from apps/server
-    path.resolve(process.cwd(), "..", "tabs-code-main", "node_modules", "@vscode", "windows-process-tree"),
+    path.resolve(
+      process.cwd(),
+      "..",
+      "tabs-code-main",
+      "node_modules",
+      "@vscode",
+      "windows-process-tree",
+    ),
     // Development checkout: ../../tabs-code-main
-    path.resolve(process.cwd(), "..", "..", "tabs-code-main", "node_modules", "@vscode", "windows-process-tree"),
+    path.resolve(
+      process.cwd(),
+      "..",
+      "..",
+      "tabs-code-main",
+      "node_modules",
+      "@vscode",
+      "windows-process-tree",
+    ),
     // Development checkout relative to __dirname / import.meta.url
     path.resolve(
       path.dirname(new URL(import.meta.url).pathname),
@@ -142,7 +157,12 @@ export function resolveWindowsProcessTreeModule(): WindowsProcessTreeModule | nu
     ),
     // Explicit environment override if configured
     process.env.TABS_CODE_OSS_BUILD_DIR
-      ? path.join(process.env.TABS_CODE_OSS_BUILD_DIR, "node_modules", "@vscode", "windows-process-tree")
+      ? path.join(
+          process.env.TABS_CODE_OSS_BUILD_DIR,
+          "node_modules",
+          "@vscode",
+          "windows-process-tree",
+        )
       : null,
   ].filter((p): p is string => Boolean(p));
 
@@ -239,7 +259,9 @@ export async function readWindowsProcessRowsFallback(): Promise<ProcessRow[]> {
     const uptime = process.uptime();
 
     return items
-      .filter((item): item is typeof item & { ProcessId: number } => typeof item.ProcessId === "number")
+      .filter(
+        (item): item is typeof item & { ProcessId: number } => typeof item.ProcessId === "number",
+      )
       .map((item) => ({
         pid: item.ProcessId,
         ppid: item.ParentProcessId ?? 0,
@@ -295,7 +317,10 @@ export function readLinuxProcessTicks(pid: number): number | null {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
     const lastParen = stat.lastIndexOf(")");
     if (lastParen === -1) return null;
-    const fields = stat.slice(lastParen + 1).trim().split(/\s+/);
+    const fields = stat
+      .slice(lastParen + 1)
+      .trim()
+      .split(/\s+/);
     // fields[11] is utime (14th stat field), fields[12] is stime (15th stat field)
     const utime = Number(fields[11]);
     const stime = Number(fields[12]);

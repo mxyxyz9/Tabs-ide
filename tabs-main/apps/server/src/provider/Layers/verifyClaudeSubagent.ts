@@ -11,7 +11,7 @@ async function main() {
   class FakeClaudeQuery {
     queue: any[] = [];
     waiters: any[] = [];
-    
+
     emit(event: any) {
       if (this.waiters.length > 0) {
         const waiter = this.waiters.shift();
@@ -30,7 +30,7 @@ async function main() {
           return new Promise((resolve) => {
             this.waiters.push({ resolve });
           });
-        }
+        },
       };
     }
 
@@ -66,8 +66,8 @@ async function main() {
         model: "claude-3-5-sonnet",
         role: "assistant",
         type: "message",
-        usage: { input_tokens: 10, output_tokens: 10 }
-      }
+        usage: { input_tokens: 10, output_tokens: 10 },
+      },
     });
 
     query.emit({
@@ -77,8 +77,8 @@ async function main() {
         type: "tool_use",
         id: "tu_subagent_123",
         name: "Task",
-        input: {}
-      }
+        input: {},
+      },
     });
 
     // 2. Claude agent emits task_progress for this subagent
@@ -90,18 +90,18 @@ async function main() {
       summary: "Progress...",
       usage: { total_tokens: 10, tool_uses: 1, duration_ms: 100 },
       session_id: "sess_123",
-      uuid: "evt_123"
+      uuid: "evt_123",
     });
 
     // 3. Close the tool_use (meaning task is spawned/running? No, in Claude CLI, task progress happens after tool_use is emitted)
     query.emit({
       type: "content_block_stop",
-      index: 0
+      index: 0,
     });
 
     // Wait for the adapter to process the events
     const runtimeEvents = yield* Fiber.join(eventsFiber);
-    
+
     console.log("Captured Runtime Events:");
     for (const evt of runtimeEvents as any) {
       console.log(` - ${evt.type} (ref: ${evt.providerThreadRef})`);
@@ -109,7 +109,6 @@ async function main() {
 
     console.log("Subagent lifecycle verification completed!");
   });
-
 
   const layer = Layer.mergeAll(
     ServerConfig.layerTest("/tmp/test", "/tmp"),
@@ -134,7 +133,24 @@ async function main() {
         realPath: (p: string) => Effect.succeed(p),
         remove: () => Effect.void,
         rename: () => Effect.void,
-        stat: () => Effect.succeed({ type: "File", size: 0, mtime: new Date(), atime: new Date(), ctime: new Date(), birthtime: new Date(), dev: 0, ino: 0, mode: 0, nlink: 0, uid: 0, gid: 0, rdev: 0, blksize: 0, blocks: 0 } as any),
+        stat: () =>
+          Effect.succeed({
+            type: "File",
+            size: 0,
+            mtime: new Date(),
+            atime: new Date(),
+            ctime: new Date(),
+            birthtime: new Date(),
+            dev: 0,
+            ino: 0,
+            mode: 0,
+            nlink: 0,
+            uid: 0,
+            gid: 0,
+            rdev: 0,
+            blksize: 0,
+            blocks: 0,
+          } as any),
         symlink: () => Effect.void,
         truncate: () => Effect.void,
         utimes: () => Effect.void,

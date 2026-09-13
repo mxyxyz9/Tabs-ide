@@ -10,10 +10,11 @@ import { decideWindowOpenAction, isSafePopupProtocol } from "./popupHandoff";
 
 describe("popupHandoff", () => {
   describe("isSafePopupProtocol", () => {
-    it("permits http, https, and about:blank", () => {
+    it("permits only classifiable web URLs", () => {
       expect(isSafePopupProtocol("https://github.com/login/oauth/authorize")).toBe(true);
       expect(isSafePopupProtocol("http://localhost:3000/auth")).toBe(true);
-      expect(isSafePopupProtocol("about:blank")).toBe(true);
+      expect(isSafePopupProtocol("about:blank")).toBe(false);
+      expect(isSafePopupProtocol("about:srcdoc")).toBe(false);
     });
 
     it("rejects dangerous or privileged protocols", () => {
@@ -27,7 +28,7 @@ describe("popupHandoff", () => {
   describe("decideWindowOpenAction", () => {
     const testPartition = "persist:tabs-browser:profile:work";
 
-    it("allows about:blank bootstrap popups for OAuth SDKs", () => {
+    it("denies unclassifiable about:blank bootstrap popups", () => {
       const decision = decideWindowOpenAction(
         {
           url: "about:blank",
@@ -41,13 +42,7 @@ describe("popupHandoff", () => {
         "https://my-app.com",
       );
 
-      expect(decision.action).toBe("allow");
-      if (decision.action === "allow") {
-        expect(decision.overrideBrowserWindowOptions.webPreferences?.partition).toBe(testPartition);
-        expect(decision.overrideBrowserWindowOptions.webPreferences?.contextIsolation).toBe(true);
-        expect(decision.overrideBrowserWindowOptions.webPreferences?.sandbox).toBe(true);
-        expect(decision.overrideBrowserWindowOptions.webPreferences?.nodeIntegration).toBe(false);
-      }
+      expect(decision.action).toBe("deny");
     });
 
     it("allows scripted OAuth popups sharing the exact session partition", () => {
@@ -70,6 +65,23 @@ describe("popupHandoff", () => {
       }
     });
 
+    it("requires an explicit user action for providers that reject embedding", () => {
+      const decision = decideWindowOpenAction(
+        {
+          url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=xyz",
+          disposition: "new-window",
+          frameName: "oauth",
+          features: "width=500,height=600",
+          referrer: { url: "https://my-app.com", policy: "strict-origin" },
+          postBody: null as never,
+        },
+        testPartition,
+        "https://my-app.com",
+      );
+
+      expect(decision).toEqual({ action: "deny", externalOAuthRequired: true });
+    });
+
     it("routes plain target=_blank links to external browser", () => {
       const decision = decideWindowOpenAction(
         {
@@ -88,6 +100,23 @@ describe("popupHandoff", () => {
       if (decision.action === "deny") {
         expect(decision.handledExternally).toBe(true);
       }
+    });
+
+    it("routes unclassified scripted popups externally without sharing the partition", () => {
+      const decision = decideWindowOpenAction(
+        {
+          url: "https://ads.example.com/popup",
+          disposition: "new-window",
+          frameName: "advertisement",
+          features: "width=500,height=600",
+          referrer: { url: "https://my-app.com", policy: "strict-origin" },
+          postBody: null as never,
+        },
+        testPartition,
+        "https://my-app.com",
+      );
+
+      expect(decision).toEqual({ action: "deny" });
     });
 
     it("denies unsafe protocols", () => {

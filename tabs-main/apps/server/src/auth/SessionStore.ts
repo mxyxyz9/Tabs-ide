@@ -947,4 +947,3 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(SessionStore, make).pipe(Layer.provideMerge(AuthSessions.layer));
-

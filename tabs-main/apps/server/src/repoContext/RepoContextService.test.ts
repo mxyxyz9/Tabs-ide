@@ -40,10 +40,7 @@ function makeFileHistory(file: string, numCommits: number): FileHistory {
 }
 
 function makeCallerList(symbol: string, numFiles: number): CallerList {
-  const files = Array.from(
-    { length: numFiles },
-    (_, i) => `src/components/Component${i}.tsx`,
-  );
+  const files = Array.from({ length: numFiles }, (_, i) => `src/components/Component${i}.tsx`);
   return { symbol, files };
 }
 
@@ -53,12 +50,8 @@ function makeCallerList(symbol: string, numFiles: number): CallerList {
 
 describe("compressRepoContext — budget enforcement", () => {
   it("keeps output within REPO_CONTEXT_BUDGET_CHARS under worst-case load (50 callers, 5 files of history per file)", () => {
-    const histories = Array.from({ length: 5 }, (_, i) =>
-      makeFileHistory(`src/module${i}.ts`, 8),
-    );
-    const callers = Array.from({ length: 5 }, (_, i) =>
-      makeCallerList(`exportedSymbol${i}`, 50),
-    );
+    const histories = Array.from({ length: 5 }, (_, i) => makeFileHistory(`src/module${i}.ts`, 8));
+    const callers = Array.from({ length: 5 }, (_, i) => makeCallerList(`exportedSymbol${i}`, 50));
 
     const result = compressRepoContext(histories, callers, REPO_CONTEXT_BUDGET_CHARS);
 
@@ -67,9 +60,10 @@ describe("compressRepoContext — budget enforcement", () => {
     );
 
     // The actual length MUST be reported on failure so the claim is verifiable.
-    expect(result.length, `Context length ${result.length} exceeds budget ${REPO_CONTEXT_BUDGET_CHARS}`).toBeLessThanOrEqual(
-      REPO_CONTEXT_BUDGET_CHARS,
-    );
+    expect(
+      result.length,
+      `Context length ${result.length} exceeds budget ${REPO_CONTEXT_BUDGET_CHARS}`,
+    ).toBeLessThanOrEqual(REPO_CONTEXT_BUDGET_CHARS);
   });
 
   it("returns full content unchanged when well within budget", () => {
@@ -116,7 +110,7 @@ describe("extractExportedSymbols", () => {
       "+export type SessionId = string;",
       "+export const DEFAULT_TIMEOUT = 30_000;",
       "+function internalHelper() {}", // not exported, should not appear
-      "+const privateVar = 1;",       // not exported, should not appear
+      "+const privateVar = 1;", // not exported, should not appear
     ].join("\n");
 
     const symbols = extractExportedSymbols(patch);
@@ -246,10 +240,7 @@ describe("loadTabsReviewJson", () => {
 
   it("returns a parseError when instructions is not a string", () => {
     const dir = makeTempDir();
-    writeFileSync(
-      path.join(dir, ".tabs-review.json"),
-      JSON.stringify({ instructions: 42 }),
-    );
+    writeFileSync(path.join(dir, ".tabs-review.json"), JSON.stringify({ instructions: 42 }));
 
     const result = loadTabsReviewJson(dir);
     expect(result.config).toBeUndefined();

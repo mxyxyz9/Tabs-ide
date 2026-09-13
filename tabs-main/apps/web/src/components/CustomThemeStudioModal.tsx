@@ -63,9 +63,15 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
   const [autoTuneFeedback, setAutoTuneFeedback] = useState<string | null>(null);
 
   // Extended driver state for extra granular controls
-  const mutedFgColor = config.tokenOverrides?.["app.mutedForeground"] || (config.baseVariant === "dark" ? "#8a8a8a" : "#64748b");
-  const selectionColor = config.tokenOverrides?.["editor.selectionBackground"] || (config.baseVariant === "dark" ? "#38bdf840" : "#2563eb33");
-  const hoverWashColor = config.tokenOverrides?.["list.hoverBackground"] || (config.baseVariant === "dark" ? "#ffffff0f" : "#0000000d");
+  const mutedFgColor =
+    config.tokenOverrides?.["app.mutedForeground"] ||
+    (config.baseVariant === "dark" ? "#8a8a8a" : "#64748b");
+  const selectionColor =
+    config.tokenOverrides?.["editor.selectionBackground"] ||
+    (config.baseVariant === "dark" ? "#38bdf840" : "#2563eb33");
+  const hoverWashColor =
+    config.tokenOverrides?.["list.hoverBackground"] ||
+    (config.baseVariant === "dark" ? "#ffffff0f" : "#0000000d");
 
   // WCAG Contrast audit results
   const wcagResults = useMemo(() => runThemeWcagCheck(config), [config]);
@@ -90,7 +96,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
     onChange({
       ...config,
       tokenOverrides: {
-        ...(config.tokenOverrides ?? {}),
+        ...config.tokenOverrides,
         [token]: value,
       },
     });
@@ -140,7 +146,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
   const handleAutoFixContrast = () => {
     const isDark = config.baseVariant === "dark";
     const bgLum = calculateLuminance(toHexColor(config.colors.background));
-    
+
     let nextFg = config.colors.foreground;
     if (isDark && bgLum > 0.4) {
       nextFg = "#f5f5f5";
@@ -152,7 +158,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
 
     const optimalPrimaryFg = getOptimalPrimaryForeground(config.colors.primary);
 
-    const nextOverrides: Record<string, string> = { ...(config.tokenOverrides ?? {}) };
+    const nextOverrides: Record<string, string> = { ...config.tokenOverrides };
     nextOverrides["app.primaryForeground"] = optimalPrimaryFg;
     nextOverrides["button.foreground"] = optimalPrimaryFg;
 
@@ -187,7 +193,8 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                 Custom Theme Studio
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Design custom color suites with automated token derivation & live WCAG contrast checking.
+                Design custom color suites with automated token derivation & live WCAG contrast
+                checking.
               </p>
             </div>
           </div>
@@ -415,7 +422,9 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             ) : (
               <div className="flex items-center gap-2 rounded-xl bg-card border border-border/80 px-3.5 py-1.5 text-xs text-foreground font-medium shadow-2xs">
                 <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
-                <span>WCAG AA Contrast Compliant ({wcagResults.length}/{wcagResults.length} Pairs Pass)</span>
+                <span>
+                  WCAG AA Contrast Compliant ({wcagResults.length}/{wcagResults.length} Pairs Pass)
+                </span>
                 <button
                   type="button"
                   onClick={handleAutoFixContrast}
@@ -494,7 +503,8 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                   Full-Width Live Preview Showcase
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  High-definition inspection of custom theme colors across IDE, App Shell, and Token surfaces.
+                  High-definition inspection of custom theme colors across IDE, App Shell, and Token
+                  surfaces.
                 </p>
               </div>
               <button

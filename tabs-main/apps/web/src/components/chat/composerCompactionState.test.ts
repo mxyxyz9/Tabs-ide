@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ThreadId } from "@tabs/contracts";
-import { useComposerDraftStore, type ComposerImageAttachment, type ComposerFileAttachment } from "~/composerDraftStore";
+import {
+  useComposerDraftStore,
+  type ComposerImageAttachment,
+  type ComposerFileAttachment,
+} from "~/composerDraftStore";
 import { isCompactCommandMessage } from "./ContextWindowMeter.logic";
 
 describe("composer state preservation during compaction", () => {
@@ -80,7 +84,10 @@ describe("composer state preservation during compaction", () => {
     store.setPrompt(threadId, "Draft text that must survive compaction failure");
 
     // Simulate compaction failure
-    const compactionResult = { _tag: "Failure" as const, error: new Error("Compaction server error") };
+    const compactionResult = {
+      _tag: "Failure" as const,
+      error: new Error("Compaction server error"),
+    };
     expect(compactionResult._tag).toBe("Failure");
 
     // Draft store should still hold the user's input intact

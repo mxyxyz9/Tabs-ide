@@ -8,11 +8,7 @@ const keytarMock = vi.hoisted(() => ({
 
 vi.mock("keytar", () => ({ default: keytarMock }));
 
-import {
-  deleteProviderSecret,
-  getProviderSecret,
-  setProviderSecret,
-} from "./ProviderSecretStore";
+import { deleteProviderSecret, getProviderSecret, setProviderSecret } from "./ProviderSecretStore";
 
 describe("ProviderSecretStore", () => {
   it("retrieves a stored secret from the keychain", async () => {

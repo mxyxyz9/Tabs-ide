@@ -115,9 +115,9 @@ try {
   });
 
   for (const relativePath of releasePackageFiles) {
-    const packageJson = JSON.parse(
-      readFileSync(resolve(tempRoot, relativePath), "utf8"),
-    ) as { version?: unknown };
+    const packageJson = JSON.parse(readFileSync(resolve(tempRoot, relativePath), "utf8")) as {
+      version?: unknown;
+    };
     if (packageJson.version !== "9.9.9-smoke.0") {
       throw new Error(`Expected ${relativePath} to contain the smoke version.`);
     }

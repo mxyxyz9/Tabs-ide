@@ -154,4 +154,3 @@ export function makeRelayClientTracingLayer(
     Tracer.Tracer.pipe(Effect.map(nonInterferingTracer), Effect.map(Option.some)),
   ).pipe(Layer.provide(tracerLayer));
 }
-

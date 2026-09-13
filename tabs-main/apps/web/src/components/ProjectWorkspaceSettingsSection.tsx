@@ -1155,11 +1155,7 @@ export function ProjectWorkspaceSettingsSection() {
                       Reset icon
                     </Button>
                   ) : null}
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    onClick={() => setIconPickerOpen(true)}
-                  >
+                  <Button size="xs" variant="outline" onClick={() => setIconPickerOpen(true)}>
                     Change icon
                   </Button>
                 </div>

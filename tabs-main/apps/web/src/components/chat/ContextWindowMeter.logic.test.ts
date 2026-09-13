@@ -9,7 +9,9 @@ import {
 describe("isCompactCommandMessage", () => {
   it("matches plain /compact user message", () => {
     expect(isCompactCommandMessage({ role: "user", text: "/compact", attachments: [] })).toBe(true);
-    expect(isCompactCommandMessage({ role: "user", text: "  /COMPACT  ", attachments: [] })).toBe(true);
+    expect(isCompactCommandMessage({ role: "user", text: "  /COMPACT  ", attachments: [] })).toBe(
+      true,
+    );
   });
 
   it("does not match when attachments are present", () => {
@@ -23,8 +25,12 @@ describe("isCompactCommandMessage", () => {
   });
 
   it("does not match non-user messages or non-compact text", () => {
-    expect(isCompactCommandMessage({ role: "assistant", text: "/compact", attachments: [] })).toBe(false);
-    expect(isCompactCommandMessage({ role: "user", text: "/compact this please", attachments: [] })).toBe(false);
+    expect(isCompactCommandMessage({ role: "assistant", text: "/compact", attachments: [] })).toBe(
+      false,
+    );
+    expect(
+      isCompactCommandMessage({ role: "user", text: "/compact this please", attachments: [] }),
+    ).toBe(false);
     expect(isCompactCommandMessage({ role: "user", text: "hello", attachments: [] })).toBe(false);
   });
 });

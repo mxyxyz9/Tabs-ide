@@ -24,9 +24,12 @@ export function generateFixPlan(
 
   // 1. Fix for unawaited promise calls
   if (finding.title.includes("Unawaited Async")) {
-    const fixedLine = targetLine.replace(/(\b(?:fetch|fs\.promises|axios|api\.[A-Za-z0-9_$]+)\s*\()/, "await $1");
+    const fixedLine = targetLine.replace(
+      /(\b(?:fetch|fs\.promises|axios|api\.[A-Za-z0-9_$]+)\s*\()/,
+      "await $1",
+    );
     const patch = `--- a/${finding.filePath}\n+++ b/${finding.filePath}\n@@ -${finding.startLine},1 +${finding.startLine},1 @@\n-${targetLine}\n+${fixedLine}`;
-    
+
     return {
       description: `Add 'await' operator to async promise call on line ${finding.startLine}.`,
       replacementPatch: patch,

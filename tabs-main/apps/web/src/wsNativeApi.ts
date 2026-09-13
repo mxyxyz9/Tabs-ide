@@ -468,9 +468,8 @@ export function createWsNativeApi(options?: {
           callback(message.data),
         ),
       onResourceTelemetry: (callback) => {
-        const unsubscribe = transport.subscribe(
-          WS_CHANNELS.resourceTelemetryUpdated,
-          (message) => callback(message.data),
+        const unsubscribe = transport.subscribe(WS_CHANNELS.resourceTelemetryUpdated, (message) =>
+          callback(message.data),
         );
         void transport.request(WS_METHODS.subscribeResourceTelemetry, {}).catch(() => {});
         return unsubscribe;
@@ -478,7 +477,8 @@ export function createWsNativeApi(options?: {
       readUsageSummary: (input) => transport.request(WS_METHODS.usageReadSummary, input),
       listUsageSnapshots: (input = {}) => transport.request(WS_METHODS.usageListSnapshots, input),
       refreshAllUsageSnapshots: () => transport.request(WS_METHODS.usageRefreshAll, {}),
-      consumeResetCredit: (input) => transport.request(WS_METHODS.providerConsumeResetCredit, input),
+      consumeResetCredit: (input) =>
+        transport.request(WS_METHODS.providerConsumeResetCredit, input),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

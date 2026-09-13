@@ -30,10 +30,7 @@ describe("versionSkew", () => {
   });
 
   it("handles nightly versions appropriately", () => {
-    const mismatch = resolveVersionMismatch(
-      "1.0.0-nightly.20260101",
-      "1.0.0-nightly.20260102",
-    );
+    const mismatch = resolveVersionMismatch("1.0.0-nightly.20260101", "1.0.0-nightly.20260102");
     expect(mismatch).not.toBeNull();
   });
 

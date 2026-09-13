@@ -16,4 +16,3 @@ describe("relaySigning", () => {
     ).toBe('{"a":{"b":null,"y":true},"list":[{"a":"one","c":"three"}],"z":1}');
   });
 });
-

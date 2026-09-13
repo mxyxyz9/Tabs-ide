@@ -19,7 +19,11 @@ export function verifyFinding(
   contextMap: Map<string, TokenBudgetedContextPack>,
 ): AuditFinding {
   // Pre-verified static analyzer findings remain verified
-  if (finding.verificationState === "verified_passed" && finding.sourceTool !== "agent-correctness-pass" && finding.sourceTool !== "agent-security-pass") {
+  if (
+    finding.verificationState === "verified_passed" &&
+    finding.sourceTool !== "agent-correctness-pass" &&
+    finding.sourceTool !== "agent-security-pass"
+  ) {
     return finding;
   }
 
@@ -43,7 +47,13 @@ export function verifyFinding(
   if (finding.title.includes("Null Dereference")) {
     const objNameMatch = /in '([^']+)'/.exec(finding.title);
     const objName = objNameMatch?.[1];
-    if (objName && (precedingLines.includes(`if (${objName})`) || precedingLines.includes(`if (!${objName}) return`) || precedingLines.includes(`${objName}?.`) || precedingLines.includes(`assert(`))) {
+    if (
+      objName &&
+      (precedingLines.includes(`if (${objName})`) ||
+        precedingLines.includes(`if (!${objName}) return`) ||
+        precedingLines.includes(`${objName}?.`) ||
+        precedingLines.includes(`assert(`))
+    ) {
       return {
         ...finding,
         verificationState: "verified_disproven",
@@ -54,7 +64,11 @@ export function verifyFinding(
 
   // Rule 2: Disprove XSS if preceding code includes DOMPurify or sanitize call
   if (finding.title.includes("Cross-Site Scripting")) {
-    if (precedingLines.includes("sanitize") || precedingLines.includes("DOMPurify") || precedingLines.includes("escapeHtml")) {
+    if (
+      precedingLines.includes("sanitize") ||
+      precedingLines.includes("DOMPurify") ||
+      precedingLines.includes("escapeHtml")
+    ) {
       return {
         ...finding,
         verificationState: "verified_disproven",

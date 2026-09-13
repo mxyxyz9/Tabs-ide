@@ -26,9 +26,7 @@ describe("PortScanner parsing", () => {
       "n[::1]:8000",
     ].join("\n");
 
-    const terminalMap = new Map([
-      [1234, { threadId: "thread-1" as any, terminalId: "term-1" }],
-    ]);
+    const terminalMap = new Map([[1234, { threadId: "thread-1" as any, terminalId: "term-1" }]]);
 
     const servers = PortScanner.parseLsofOutput(rawLsof, terminalMap);
     expect(servers).toHaveLength(3);
@@ -107,7 +105,9 @@ describe("PortDiscovery Service", () => {
           mockProcessRunner,
           mockNet,
           Layer.succeed(HostProcessPlatform, "darwin"),
-          FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, mockFetch))),
+          FetchHttpClient.layer.pipe(
+            Layer.provide(Layer.succeed(FetchHttpClient.Fetch, mockFetch)),
+          ),
         ),
       ),
     );

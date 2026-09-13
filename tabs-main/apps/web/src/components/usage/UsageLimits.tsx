@@ -218,9 +218,7 @@ export function useResetCredit(
       setStatus(result.warning ?? OUTCOME_TEXT[result.outcome]);
     } catch (error) {
       setBusy(false);
-      setStatus(
-        error instanceof Error ? error.message : "Could not use the reset credit.",
-      );
+      setStatus(error instanceof Error ? error.message : "Could not use the reset credit.");
     }
   };
 

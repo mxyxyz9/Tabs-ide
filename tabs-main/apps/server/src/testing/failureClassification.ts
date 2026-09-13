@@ -117,8 +117,7 @@ export function classifyExecutionFailure(
     return {
       classification: "product-assertion",
       isRepairable: false,
-      reason:
-        "Genuine product assertion mismatch; test must not be weakened or skipped",
+      reason: "Genuine product assertion mismatch; test must not be weakened or skipped",
     };
   }
 
@@ -216,10 +215,7 @@ export function createUnifiedDiff(
       lengths[oldIdx]![newIdx] =
         oldLines[oldIdx] === newLines[newIdx]
           ? lengths[oldIdx + 1]![newIdx + 1]! + 1
-          : Math.max(
-              lengths[oldIdx + 1]![newIdx]!,
-              lengths[oldIdx]![newIdx + 1]!,
-            );
+          : Math.max(lengths[oldIdx + 1]![newIdx]!, lengths[oldIdx]![newIdx + 1]!);
     }
   }
 
@@ -236,8 +232,7 @@ export function createUnifiedDiff(
       newIdx++;
     } else if (
       newIdx >= newLines.length ||
-      (oldIdx < oldLines.length &&
-        lengths[oldIdx + 1]![newIdx]! >= lengths[oldIdx]![newIdx + 1]!)
+      (oldIdx < oldLines.length && lengths[oldIdx + 1]![newIdx]! >= lengths[oldIdx]![newIdx + 1]!)
     ) {
       diffLines.push(`-${oldLines[oldIdx]}`);
       oldIdx++;

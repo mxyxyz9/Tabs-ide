@@ -98,4 +98,3 @@ export function relayClerkTokenOptions(template: string) {
     skipCache: true,
   } as const;
 }
-

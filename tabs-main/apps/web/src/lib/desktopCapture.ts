@@ -18,7 +18,9 @@ export interface DesktopCaptureDependencies {
   captureScreen?: ((options?: DesktopCaptureOptions) => Promise<DesktopCaptureResult>) | undefined;
   requestPermission?: (() => Promise<boolean>) | undefined;
   addImage?: ((threadId: string, image: ComposerImageAttachment) => void) | undefined;
-  showToast?: ((toast: { type: "success" | "error" | "info"; title: string; description?: string }) => void) | undefined;
+  showToast?:
+    | ((toast: { type: "success" | "error" | "info"; title: string; description?: string }) => void)
+    | undefined;
   focusComposer?: (() => void) | undefined;
 }
 
@@ -32,7 +34,8 @@ export async function captureDesktopToComposer(
   options?: DesktopCaptureOptions,
 ): Promise<DesktopCaptureResult | null> {
   const captureScreen =
-    deps.captureScreen ?? (typeof window !== "undefined" ? window.desktopBridge?.captureDesktopScreen : undefined);
+    deps.captureScreen ??
+    (typeof window !== "undefined" ? window.desktopBridge?.captureDesktopScreen : undefined);
   if (!captureScreen) {
     throw new Error("Desktop capture is only available when running in the native desktop app.");
   }
@@ -41,7 +44,8 @@ export async function captureDesktopToComposer(
     const result = await captureScreen(options);
     const file = dataUrlToFile(result.dataUrl, result.name, result.mimeType);
 
-    const addImage = deps.addImage ?? ((tId, img) => useComposerDraftStore.getState().addImage(tId as any, img));
+    const addImage =
+      deps.addImage ?? ((tId, img) => useComposerDraftStore.getState().addImage(tId as any, img));
     addImage(threadId, {
       type: "image",
       id: result.id,

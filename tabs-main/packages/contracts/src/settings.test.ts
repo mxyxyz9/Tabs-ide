@@ -76,7 +76,9 @@ describe("ClientSettings motion and panel animations", () => {
   it("accepts valid panelAnimationDurationMs within 0-400ms", () => {
     const settings = decodeClientSettings({ panelAnimationDurationMs: 250 });
     expect(settings.panelAnimationDurationMs).toBe(250);
-    expect(decodeClientSettingsPatch({ panelAnimationDurationMs: 0 }).panelAnimationDurationMs).toBe(0);
+    expect(
+      decodeClientSettingsPatch({ panelAnimationDurationMs: 0 }).panelAnimationDurationMs,
+    ).toBe(0);
   });
 
   it("rejects panelAnimationDurationMs out of bounds", () => {
