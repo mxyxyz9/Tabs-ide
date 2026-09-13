@@ -187,6 +187,14 @@ const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies
 const BROWSER_HOST_RESPOND_PERMISSION_CHANNEL = "desktop:browser-host:respond-permission";
 const BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL = "desktop:browser-host:get-profile-permissions";
 const BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL = "desktop:browser-host:revoke-profile-permission";
+const BROWSER_HOST_TAKE_CONTROL_CHANNEL = "desktop:browser-host:take-control";
+const BROWSER_HOST_RESUME_AGENT_CHANNEL = "desktop:browser-host:resume-agent";
+const BROWSER_HOST_ASSIGN_TAB_TASK_CHANNEL = "desktop:browser-host:assign-tab-task";
+const BROWSER_HOST_RETAIN_TAB_CHANNEL = "desktop:browser-host:retain-tab";
+const BROWSER_HOST_CLEANUP_AGENT_TABS_CHANNEL = "desktop:browser-host:cleanup-agent-tabs";
+const BROWSER_HOST_DESTROY_SESSION_CHANNEL = "desktop:browser-host:destroy-session";
+const BROWSER_HOST_GET_RECENTLY_CLOSED_CHANNEL = "desktop:browser-host:get-recently-closed";
+const BROWSER_HOST_RESTORE_RECENTLY_CLOSED_CHANNEL = "desktop:browser-host:restore-recently-closed";
 
 function readBrowserSessionId(input: unknown): string | undefined {
   const value = (input as { sessionId?: unknown }).sessionId;
@@ -2844,6 +2852,84 @@ function registerIpcHandlers(): void {
     };
     if (typeof profileId !== "string" || typeof origin !== "string" || typeof permission !== "string") return;
     browserHostManager.revokeProfilePermission(profileId, origin, permission);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_TAKE_CONTROL_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_TAKE_CONTROL_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null || typeof (input as { projectId?: unknown }).projectId !== "string") return;
+    browserHostManager.takeControl({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_RESUME_AGENT_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_RESUME_AGENT_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null || typeof (input as { projectId?: unknown }).projectId !== "string") return;
+    const taskId = typeof (input as { taskId?: unknown }).taskId === "string" ? (input as { taskId: string }).taskId : undefined;
+    browserHostManager.resumeAgent({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+      taskId,
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_ASSIGN_TAB_TASK_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_ASSIGN_TAB_TASK_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null || typeof (input as { projectId?: unknown }).projectId !== "string") return;
+    const taskId = typeof (input as { taskId?: unknown }).taskId === "string" ? (input as { taskId: string }).taskId : null;
+    browserHostManager.assignTabTask({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+      taskId,
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_RETAIN_TAB_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_RETAIN_TAB_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null || typeof (input as { projectId?: unknown }).projectId !== "string") return;
+    browserHostManager.retainTab({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_CLEANUP_AGENT_TABS_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_CLEANUP_AGENT_TABS_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string" ||
+      typeof (input as { taskId?: unknown }).taskId !== "string"
+    ) {
+      return [];
+    }
+    return browserHostManager.cleanupAgentTabs({
+      projectId: (input as { projectId: string }).projectId,
+      taskId: (input as { taskId: string }).taskId,
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_DESTROY_SESSION_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_DESTROY_SESSION_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null || typeof (input as { projectId?: unknown }).projectId !== "string") return;
+    browserHostManager.destroySession({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_GET_RECENTLY_CLOSED_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_GET_RECENTLY_CLOSED_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "string") return [];
+    return browserHostManager.getRecentlyClosedTabs(input);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_RESTORE_RECENTLY_CLOSED_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_RESTORE_RECENTLY_CLOSED_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null || typeof (input as { projectId?: unknown }).projectId !== "string") return null;
+    const id = typeof (input as { id?: unknown }).id === "string" ? (input as { id: string }).id : undefined;
+    return browserHostManager.restoreRecentlyClosedTab((input as { projectId: string }).projectId, id);
   });
 
   ipcMain.removeHandler(VSCODE_FETCH_SHELL_ENV_CHANNEL);

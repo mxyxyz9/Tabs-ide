@@ -107,6 +107,14 @@ const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies
 const BROWSER_HOST_RESPOND_PERMISSION_CHANNEL = "desktop:browser-host:respond-permission";
 const BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL = "desktop:browser-host:get-profile-permissions";
 const BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL = "desktop:browser-host:revoke-profile-permission";
+const BROWSER_HOST_TAKE_CONTROL_CHANNEL = "desktop:browser-host:take-control";
+const BROWSER_HOST_RESUME_AGENT_CHANNEL = "desktop:browser-host:resume-agent";
+const BROWSER_HOST_ASSIGN_TAB_TASK_CHANNEL = "desktop:browser-host:assign-tab-task";
+const BROWSER_HOST_RETAIN_TAB_CHANNEL = "desktop:browser-host:retain-tab";
+const BROWSER_HOST_CLEANUP_AGENT_TABS_CHANNEL = "desktop:browser-host:cleanup-agent-tabs";
+const BROWSER_HOST_DESTROY_SESSION_CHANNEL = "desktop:browser-host:destroy-session";
+const BROWSER_HOST_GET_RECENTLY_CLOSED_CHANNEL = "desktop:browser-host:get-recently-closed";
+const BROWSER_HOST_RESTORE_RECENTLY_CLOSED_CHANNEL = "desktop:browser-host:restore-recently-closed";
 
 // Persistence channels
 const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
@@ -297,6 +305,18 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL, input),
   revokeBrowserProfilePermission: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL, input),
+  takeBrowserControl: (input) => ipcRenderer.invoke(BROWSER_HOST_TAKE_CONTROL_CHANNEL, input),
+  resumeBrowserAgent: (input) => ipcRenderer.invoke(BROWSER_HOST_RESUME_AGENT_CHANNEL, input),
+  assignBrowserTabTask: (input) => ipcRenderer.invoke(BROWSER_HOST_ASSIGN_TAB_TASK_CHANNEL, input),
+  retainBrowserTab: (input) => ipcRenderer.invoke(BROWSER_HOST_RETAIN_TAB_CHANNEL, input),
+  cleanupAgentBrowserTabs: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_CLEANUP_AGENT_TABS_CHANNEL, input),
+  destroyBrowserSession: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_DESTROY_SESSION_CHANNEL, input),
+  getRecentlyClosedBrowserTabs: (projectId) =>
+    ipcRenderer.invoke(BROWSER_HOST_GET_RECENTLY_CLOSED_CHANNEL, projectId),
+  restoreRecentlyClosedBrowserTab: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_RESTORE_RECENTLY_CLOSED_CHANNEL, input),
   onBrowserProfileDataChanged: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, profileId: unknown) => {
       if (typeof profileId === "string") listener(profileId);

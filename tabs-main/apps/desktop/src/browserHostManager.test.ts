@@ -634,3 +634,235 @@ describe("browser profile input validation", () => {
     );
   });
 });
+
+describe("reliable browser tabs and agent control", () => {
+  function createMockSession(overrides: Record<string, unknown> = {}) {
+    const executeJavaScript = vi.fn().mockResolvedValue(true);
+    const sendInputEvent = vi.fn();
+    const close = vi.fn();
+    const debuggerApi = {
+      isAttached: vi.fn(() => false),
+      attach: vi.fn(),
+      detach: vi.fn(),
+      sendCommand: vi.fn().mockResolvedValue({}),
+      on: vi.fn(),
+    };
+    const webContents = {
+      id: 100,
+      isDestroyed: vi.fn(() => false),
+      isDevToolsOpened: vi.fn(() => false),
+      close,
+      executeJavaScript,
+      sendInputEvent,
+      debugger: debuggerApi,
+      session: {
+        cookies: { on: vi.fn(), flushStore: vi.fn() },
+        setPermissionRequestHandler: vi.fn(),
+        setPermissionCheckHandler: vi.fn(),
+      },
+      on: vi.fn(),
+    };
+
+    const session = {
+      projectId: "project-1",
+      sessionId: "tab-1",
+      key: "project-1::tab-1",
+      partition: "persist:tabs-browser:project-1",
+      profileId: "default",
+      view: { webContents },
+      bounds: null,
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      devToolsOpen: false,
+      zoomFactor: 1,
+      audioMuted: false,
+      colorScheme: "system",
+      pictureInPictureWindow: null,
+      consoleEntries: [],
+      networkEntries: [],
+      actionTimeline: [],
+      controller: "none",
+      controlEpoch: 0,
+      assignedTaskId: null,
+      temporaryAgentTab: false,
+      userRetained: false,
+      dispatchingAgentInput: false,
+      humanControlTimer: null,
+      crashRecoveryAttempts: 0,
+      crashRecoveryWindowStartedAt: null,
+      crashRecoveryTimer: null,
+      pendingPermission: null,
+      automationTail: Promise.resolve(),
+      currentUrl: "https://example.com/app",
+      pageTitle: "Example App",
+      lastError: null,
+      transientError: null,
+      ...overrides,
+    };
+    return { session, webContents, executeJavaScript, sendInputEvent, close };
+  }
+
+  it("cancels queued automation operations when human takes control before execution", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const { session, executeJavaScript } = createMockSession();
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(
+      session.key,
+      session,
+    );
+
+    // Block the automation queue with a long-running promise
+    let unblockFirst!: () => void;
+    const blockingPromise = new Promise<void>((resolve) => {
+      unblockFirst = resolve;
+    });
+
+    let firstStarted!: () => void;
+    const firstStartedPromise = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+
+    executeJavaScript.mockImplementationOnce(async () => {
+      firstStarted();
+      await blockingPromise;
+      return 2;
+    });
+
+    // Schedule first automation
+    const firstPromise = manager.runAutomation({
+      projectId: "project-1",
+      sessionId: "tab-1",
+      operation: "evaluate",
+      input: { expression: "1 + 1" },
+    });
+
+    // Wait until first automation is actively executing
+    await firstStartedPromise;
+
+    // Schedule second automation that queues behind the first
+    const queuedPromise = manager.runAutomation({
+      projectId: "project-1",
+      sessionId: "tab-1",
+      operation: "evaluate",
+      input: { expression: "2 + 2" },
+    });
+
+    // Human takes control while first is running and second is queued!
+    manager.takeControl({ projectId: "project-1", sessionId: "tab-1" });
+    expect(session.controller).toBe("human");
+    expect(session.controlEpoch).toBe(1);
+
+    // Unblock the first operation
+    unblockFirst();
+    await expect(firstPromise).rejects.toThrow(
+      "Browser automation was interrupted by human input during execution.",
+    );
+
+    // Queued action must be rejected without calling executeJavaScript for "2 + 2"
+    await expect(queuedPromise).rejects.toThrow(
+      "Browser automation was cancelled prior to execution due to human takeover or control epoch change.",
+    );
+
+    // Verify timeline recorded the cancellation
+    const lastEvent = session.actionTimeline[session.actionTimeline.length - 1];
+    expect(lastEvent.status).toBe("cancelled");
+  });
+
+  it("enforces task-to-tab ownership and rejects operations from unauthorized tasks", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const { session } = createMockSession({ assignedTaskId: "task-A" });
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(
+      session.key,
+      session,
+    );
+
+    // Running with matching task ID succeeds
+    await expect(
+      manager.runAutomation({
+        projectId: "project-1",
+        sessionId: "tab-1",
+        taskId: "task-A",
+        operation: "evaluate",
+        input: { expression: "true" },
+      }),
+    ).resolves.toBe(true);
+
+    // Running with different task ID is rejected immediately
+    await expect(
+      manager.runAutomation({
+        projectId: "project-1",
+        sessionId: "tab-1",
+        taskId: "task-B",
+        operation: "evaluate",
+        input: { expression: "true" },
+      }),
+    ).rejects.toThrow('Browser tab is assigned to task "task-A", but automation was requested by task "task-B".');
+  });
+
+  it("cleans up temporary agent tabs while preserving user-retained tabs", () => {
+    const manager = new BrowserHostManager(() => null);
+    const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
+
+    const { session: tabA, close: closeA } = createMockSession({
+      sessionId: "tab-A",
+      key: "project-1::tab-A",
+      assignedTaskId: "task-agent",
+      temporaryAgentTab: true,
+      userRetained: false,
+    });
+    const { session: tabB, close: closeB } = createMockSession({
+      sessionId: "tab-B",
+      key: "project-1::tab-B",
+      assignedTaskId: "task-agent",
+      temporaryAgentTab: true,
+      userRetained: true, // User interacted or retained
+    });
+    const { session: tabC, close: closeC } = createMockSession({
+      sessionId: "tab-C",
+      key: "project-1::tab-C",
+      assignedTaskId: "task-agent",
+      temporaryAgentTab: false, // User created tab
+      userRetained: false,
+    });
+
+    sessions.set(tabA.key, tabA);
+    sessions.set(tabB.key, tabB);
+    sessions.set(tabC.key, tabC);
+
+    const closed = manager.cleanupAgentTabs({ projectId: "project-1", taskId: "task-agent" });
+
+    expect(closed).toEqual(["tab-A"]);
+    expect(closeA).toHaveBeenCalled();
+    expect(closeB).not.toHaveBeenCalled();
+    expect(closeC).not.toHaveBeenCalled();
+    expect(sessions.has(tabA.key)).toBe(false);
+    expect(sessions.has(tabB.key)).toBe(true);
+    expect(sessions.has(tabC.key)).toBe(true);
+  });
+
+  it("records and restores recently closed tabs", () => {
+    const manager = new BrowserHostManager(() => null);
+    const { session } = createMockSession({
+      currentUrl: "https://github.com/pulls",
+      pageTitle: "Pull Requests",
+    });
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(
+      session.key,
+      session,
+    );
+
+    manager.destroySession({ projectId: "project-1", sessionId: "tab-1" });
+
+    const recent = manager.getRecentlyClosedTabs("project-1");
+    expect(recent).toHaveLength(1);
+    expect(recent[0].url).toBe("https://github.com/pulls");
+    expect(recent[0].title).toBe("Pull Requests");
+
+    const restored = manager.restoreRecentlyClosedTab("project-1", recent[0].id);
+    expect(restored).toMatchObject({
+      url: "https://github.com/pulls",
+      title: "Pull Requests",
+    });
+    expect(manager.getRecentlyClosedTabs("project-1")).toHaveLength(0);
+  });
+});

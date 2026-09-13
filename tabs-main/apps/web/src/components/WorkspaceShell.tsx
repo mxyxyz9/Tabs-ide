@@ -7509,6 +7509,15 @@ function DesktopBrowserChrome(props: {
                 <MousePointer2Icon className="size-3.5" />
                 {pickingElement ? "Pick on page…" : "Pick element"}
               </Button>
+              {props.sessionState.assignedTaskId ? (
+                <Badge
+                  variant="outline"
+                  className="h-6 text-xs text-muted-foreground"
+                  title={`Assigned to task ${props.sessionState.assignedTaskId}`}
+                >
+                  Task: {props.sessionState.assignedTaskId.slice(0, 8)}
+                </Badge>
+              ) : null}
               {props.sessionState.controller && props.sessionState.controller !== "none" ? (
                 <Badge
                   variant={props.sessionState.controller === "agent" ? "default" : "secondary"}
@@ -7516,6 +7525,44 @@ function DesktopBrowserChrome(props: {
                 >
                   {props.sessionState.controller === "agent" ? "Agent control" : "Human control"}
                 </Badge>
+              ) : null}
+              {props.sessionState.controller === "agent" ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="secondary"
+                  className="h-6 text-xs text-amber-500 hover:text-amber-400"
+                  onClick={() => void bridge?.takeBrowserControl?.(sessionArg)}
+                >
+                  Take control
+                </Button>
+              ) : props.sessionState.controller === "human" && props.sessionState.assignedTaskId ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="secondary"
+                  className="h-6 text-xs"
+                  onClick={() =>
+                    void bridge?.resumeBrowserAgent?.({
+                      ...sessionArg,
+                      taskId: props.sessionState.assignedTaskId ?? undefined,
+                    })
+                  }
+                >
+                  Resume agent
+                </Button>
+              ) : null}
+              {props.sessionState.temporaryAgentTab && !props.sessionState.userRetained ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="h-6 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => void bridge?.retainBrowserTab?.(sessionArg)}
+                  title="Keep this tab open after agent task finishes"
+                >
+                  Keep tab
+                </Button>
               ) : null}
               <Menu>
                 <MenuTrigger
@@ -7656,6 +7703,15 @@ function DesktopBrowserChrome(props: {
       ) : props.toolbarTarget ? (
         createPortal(
           <div className="flex items-center gap-1.5 pr-1">
+            {props.sessionState.assignedTaskId ? (
+              <Badge
+                variant="outline"
+                className="h-6 text-xs text-muted-foreground"
+                title={`Assigned to task ${props.sessionState.assignedTaskId}`}
+              >
+                Task: {props.sessionState.assignedTaskId.slice(0, 8)}
+              </Badge>
+            ) : null}
             {props.sessionState.controller && props.sessionState.controller !== "none" ? (
               <Badge
                 variant={props.sessionState.controller === "agent" ? "default" : "secondary"}
@@ -7664,6 +7720,32 @@ function DesktopBrowserChrome(props: {
               >
                 {props.sessionState.controller === "agent" ? "Agent" : "Human"}
               </Badge>
+            ) : null}
+            {props.sessionState.controller === "agent" ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="secondary"
+                className="h-6 text-xs text-amber-500 hover:text-amber-400"
+                onClick={() => void bridge?.takeBrowserControl?.(sessionArg)}
+              >
+                Take control
+              </Button>
+            ) : props.sessionState.controller === "human" && props.sessionState.assignedTaskId ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="secondary"
+                className="h-6 text-xs"
+                onClick={() =>
+                  void bridge?.resumeBrowserAgent?.({
+                    ...sessionArg,
+                    taskId: props.sessionState.assignedTaskId ?? undefined,
+                  })
+                }
+              >
+                Resume
+              </Button>
             ) : null}
             <div className="flex items-center rounded-lg border border-border/70 bg-card/60 p-0.5 shadow-2xs backdrop-blur-xs">
               <div className="flex items-center">

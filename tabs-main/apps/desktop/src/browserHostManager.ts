@@ -246,10 +246,23 @@ export function planBrowserCrashRecovery(
   };
 }
 
+import { BrowserCdpCoordinator } from "./browserCdpCoordinator";
+
+export interface RecentlyClosedTab {
+  readonly id: string;
+  readonly projectId: string;
+  readonly sessionId: string;
+  readonly url: string;
+  readonly title: string;
+  readonly profileId?: string | undefined;
+  readonly closedAt: string;
+}
+
 type BrowserSession = {
   projectId: string;
   sessionId: string;
   partition: string;
+  profileId?: string | undefined;
   key: string;
   view: WebContentsView;
   bounds: Rectangle | null;
@@ -273,6 +286,9 @@ type BrowserSession = {
   actionTimeline: BrowserActionEvent[];
   controller: "human" | "agent" | "none";
   controlEpoch: number;
+  assignedTaskId: string | null;
+  temporaryAgentTab: boolean;
+  userRetained: boolean;
   dispatchingAgentInput: boolean;
   humanControlTimer: ReturnType<typeof setTimeout> | null;
   crashRecoveryAttempts: number;
@@ -281,6 +297,7 @@ type BrowserSession = {
   pendingPermission?: BrowserPermissionRequest | null;
   automationTail: Promise<void>;
   journeyRecorder?: JourneyRecorder;
+  cdpCoordinator: BrowserCdpCoordinator;
 };
 
 interface BrowserConsoleEntry {
@@ -302,7 +319,7 @@ interface BrowserNetworkEntry {
 interface BrowserActionEvent {
   readonly id: string;
   readonly action: string;
-  status: "running" | "succeeded" | "failed" | "interrupted";
+  status: "running" | "succeeded" | "failed" | "interrupted" | "cancelled";
   readonly startedAt: string;
   completedAt?: string;
   error?: string;
@@ -320,6 +337,7 @@ function appendBounded<T>(entries: T[], entry: T): void {
 interface BrowserAutomationRequest {
   readonly projectId: string;
   readonly sessionId?: string;
+  readonly taskId?: string;
   readonly operation: string;
   readonly input?: unknown;
 }
@@ -363,6 +381,7 @@ export class BrowserHostManager {
   private activeKey: string | null = null;
   private readonly observedProfileSessions = new WeakSet<Session>();
   private readonly observedAutomationSessions = new WeakSet<Session>();
+  private readonly recentlyClosedTabs = new Map<string, RecentlyClosedTab[]>();
   readonly diagnostics = new BrowserAuthDiagnostics();
 
   constructor(private readonly getWindow: () => BrowserWindow | null) {
@@ -457,6 +476,7 @@ export class BrowserHostManager {
       projectId: input.projectId,
       sessionId,
       partition,
+      profileId: input.profileId,
       key,
       view,
       bounds: null,
@@ -478,6 +498,9 @@ export class BrowserHostManager {
       actionTimeline: [],
       controller: "none",
       controlEpoch: 0,
+      assignedTaskId: input.taskId ?? null,
+      temporaryAgentTab: Boolean(input.temporaryAgentTab),
+      userRetained: false,
       dispatchingAgentInput: false,
       humanControlTimer: null,
       crashRecoveryAttempts: 0,
@@ -485,6 +508,7 @@ export class BrowserHostManager {
       crashRecoveryTimer: null,
       pendingPermission: null,
       automationTail: Promise.resolve(),
+      cdpCoordinator: new BrowserCdpCoordinator(view.webContents),
     };
 
     this.sessions.set(key, session);
@@ -530,11 +554,13 @@ export class BrowserHostManager {
     const currentUrl = session.currentUrl;
     const partition = partitionInput ?? session.partition ?? `persist:tabs-browser:${projectId}`;
 
+    session.controlEpoch = (session.controlEpoch ?? 0) + 1;
     this.clearCrashRecoveryTimer(session);
     this.clearHumanControlTimer(session);
     this.detachSession(session);
     defaultPermissionMediator.cancelPendingRequestsForWebContents(session.view.webContents.id);
     session.pendingPermission = null;
+    session.cdpCoordinator?.detach();
     session.view.webContents.close({ waitForBeforeUnload: false });
 
     const view = new WebContentsView({
@@ -555,6 +581,7 @@ export class BrowserHostManager {
 
     session.view = view;
     session.partition = partition;
+    session.cdpCoordinator = new BrowserCdpCoordinator(view.webContents);
     session.lastError = null;
     session.transientError = null;
     this.registerSessionEvents(session);
@@ -1001,9 +1028,7 @@ export class BrowserHostManager {
     if (session.view.webContents.isDevToolsOpened()) {
       session.view.webContents.closeDevTools();
     } else {
-      if (session.view.webContents.debugger.isAttached()) {
-        session.view.webContents.debugger.detach();
-      }
+      session.cdpCoordinator.prepareForDevTools();
       session.view.webContents.openDevTools({ mode: DOCKED_DEVTOOLS_MODE, activate: false });
     }
   }
@@ -1016,14 +1041,24 @@ export class BrowserHostManager {
     const input = automationInput(request.input);
     if (request.operation === "recordStart") {
       session.journeyRecorder ??= new JourneyRecorder(contents);
-      await this.trackAutomation(session, "recordStart", () => session.journeyRecorder!.start());
+      await this.trackAutomation(
+        session,
+        "recordStart",
+        () => session.journeyRecorder!.start(),
+        request.taskId,
+      );
       return session.journeyRecorder.status();
     }
     if (request.operation === "recordStatus")
       return session.journeyRecorder?.status() ?? { recording: false, count: 0 };
     if (request.operation === "recordStop") {
       if (!session.journeyRecorder) throw new Error("No recorded journey is available");
-      return this.trackAutomation(session, "recordStop", () => session.journeyRecorder!.stop());
+      return this.trackAutomation(
+        session,
+        "recordStop",
+        () => session.journeyRecorder!.stop(),
+        request.taskId,
+      );
     }
 
     if (request.operation === "status") {
@@ -1044,8 +1079,11 @@ export class BrowserHostManager {
       if (typeof input.expression !== "string" || input.expression.trim().length === 0) {
         throw new Error("A JavaScript expression is required.");
       }
-      return this.trackAutomation(session, "evaluate", () =>
-        contents.executeJavaScript(input.expression as string, true),
+      return this.trackAutomation(
+        session,
+        "evaluate",
+        () => contents.executeJavaScript(input.expression as string, true),
+        request.taskId,
       );
     }
 
@@ -1070,13 +1108,12 @@ export class BrowserHostManager {
         true,
       );
       let accessibilityTree: unknown = null;
-      const debuggerApi = contents.debugger;
-      const wasAttached = debuggerApi.isAttached();
       try {
-        if (!wasAttached) debuggerApi.attach("1.3");
-        accessibilityTree = await debuggerApi.sendCommand("Accessibility.getFullAXTree");
-      } finally {
-        if (!wasAttached && debuggerApi.isAttached()) debuggerApi.detach();
+        accessibilityTree = await session.cdpCoordinator.withSession("automation", async (debuggerApi) => {
+          return await debuggerApi.sendCommand("Accessibility.getFullAXTree");
+        });
+      } catch {
+        accessibilityTree = null;
       }
       const image = await contents.capturePage();
       const size = image.getSize();
@@ -1116,74 +1153,84 @@ export class BrowserHostManager {
               : [],
           )
         : [];
-      return this.trackAutomation(session, "press", async () => {
-        session.dispatchingAgentInput = true;
-        try {
-          contents.sendInputEvent({ type: "keyDown", keyCode: input.key as string, modifiers });
-          contents.sendInputEvent({ type: "keyUp", keyCode: input.key as string, modifiers });
-        } finally {
-          session.dispatchingAgentInput = false;
-        }
-        return { pressed: true };
-      });
+      return this.trackAutomation(
+        session,
+        "press",
+        async () => {
+          session.dispatchingAgentInput = true;
+          try {
+            contents.sendInputEvent({ type: "keyDown", keyCode: input.key as string, modifiers });
+            contents.sendInputEvent({ type: "keyUp", keyCode: input.key as string, modifiers });
+          } finally {
+            session.dispatchingAgentInput = false;
+          }
+          return { pressed: true };
+        },
+        request.taskId,
+      );
     }
 
     if (request.operation === "click") {
-      return this.trackAutomation(session, "click", async () => {
-        let point: { x: number; y: number };
-        if (typeof input.x === "number" && typeof input.y === "number") {
-          point = { x: input.x, y: input.y };
-        } else {
-          const target = pageTargetExpression(input);
-          const resolved = (await contents.executeJavaScript(
-            `(() => { const element = ${target}; if (!(element instanceof HTMLElement)) return null; const rect = element.getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }; })()`,
+      return this.trackAutomation(
+        session,
+        "click",
+        async () => {
+          let point: { x: number; y: number };
+          if (typeof input.x === "number" && typeof input.y === "number") {
+            point = { x: input.x, y: input.y };
+          } else {
+            const target = pageTargetExpression(input);
+            const resolved = (await contents.executeJavaScript(
+              `(() => { const element = ${target}; if (!(element instanceof HTMLElement)) return null; const rect = element.getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }; })()`,
+              true,
+            )) as { x: number; y: number } | null;
+            if (!resolved) throw new Error("The browser click target was not found.");
+            point = resolved;
+          }
+          await contents.executeJavaScript(
+            `(() => {
+              document.querySelector('[data-tabs-agent-pointer]')?.remove();
+              const pointer = document.createElement('div');
+              pointer.setAttribute('data-tabs-agent-pointer', '');
+              Object.assign(pointer.style, {
+                position: 'fixed', left: '${point.x}px', top: '${point.y}px', width: '18px', height: '18px',
+                transform: 'translate(-50%, -50%)', borderRadius: '999px', pointerEvents: 'none',
+                zIndex: '2147483647', background: 'rgba(124,58,237,.3)', border: '2px solid #7c3aed',
+                boxShadow: '0 0 0 5px rgba(124,58,237,.12)', transition: 'opacity 180ms ease'
+              });
+              document.documentElement.append(pointer);
+              setTimeout(() => { pointer.style.opacity = '0'; setTimeout(() => pointer.remove(), 200); }, 500);
+            })()`,
             true,
-          )) as { x: number; y: number } | null;
-          if (!resolved) throw new Error("The browser click target was not found.");
-          point = resolved;
-        }
-        await contents.executeJavaScript(
-          `(() => {
-            document.querySelector('[data-tabs-agent-pointer]')?.remove();
-            const pointer = document.createElement('div');
-            pointer.setAttribute('data-tabs-agent-pointer', '');
-            Object.assign(pointer.style, {
-              position: 'fixed', left: '${point.x}px', top: '${point.y}px', width: '18px', height: '18px',
-              transform: 'translate(-50%, -50%)', borderRadius: '999px', pointerEvents: 'none',
-              zIndex: '2147483647', background: 'rgba(124,58,237,.3)', border: '2px solid #7c3aed',
-              boxShadow: '0 0 0 5px rgba(124,58,237,.12)', transition: 'opacity 180ms ease'
+          );
+          session.dispatchingAgentInput = true;
+          try {
+            contents.sendInputEvent({
+              type: "mouseMove",
+              x: point.x,
+              y: point.y,
             });
-            document.documentElement.append(pointer);
-            setTimeout(() => { pointer.style.opacity = '0'; setTimeout(() => pointer.remove(), 200); }, 500);
-          })()`,
-          true,
-        );
-        session.dispatchingAgentInput = true;
-        try {
-          contents.sendInputEvent({
-            type: "mouseMove",
-            x: point.x,
-            y: point.y,
-          });
-          contents.sendInputEvent({
-            type: "mouseDown",
-            x: point.x,
-            y: point.y,
-            button: "left",
-            clickCount: 1,
-          });
-          contents.sendInputEvent({
-            type: "mouseUp",
-            x: point.x,
-            y: point.y,
-            button: "left",
-            clickCount: 1,
-          });
-        } finally {
-          session.dispatchingAgentInput = false;
-        }
-        return { clicked: true };
-      });
+            contents.sendInputEvent({
+              type: "mouseDown",
+              x: point.x,
+              y: point.y,
+              button: "left",
+              clickCount: 1,
+            });
+            contents.sendInputEvent({
+              type: "mouseUp",
+              x: point.x,
+              y: point.y,
+              button: "left",
+              clickCount: 1,
+            });
+          } finally {
+            session.dispatchingAgentInput = false;
+          }
+          return { clicked: true };
+        },
+        request.taskId,
+      );
     }
 
     if (request.operation === "type") {
@@ -1191,40 +1238,50 @@ export class BrowserHostManager {
       const target = pageTargetExpression(input);
       const encodedText = JSON.stringify(input.text);
       const clear = input.clear === true;
-      return this.trackAutomation(session, "type", async () => {
-        const typed = await contents.executeJavaScript(
-          `(() => {
-          const element = ${target};
-          if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLElement && element.isContentEditable)) return false;
-          element.focus();
-          if (${clear}) {
-            if ("value" in element) element.value = "";
-            else element.textContent = "";
-          }
-          if ("value" in element) element.value += ${encodedText};
-          else element.textContent = (element.textContent || "") + ${encodedText};
-          element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ${encodedText} }));
-          element.dispatchEvent(new Event("change", { bubbles: true }));
-          return true;
-        })()`,
-          true,
-        );
-        if (!typed) throw new Error("The browser type target is not editable.");
-        return { typed: true };
-      });
+      return this.trackAutomation(
+        session,
+        "type",
+        async () => {
+          const typed = await contents.executeJavaScript(
+            `(() => {
+            const element = ${target};
+            if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLElement && element.isContentEditable)) return false;
+            element.focus();
+            if (${clear}) {
+              if ("value" in element) element.value = "";
+              else element.textContent = "";
+            }
+            if ("value" in element) element.value += ${encodedText};
+            else element.textContent = (element.textContent || "") + ${encodedText};
+            element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ${encodedText} }));
+            element.dispatchEvent(new Event("change", { bubbles: true }));
+            return true;
+          })()`,
+            true,
+          );
+          if (!typed) throw new Error("The browser type target is not editable.");
+          return { typed: true };
+        },
+        request.taskId,
+      );
     }
 
     if (request.operation === "scroll") {
       const target = pageTargetExpression(input);
       const deltaX = typeof input.deltaX === "number" ? input.deltaX : 0;
       const deltaY = typeof input.deltaY === "number" ? input.deltaY : 0;
-      return this.trackAutomation(session, "scroll", async () => {
-        await contents.executeJavaScript(
-          `(() => { const target = ${target}; (target || window).scrollBy(${deltaX}, ${deltaY}); })()`,
-          true,
-        );
-        return { scrolled: true };
-      });
+      return this.trackAutomation(
+        session,
+        "scroll",
+        async () => {
+          await contents.executeJavaScript(
+            `(() => { const target = ${target}; (target || window).scrollBy(${deltaX}, ${deltaY}); })()`,
+            true,
+          );
+          return { scrolled: true };
+        },
+        request.taskId,
+      );
     }
 
     if (request.operation === "waitFor") {
@@ -1233,28 +1290,33 @@ export class BrowserHostManager {
           ? Math.min(60_000, Math.max(1, input.timeoutMs))
           : 15_000;
       const deadline = Date.now() + timeoutMs;
-      return this.trackAutomation(session, "waitFor", async () => {
-        while (Date.now() <= deadline) {
-          const target = pageTargetExpression(input);
-          const text = typeof input.text === "string" ? JSON.stringify(input.text) : "null";
-          const url =
-            typeof input.urlIncludes === "string" ? JSON.stringify(input.urlIncludes) : "null";
-          const matched = await contents.executeJavaScript(
-            `(() => {
-            const target = ${target};
-            const text = ${text};
-            const url = ${url};
-            return (!${Boolean(input.selector || input.locator)} || Boolean(target))
-              && (!text || (document.body?.innerText || "").includes(text))
-              && (!url || location.href.includes(url));
-          })()`,
-            true,
-          );
-          if (matched) return { matched: true };
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-        throw new Error(`Browser wait timed out after ${timeoutMs}ms.`);
-      });
+      return this.trackAutomation(
+        session,
+        "waitFor",
+        async () => {
+          while (Date.now() <= deadline) {
+            const target = pageTargetExpression(input);
+            const text = typeof input.text === "string" ? JSON.stringify(input.text) : "null";
+            const url =
+              typeof input.urlIncludes === "string" ? JSON.stringify(input.urlIncludes) : "null";
+            const matched = await contents.executeJavaScript(
+              `(() => {
+              const target = ${target};
+              const text = ${text};
+              const url = ${url};
+              return (!${Boolean(input.selector || input.locator)} || Boolean(target))
+                && (!text || (document.body?.innerText || "").includes(text))
+                && (!url || location.href.includes(url));
+            })()`,
+              true,
+            );
+            if (matched) return { matched: true };
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          throw new Error(`Browser wait timed out after ${timeoutMs}ms.`);
+        },
+        request.taskId,
+      );
     }
 
     throw new Error(`Unsupported browser automation operation: ${request.operation}`);
@@ -1461,13 +1523,25 @@ export class BrowserHostManager {
     session: BrowserSession,
     action: string,
     run: () => Promise<T>,
+    taskId?: string,
   ): Promise<T> {
+    if (session.assignedTaskId && taskId && session.assignedTaskId !== taskId) {
+      throw new Error(
+        `Browser tab is assigned to task "${session.assignedTaskId}", but automation was requested by task "${taskId}".`,
+      );
+    }
+    if (session.controller === "human") {
+      throw new Error("Browser automation was rejected because human has taken control.");
+    }
+
+    session.controlEpoch ??= 0;
+    const scheduledEpoch = session.controlEpoch;
     const previous = session.automationTail ?? Promise.resolve();
     let releaseQueue!: () => void;
     session.automationTail = new Promise<void>((resolve) => {
       releaseQueue = resolve;
     });
-    await previous;
+
     const event: BrowserActionEvent = {
       id: crypto.randomUUID(),
       action,
@@ -1476,23 +1550,53 @@ export class BrowserHostManager {
     };
     session.actionTimeline ??= [];
     appendBounded(session.actionTimeline, event);
-    session.controlEpoch ??= 0;
-    const controlEpoch = session.controlEpoch;
+
+    try {
+      await previous;
+    } catch {
+      // previous queue item failed, continue
+    }
+
+    if (!this.sessions.has(session.key) || session.view.webContents.isDestroyed()) {
+      event.status = "cancelled";
+      event.completedAt = new Date().toISOString();
+      event.error = "Browser session was closed or recreated before automation could execute.";
+      releaseQueue();
+      throw new Error(event.error);
+    }
+
+    if ((session.controlEpoch ?? 0) !== scheduledEpoch || (session.controller as string) === "human") {
+      event.status = "cancelled";
+      event.completedAt = new Date().toISOString();
+      event.error =
+        "Browser automation was cancelled prior to execution due to human takeover or control epoch change.";
+      releaseQueue();
+      throw new Error(event.error);
+    }
+
+    if (session.assignedTaskId && taskId && session.assignedTaskId !== taskId) {
+      event.status = "cancelled";
+      event.completedAt = new Date().toISOString();
+      event.error = `Tab assignment changed to task "${session.assignedTaskId}".`;
+      releaseQueue();
+      throw new Error(event.error);
+    }
+
     session.controller = "agent";
     this.emitState(session);
     try {
       const result = await run();
-      if (session.controlEpoch !== controlEpoch) {
+      if (session.controlEpoch !== scheduledEpoch) {
         event.status = "interrupted";
         event.completedAt = new Date().toISOString();
-        event.error = "Browser automation was interrupted by human input.";
+        event.error = "Browser automation was interrupted by human input during execution.";
         throw new Error(event.error);
       }
       event.status = "succeeded";
       event.completedAt = new Date().toISOString();
       return result;
     } catch (cause) {
-      if (event.status !== "interrupted") {
+      if (event.status !== "interrupted" && event.status !== "cancelled") {
         event.status = "failed";
         event.completedAt = new Date().toISOString();
         event.error = cause instanceof Error ? cause.message : String(cause);
@@ -1505,6 +1609,110 @@ export class BrowserHostManager {
       }
       releaseQueue();
     }
+  }
+
+  takeControl(input: DesktopBrowserHostControlInput): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) return;
+    session.controlEpoch = (session.controlEpoch ?? 0) + 1;
+    session.controller = "human";
+    session.userRetained = true;
+    this.clearHumanControlTimer(session);
+    this.emitState(session);
+  }
+
+  resumeAgent(
+    input: DesktopBrowserHostControlInput & { taskId?: string | undefined },
+  ): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) return;
+    if (input.taskId && session.assignedTaskId && session.assignedTaskId !== input.taskId) {
+      throw new Error(`Cannot resume tab assigned to task "${session.assignedTaskId}".`);
+    }
+    session.controlEpoch = (session.controlEpoch ?? 0) + 1;
+    session.controller = "none";
+    this.clearHumanControlTimer(session);
+    this.emitState(session);
+  }
+
+  assignTabTask(input: DesktopBrowserHostControlInput & { taskId: string | null }): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) return;
+    session.assignedTaskId = input.taskId ?? null;
+    this.emitState(session);
+  }
+
+  retainTab(input: DesktopBrowserHostControlInput): void {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) return;
+    session.userRetained = true;
+    this.emitState(session);
+  }
+
+  cleanupAgentTabs(input: { projectId: string; taskId: string }): string[] {
+    const closedIds: string[] = [];
+    for (const [, session] of this.sessions) {
+      if (
+        session.projectId === input.projectId &&
+        session.assignedTaskId === input.taskId &&
+        session.temporaryAgentTab &&
+        !session.userRetained
+      ) {
+        closedIds.push(session.sessionId);
+        this.destroySession({ projectId: session.projectId, sessionId: session.sessionId });
+      }
+    }
+    return closedIds;
+  }
+
+  destroySession(input: DesktopBrowserHostControlInput): void {
+    const key = this.sessionKey(input.projectId, input.sessionId);
+    const session = this.sessions.get(key);
+    if (!session) return;
+    this.recordRecentlyClosed(session);
+    session.controlEpoch = (session.controlEpoch ?? 0) + 1;
+    this.clearCrashRecoveryTimer(session);
+    this.clearHumanControlTimer(session);
+    if (this.activeKey === key) {
+      this.detachSession(session);
+      this.activeKey = null;
+    }
+    this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
+    defaultPermissionMediator.cancelPendingRequestsForWebContents(session.view.webContents.id);
+    session.pendingPermission = null;
+    session.cdpCoordinator?.detach();
+    session.view.webContents.close({ waitForBeforeUnload: false });
+    this.sessions.delete(key);
+  }
+
+  private recordRecentlyClosed(session: BrowserSession): void {
+    if (!session.currentUrl || session.currentUrl === "about:blank") return;
+    const list = this.recentlyClosedTabs.get(session.projectId) ?? [];
+    const entry: RecentlyClosedTab = {
+      id: crypto.randomUUID(),
+      projectId: session.projectId,
+      sessionId: session.sessionId,
+      url: session.currentUrl,
+      title: session.pageTitle || session.currentUrl,
+      profileId: session.profileId,
+      closedAt: new Date().toISOString(),
+    };
+    list.unshift(entry);
+    if (list.length > 25) list.pop();
+    this.recentlyClosedTabs.set(session.projectId, list);
+  }
+
+  getRecentlyClosedTabs(projectId: string): RecentlyClosedTab[] {
+    return this.recentlyClosedTabs.get(projectId) ?? [];
+  }
+
+  restoreRecentlyClosedTab(projectId: string, id?: string): RecentlyClosedTab | null {
+    const list = this.recentlyClosedTabs.get(projectId);
+    if (!list || list.length === 0) return null;
+    const index = id ? list.findIndex((e) => e.id === id) : 0;
+    if (index === -1) return null;
+    const [restored] = list.splice(index, 1);
+    return restored ?? null;
   }
 
   private observeAutomationNetwork(browserSession: Session): void {
@@ -1541,15 +1749,7 @@ export class BrowserHostManager {
     const allowed = new Set(projectIds);
     for (const [key, session] of this.sessions) {
       if (allowed.has(session.projectId)) continue;
-      if (this.activeKey === key) {
-        this.detachSession(session);
-        this.activeKey = null;
-      }
-      this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
-      this.clearHumanControlTimer(session);
-      this.clearCrashRecoveryTimer(session);
-      session.view.webContents.close({ waitForBeforeUnload: false });
-      this.sessions.delete(key);
+      this.destroySession({ projectId: session.projectId, sessionId: session.sessionId });
     }
   }
 
@@ -1581,6 +1781,7 @@ export class BrowserHostManager {
     return {
       projectId: session.projectId,
       sessionId: session.sessionId,
+      profileId: session.profileId,
       currentUrl: session.currentUrl,
       pageTitle: session.pageTitle,
       loading: session.loading,
@@ -1593,6 +1794,10 @@ export class BrowserHostManager {
         session.pictureInPictureWindow !== null && !session.pictureInPictureWindow.isDestroyed(),
       colorScheme: session.colorScheme,
       controller: session.controller ?? "none",
+      controlEpoch: session.controlEpoch,
+      assignedTaskId: session.assignedTaskId,
+      temporaryAgentTab: session.temporaryAgentTab,
+      userRetained: session.userRetained,
       lastError: session.lastError,
       transientError: session.transientError,
       securityContext: buildSecurityContext({
@@ -1617,15 +1822,28 @@ export class BrowserHostManager {
     const contents = session.view.webContents;
     if (contents.isDestroyed() || contents.isDevToolsOpened()) return;
     try {
-      if (!contents.debugger.isAttached()) contents.debugger.attach("1.3");
-      await contents.debugger.sendCommand("Emulation.setEmulatedMedia", {
-        features: [
-          {
-            name: "prefers-color-scheme",
-            value: session.colorScheme === "system" ? "" : session.colorScheme,
-          },
-        ],
-      });
+      if (session.cdpCoordinator) {
+        await session.cdpCoordinator.withSession("emulation", async (debuggerApi) => {
+          await debuggerApi.sendCommand("Emulation.setEmulatedMedia", {
+            features: [
+              {
+                name: "prefers-color-scheme",
+                value: session.colorScheme === "system" ? "" : session.colorScheme,
+              },
+            ],
+          });
+        });
+      } else {
+        if (!contents.debugger.isAttached()) contents.debugger.attach("1.3");
+        await contents.debugger.sendCommand("Emulation.setEmulatedMedia", {
+          features: [
+            {
+              name: "prefers-color-scheme",
+              value: session.colorScheme === "system" ? "" : session.colorScheme,
+            },
+          ],
+        });
+      }
     } catch (error) {
       console.warn("[browserHostManager] Failed to apply browser color scheme:", error);
     }
@@ -1688,6 +1906,7 @@ export class BrowserHostManager {
       if (session.dispatchingAgentInput) return;
       session.controlEpoch = (session.controlEpoch ?? 0) + 1;
       session.controller = "human";
+      session.userRetained = true;
       if (session.humanControlTimer) clearTimeout(session.humanControlTimer);
       this.emitState(session);
       session.humanControlTimer = setTimeout(() => {

@@ -1283,6 +1283,39 @@ export interface DesktopBridge {
     origin: string;
     permission: string;
   }) => Promise<void>;
+  takeBrowserControl?: (input: DesktopBrowserHostControlInput) => Promise<void>;
+  resumeBrowserAgent?: (
+    input: DesktopBrowserHostControlInput & { taskId?: string | undefined },
+  ) => Promise<void>;
+  assignBrowserTabTask?: (
+    input: DesktopBrowserHostControlInput & { taskId: string | null },
+  ) => Promise<void>;
+  retainBrowserTab?: (input: DesktopBrowserHostControlInput) => Promise<void>;
+  cleanupAgentBrowserTabs?: (input: { projectId: string; taskId: string }) => Promise<string[]>;
+  destroyBrowserSession?: (input: DesktopBrowserHostControlInput) => Promise<void>;
+  getRecentlyClosedBrowserTabs?: (projectId: string) => Promise<
+    Array<{
+      id: string;
+      projectId: string;
+      sessionId: string;
+      url: string;
+      title: string;
+      profileId?: string | undefined;
+      closedAt: string;
+    }>
+  >;
+  restoreRecentlyClosedBrowserTab?: (input: {
+    projectId: string;
+    id?: string | undefined;
+  }) => Promise<{
+    id: string;
+    projectId: string;
+    sessionId: string;
+    url: string;
+    title: string;
+    profileId?: string | undefined;
+    closedAt: string;
+  } | null>;
   onBrowserProfileDataChanged: (listener: (profileId: string) => void) => () => void;
   onBrowserSessionState: (listener: (state: DesktopBrowserSessionState) => void) => () => void;
   getTailscaleStatus: () => Promise<{
@@ -1776,6 +1809,9 @@ export interface DesktopBrowserHostEnsureSessionInput {
   sessionId?: string | undefined;
   initialUrl: string;
   partition?: string | undefined;
+  profileId?: string | undefined;
+  taskId?: string | undefined;
+  temporaryAgentTab?: boolean | undefined;
 }
 
 export interface DesktopBrowserHostActivateSessionInput {
@@ -1795,6 +1831,7 @@ export interface DesktopBrowserHostControlInput {
 }
 
 export interface DesktopBrowserAutomationInput extends DesktopBrowserHostControlInput {
+  taskId?: string | undefined;
   operation:
     | "status"
     | "snapshot"
@@ -1833,6 +1870,7 @@ export interface DesktopBrowserSecurityContext {
 export interface DesktopBrowserSessionState {
   projectId: string;
   sessionId: string;
+  profileId?: string | undefined;
   currentUrl: string | null;
   pageTitle: string | null;
   visible?: boolean;
@@ -1846,6 +1884,10 @@ export interface DesktopBrowserSessionState {
   pictureInPicture: boolean;
   colorScheme: "system" | "light" | "dark";
   controller?: "human" | "agent" | "none";
+  controlEpoch?: number | undefined;
+  assignedTaskId?: string | null | undefined;
+  temporaryAgentTab?: boolean | undefined;
+  userRetained?: boolean | undefined;
   lastError: string | null;
   /** Set when did-fail-load fires with ERR_CONNECTION_REFUSED (-102).
    * Unlike lastError, this is treated as a transient startup condition and
