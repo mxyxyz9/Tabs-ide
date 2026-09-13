@@ -25,6 +25,7 @@ import {
   stopNativeBrowserRecording,
 } from "./NativePreviewAutomationHost";
 import { PreviewAnnotationEditor } from "./PreviewAnnotationEditor";
+import { RecordIssueDialog } from "./browser/RecordIssueDialog";
 import {
   type ProjectToolKind,
   type ProjectWorkspaceSettings,
@@ -7098,6 +7099,7 @@ function DesktopBrowserChrome(props: {
   const [changingRecording, setChangingRecording] = useState(false);
   const [pickingElement, setPickingElement] = useState(false);
   const [clearingBrowserData, setClearingBrowserData] = useState(false);
+  const [recordIssueDialogOpen, setRecordIssueDialogOpen] = useState(false);
   const [pendingAnnotation, setPendingAnnotation] = useState<PreviewAnnotationPayload | null>(null);
   const browserHistory = useBrowserHistoryStore((state) => state.entries);
   const recordBrowserHistory = useBrowserHistoryStore((state) => state.record);
@@ -7502,6 +7504,17 @@ function DesktopBrowserChrome(props: {
               <Button
                 type="button"
                 size="xs"
+                variant="outline"
+                onClick={() => setRecordIssueDialogOpen(true)}
+                className="gap-1 text-xs hover:text-red-400"
+                title="Record an issue reproduction with assertions"
+              >
+                <RadioIcon className="size-3.5 text-red-500" />
+                Record issue
+              </Button>
+              <Button
+                type="button"
+                size="xs"
                 variant={pickingElement ? "secondary" : "outline"}
                 disabled={pickingElement}
                 onClick={() => void pickElement()}
@@ -7877,6 +7890,20 @@ function DesktopBrowserChrome(props: {
             onAttach={attachAnnotation}
           />
         ) : null}
+        <RecordIssueDialog
+          isOpen={recordIssueDialogOpen}
+          onOpenChange={setRecordIssueDialogOpen}
+          projectId={props.projectId}
+          sessionId={props.sessionId}
+          currentUrl={props.sessionState.currentUrl || props.normalizedUrl}
+          viewport={
+            props.browserState.customWidth && props.browserState.customHeight
+              ? { width: props.browserState.customWidth, height: props.browserState.customHeight }
+              : undefined
+          }
+          profileId={props.sessionState.profileId}
+          assignedTaskId={props.sessionState.assignedTaskId}
+        />
       </div>
     </div>
   );

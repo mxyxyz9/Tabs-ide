@@ -681,7 +681,7 @@ describe("reliable browser tabs and agent control", () => {
       pictureInPictureWindow: null,
       consoleEntries: [],
       networkEntries: [],
-      actionTimeline: [],
+      actionTimeline: [] as Array<any>,
       controller: "none",
       controlEpoch: 0,
       assignedTaskId: null,
@@ -765,7 +765,7 @@ describe("reliable browser tabs and agent control", () => {
 
     // Verify timeline recorded the cancellation
     const lastEvent = session.actionTimeline[session.actionTimeline.length - 1];
-    expect(lastEvent.status).toBe("cancelled");
+    expect(lastEvent?.status).toBe("cancelled");
   });
 
   it("enforces task-to-tab ownership and rejects operations from unauthorized tasks", async () => {
@@ -855,10 +855,10 @@ describe("reliable browser tabs and agent control", () => {
 
     const recent = manager.getRecentlyClosedTabs("project-1");
     expect(recent).toHaveLength(1);
-    expect(recent[0].url).toBe("https://github.com/pulls");
-    expect(recent[0].title).toBe("Pull Requests");
+    expect(recent[0]!.url).toBe("https://github.com/pulls");
+    expect(recent[0]!.title).toBe("Pull Requests");
 
-    const restored = manager.restoreRecentlyClosedTab("project-1", recent[0].id);
+    const restored = manager.restoreRecentlyClosedTab("project-1", recent[0]!.id);
     expect(restored).toMatchObject({
       url: "https://github.com/pulls",
       title: "Pull Requests",
