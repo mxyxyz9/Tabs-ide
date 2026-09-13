@@ -9,9 +9,14 @@ import {
   type BrowserImportSourceProfile,
   type BrowserImportUnavailableReason,
 } from "@tabs/contracts";
-import { session as electronSession } from "electron";
+import { session as electronSession, type Session } from "electron";
 import { normalizeBrowserProfileId } from "../browserHostManager";
 import { normalizeProfileIdentifier } from "../profileStorage";
+import { readChromiumCookies } from "./ChromiumCookies";
+import { type ChromiumKeyMaterial } from "./ChromiumKeys";
+import { type ImportedCookie } from "./CookieDatabase";
+import { readFirefoxCookies } from "./FirefoxCookies";
+import { readSafariCookies, safariAccessDenied } from "./SafariCookies";
 
 export interface SyntheticCookieInput {
   readonly name: string;
@@ -30,7 +35,7 @@ export interface SyntheticCookieImportOptions {
 }
 
 /**
- * Hardened cookie import engine.
+ * Hardened synthetic cookie import engine.
  *
  * Enforces:
  * 1. Target profile isolation (validates normalized profile ID to prevent partition breakout).
@@ -111,7 +116,11 @@ export async function importSyntheticCookiesToSession(
 interface BrowserSourceConfig {
   readonly id: BrowserImportSourceId;
   readonly name: string;
+  readonly engine: "chromium" | "firefox" | "safari";
   readonly processNames: readonly string[];
+  readonly keychainService?: string;
+  readonly keychainAccount?: string;
+  readonly linuxSecretApplication?: string;
   readonly getUserDataDir: (platform: NodeJS.Platform) => string | null;
 }
 
@@ -119,7 +128,11 @@ const BROWSER_CONFIGS: readonly BrowserSourceConfig[] = [
   {
     id: "chrome",
     name: "Google Chrome",
+    engine: "chromium",
     processNames: ["Google Chrome", "chrome", "chrome.exe"],
+    keychainService: "Chrome Safe Storage",
+    keychainAccount: "Chrome",
+    linuxSecretApplication: "chrome",
     getUserDataDir: (platform) => {
       const home = Os.homedir();
       if (platform === "darwin") {
@@ -134,7 +147,11 @@ const BROWSER_CONFIGS: readonly BrowserSourceConfig[] = [
   {
     id: "brave",
     name: "Brave",
+    engine: "chromium",
     processNames: ["Brave Browser", "brave", "brave.exe"],
+    keychainService: "Brave Safe Storage",
+    keychainAccount: "Brave",
+    linuxSecretApplication: "brave",
     getUserDataDir: (platform) => {
       const home = Os.homedir();
       if (platform === "darwin") {
@@ -149,7 +166,11 @@ const BROWSER_CONFIGS: readonly BrowserSourceConfig[] = [
   {
     id: "edge",
     name: "Microsoft Edge",
+    engine: "chromium",
     processNames: ["Microsoft Edge", "msedge", "msedge.exe"],
+    keychainService: "Microsoft Edge Safe Storage",
+    keychainAccount: "Microsoft Edge",
+    linuxSecretApplication: "msedge",
     getUserDataDir: (platform) => {
       const home = Os.homedir();
       if (platform === "darwin") {
@@ -164,14 +185,15 @@ const BROWSER_CONFIGS: readonly BrowserSourceConfig[] = [
   {
     id: "firefox",
     name: "Mozilla Firefox",
+    engine: "firefox",
     processNames: ["firefox", "firefox.exe"],
     getUserDataDir: (platform) => {
       const home = Os.homedir();
       if (platform === "darwin") {
-        return Path.join(home, "Library/Application Support/Firefox/Profiles");
+        return Path.join(home, "Library/Application Support/Firefox");
       }
       if (platform === "win32") {
-        return Path.join(process.env.APPDATA || "", "Mozilla/Firefox/Profiles");
+        return Path.join(process.env.APPDATA || "", "Mozilla/Firefox");
       }
       return Path.join(home, ".mozilla/firefox");
     },
@@ -179,6 +201,7 @@ const BROWSER_CONFIGS: readonly BrowserSourceConfig[] = [
   {
     id: "safari",
     name: "Safari",
+    engine: "safari",
     processNames: ["Safari"],
     getUserDataDir: (platform) => {
       if (platform !== "darwin") return null;
@@ -193,13 +216,16 @@ export class BrowserSessionImporter {
     private readonly isProcessRunningFn: (
       processNames: readonly string[],
     ) => Promise<boolean> = isProcessRunningDefault,
+    private readonly userDataDirOverrides?: Partial<Record<BrowserImportSourceId, string>>,
+    private readonly keyOverrides?: Partial<Record<BrowserImportSourceId, ChromiumKeyMaterial>>,
   ) {}
 
   async listSources(): Promise<BrowserImportSource[]> {
     const sources: BrowserImportSource[] = [];
 
     for (const config of BROWSER_CONFIGS) {
-      const userDataDir = config.getUserDataDir(this.platform);
+      const userDataDir =
+        this.userDataDirOverrides?.[config.id] ?? config.getUserDataDir(this.platform);
       if (!userDataDir) {
         continue;
       }
@@ -220,11 +246,11 @@ export class BrowserSessionImporter {
       let unavailable: BrowserImportUnavailableReason | undefined;
       if (running) {
         unavailable = "browserRunning";
-      } else {
-        // Source discovery is retained for the settings UI, but the engine-
-        // specific cookie readers have not been ported yet. Keep import
-        // disabled instead of presenting a control that cannot do its job.
-        unavailable = "unsupportedPlatform";
+      } else if (config.id === "safari") {
+        const jar = Path.join(userDataDir, "Cookies.binarycookies");
+        if (await safariAccessDenied(jar)) {
+          unavailable = "needsFullDiskAccess";
+        }
       }
 
       const profiles = await this.discoverProfiles(config.id, userDataDir);
@@ -240,7 +266,7 @@ export class BrowserSessionImporter {
     return sources;
   }
 
-  private async discoverProfiles(
+  async discoverProfiles(
     sourceId: BrowserImportSourceId,
     userDataDir: string,
   ): Promise<BrowserImportSourceProfile[]> {
@@ -253,6 +279,14 @@ export class BrowserSessionImporter {
       ];
     }
 
+    if (sourceId === "firefox") {
+      return await this.discoverFirefoxProfiles(userDataDir);
+    }
+
+    return await this.discoverChromiumProfiles(userDataDir);
+  }
+
+  private async discoverChromiumProfiles(userDataDir: string): Promise<BrowserImportSourceProfile[]> {
     try {
       const entries = await FS.readdir(userDataDir, { withFileTypes: true });
       const profiles: BrowserImportSourceProfile[] = [];
@@ -265,7 +299,7 @@ export class BrowserSessionImporter {
             directory: "Default",
             name: "Default Profile",
           });
-        } else if (dirName.startsWith("Profile ") || dirName.includes(".default")) {
+        } else if (dirName.startsWith("Profile ")) {
           profiles.push({
             directory: dirName,
             name: dirName,
@@ -291,7 +325,87 @@ export class BrowserSessionImporter {
     }
   }
 
-  async importSelectedCookies(input: BrowserImportInput): Promise<BrowserImportResult> {
+  private async discoverFirefoxProfiles(userDataDir: string): Promise<BrowserImportSourceProfile[]> {
+    const profiles: BrowserImportSourceProfile[] = [];
+
+    // First attempt: parse profiles.ini
+    const iniPath = Path.join(userDataDir, "profiles.ini");
+    try {
+      const iniContent = await FS.readFile(iniPath, "utf8");
+      const lines = iniContent.split(/\r?\n/);
+      let currentSection = "";
+      let currentName = "";
+      let currentPath = "";
+      let isRelative = true;
+
+      const flushSection = () => {
+        if (currentSection.startsWith("Profile") && currentPath) {
+          profiles.push({
+            directory: currentPath,
+            name: currentName || currentPath,
+          });
+        }
+        currentSection = "";
+        currentName = "";
+        currentPath = "";
+        isRelative = true;
+      };
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          flushSection();
+          currentSection = trimmed.slice(1, -1);
+        } else if (trimmed.startsWith("Name=")) {
+          currentName = trimmed.slice(5).trim();
+        } else if (trimmed.startsWith("Path=")) {
+          currentPath = trimmed.slice(5).trim();
+        } else if (trimmed.startsWith("IsRelative=")) {
+          isRelative = trimmed.slice(11).trim() !== "0";
+        }
+      }
+      flushSection();
+
+      if (profiles.length > 0) {
+        return profiles;
+      }
+    } catch {
+      // Fall through to directory inspection
+    }
+
+    // Second attempt: scan profiles subdirectory or root directory for *.default*
+    for (const searchDir of [Path.join(userDataDir, "Profiles"), userDataDir]) {
+      try {
+        const entries = await FS.readdir(searchDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          if (entry.name.includes(".default") || entry.name.includes("default-release")) {
+            profiles.push({
+              directory: Path.relative(userDataDir, Path.join(searchDir, entry.name)),
+              name: entry.name,
+            });
+          }
+        }
+      } catch {
+        // Continue
+      }
+      if (profiles.length > 0) break;
+    }
+
+    if (profiles.length === 0) {
+      profiles.push({
+        directory: "Default",
+        name: "Default Profile",
+      });
+    }
+
+    return profiles;
+  }
+
+  async importSelectedCookies(
+    input: BrowserImportInput,
+    overrideSession?: { cookies: Pick<Session["cookies"], "set" | "flushStore"> },
+  ): Promise<BrowserImportResult> {
     const targetProfileId = normalizeBrowserProfileId(input.targetProfileId);
     const config = BROWSER_CONFIGS.find((c) => c.id === input.sourceId);
     if (!config) {
@@ -305,46 +419,132 @@ export class BrowserSessionImporter {
       );
     }
 
-    const userDataDir = config.getUserDataDir(this.platform);
+    const userDataDir =
+      this.userDataDirOverrides?.[config.id] ?? config.getUserDataDir(this.platform);
     if (!userDataDir) {
       throw new Error(`Browser source ${input.sourceId} is not supported on this platform.`);
     }
 
     const profiles = await this.discoverProfiles(config.id, userDataDir);
-    if (!profiles.some((profile) => profile.directory === input.sourceProfileDirectory)) {
+    const matchedProfile = profiles.find((profile) => profile.directory === input.sourceProfileDirectory);
+    if (!matchedProfile) {
       throw new Error("Selected browser profile was not found.");
     }
 
-    const partition = `persist:tabs-browser:profile:${targetProfileId}`;
-    const targetSession = electronSession.fromPartition(partition);
-
-    // Resolve only the cookie store belonging to the validated profile. Passwords,
-    // history, and autofill are never accessed.
-    const cookieDbPath =
-      config.id === "firefox"
-        ? Path.join(userDataDir, input.sourceProfileDirectory, "cookies.sqlite")
-        : config.id === "safari"
-          ? Path.join(userDataDir, "Cookies.binarycookies")
-          : Path.join(userDataDir, input.sourceProfileDirectory, "Cookies");
-    let fileExists = false;
-    try {
-      const stat = await FS.stat(cookieDbPath);
-      fileExists = stat.isFile();
-    } catch {
-      fileExists = false;
+    // Resolve cookie database file candidates
+    let candidatePaths: string[] = [];
+    if (config.engine === "safari") {
+      candidatePaths = [Path.join(userDataDir, "Cookies.binarycookies")];
+    } else if (config.engine === "firefox") {
+      const profilePath = Path.isAbsolute(input.sourceProfileDirectory)
+        ? input.sourceProfileDirectory
+        : Path.join(userDataDir, input.sourceProfileDirectory);
+      candidatePaths = [Path.join(profilePath, "cookies.sqlite")];
+    } else {
+      // Chromium: Modern Chrome 96+ uses Network/Cookies; older versions use Cookies
+      const profilePath = Path.isAbsolute(input.sourceProfileDirectory)
+        ? input.sourceProfileDirectory
+        : Path.join(userDataDir, input.sourceProfileDirectory);
+      candidatePaths = [
+        Path.join(profilePath, "Network", "Cookies"),
+        Path.join(profilePath, "Cookies"),
+      ];
     }
 
-    if (!fileExists) {
+    let cookieDbPath: string | null = null;
+    for (const cand of candidatePaths) {
+      try {
+        const stat = await FS.stat(cand);
+        if (stat.isFile()) {
+          cookieDbPath = cand;
+          break;
+        }
+      } catch {
+        // Continue to next candidate
+      }
+    }
+
+    if (!cookieDbPath) {
       throw new Error("No readable cookie database was found for the selected browser profile.");
     }
 
-    // Cookie extraction requires each browser engine's native decryption and
-    // database handling. Do not report success until that implementation has
-    // actually populated the Electron partition.
-    void targetSession;
-    throw new Error(
-      "Cookie import for this browser is not available yet. No browser data was changed.",
-    );
+    // Read cookies based on engine
+    let cookies: readonly ImportedCookie[] = [];
+    let initialUndecryptable = 0;
+    const skippedDomains = new Set<string>();
+
+    if (config.engine === "safari") {
+      cookies = await readSafariCookies(cookieDbPath);
+    } else if (config.engine === "firefox") {
+      cookies = await readFirefoxCookies(cookieDbPath);
+    } else {
+      const readResult = await readChromiumCookies(
+        {
+          cookieDatabasePath: cookieDbPath,
+          keychainService: config.keychainService,
+          keychainAccount: config.keychainAccount,
+          linuxSecretApplication: config.linuxSecretApplication,
+          windowsLocalStatePath:
+            this.platform === "win32" ? Path.join(userDataDir, "Local State") : undefined,
+          platform: this.platform,
+        },
+        this.keyOverrides?.[config.id],
+      );
+      cookies = readResult.cookies;
+      initialUndecryptable = readResult.undecryptable;
+      for (const host of readResult.undecryptableHosts) {
+        skippedDomains.add(host);
+      }
+    }
+
+    // Resolve Electron target session
+    const partition = `persist:tabs-browser:profile:${targetProfileId}`;
+    const targetSession = overrideSession ?? electronSession.fromPartition(partition);
+
+    let imported = 0;
+    let skipped = initialUndecryptable;
+
+    for (const cookie of cookies) {
+      try {
+        const details: Electron.CookiesSetDetails = {
+          url: cookie.url,
+          name: cookie.name,
+          value: cookie.value,
+          // CRITICAL: omit domain for host-only cookies so Electron does not widen them or reject __Host- cookies
+          path: cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite,
+          ...(cookie.domain ? { domain: cookie.domain } : {}),
+          ...(typeof cookie.expirationDate === "number"
+            ? { expirationDate: cookie.expirationDate }
+            : {}),
+        };
+        await targetSession.cookies.set(details);
+        imported++;
+      } catch {
+        skipped++;
+        try {
+          skippedDomains.add(new URL(cookie.url).hostname);
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    if (imported > 0 && typeof targetSession.cookies.flushStore === "function") {
+      try {
+        await targetSession.cookies.flushStore();
+      } catch {
+        // Non-fatal if flushStore fails
+      }
+    }
+
+    return {
+      imported,
+      skipped,
+      skippedDomains: Array.from(skippedDomains).slice(0, 20),
+    };
   }
 }
 
