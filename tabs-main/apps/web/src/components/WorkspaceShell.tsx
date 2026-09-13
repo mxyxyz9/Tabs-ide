@@ -90,6 +90,7 @@ import {
   PanelLeftCloseIcon,
   PinIcon,
   PictureInPicture2Icon,
+  ShieldAlertIcon,
   Clock3Icon,
   CircleCheckIcon,
   SquareIcon,
@@ -7278,6 +7279,57 @@ function DesktopBrowserChrome(props: {
       {props.isChromeExpanded ? (
         <Card className="relative z-20">
           <CardContent className="space-y-1.5 p-2">
+            {props.sessionState.pendingPermission ? (
+              <div
+                role="alert"
+                className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded bg-amber-500/10 border border-amber-500/25 text-xs text-foreground"
+              >
+                <div className="flex items-center gap-2 min-w-0 truncate">
+                  <ShieldAlertIcon className="size-4 text-amber-500 shrink-0" />
+                  <span className="truncate">
+                    <strong className="font-semibold text-foreground">
+                      {props.sessionState.pendingPermission.origin}
+                    </strong>{" "}
+                    wants access to{" "}
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">
+                      {props.sessionState.pendingPermission.permission}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="default"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => {
+                      void window.desktopBridge?.respondBrowserPermission?.({
+                        requestId: props.sessionState.pendingPermission!.requestId,
+                        granted: true,
+                        remember: true,
+                      });
+                    }}
+                  >
+                    Allow
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => {
+                      void window.desktopBridge?.respondBrowserPermission?.({
+                        requestId: props.sessionState.pendingPermission!.requestId,
+                        granted: false,
+                        remember: true,
+                      });
+                    }}
+                  >
+                    Block
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center gap-1">
               <Button
                 type="button"

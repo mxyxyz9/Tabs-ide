@@ -184,6 +184,9 @@ const BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL = "desktop:browser-host:get-profi
 const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-profile-domain";
 const BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL = "desktop:browser-host:list-import-sources";
 const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies";
+const BROWSER_HOST_RESPOND_PERMISSION_CHANNEL = "desktop:browser-host:respond-permission";
+const BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL = "desktop:browser-host:get-profile-permissions";
+const BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL = "desktop:browser-host:revoke-profile-permission";
 
 function readBrowserSessionId(input: unknown): string | undefined {
   const value = (input as { sessionId?: unknown }).sessionId;
@@ -2809,6 +2812,38 @@ function registerIpcHandlers(): void {
   ipcMain.handle(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, async (_event, input: unknown) => {
     const decoded = Schema.decodeUnknownSync(BrowserImportInput)(input);
     return await browserHostManager.importBrowserCookies(decoded);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_RESPOND_PERMISSION_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_RESPOND_PERMISSION_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null) return;
+    const { requestId, granted, remember } = input as {
+      requestId: string;
+      granted: boolean;
+      remember?: boolean;
+    };
+    if (typeof requestId !== "string" || typeof granted !== "boolean") return;
+    browserHostManager.respondPermission(requestId, granted, remember ?? true);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null) return [];
+    const profileId = (input as { profileId?: unknown }).profileId;
+    if (typeof profileId !== "string") return [];
+    return browserHostManager.getProfilePermissions(profileId);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null) return;
+    const { profileId, origin, permission } = input as {
+      profileId: string;
+      origin: string;
+      permission: string;
+    };
+    if (typeof profileId !== "string" || typeof origin !== "string" || typeof permission !== "string") return;
+    browserHostManager.revokeProfilePermission(profileId, origin, permission);
   });
 
   ipcMain.removeHandler(VSCODE_FETCH_SHELL_ENV_CHANNEL);

@@ -1119,6 +1119,31 @@ export interface BrowserProfileDomainInfo {
   hasSessionHint: boolean;
 }
 
+export interface BrowserPermissionRequest {
+  readonly requestId: string;
+  readonly profileId: string;
+  readonly origin: string;
+  readonly permission: string;
+  readonly details?: {
+    readonly mediaType?: "video" | "audio" | undefined;
+    readonly requestingUrl?: string | undefined;
+  } | undefined;
+}
+
+export interface BrowserPermissionResponse {
+  readonly requestId: string;
+  readonly granted: boolean;
+  readonly remember?: boolean | undefined;
+}
+
+export interface BrowserProfilePermissionInfo {
+  readonly profileId: string;
+  readonly origin: string;
+  readonly permission: string;
+  readonly granted: boolean;
+  readonly updatedAt: number;
+}
+
 export interface DesktopBridge {
   writeClipboardText: (text: string) => Promise<void>;
   readClipboardText?: (type?: "clipboard" | "selection") => Promise<string>;
@@ -1249,6 +1274,15 @@ export interface DesktopBridge {
   clearBrowserProfileDomain: (input: { profileId: string; domain: string }) => Promise<void>;
   listBrowserImportSources?: () => Promise<BrowserImportSource[]>;
   importBrowserCookies?: (input: BrowserImportInput) => Promise<BrowserImportResult>;
+  respondBrowserPermission?: (response: BrowserPermissionResponse) => Promise<void>;
+  getBrowserProfilePermissions?: (input: {
+    profileId: string;
+  }) => Promise<BrowserProfilePermissionInfo[]>;
+  revokeBrowserProfilePermission?: (input: {
+    profileId: string;
+    origin: string;
+    permission: string;
+  }) => Promise<void>;
   onBrowserProfileDataChanged: (listener: (profileId: string) => void) => () => void;
   onBrowserSessionState: (listener: (state: DesktopBrowserSessionState) => void) => () => void;
   getTailscaleStatus: () => Promise<{
@@ -1819,4 +1853,5 @@ export interface DesktopBrowserSessionState {
    * instead shows "Starting..." and retries automatically. */
   transientError: string | null;
   securityContext?: DesktopBrowserSecurityContext | undefined;
+  pendingPermission?: BrowserPermissionRequest | null | undefined;
 }

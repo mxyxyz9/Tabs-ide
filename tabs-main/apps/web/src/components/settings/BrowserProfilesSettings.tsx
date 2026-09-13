@@ -3,7 +3,7 @@ import {
   type BrowserLinkTarget,
   type BrowserProfileDefinition,
 } from "@tabs/contracts/settings";
-import { type BrowserProfileDomainInfo } from "@tabs/contracts";
+import { type BrowserProfileDomainInfo, type BrowserProfilePermissionInfo } from "@tabs/contracts";
 import {
   FingerprintIcon,
   PlusIcon,
@@ -141,15 +141,55 @@ export function BrowserProfilesSettings() {
     setProfileDomains(res);
   }, [profiles]);
 
+  const [profilePermissions, setProfilePermissions] = useState<Record<string, BrowserProfilePermissionInfo[]>>(
+    {},
+  );
+  const refreshPermissions = useCallback(async () => {
+    if (!window.desktopBridge?.getBrowserProfilePermissions) return;
+    const res: Record<string, BrowserProfilePermissionInfo[]> = {};
+    for (const p of profiles) {
+      try {
+        const perms = await window.desktopBridge.getBrowserProfilePermissions({ profileId: p.id });
+        res[p.id] = perms;
+      } catch {
+        res[p.id] = [];
+      }
+    }
+    setProfilePermissions(res);
+  }, [profiles]);
+
+  const handleRevokePermission = async (profileId: string, origin: string, permission: string) => {
+    if (!window.desktopBridge?.revokeBrowserProfilePermission) return;
+    try {
+      await window.desktopBridge.revokeBrowserProfilePermission({ profileId, origin, permission });
+      toastManager.add({
+        type: "success",
+        title: "Permission revoked",
+        description: `Revoked ${permission} for ${origin}.`,
+      });
+      await refreshPermissions();
+    } catch {
+      toastManager.add({
+        type: "error",
+        title: "Failed to revoke permission",
+        description: `Could not revoke ${permission} for ${origin}.`,
+      });
+    }
+  };
+
   useEffect(() => {
     refreshDomains();
-  }, [refreshDomains]);
+    refreshPermissions();
+  }, [refreshDomains, refreshPermissions]);
 
   useEffect(() => {
     const subscribe = window.desktopBridge?.onBrowserProfileDataChanged;
     if (!subscribe) return;
-    return subscribe(() => void refreshDomains());
-  }, [refreshDomains]);
+    return subscribe(() => {
+      void refreshDomains();
+      void refreshPermissions();
+    });
+  }, [refreshDomains, refreshPermissions]);
 
   // Quick portals customized by user
   const [customPortals, setCustomPortals] = useState<QuickPortal[]>(() => {
@@ -478,13 +518,12 @@ export function BrowserProfilesSettings() {
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
-            disabled
             onClick={openImportModal}
-            title="Browser session import is not available in this build yet"
-            className="gap-1.5"
+            title="Import cookies from installed desktop browsers"
+            className="gap-1.5 cursor-pointer"
           >
             <DownloadIcon className="size-4" />
-            Import Sessions (Coming Soon)
+            Import Sessions
           </Button>
           <Button onClick={openCreateModal} className="gap-1.5 cursor-pointer">
             <PlusIcon className="size-4" />
@@ -535,6 +574,7 @@ export function BrowserProfilesSettings() {
         {profiles.map((profile) => {
           const usage = usageByProfileId.get(profile.id) ?? [];
           const domains = profileDomains[profile.id] ?? [];
+          const permissions = profilePermissions[profile.id] ?? [];
           const sessionHintDomains = domains.filter((d) => d.hasSessionHint);
           const otherDomains = domains.filter((d) => !d.hasSessionHint);
           const isClearing = clearingProfileId === profile.id;
@@ -682,6 +722,41 @@ export function BrowserProfilesSettings() {
                     <div className="text-[11px] text-muted-foreground/70">
                       No site data in this named profile. Existing per-project logins are stored
                       separately.
+                    </div>
+                  )}
+                </div>
+
+                {/* Remembered Website Permissions */}
+                <div className="pt-2 border-t border-border/40">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <ShieldCheckIcon className="size-3 text-primary" />
+                    Website Permissions
+                  </div>
+                  {permissions.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {permissions.map((perm) => (
+                        <span
+                          key={`${perm.origin}-${perm.permission}`}
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/90 border border-border/70 text-[11px] text-foreground group"
+                        >
+                          <span className="font-mono text-[10px]">{perm.origin}</span>
+                          <span className="text-[10px] font-medium text-primary">
+                            {perm.permission}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleRevokePermission(profile.id, perm.origin, perm.permission)}
+                            title={`Revoke ${perm.permission} for ${perm.origin}`}
+                            className="text-muted-foreground hover:text-destructive cursor-pointer opacity-70 hover:opacity-100"
+                          >
+                            <XIcon className="size-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-muted-foreground/70">
+                      No custom permissions remembered for this profile.
                     </div>
                   )}
                 </div>

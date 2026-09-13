@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   PermissionMediator,
   categorizePermission,
@@ -9,9 +9,18 @@ import {
 
 describe("permissionMediator", () => {
   let mediator: PermissionMediator;
+  let mockSysPrefs: {
+    getMediaAccessStatus: ((mediaType: "camera" | "microphone" | "screen") => string) & {
+      mockReturnValue: (val: string) => void;
+    };
+  };
 
   beforeEach(() => {
-    mediator = new PermissionMediator();
+    const fn = vi.fn((_mediaType: "camera" | "microphone" | "screen") => "granted");
+    mockSysPrefs = {
+      getMediaAccessStatus: fn as any,
+    };
+    mediator = new PermissionMediator(mockSysPrefs);
   });
 
   describe("categorizePermission", () => {
@@ -42,7 +51,7 @@ describe("permissionMediator", () => {
     });
   });
 
-  describe("PermissionMediator requests and checks", () => {
+  describe("PermissionMediator profile scoping and revocation", () => {
     const origin = "https://app.example.com";
     const requestUrl = "https://app.example.com/dashboard";
 
@@ -64,43 +73,159 @@ describe("permissionMediator", () => {
       expect(mediator.evaluateRequest("local-fonts", requestUrl)).toBe(false);
     });
 
-    it("honors explicitly recorded origin decisions without bleeding across origins", () => {
-      mediator.recordDecision(origin, "camera", true);
+    it("scopes decisions strictly by profile and origin", () => {
+      mediator.recordDecision(origin, "camera", true, "work");
 
-      // Granted for https://app.example.com
-      expect(mediator.evaluateRequest("camera", requestUrl)).toBe(true);
-      expect(mediator.evaluateCheck("camera", origin)).toBe(true);
+      // Granted for profile "work"
+      expect(mediator.evaluateRequest("camera", requestUrl, undefined, "work")).toBe(true);
+      expect(mediator.evaluateCheck("camera", origin, "work")).toBe(true);
 
-      // NOT granted for https://other-app.com
-      const otherOrigin = "https://other-app.com";
-      expect(mediator.evaluateRequest("camera", "https://other-app.com/login")).toBe(false);
-      expect(mediator.evaluateCheck("camera", otherOrigin)).toBe(false);
+      // NOT granted for profile "personal"
+      expect(mediator.evaluateRequest("camera", requestUrl, undefined, "personal")).toBe(false);
+      expect(mediator.evaluateCheck("camera", origin, "personal")).toBe(false);
+
+      // NOT granted for another origin in "work"
+      expect(mediator.evaluateRequest("camera", "https://other.com", undefined, "work")).toBe(false);
     });
 
-    it("clears decisions on demand", () => {
-      mediator.recordDecision(origin, "camera", true);
-      expect(mediator.evaluateRequest("camera", requestUrl)).toBe(true);
+    it("supports revoking specific permissions for a profile and origin", () => {
+      mediator.recordDecision(origin, "camera", true, "work");
+      mediator.recordDecision(origin, "microphone", true, "work");
 
-      mediator.clearDecisions(origin);
-      expect(mediator.evaluateRequest("camera", requestUrl)).toBe(false);
+      expect(mediator.hasRememberedDecision(origin, "camera", "work")).toBe(true);
+      expect(mediator.hasRememberedDecision(origin, "microphone", "work")).toBe(true);
+
+      const revoked = mediator.revokeDecision("work", origin, "camera");
+      expect(revoked).toBe(true);
+
+      expect(mediator.evaluateRequest("camera", requestUrl, undefined, "work")).toBe(false);
+      expect(mediator.evaluateRequest("microphone", requestUrl, undefined, "work")).toBe(true);
+    });
+
+    it("lists decisions accurately per profile", () => {
+      mediator.recordDecision("https://site-a.com", "camera", true, "work");
+      mediator.recordDecision("https://site-b.com", "microphone", true, "personal");
+
+      const workDecisions = mediator.listDecisions("work");
+      expect(workDecisions).toHaveLength(1);
+      expect(workDecisions[0]?.origin).toBe("https://site-a.com");
+      expect(workDecisions[0]?.permission).toBe("camera");
+
+      const allDecisions = mediator.listDecisions();
+      expect(allDecisions).toHaveLength(2);
+    });
+
+    it("clears decisions on demand scoped by profile", () => {
+      mediator.recordDecision(origin, "camera", true, "work");
+      mediator.recordDecision(origin, "camera", true, "personal");
+
+      mediator.clearDecisions(origin, "work");
+      expect(mediator.evaluateRequest("camera", requestUrl, undefined, "work")).toBe(false);
+      expect(mediator.evaluateRequest("camera", requestUrl, undefined, "personal")).toBe(true);
+    });
+  });
+
+  describe("PermissionMediator async prompt mediation and pending request handling", () => {
+    it("notifies prompt handler on new permission request and grants when accepted", () => {
+      let promptPayload: any = null;
+      mediator.setPromptHandler((req) => {
+        promptPayload = req;
+      });
+
+      let callbackResult: boolean | null = null;
+      mediator.handlePermissionRequest({
+        webContentsId: 42,
+        permission: "camera",
+        requestingUrl: "https://zoom.us/join",
+        profileId: "work",
+        callback: (granted) => {
+          callbackResult = granted;
+        },
+      });
+
+      expect(promptPayload).not.toBeNull();
+      expect(promptPayload.origin).toBe("https://zoom.us");
+      expect(promptPayload.permission).toBe("camera");
+      expect(callbackResult).toBeNull(); // Still pending
+
+      // User allows and remembers
+      mediator.respondDecision(promptPayload.requestId, true, true);
+      expect(callbackResult).toBe(true);
+
+      // Now remembered for future checks
+      expect(mediator.evaluateRequest("camera", "https://zoom.us/join", undefined, "work")).toBe(true);
+    });
+
+    it("cancels pending requests when tab navigates or closes (webContents destroyed)", () => {
+      let promptPayload: any = null;
+      mediator.setPromptHandler((req) => {
+        promptPayload = req;
+      });
+
+      let callbackResult: boolean | null = null;
+      mediator.handlePermissionRequest({
+        webContentsId: 99,
+        permission: "microphone",
+        requestingUrl: "https://meet.google.com",
+        profileId: "work",
+        callback: (granted) => {
+          callbackResult = granted;
+        },
+      });
+
+      expect(promptPayload).not.toBeNull();
+      expect(callbackResult).toBeNull();
+
+      // Tab navigates or closes
+      mediator.cancelPendingRequestsForWebContents(99);
+      expect(callbackResult).toBe(false);
+    });
+
+    it("enforces OS-level media access checks", () => {
+      mockSysPrefs.getMediaAccessStatus.mockReturnValue("denied");
+
+      let callbackResult: boolean | null = null;
+      mediator.handlePermissionRequest({
+        webContentsId: 10,
+        permission: "camera",
+        requestingUrl: "https://example.com",
+        profileId: "work",
+        callback: (granted) => {
+          callbackResult = granted;
+        },
+      });
+
+      // Refused immediately because OS denied it
+      expect(callbackResult).toBe(false);
     });
   });
 
   describe("WebAuthn context and passkey support verification", () => {
-    it("confirms secure contexts for HTTPS origins", () => {
+    it("distinguishes secure context from platform passkey hardware support", () => {
+      // Without platform authenticator: establishes secure context, but reports supported=false with clear capability
       const check = checkWebAuthnContext("https://github.com/login");
-      expect(check.supported).toBe(true);
       expect(check.isSecureContext).toBe(true);
-      expect(check.fallbackRequired).toBe(false);
+      expect(check.supported).toBe(false);
+      expect(check.fallbackRequired).toBe(true);
+      expect(check.capability).toBe("secure_context_only");
+      expect(check.isPasskeyDistinguishedFromVerificationCode).toBe(true);
+      expect(check.reason).toContain("limited OS biometric passkey integration");
+
+      // When platform authenticator is verified
+      const checkWithAuth = checkWebAuthnContext("https://github.com/login", {
+        isPlatformAuthenticatorAvailable: true,
+      });
+      expect(checkWithAuth.isSecureContext).toBe(true);
+      expect(checkWithAuth.supported).toBe(true);
+      expect(checkWithAuth.fallbackRequired).toBe(false);
+      expect(checkWithAuth.capability).toBe("platform_passkey_ready");
     });
 
     it("confirms secure contexts for localhost origins", () => {
       const check1 = checkWebAuthnContext("http://localhost:3000/auth");
-      expect(check1.supported).toBe(true);
       expect(check1.isSecureContext).toBe(true);
 
       const check2 = checkWebAuthnContext("http://127.0.0.1:8080/auth");
-      expect(check2.supported).toBe(true);
       expect(check2.isSecureContext).toBe(true);
     });
 
@@ -109,6 +234,7 @@ describe("permissionMediator", () => {
       expect(check.supported).toBe(false);
       expect(check.isSecureContext).toBe(false);
       expect(check.fallbackRequired).toBe(true);
+      expect(check.capability).toBe("not_supported");
       expect(check.reason).toContain("require an HTTPS origin");
     });
   });

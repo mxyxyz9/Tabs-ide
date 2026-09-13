@@ -104,6 +104,9 @@ const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-pr
 const BROWSER_HOST_PROFILE_DATA_CHANGED_CHANNEL = "desktop:browser-host:profile-data-changed";
 const BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL = "desktop:browser-host:list-import-sources";
 const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies";
+const BROWSER_HOST_RESPOND_PERMISSION_CHANNEL = "desktop:browser-host:respond-permission";
+const BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL = "desktop:browser-host:get-profile-permissions";
+const BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL = "desktop:browser-host:revoke-profile-permission";
 
 // Persistence channels
 const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
@@ -288,6 +291,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL, input),
   listBrowserImportSources: () => ipcRenderer.invoke(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL),
   importBrowserCookies: (input) => ipcRenderer.invoke(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, input),
+  respondBrowserPermission: (response) =>
+    ipcRenderer.invoke(BROWSER_HOST_RESPOND_PERMISSION_CHANNEL, response),
+  getBrowserProfilePermissions: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_GET_PROFILE_PERMISSIONS_CHANNEL, input),
+  revokeBrowserProfilePermission: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_REVOKE_PROFILE_PERMISSION_CHANNEL, input),
   onBrowserProfileDataChanged: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, profileId: unknown) => {
       if (typeof profileId === "string") listener(profileId);

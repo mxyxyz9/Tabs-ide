@@ -63,6 +63,8 @@ import type {
   BrowserImportInput,
   BrowserImportResult,
   BrowserImportSource,
+  BrowserPermissionRequest,
+  BrowserProfilePermissionInfo,
   DesktopPreviewScreenshotArtifact,
   DesktopPreviewRecordingArtifact,
   PreviewAnnotationPayload,
@@ -180,6 +182,8 @@ export function getCleanDesktopUserAgent(): string {
   return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
 }
 
+let activeBrowserHostManager: BrowserHostManager | null = null;
+
 export function configurePartitionSession(s: Session): void {
   if (configuredSessions.has(s)) return;
   configuredSessions.add(s);
@@ -192,16 +196,26 @@ export function configurePartitionSession(s: Session): void {
         console.error("[browserHostManager] Failed to persist browser cookies:", err);
       });
     });
-    s.setPermissionRequestHandler((_webContents, permission, callback, details) => {
-      const granted = defaultPermissionMediator.evaluateRequest(
+    s.setPermissionRequestHandler((webContents, permission, callback, details) => {
+      const session = activeBrowserHostManager?.sessionForWebContentsId(webContents?.id);
+      const profileId = session
+        ? extractProfileIdFromPartition(session.partition) || "default"
+        : "default";
+      defaultPermissionMediator.handlePermissionRequest({
+        webContentsId: webContents?.id,
         permission,
-        details?.requestingUrl,
+        requestingUrl: details?.requestingUrl,
         details,
-      );
-      callback(granted);
+        profileId,
+        callback,
+      });
     });
-    s.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
-      return defaultPermissionMediator.evaluateCheck(permission, requestingOrigin);
+    s.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+      const session = activeBrowserHostManager?.sessionForWebContentsId(webContents?.id);
+      const profileId = session
+        ? extractProfileIdFromPartition(session.partition) || "default"
+        : "default";
+      return defaultPermissionMediator.evaluateCheck(permission, requestingOrigin, profileId);
     });
   } catch (err) {
     console.error("[browserHostManager] Failed to configure partition session:", err);
@@ -264,6 +278,7 @@ type BrowserSession = {
   crashRecoveryAttempts: number;
   crashRecoveryWindowStartedAt: number | null;
   crashRecoveryTimer: ReturnType<typeof setTimeout> | null;
+  pendingPermission?: BrowserPermissionRequest | null;
   automationTail: Promise<void>;
   journeyRecorder?: JourneyRecorder;
 };
@@ -350,7 +365,19 @@ export class BrowserHostManager {
   private readonly observedAutomationSessions = new WeakSet<Session>();
   readonly diagnostics = new BrowserAuthDiagnostics();
 
-  constructor(private readonly getWindow: () => BrowserWindow | null) {}
+  constructor(private readonly getWindow: () => BrowserWindow | null) {
+    activeBrowserHostManager = this;
+    defaultPermissionMediator.setPromptHandler((request) => {
+      for (const session of this.sessions.values()) {
+        const profileId = extractProfileIdFromPartition(session.partition) || "default";
+        if (profileId === request.profileId) {
+          session.pendingPermission = request;
+          this.emitState(session);
+          break;
+        }
+      }
+    });
+  }
 
   getAuthDiagnostics(): readonly AuthDiagnosticEntry[] {
     return this.diagnostics.getEntries();
@@ -456,6 +483,7 @@ export class BrowserHostManager {
       crashRecoveryAttempts: 0,
       crashRecoveryWindowStartedAt: null,
       crashRecoveryTimer: null,
+      pendingPermission: null,
       automationTail: Promise.resolve(),
     };
 
@@ -505,6 +533,8 @@ export class BrowserHostManager {
     this.clearCrashRecoveryTimer(session);
     this.clearHumanControlTimer(session);
     this.detachSession(session);
+    defaultPermissionMediator.cancelPendingRequestsForWebContents(session.view.webContents.id);
+    session.pendingPermission = null;
     session.view.webContents.close({ waitForBeforeUnload: false });
 
     const view = new WebContentsView({
@@ -723,6 +753,26 @@ export class BrowserHostManager {
     const s = electronSession.fromPartition(partition);
     this.observeProfileSession(partition, s);
     return result;
+  }
+
+  respondPermission(requestId: string, granted: boolean, remember: boolean = true): void {
+    defaultPermissionMediator.respondDecision(requestId, granted, remember);
+    for (const session of this.sessions.values()) {
+      if (session.pendingPermission?.requestId === requestId) {
+        session.pendingPermission = null;
+        this.emitState(session);
+      }
+    }
+  }
+
+  getProfilePermissions(profileId: string): BrowserProfilePermissionInfo[] {
+    const trimmed = normalizeBrowserProfileId(profileId);
+    return defaultPermissionMediator.listDecisions(trimmed);
+  }
+
+  revokeProfilePermission(profileId: string, origin: string, permission: string): void {
+    const trimmed = normalizeBrowserProfileId(profileId);
+    defaultPermissionMediator.revokeDecision(trimmed, origin, permission);
   }
 
   private async openLoginWindow(
@@ -1400,7 +1450,7 @@ export class BrowserHostManager {
     return resolved;
   }
 
-  private sessionForWebContentsId(webContentsId: number | undefined): BrowserSession | undefined {
+  sessionForWebContentsId(webContentsId: number | undefined): BrowserSession | undefined {
     if (webContentsId === undefined) return undefined;
     return [...this.sessions.values()].find(
       (candidate) => candidate.view.webContents.id === webContentsId,
@@ -1551,6 +1601,7 @@ export class BrowserHostManager {
         certificateError: session.certificateError,
         isTabsOwned: true,
       }),
+      pendingPermission: session.pendingPermission ?? null,
     };
   }
 
@@ -1671,12 +1722,20 @@ export class BrowserHostManager {
     });
 
     contents.on("did-start-loading", () => {
+      if (session.pendingPermission) {
+        defaultPermissionMediator.cancelPendingRequestsForWebContents(contents.id);
+        session.pendingPermission = null;
+      }
       session.loading = true;
       session.lastError = null;
       session.transientError = null;
       session.certificateError = null;
       refreshNavigationState();
       this.emitState(session);
+    });
+    contents.on("destroyed", () => {
+      defaultPermissionMediator.cancelPendingRequestsForWebContents(contents.id);
+      session.pendingPermission = null;
     });
     contents.on("did-stop-loading", () => {
       session.loading = false;
