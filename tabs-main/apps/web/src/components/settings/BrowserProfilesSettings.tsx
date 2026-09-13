@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import type { BrowserImportSourceId, BrowserImportSource } from "@tabs/contracts";
 import { BROWSER_IMPORT_FAILURE_COPY } from "@tabs/contracts";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useAtomValue } from "@effect/atom-react";
 import { projectsAtom } from "../../state/threads";
@@ -261,6 +261,19 @@ export function BrowserProfilesSettings() {
   const [selectedSourceId, setSelectedSourceId] = useState<BrowserImportSourceId | "">("");
   const [selectedProfileDir, setSelectedProfileDir] = useState<string>("Default");
   const [importTargetProfileId, setImportTargetProfileId] = useState<string>("");
+  const importRequestId = useRef<string | null>(null);
+  const closeImport = () => {
+    if (importRequestId.current)
+      void window.desktopBridge?.cancelBrowserImport?.(importRequestId.current);
+    setImportModalOpen(false);
+  };
+  useEffect(
+    () => () => {
+      if (importRequestId.current)
+        void window.desktopBridge?.cancelBrowserImport?.(importRequestId.current);
+    },
+    [],
+  );
   const [importing, setImporting] = useState(false);
 
   const openImportModal = async () => {
@@ -285,19 +298,33 @@ export function BrowserProfilesSettings() {
   const handleRunImport = async () => {
     if (!window.desktopBridge?.importBrowserCookies || selectedSourceId === "") return;
     setImporting(true);
+    importRequestId.current = crypto.randomUUID();
     try {
       const result = await window.desktopBridge.importBrowserCookies({
+        requestId: importRequestId.current,
         sourceId: selectedSourceId,
         sourceProfileDirectory: selectedProfileDir,
         targetProfileId: importTargetProfileId,
       });
+      if (result.cancelled) {
+        toastManager.add({
+          title: "Import cancelled",
+          description: `${result.imported} cookies were imported before cancellation. Existing destination cookies have been retained.`,
+        });
+        return;
+      }
       if (result.imported === 0) {
-        throw new Error(BROWSER_IMPORT_FAILURE_COPY.noCookies);
+        throw new Error(
+          result.warnings?.join(" ") ||
+            (result.skipped > 0
+              ? `No cookies imported; ${result.skipped} cookies were unsupported or could not be read.`
+              : BROWSER_IMPORT_FAILURE_COPY.noCookies),
+        );
       }
       toastManager.add({
         type: "success",
         title: "Browser session imported",
-        description: `Imported ${result.imported} cookies into profile "${importTargetProfileId}".`,
+        description: `Imported ${result.imported} cookies; skipped ${result.skipped}. ${result.warnings?.join(" ") ?? ""}`,
       });
       setImportModalOpen(false);
       if (window.desktopBridge?.getBrowserProfileDomains) {
@@ -313,6 +340,7 @@ export function BrowserProfilesSettings() {
         description: err.message || "Failed to import browser session.",
       });
     } finally {
+      importRequestId.current = null;
       setImporting(false);
     }
   };
@@ -998,6 +1026,11 @@ export function BrowserProfilesSettings() {
             )}
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            Import copies supported cookies only; passkeys, passwords, and local storage are not
+            transferred. Linux Secret Service requires secret-tool and an unlocked keyring. Windows
+            App-Bound (v20) cookies are unsupported and will be reported as skipped.
+          </p>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40">
             <Button
               size="sm"
@@ -1114,6 +1147,11 @@ export function BrowserProfilesSettings() {
             </div>
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            Import copies supported cookies only; passkeys, passwords, and local storage are not
+            transferred. Linux Secret Service requires secret-tool and an unlocked keyring. Windows
+            App-Bound (v20) cookies are unsupported and will be reported as skipped.
+          </p>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40">
             <Button variant="ghost" size="sm" onClick={() => setModalOpen(false)}>
               Cancel
@@ -1126,7 +1164,10 @@ export function BrowserProfilesSettings() {
       </Dialog>
 
       {/* Import Browser Sessions Modal */}
-      <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+      <Dialog
+        open={importModalOpen}
+        onOpenChange={(open) => (open ? setImportModalOpen(true) : closeImport())}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -1138,7 +1179,7 @@ export function BrowserProfilesSettings() {
                 variant="ghost"
                 size="icon"
                 className="size-6 text-muted-foreground hover:text-foreground"
-                onClick={() => setImportModalOpen(false)}
+                onClick={closeImport}
                 title="Close"
               >
                 <XIcon className="size-4" />
@@ -1253,8 +1294,13 @@ export function BrowserProfilesSettings() {
             )}
           </div>
 
+          <p className="text-xs text-muted-foreground">
+            Import copies supported cookies only; passkeys, passwords, and local storage are not
+            transferred. Linux Secret Service requires secret-tool and an unlocked keyring. Windows
+            App-Bound (v20) cookies are unsupported and will be reported as skipped.
+          </p>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40">
-            <Button variant="ghost" size="sm" onClick={() => setImportModalOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={closeImport}>
               Cancel
             </Button>
             <Button

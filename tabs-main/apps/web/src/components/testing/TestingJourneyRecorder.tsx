@@ -206,6 +206,7 @@ export function TestingJourneyRecorder() {
   const request = (operation: "recordStart" | "recordStop" | "recordStatus") => {
     if (!window.desktopBridge) throw new Error("Journey recording requires the Tabs desktop app.");
     return window.desktopBridge.runBrowserAutomation({
+      source: "human",
       projectId,
       sessionId: `testing:${projectId}`,
       operation,
@@ -217,6 +218,7 @@ export function TestingJourneyRecorder() {
       if (active.current) {
         void window.desktopBridge
           ?.runBrowserAutomation({
+            source: "human",
             projectId,
             sessionId: `testing:${projectId}`,
             operation: "recordStop",

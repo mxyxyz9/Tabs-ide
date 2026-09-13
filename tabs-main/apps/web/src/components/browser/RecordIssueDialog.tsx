@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { saveIssueReproduction } from "./saveIssueReproduction";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -28,34 +29,13 @@ import {
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { readNativeApi } from "~/nativeApi";
-import { DEFAULT_MODEL, type DesktopPreviewScreenshotArtifact } from "@tabs/contracts";
-import { makeAppModelSelection } from "~/modelSelection";
+import type { BrowserVerificationResult } from "@tabs/contracts";
 import { toastManager } from "~/components/ui/toast";
 
 export type VerificationStatus = "not_verified" | "pass" | "fail" | "interrupted";
 
-export interface RecordedStep {
-  id: string;
-  action:
-    | "goto"
-    | "click"
-    | "fill"
-    | "selectOption"
-    | "check"
-    | "uncheck"
-    | "press"
-    | "assertVisible"
-    | "assertText"
-    | "assertValue";
-  selector: string;
-  value?: string | undefined;
-  url?: string | undefined;
-  key?: string | undefined;
-  placeholder?: string | undefined;
-  expectedValue?: string | undefined;
-  isFragile?: boolean | undefined;
-  reviewed?: boolean | undefined;
-}
+export type { BrowserReproductionStep as RecordedStep } from "@tabs/contracts";
+import type { BrowserReproductionStep as RecordedStep } from "@tabs/contracts";
 
 export interface IssueReproduction {
   id: string;
@@ -79,28 +59,25 @@ interface RecordIssueDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  projectCwd: string;
+  onRecordingChange?: (recording: boolean) => void;
   sessionId?: string | undefined;
   currentUrl: string;
   viewport?: { width: number; height: number } | undefined;
   profileId?: string | undefined;
   assignedTaskId?: string | null | undefined;
   availableTasks?: Array<{ id: string; title: string }> | undefined;
-  onReproductionCreated?: (reproduction: IssueReproduction) => void;
+  onReproductionCreated?: (reproduction: IssueReproduction) => Promise<void>;
 }
 
-export function isFragileSelector(selector: string): boolean {
-  if (!selector) return false;
-  const s = selector.trim();
-  // Positional pseudo-classes like :nth-child(3), :nth-of-type(2)
-  if (/:(nth-child|nth-of-type)\(\d+\)/i.test(s)) return true;
-  // Absolute / deep XPath
-  if (s.startsWith("/") || s.startsWith("xpath=") || s.includes("/div[")) return true;
-  // Deep tag-only hierarchy: e.g. "div > div > p > span"
-  if (/^([a-z]+(\s*>\s*|\s+)){3,}[a-z]+$/i.test(s)) return true;
-  // Dynamically generated hashed CSS classes e.g. .css-1a2b3c, .sc-xyz123, ._1234abcd
-  if (/\b(?:css-|sc-|_)[0-9a-zA-Z]{5,}\b/.test(s)) return true;
-  return false;
-}
+import {
+  isFragileSelector,
+  generateReproductionPlaywrightCode,
+} from "@tabs/shared/browserReproduction";
+export {
+  isFragileSelector,
+  generateReproductionPlaywrightCode,
+} from "@tabs/shared/browserReproduction";
 
 export function evaluateVerification(
   hasAssertions: boolean,
@@ -127,123 +104,28 @@ export function evaluateVerification(
   };
 }
 
-/** The current automation bridge cannot evaluate locator-scoped Playwright assertions. */
-export function getLiveReplayLimitation(steps: readonly RecordedStep[]): string | null {
-  if (steps.some((step) => step.action.startsWith("assert"))) {
-    return "Not verified: live replay cannot evaluate these assertions reliably. Run the generated Playwright spec to verify the outcome.";
-  }
-  if (steps.some((step) => ["selectOption", "check", "uncheck"].includes(step.action))) {
-    return "Not verified: this sequence contains actions unsupported by live replay. Run the generated Playwright spec.";
-  }
-  if (
-    steps.some(
-      (step) =>
-        step.action === "fill" &&
-        (step.value === undefined ||
-          /password|secret|token|api[-_]?key|auth|bearer|pin|credential/i.test(
-            `${step.selector} ${step.placeholder ?? ""}`,
-          )),
-    )
-  ) {
-    return "Not verified: this sequence requires reviewed input parameters. Set the environment variables and run the generated Playwright spec.";
-  }
-  return null;
-}
-
-export function generateReproductionPlaywrightCode(
-  url: string,
-  steps: readonly RecordedStep[],
-  expectedResult: string,
-): string {
-  let inputCount = 0;
-  const lines: string[] = [
-    'import { test, expect } from "playwright/test";',
-    "",
-    `// Expected outcome: ${JSON.stringify(expectedResult || "Reviewed expected behavior")}`,
-    `test(${JSON.stringify(`reproduce and verify: ${expectedResult.slice(0, 80) || "reported issue"}`)}, async ({ page }) => {`,
-    ...(steps.some((step) => step.action.startsWith("assert"))
-      ? []
-      : ['  throw new Error("Add an assertion before running verification.");']),
-    `  await page.goto(${JSON.stringify(url || "https://example.com")});`,
-  ];
-
-  for (const step of steps) {
-    if (step.action === "goto") {
-      lines.push(`  await page.goto(${JSON.stringify(step.url || url)});`);
-      continue;
-    }
-
-    const locator = `page.locator(${JSON.stringify(step.selector || "body")})`;
-
-    switch (step.action) {
-      case "click":
-        lines.push(`  await ${locator}.click();`);
-        break;
-      case "fill": {
-        inputCount++;
-        const rawName = step.placeholder || `TEST_INPUT_${inputCount}`;
-        const sanitizedEnvVar = rawName.toUpperCase().replace(/[^A-Z0-9_]/g, "_");
-        const isSensitive = /password|secret|token|api[-_]?key|auth|bearer|pin|credential/i.test(
-          `${step.selector} ${step.placeholder ?? ""} ${rawName}`,
-        );
-
-        if (isSensitive) {
-          lines.push(
-            `  // Masked sensitive input: passwords and auth tokens are parameterized via environment variables\n  const input_${inputCount} = process.env[${JSON.stringify(sanitizedEnvVar)}];\n  if (input_${inputCount} === undefined) throw new Error(${JSON.stringify(`Missing environment variable: ${sanitizedEnvVar}`)});\n  await ${locator}.fill(input_${inputCount});`,
-          );
-        } else if (step.value !== undefined) {
-          lines.push(`  await ${locator}.fill(${JSON.stringify(step.value)});`);
-        } else {
-          lines.push(
-            `  // Supply reviewed parameter; sensitive inputs were not recorded\n  const input_${inputCount} = process.env[${JSON.stringify(sanitizedEnvVar)}];\n  if (input_${inputCount} === undefined) throw new Error(${JSON.stringify(`Missing environment variable: ${sanitizedEnvVar}`)});\n  await ${locator}.fill(input_${inputCount});`,
-          );
-        }
-        break;
-      }
-      case "selectOption": {
-        if (step.value !== undefined) {
-          lines.push(`  await ${locator}.selectOption(${JSON.stringify(step.value)});`);
-        } else {
-          lines.push(
-            `  throw new Error("Review the missing selectOption value before replaying.");`,
-          );
-        }
-        break;
-      }
-      case "check":
-        lines.push(`  await ${locator}.check();`);
-        break;
-      case "uncheck":
-        lines.push(`  await ${locator}.uncheck();`);
-        break;
-      case "press":
-        lines.push(`  await ${locator}.press(${JSON.stringify(step.key || "Enter")});`);
-        break;
-      case "assertVisible":
-        lines.push(`  await expect(${locator}).toBeVisible();`);
-        break;
-      case "assertText":
-        lines.push(
-          `  await expect(${locator}).toHaveText(${JSON.stringify(step.expectedValue ?? "")});`,
-        );
-        break;
-      case "assertValue":
-        lines.push(
-          `  await expect(${locator}).toHaveValue(${JSON.stringify(step.expectedValue ?? "")});`,
-        );
-        break;
-    }
-  }
-
-  lines.push("});");
-  lines.push("");
-  return lines.join("\n");
-}
+type ReviewDraft = {
+  phase: "idle" | "recording" | "review" | "verifying" | "verified";
+  recordedUrl: string;
+  steps: RecordedStep[];
+  expectedResult: string;
+  selectedTaskId: string;
+  beforeScreenshot: string | null;
+  afterScreenshot: string | null;
+  verificationStatus: VerificationStatus;
+  verificationMessage: string;
+  dispatched: boolean;
+  pendingDispatch: IssueReproduction | null;
+};
+// Keep review work when switching tabs. Drafts remain in memory, not browser storage.
+const reviewDrafts = new Map<string, ReviewDraft>();
 
 export function RecordIssueDialog({
   isOpen,
   onOpenChange,
   projectId,
+  projectCwd,
+  onRecordingChange,
   sessionId,
   currentUrl,
   viewport,
@@ -254,18 +136,80 @@ export function RecordIssueDialog({
 }: RecordIssueDialogProps) {
   const bridge = window.desktopBridge;
   const api = readNativeApi();
+  const draftKey = `${projectId}:${sessionId ?? "default"}`;
+  const saved = useRef(reviewDrafts.get(draftKey)).current;
+  const pendingDispatch = useRef<IssueReproduction | null>(saved?.pendingDispatch ?? null);
 
   const [phase, setPhase] = useState<"idle" | "recording" | "review" | "verifying" | "verified">(
-    "idle",
+    saved?.phase === "verifying" ? "review" : (saved?.phase ?? "idle"),
   );
   const [busy, setBusy] = useState(false);
-  const [steps, setSteps] = useState<RecordedStep[]>([]);
-  const [expectedResult, setExpectedResult] = useState("");
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(assignedTaskId ?? "");
-  const [beforeScreenshot, setBeforeScreenshot] = useState<string | null>(null);
-  const [afterScreenshot, setAfterScreenshot] = useState<string | null>(null);
-  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("not_verified");
-  const [verificationMessage, setVerificationMessage] = useState<string>("");
+  const [recordedUrl, setRecordedUrl] = useState(saved?.recordedUrl ?? currentUrl);
+  const [dispatched, setDispatched] = useState(saved?.dispatched ?? false);
+  const operationGeneration = useRef(0);
+  const reproductionId = useRef<string | null>(null);
+  const verifyActive = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    void bridge
+      ?.runBrowserAutomation({ projectId, sessionId, source: "human", operation: "recordStatus" })
+      .then(async (result) => {
+        if (!alive) return;
+        const status = result as { recording?: boolean; count?: number; interrupted?: boolean };
+        if (status.recording) {
+          setPhase("recording");
+          return;
+        }
+        if ((status.count ?? 0) > 0 && (!saved || saved.phase === "recording")) {
+          const recording = (await bridge.runBrowserAutomation({
+            projectId,
+            sessionId,
+            source: "human",
+            operation: "recordStop",
+          })) as { steps: RecordedStep[]; initialUrl: string };
+          if (!alive) return;
+          setSteps(recording.steps);
+          setRecordedUrl(recording.initialUrl);
+          setPhase("review");
+          if (status.interrupted)
+            setVerificationMessage(
+              "Recording was interrupted. Review the captured steps before replaying.",
+            );
+        } else if (saved?.phase === "recording") setPhase("idle");
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+      operationGeneration.current++;
+      if (verifyActive.current)
+        void bridge?.runBrowserAutomation({
+          projectId,
+          sessionId,
+          source: "human",
+          operation: "cancelVerification",
+        });
+    };
+  }, [bridge, projectId, sessionId, saved]);
+  useEffect(() => {
+    onRecordingChange?.(phase === "recording");
+  }, [phase, onRecordingChange]);
+  const [steps, setSteps] = useState<RecordedStep[]>(saved?.steps ?? []);
+  const [expectedResult, setExpectedResult] = useState(saved?.expectedResult ?? "");
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(
+    saved?.selectedTaskId ?? assignedTaskId ?? "",
+  );
+  const [beforeScreenshot, setBeforeScreenshot] = useState<string | null>(
+    saved?.beforeScreenshot ?? null,
+  );
+  const [afterScreenshot, setAfterScreenshot] = useState<string | null>(
+    saved?.afterScreenshot ?? null,
+  );
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>(
+    saved?.verificationStatus ?? "not_verified",
+  );
+  const [verificationMessage, setVerificationMessage] = useState<string>(
+    saved?.verificationMessage ?? "",
+  );
   const [activeTab, setActiveTab] = useState<"steps" | "code" | "evidence">("steps");
 
   useEffect(() => {
@@ -274,7 +218,40 @@ export function RecordIssueDialog({
     }
   }, [assignedTaskId]);
 
+  useEffect(() => {
+    reviewDrafts.set(draftKey, {
+      phase,
+      recordedUrl,
+      steps,
+      expectedResult,
+      selectedTaskId,
+      beforeScreenshot,
+      afterScreenshot,
+      verificationStatus,
+      verificationMessage,
+      dispatched,
+      pendingDispatch: pendingDispatch.current,
+    });
+    if (reviewDrafts.size > 50) reviewDrafts.delete(reviewDrafts.keys().next().value!);
+  }, [
+    draftKey,
+    phase,
+    recordedUrl,
+    steps,
+    expectedResult,
+    selectedTaskId,
+    beforeScreenshot,
+    afterScreenshot,
+    verificationStatus,
+    verificationMessage,
+    dispatched,
+    busy,
+  ]);
+
   const resetState = useCallback(() => {
+    pendingDispatch.current = null;
+    reproductionId.current = null;
+    setDispatched(false);
     setPhase("idle");
     setBusy(false);
     setSteps([]);
@@ -287,11 +264,19 @@ export function RecordIssueDialog({
   }, []);
 
   const handleOpenChange = (open: boolean) => {
-    if (!open && phase === "recording") {
-      void stopRecording();
-    }
-    if (!open) {
-      resetState();
+    if (!open && verifyActive.current) {
+      operationGeneration.current++;
+      verifyActive.current = false;
+      void bridge?.runBrowserAutomation({
+        projectId,
+        sessionId,
+        source: "human",
+        operation: "cancelVerification",
+      });
+      setBusy(false);
+      setPhase("review");
+      setVerificationStatus("interrupted");
+      setVerificationMessage("Verification cancelled when review was closed.");
     }
     onOpenChange(open);
   };
@@ -301,11 +286,17 @@ export function RecordIssueDialog({
     setBusy(true);
     try {
       await bridge.runBrowserAutomation({
+        source: "human",
         projectId,
         sessionId,
         operation: "recordStart",
       });
+      resetState();
+      reproductionId.current = null;
+      setDispatched(false);
+      setRecordedUrl(currentUrl);
       setPhase("recording");
+      onOpenChange(false);
       toastManager.add({
         type: "success",
         title: "Issue recording started",
@@ -327,6 +318,7 @@ export function RecordIssueDialog({
     setBusy(true);
     try {
       const result = (await bridge.runBrowserAutomation({
+        source: "human",
         projectId,
         sessionId,
         operation: "recordStop",
@@ -352,6 +344,7 @@ export function RecordIssueDialog({
         isFragile: s.isFragile ?? isFragileSelector(s.selector),
       }));
       setSteps(recorded);
+      setRecordedUrl(result.initialUrl || currentUrl);
       setPhase("review");
       toastManager.add({
         type: "success",
@@ -399,8 +392,8 @@ export function RecordIssueDialog({
   };
 
   const generatedCode = useMemo(() => {
-    return generateReproductionPlaywrightCode(currentUrl, steps, expectedResult);
-  }, [currentUrl, steps, expectedResult]);
+    return generateReproductionPlaywrightCode(recordedUrl, steps, expectedResult);
+  }, [recordedUrl, steps, expectedResult]);
 
   const hasAssertions = useMemo(() => {
     return steps.some((s) => s.action.startsWith("assert"));
@@ -420,37 +413,29 @@ export function RecordIssueDialog({
       return;
     }
 
+    if (dispatched || busy) return;
     setBusy(true);
     try {
-      const repId = `issue-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
+      if (
+        !projectCwd ||
+        !api?.projects?.writeFile ||
+        !onReproductionCreated ||
+        !availableTasks.some(
+          (task) => task.id === (pendingDispatch.current?.taskId ?? selectedTaskId),
+        )
+      )
+        throw new Error("Select an available project task before sending this reproduction.");
+      const repId =
+        pendingDispatch.current?.id ??
+        reproductionId.current ??
+        `issue-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
+      reproductionId.current = repId;
       const specPath = `tests/e2e/reproductions/${repId}.spec.ts`;
 
-      // 1. Save reproduction spec file to workspace if nativeApi is available
-      if (api?.projects?.writeFile) {
-        await api.projects.writeFile({
-          cwd: "",
-          relativePath: specPath,
-          contents: generatedCode,
-        });
-      }
-
-      // 2. Register with Testing service if available
-      if (api?.testing?.generateTests) {
-        await api.testing.generateTests({
-          projectId,
-          projectPath: "",
-          modelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
-          engine: "recording",
-          recordedCode: generatedCode,
-          recordedExpectedResult: expectedResult,
-          targetUrl: currentUrl,
-        });
-      }
-
-      const reproduction: IssueReproduction = {
+      const reproduction: IssueReproduction = pendingDispatch.current ?? {
         id: repId,
         projectId,
-        route: currentUrl,
+        route: recordedUrl,
         profileId,
         viewport,
         taskId: selectedTaskId || undefined,
@@ -459,12 +444,19 @@ export function RecordIssueDialog({
         generatedCode,
         specPath,
         beforeScreenshot: beforeScreenshot ?? undefined,
+        afterScreenshot: afterScreenshot ?? undefined,
         verificationStatus,
         verificationMessage: verificationMessage || undefined,
         createdAt: new Date().toISOString(),
       };
 
-      onReproductionCreated?.(reproduction);
+      pendingDispatch.current = reproduction;
+      await saveIssueReproduction(reproduction, {
+        cwd: projectCwd,
+        writeFile: (input) => api.projects.writeFile(input),
+        dispatch: onReproductionCreated,
+      });
+      setDispatched(true);
 
       toastManager.add({
         type: "success",
@@ -483,116 +475,49 @@ export function RecordIssueDialog({
   };
 
   const rerunReproduction = async () => {
-    if (!bridge) return;
+    if (!bridge || busy) return;
+    const generation = ++operationGeneration.current;
+    verifyActive.current = true;
     setBusy(true);
     setPhase("verifying");
     setVerificationStatus("not_verified");
-    setVerificationMessage("Running reproduction steps against live browser tab...");
-
+    setAfterScreenshot(null);
+    setVerificationMessage("Running all reviewed actions and assertions…");
     try {
-      const limitation = getLiveReplayLimitation(steps);
-      if (limitation) {
-        setVerificationMessage(limitation);
-        return;
-      }
-      // Execute each step in sequence against the live session
-      for (const step of steps) {
-        if (step.action === "goto" && step.url) {
-          await bridge.navigateBrowserSession({ projectId, sessionId, url: step.url });
-          await new Promise((r) => setTimeout(r, 600));
-        } else if (step.action === "click" && step.selector) {
-          await bridge.runBrowserAutomation({
-            projectId,
-            sessionId,
-            operation: "click",
-            input: { selector: step.selector },
-          });
-          await new Promise((r) => setTimeout(r, 200));
-        } else if (step.action === "fill" && step.selector) {
-          await bridge.runBrowserAutomation({
-            projectId,
-            sessionId,
-            operation: "type",
-            input: { selector: step.selector, text: step.value ?? "", clear: true },
-          });
-        } else if (step.action === "press") {
-          await bridge.runBrowserAutomation({
-            projectId,
-            sessionId,
-            operation: "press",
-            input: { key: step.key || "Enter" },
-          });
-        } else if (step.action === "assertVisible") {
-          const matched = (await bridge.runBrowserAutomation({
-            projectId,
-            sessionId,
-            operation: "waitFor",
-            input: { selector: step.selector, timeoutMs: 3000 },
-          })) as { matched?: boolean };
-          if (!matched?.matched) {
-            throw new Error(`Assertion failed: element "${step.selector}" is not visible.`);
-          }
-        } else if (step.action === "assertText") {
-          const matched = (await bridge.runBrowserAutomation({
-            projectId,
-            sessionId,
-            operation: "waitFor",
-            input: {
-              selector: step.selector,
-              text: step.expectedValue || expectedResult,
-              timeoutMs: 3000,
-            },
-          })) as { matched?: boolean };
-          if (!matched?.matched) {
-            throw new Error(
-              `Assertion failed: element "${step.selector}" does not contain expected text "${step.expectedValue || expectedResult}".`,
-            );
-          }
-        }
-      }
-
-      const evalResult = evaluateVerification(hasAssertions, expectedResult);
-      setVerificationStatus(evalResult.status);
-      setVerificationMessage(evalResult.message);
-      if (evalResult.status === "pass") {
-        try {
-          const screenshot = await bridge.captureBrowserScreenshot({ projectId, sessionId });
-          if (screenshot?.path) {
-            setAfterScreenshot(screenshot.path);
-          }
-        } catch {
-          // Ignore
-        }
-        toastManager.add({
-          type: "success",
-          title: "Verification Passed",
-          description: "All assertions matched the expected behavior.",
-        });
-      }
-    } catch (cause) {
-      const evalResult = evaluateVerification(
-        hasAssertions,
-        expectedResult,
-        cause instanceof Error ? cause : String(cause),
-      );
-      setVerificationStatus(evalResult.status);
-      setVerificationMessage(evalResult.message);
-      toastManager.add({
-        type: "error",
-        title:
-          evalResult.status === "interrupted" ? "Verification Interrupted" : "Verification Failed",
-        description: evalResult.message,
-      });
+      const result = (await bridge.runBrowserAutomation({
+        projectId,
+        sessionId,
+        source: "human",
+        operation: "verify",
+        input: { url: recordedUrl, steps },
+      })) as BrowserVerificationResult;
+      if (generation !== operationGeneration.current) return;
+      setVerificationStatus(result.status);
+      setVerificationMessage(result.message);
+      setAfterScreenshot(result.afterScreenshotPath ?? null);
+    } catch {
+      if (generation !== operationGeneration.current) return;
+      setVerificationStatus("fail");
+      setVerificationMessage("Verification could not run. Check the tab and retry.");
     } finally {
-      setBusy(false);
-      setPhase("verified");
-      setActiveTab("evidence");
+      if (generation === operationGeneration.current) {
+        verifyActive.current = false;
+        setBusy(false);
+        setPhase("verified");
+        setActiveTab("evidence");
+      }
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogPopup className="max-w-2xl">
+        {pendingDispatch.current && !dispatched && (
+          <p className="text-xs text-muted-foreground">
+            Retry sends the same saved reproduction to its original task. Start a new recording to
+            submit different content.
+          </p>
+        )}
         <DialogHeader>
           <div className="flex items-center justify-between gap-2">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -774,6 +699,14 @@ export function RecordIssueDialog({
                         >
                           + Assert Text
                         </Button>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => addAssertion("assertValue")}
+                        >
+                          + Assert Value
+                        </Button>
                       </div>
                     </div>
 
@@ -807,6 +740,39 @@ export function RecordIssueDialog({
                                 placeholder="Expected text"
                                 className="h-6 w-32 text-[11px]"
                               />
+                            )}
+                            {(step.action === "fill" || step.action === "selectOption") && (
+                              <Input
+                                value={step.placeholder ?? ""}
+                                placeholder="Environment variable"
+                                aria-label="Input environment variable"
+                                className="h-6 w-32 text-[11px]"
+                                onChange={(event) =>
+                                  updateStep(step.id, { placeholder: event.target.value })
+                                }
+                              />
+                            )}
+                            {step.action === "goto" && (
+                              <Input
+                                value={step.url ?? ""}
+                                placeholder="Navigation URL"
+                                className="h-6 w-40 text-[11px]"
+                                onChange={(event) =>
+                                  updateStep(step.id, { url: event.target.value })
+                                }
+                              />
+                            )}
+                            {step.isFragile && (
+                              <label className="flex gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={step.reviewed ?? false}
+                                  onChange={(event) =>
+                                    updateStep(step.id, { reviewed: event.target.checked })
+                                  }
+                                />
+                                Reviewed
+                              </label>
                             )}
                             {step.isFragile && (
                               <Badge
@@ -858,12 +824,9 @@ export function RecordIssueDialog({
                         ))}
                       </select>
                     ) : (
-                      <Input
-                        placeholder="Task ID or description"
-                        value={selectedTaskId}
-                        onChange={(e) => setSelectedTaskId(e.target.value)}
-                        className="h-8 text-xs"
-                      />
+                      <p className="text-xs text-muted-foreground">
+                        Create a coding task in this project, then reopen this review to select it.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -936,7 +899,13 @@ export function RecordIssueDialog({
                             <span className="font-mono text-[10px]">
                               {beforeScreenshot.split("/").pop()}
                             </span>
-                            <p className="text-[10px] text-primary">Saved as task evidence</p>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => void bridge?.revealBrowserArtifact(beforeScreenshot)}
+                            >
+                              Show screenshot
+                            </Button>
                           </div>
                         ) : (
                           <span>No capture available</span>
@@ -954,6 +923,13 @@ export function RecordIssueDialog({
                             <span className="font-mono text-[10px]">
                               {afterScreenshot.split("/").pop()}
                             </span>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => void bridge?.revealBrowserArtifact(afterScreenshot)}
+                            >
+                              Show screenshot
+                            </Button>
                             <p className="text-[10px] text-green-500">Verified evidence</p>
                           </div>
                         ) : (
@@ -973,6 +949,9 @@ export function RecordIssueDialog({
 
           {(phase === "review" || phase === "verified") && (
             <>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={resetState}>
+                New recording
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
@@ -988,7 +967,7 @@ export function RecordIssueDialog({
                 type="button"
                 variant="default"
                 size="sm"
-                disabled={busy || !expectedResult.trim()}
+                disabled={busy || dispatched || !selectedTaskId || !expectedResult.trim()}
                 onClick={() => void sendReproductionToTask()}
                 className="gap-1.5"
               >

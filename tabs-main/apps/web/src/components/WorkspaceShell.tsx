@@ -4,6 +4,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   MessageId,
+  CommandId,
   type DesktopBrowserHostState,
   type DesktopBrowserSessionState,
   type DesktopCodeHostState,
@@ -7077,6 +7078,7 @@ function GitConflictTextPane(props: {
 
 function DesktopBrowserChrome(props: {
   projectId: ProjectId;
+  projectCwd: string;
   sessionId?: string | undefined;
   title: string;
   isChromeExpanded: boolean;
@@ -7103,6 +7105,10 @@ function DesktopBrowserChrome(props: {
   const [pickingElement, setPickingElement] = useState(false);
   const [clearingBrowserData, setClearingBrowserData] = useState(false);
   const [recordIssueDialogOpen, setRecordIssueDialogOpen] = useState(false);
+  const [issueRecording, setIssueRecording] = useState(false);
+  const reproductionTasks = useAtomValue(threadsAtom, (threads) =>
+    threads.filter((thread) => thread.projectId === props.projectId && !thread.archivedAt),
+  );
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [pendingAnnotation, setPendingAnnotation] = useState<PreviewAnnotationPayload | null>(null);
   const browserHistory = useBrowserHistoryStore((state) => state.entries);
@@ -7511,10 +7517,14 @@ function DesktopBrowserChrome(props: {
                 variant="outline"
                 onClick={() => setRecordIssueDialogOpen(true)}
                 className="gap-1 text-xs hover:text-red-400"
-                title="Record an issue reproduction with assertions"
+                title={
+                  issueRecording
+                    ? "Recording — stop and review"
+                    : "Record an issue reproduction with assertions"
+                }
               >
                 <RadioIcon className="size-3.5 text-red-500" />
-                Record issue
+                {issueRecording ? "Stop & review issue" : "Record issue"}
               </Button>
               <Button
                 type="button"
@@ -7916,6 +7926,39 @@ function DesktopBrowserChrome(props: {
           />
         ) : null}
         <RecordIssueDialog
+          key={`${props.projectId}:${props.sessionId}`}
+          projectCwd={props.projectCwd}
+          onRecordingChange={setIssueRecording}
+          availableTasks={reproductionTasks.map((thread) => ({
+            id: thread.id,
+            title: thread.title,
+          }))}
+          onReproductionCreated={async (reproduction) => {
+            const task = reproductionTasks.find((thread) => thread.id === reproduction.taskId);
+            if (!api || !task) throw new Error("The selected task is no longer available.");
+            await api.orchestration.dispatchCommand({
+              type: "thread.turn.start",
+              commandId: CommandId.makeUnsafe(`reproduction-${reproduction.id}`),
+              threadId: task.id,
+              message: {
+                messageId: MessageId.makeUnsafe(reproduction.id),
+                role: "user",
+                attachments: [],
+                text: [
+                  `Investigate this browser issue in ${props.projectCwd}.`,
+                  `Expected result: ${reproduction.expectedResult}`,
+                  `Reproduction: ${reproduction.specPath}`,
+                  `Evidence and reviewed steps: tests/e2e/reproductions/${reproduction.id}.json`,
+                  `Verification: ${reproduction.verificationStatus}. ${reproduction.verificationMessage ?? ""}`,
+                  "Run the reviewed assertions to verify any fix. Required inputs are environment variables; do not put secrets in source files.",
+                ].join("\n"),
+              },
+              modelSelection: task.modelSelection,
+              runtimeMode: task.runtimeMode,
+              interactionMode: task.interactionMode,
+              createdAt: reproduction.createdAt,
+            });
+          }}
           isOpen={recordIssueDialogOpen}
           onOpenChange={setRecordIssueDialogOpen}
           projectId={props.projectId}
@@ -8385,6 +8428,7 @@ function DesktopBrowserTool(props: {
 
   return (
     <DesktopBrowserChrome
+      projectCwd={props.project.cwd}
       projectId={props.project.id}
       sessionId="browser"
       title="Browser"
@@ -9299,6 +9343,7 @@ function DesktopCustomEmbedTool(props: {
 
   return (
     <DesktopBrowserChrome
+      projectCwd={props.project.cwd}
       projectId={props.project.id}
       sessionId={props.sessionId}
       title={props.title}

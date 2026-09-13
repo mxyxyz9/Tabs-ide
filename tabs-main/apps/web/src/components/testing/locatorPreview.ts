@@ -45,12 +45,14 @@ export async function captureTestingPreview(
   if (!bridge) return undefined;
   const snapshot = locatorPreviewSnapshot(
     await bridge.runBrowserAutomation({
+      source: "human",
       projectId,
       sessionId: `testing:${projectId}`,
       operation: "snapshot",
     }),
   );
   const dom = (await bridge.runBrowserAutomation({
+    source: "human",
     projectId,
     sessionId: `testing:${projectId}`,
     operation: "evaluate",

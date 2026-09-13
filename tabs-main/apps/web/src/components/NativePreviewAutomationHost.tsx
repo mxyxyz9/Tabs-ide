@@ -74,6 +74,7 @@ export async function startNativeBrowserRecording(
   bridge: NonNullable<Window["desktopBridge"]>,
   projectId: string,
   sessionId: string,
+  checkControl: () => Promise<unknown> = async () => undefined,
 ): Promise<PreviewAutomationRecordingStatus> {
   const key = recordingKey(projectId, sessionId);
   const existing = activeRecordings.get(key);
@@ -82,6 +83,7 @@ export async function startNativeBrowserRecording(
     projectId,
     sessionId,
   });
+  await checkControl();
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
@@ -93,6 +95,7 @@ export async function startNativeBrowserRecording(
     } as MediaTrackConstraints,
   });
   try {
+    await checkControl();
     const mimeType = preferredRecordingMimeType();
     const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     const chunks: Blob[] = [];
@@ -200,12 +203,24 @@ async function waitForViewport(
   sessionId: string,
   setting: PreviewViewportSetting,
   timeoutMs: number,
+  taskId: string,
+  controlEpoch: number,
 ): Promise<{ width: number; height: number }> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
+    await bridge.runBrowserAutomation({
+      projectId,
+      sessionId,
+      taskId,
+      source: "agent",
+      operation: "assertControl",
+      input: { controlEpoch },
+    });
     const status = (await bridge.runBrowserAutomation({
       projectId,
       sessionId,
+      taskId,
+      source: "agent",
       operation: "status",
     })) as { viewport?: { width: number; height: number } };
     if (
@@ -278,7 +293,7 @@ export function NativePreviewAutomationHost() {
         .get(readModelStateAtom)
         .threads.find((candidate) => candidate.id === request.threadId);
       if (!thread) throw new Error(`Thread ${request.threadId} is not available in this client.`);
-      const sessionId = request.tabId ?? "browser";
+      const sessionId = request.tabId ?? `agent-${request.threadId}`;
       previewTargets.set(recordingKey(thread.projectId, sessionId), {
         threadId: request.threadId,
         tabId: sessionId,
@@ -294,6 +309,8 @@ export function NativePreviewAutomationHost() {
           projectId: thread.projectId,
           sessionId,
           initialUrl: url,
+          taskId: request.threadId,
+          temporaryAgentTab: true,
         });
         if (input.show !== false) {
           await bridge.activateBrowserSession({
@@ -302,6 +319,8 @@ export function NativePreviewAutomationHost() {
           });
         }
         return bridge.runBrowserAutomation({
+          taskId: request.threadId,
+          source: "agent",
           projectId: thread.projectId,
           sessionId,
           operation: "status",
@@ -310,19 +329,41 @@ export function NativePreviewAutomationHost() {
       if (request.operation === "navigate") {
         const url = typeof input.url === "string" ? input.url : null;
         if (!url) throw new Error("Native preview navigation requires a resolved URL.");
-        await bridge.navigateBrowserSession({
+        await bridge.runBrowserAutomation({
+          source: "agent",
+          taskId: request.threadId,
+          operation: "navigate",
+          input: { url },
           projectId: thread.projectId,
           sessionId,
-          url,
         });
         return bridge.runBrowserAutomation({
+          taskId: request.threadId,
+          source: "agent",
           projectId: thread.projectId,
           sessionId,
           operation: "status",
         });
       }
+      // Carry the same control epoch through operations that use renderer APIs.
+      const control = (await bridge.runBrowserAutomation({
+        projectId: thread.projectId,
+        sessionId,
+        source: "agent",
+        taskId: request.threadId,
+        operation: "assertControl",
+      })) as { controlEpoch: number };
+      const checkControl = () =>
+        bridge.runBrowserAutomation({
+          projectId: thread.projectId,
+          sessionId,
+          source: "agent",
+          taskId: request.threadId,
+          operation: "assertControl",
+          input: control,
+        });
       if (request.operation === "recordingStart") {
-        return startNativeBrowserRecording(bridge, thread.projectId, sessionId);
+        return startNativeBrowserRecording(bridge, thread.projectId, sessionId, checkControl);
       }
       if (request.operation === "recordingStop") {
         return stopNativeBrowserRecording(bridge, thread.projectId, sessionId);
@@ -353,6 +394,8 @@ export function NativePreviewAutomationHost() {
           sessionId,
           setting,
           resizeInput.timeoutMs ?? 15_000,
+          request.threadId,
+          control.controlEpoch,
         );
         return {
           tabId: sessionId,
@@ -361,6 +404,8 @@ export function NativePreviewAutomationHost() {
         } satisfies PreviewAutomationResizeResult;
       }
       return bridge.runBrowserAutomation({
+        taskId: request.threadId,
+        source: "agent",
         projectId: thread.projectId,
         sessionId,
         operation: request.operation,

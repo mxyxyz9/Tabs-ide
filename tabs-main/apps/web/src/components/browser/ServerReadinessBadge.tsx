@@ -1,3 +1,4 @@
+import { ReadinessProbeGate } from "./readinessProbeGate";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2Icon,
@@ -14,54 +15,31 @@ import { Button } from "~/components/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "~/components/ui/menu";
 import { useDiscoveredLocalServers } from "./useDiscoveredLocalServers";
 
-export type ServerReadinessState = "ready" | "probing" | "offline" | "not_local";
-
-export interface ServerProbeResult {
-  state: ServerReadinessState;
-  latencyMs?: number;
-  httpStatus?: number;
-  lastProbedAt?: string;
-  error?: string;
-}
+export type {
+  BrowserReadinessState as ServerReadinessState,
+  BrowserReadinessResult as ServerProbeResult,
+} from "@tabs/contracts";
+import type { BrowserReadinessResult as ServerProbeResult } from "@tabs/contracts";
 
 export async function probeServerReadiness(
   url: string,
   timeoutMs = 2500,
 ): Promise<ServerProbeResult> {
+  let parsed: URL;
   try {
-    const parsed = new URL(url);
-    if (!isLoopbackHost(parsed.hostname)) {
-      return { state: "not_local" };
-    }
-
-    const start = performance.now();
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const res = await fetch(parsed.origin, {
-        method: "HEAD",
-        signal: controller.signal,
-        mode: "no-cors",
-      });
-      clearTimeout(timer);
-      const latencyMs = Math.round(performance.now() - start);
-      return {
-        state: "ready",
-        latencyMs,
-        httpStatus: res.status || 200,
-        lastProbedAt: new Date().toISOString(),
-      };
-    } catch (cause) {
-      clearTimeout(timer);
-      return {
-        state: "offline",
-        lastProbedAt: new Date().toISOString(),
-        error: cause instanceof Error ? cause.message : String(cause),
-      };
-    }
+    parsed = new URL(url);
   } catch {
     return { state: "not_local" };
+  }
+  try {
+    if (!isLoopbackHost(parsed.hostname) || !["http:", "https:"].includes(parsed.protocol))
+      return { state: "not_local" };
+    const bridge = typeof window === "undefined" ? undefined : window.desktopBridge;
+    if (!bridge?.probeBrowserReadiness)
+      return { state: "unknown", error: "Desktop readiness probe is unavailable." };
+    return await bridge.probeBrowserReadiness({ url, timeoutMs });
+  } catch {
+    return { state: "unknown", error: "Could not determine server health." };
   }
 }
 
@@ -81,7 +59,7 @@ export function ServerReadinessBadge({
   const [probeResult, setProbeResult] = useState<ServerProbeResult>({ state: "probing" });
   const [autoReload, setAutoReload] = useState(true);
   const [probing, setProbing] = useState(false);
-  const previousStateRef = useRef<ServerReadinessState>("probing");
+  const probeGate = useRef(new ReadinessProbeGate()).current;
 
   const discoveredServers = useDiscoveredLocalServers({
     environmentId: environmentId ?? null,
@@ -99,36 +77,37 @@ export function ServerReadinessBadge({
   const isLocal = Boolean(parsedUrl && isLoopbackHost(parsedUrl.hostname));
   const currentPort = parsedUrl?.port || (parsedUrl?.protocol === "https:" ? "443" : "80");
 
+  const targetRef = useRef(currentUrl);
+  const callbacks = useRef({ onReload, autoReload });
+  targetRef.current = currentUrl;
+  callbacks.current = { onReload, autoReload };
   const runProbe = useCallback(async () => {
-    if (!currentUrl || !isLocal) {
-      setProbeResult({ state: "not_local" });
-      return;
-    }
-
+    const url = currentUrl;
+    if (!url || !isLocal) return;
+    const token = probeGate.start(url);
+    if (!token) return;
     setProbing(true);
-    const res = await probeServerReadiness(currentUrl);
-    setProbeResult(res);
+    const result = await probeServerReadiness(url);
+    if (targetRef.current !== url) return;
+    const outcome = probeGate.finish(token, url, result.state);
+    if (!outcome.accepted) return;
+    setProbeResult(result);
     setProbing(false);
-
-    // If server just became ready and autoReload is active, reload page
-    if (previousStateRef.current === "offline" && res.state === "ready" && autoReload) {
-      onReload?.();
-    }
-    previousStateRef.current = res.state;
-  }, [currentUrl, isLocal, autoReload, onReload]);
+    if (outcome.recovered && callbacks.current.autoReload) callbacks.current.onReload?.();
+  }, [currentUrl, isLocal, probeGate]);
 
   useEffect(() => {
+    probeGate.reset(currentUrl);
+    setProbing(false);
+    setProbeResult({ state: isLocal ? "probing" : "not_local" });
     if (!isLocal) return;
     void runProbe();
-
-    // Poll every 4 seconds when offline or probing, or every 15 seconds when ready
-    const intervalMs = probeResult.state === "ready" ? 15000 : 4000;
-    const timer = setInterval(() => {
-      void runProbe();
-    }, intervalMs);
-
-    return () => clearInterval(timer);
-  }, [isLocal, currentUrl, probeResult.state, runProbe]);
+    const timer = setInterval(() => void runProbe(), 4000);
+    return () => {
+      probeGate.reset();
+      clearInterval(timer);
+    };
+  }, [isLocal, currentUrl, runProbe, probeGate]);
 
   // Don't render badge if not on loopback and no local servers discovered
   if (!isLocal && discoveredServers.length === 0) {
@@ -199,6 +178,8 @@ export function ServerReadinessBadge({
               <span className="font-mono text-emerald-500">{probeResult.latencyMs} ms</span>
             </div>
           )}
+          {probeResult.httpStatus !== undefined && <div>HTTP {probeResult.httpStatus}</div>}
+          {probeResult.error && <div>{probeResult.error}</div>}
           <div className="flex items-center justify-between pt-1">
             <span>Auto-reload on connect:</span>
             <input

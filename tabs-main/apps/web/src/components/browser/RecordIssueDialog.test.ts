@@ -2,7 +2,6 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   evaluateVerification,
-  getLiveReplayLimitation,
   generateReproductionPlaywrightCode,
   isFragileSelector,
   type RecordedStep,
@@ -214,29 +213,4 @@ it("emits parseable code for quotes, newlines, comment terminators and numeric e
   expect(code).not.toContain("test-secret");
   expect(code).toContain('process.env["123_PASSWORD"]');
   expect(code).toContain("Missing environment variable");
-});
-
-it.each([
-  "assertVisible",
-  "assertText",
-  "assertValue",
-  "selectOption",
-  "check",
-  "uncheck",
-] as const)("blocks unsupported live replay action %s before execution", (action) => {
-  expect(getLiveReplayLimitation([{ id: "1", action, selector: "#target" }])).toContain(
-    "Not verified",
-  );
-});
-
-it("does not replay secrets or invent missing inputs", () => {
-  expect(
-    getLiveReplayLimitation([{ id: "1", action: "fill", selector: "#password", value: "secret" }]),
-  ).toContain("parameters");
-  expect(getLiveReplayLimitation([{ id: "1", action: "fill", selector: "#name" }])).toContain(
-    "parameters",
-  );
-  expect(
-    getLiveReplayLimitation([{ id: "1", action: "fill", selector: "#name", value: "" }]),
-  ).toBeNull();
 });

@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useSettings } from "../../hooks/useSettings";
+import type { DesktopPreviewScreenshotArtifact } from "@tabs/contracts";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CameraIcon,
   Columns2Icon,
@@ -21,9 +23,7 @@ import { Button } from "~/components/ui/button";
 import {
   Dialog,
   DialogClose,
-  DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogPopup,
   DialogTitle,
@@ -66,9 +66,25 @@ export function BrowserComparisonView({
   projectId,
   sessionId,
   primaryUrl,
-  primaryProfileId = "default",
+  primaryProfileId = "current",
 }: BrowserComparisonViewProps) {
   const bridge = window.desktopBridge;
+  const comparisonId = useRef(crypto.randomUUID()).current;
+  const paneA = useRef<HTMLDivElement>(null);
+  const paneB = useRef<HTMLDivElement>(null);
+  const settings = useSettings();
+  const profiles = [
+    { id: "current", label: "Source tab profile" },
+    ...(settings.browserProfiles?.length
+      ? settings.browserProfiles
+      : [
+          { id: "personal", label: "Personal" },
+          { id: "work", label: "Work" },
+        ]),
+  ];
+  const [error, setError] = useState<string | null>(null);
+  const [captures, setCaptures] = useState<DesktopPreviewScreenshotArtifact[]>([]);
+  const [syncNavigation, setSyncNavigation] = useState(false);
 
   // Comparison State
   const [mode, setMode] = useState<ComparisonMode>("responsive");
@@ -83,10 +99,108 @@ export function BrowserComparisonView({
   // Pane B (Right/Bottom)
   const [urlB, setUrlB] = useState(primaryUrl);
   const [viewportB, setViewportB] = useState<ViewportPreset>(COMPARISON_VIEWPORTS[5]!); // Laptop
-  const [profileB, setProfileB] = useState("guest");
+  const [profileB, setProfileB] = useState("work");
 
-  const [reloadKey, setReloadKey] = useState(0);
   const [capturing, setCapturing] = useState(false);
+  useEffect(() => {
+    if (!isOpen) return;
+    setUrlA(primaryUrl);
+    setUrlB(primaryUrl);
+    setCaptures([]);
+    return () => {
+      void bridge?.closeBrowserComparison({ projectId, comparisonId });
+    };
+  }, [isOpen, projectId, comparisonId, bridge]);
+
+  useEffect(() => {
+    if (!isOpen || !bridge) return;
+    return bridge.onBrowserSessionState((state) => {
+      if (state.projectId !== projectId || !state.currentUrl) return;
+      if (state.sessionId === `comparison-${comparisonId}-a`) setUrlA(state.currentUrl);
+      if (state.sessionId === `comparison-${comparisonId}-b`) setUrlB(state.currentUrl);
+    });
+  }, [isOpen, bridge, projectId, comparisonId]);
+
+  useEffect(() => {
+    if (!isOpen || !bridge) return;
+    let alive = true;
+    let last = "";
+    const update = () => {
+      if (!alive || !paneA.current || !paneB.current) return;
+      const a = paneA.current.getBoundingClientRect(),
+        b = paneB.current.getBoundingClientRect();
+      if (a.width < 1 || b.width < 1 || a.height < 1 || b.height < 1) return;
+      const bounds = (rect: DOMRect) => ({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      });
+      const input = {
+        projectId,
+        comparisonId,
+        sourceSessionId: sessionId,
+        syncNavigation,
+        syncScroll,
+        panes: [
+          {
+            url: urlA,
+            profileId: profileA,
+            viewport: { width: viewportA.width, height: viewportA.height },
+            bounds: bounds(a),
+          },
+          {
+            url: urlB,
+            profileId: mode === "profiles" ? profileB : profileA,
+            viewport: { width: viewportB.width, height: viewportB.height },
+            bounds: bounds(b),
+          },
+        ] as const,
+      };
+      const signature = JSON.stringify(input);
+      if (signature === last) return;
+      last = signature;
+      void bridge
+        .configureBrowserComparison({ ...input, panes: [...input.panes] })
+        .then(() => {
+          if (alive) setError(null);
+        })
+        .catch((cause) => {
+          if (alive)
+            setError(cause instanceof Error ? cause.message : "Could not open comparison.");
+        });
+    };
+    const observer = new ResizeObserver(update);
+    if (paneA.current) observer.observe(paneA.current);
+    if (paneB.current) observer.observe(paneB.current);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    const timer = setInterval(update, 250);
+    update();
+    return () => {
+      alive = false;
+      observer.disconnect();
+      clearInterval(timer);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [
+    isOpen,
+    bridge,
+    projectId,
+    comparisonId,
+    sessionId,
+    urlA,
+    urlB,
+    profileA,
+    profileB,
+    viewportA,
+    viewportB,
+    syncScroll,
+    syncNavigation,
+    orientation,
+    mode,
+  ]);
 
   const swapPanes = useCallback(() => {
     setUrlA(urlB);
@@ -98,27 +212,33 @@ export function BrowserComparisonView({
   }, [urlA, urlB, viewportA, viewportB, profileA, profileB]);
 
   const reloadBoth = useCallback(() => {
-    setReloadKey((k) => k + 1);
+    void Promise.all(
+      ["a", "b"].map((pane) =>
+        bridge?.reloadBrowserSession({
+          projectId,
+          sessionId: `comparison-${comparisonId}-${pane}`,
+        }),
+      ),
+    ).catch(() => setError("Could not reload comparison panes."));
     toastManager.add({
       type: "info",
       title: "Reloading comparison panes",
       description: "Both comparison views are refreshing.",
     });
-  }, []);
+  }, [bridge, projectId, comparisonId]);
 
   const captureComparison = useCallback(async () => {
     if (!bridge) return;
     setCapturing(true);
     try {
-      const artifact = await bridge.captureBrowserScreenshot({ projectId, sessionId });
-      if (artifact?.path) {
-        await bridge.copyBrowserArtifactToClipboard(artifact.path);
-        toastManager.add({
-          type: "success",
-          title: "Comparison captured & copied",
-          description: "Saved comparison screenshot to clipboard.",
-        });
-      }
+      const artifacts = await bridge.captureBrowserComparison({ projectId, comparisonId });
+      setCaptures(artifacts);
+      toastManager.add({
+        type: "success",
+        title: "Both comparison panes captured",
+        description:
+          "Two separate screenshots were saved. Use the pane controls to reveal or copy them.",
+      });
     } catch (err) {
       toastManager.add({
         type: "error",
@@ -128,7 +248,7 @@ export function BrowserComparisonView({
     } finally {
       setCapturing(false);
     }
-  }, [bridge, projectId, sessionId]);
+  }, [bridge, projectId, comparisonId]);
 
   const renderIcon = (iconType: ViewportPreset["icon"]) => {
     switch (iconType) {
@@ -217,6 +337,14 @@ export function BrowserComparisonView({
               </button>
             </div>
 
+            <Button
+              type="button"
+              size="xs"
+              variant={syncNavigation ? "secondary" : "outline"}
+              onClick={() => setSyncNavigation(!syncNavigation)}
+            >
+              Sync navigation
+            </Button>
             {/* Sync toggle */}
             <Button
               type="button"
@@ -231,7 +359,7 @@ export function BrowserComparisonView({
               ) : (
                 <Link2OffIcon className="size-3" />
               )}
-              <span>Sync</span>
+              <span>Sync scroll</span>
             </Button>
 
             {/* Reload button */}
@@ -268,6 +396,24 @@ export function BrowserComparisonView({
           </div>
         </div>
 
+        {error && (
+          <p role="alert" className="px-4 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {captures.length > 0 && (
+          <div className="flex gap-2 px-4">
+            {captures.map((artifact, index) => (
+              <Button
+                key={artifact.id}
+                size="xs"
+                onClick={() => void bridge?.revealBrowserArtifact(artifact.path)}
+              >
+                Reveal Pane {index === 0 ? "A" : "B"} screenshot
+              </Button>
+            ))}
+          </div>
+        )}
         {/* Viewport comparison area */}
         <div
           className={`flex-1 min-h-0 grid gap-2 p-3 bg-muted/20 ${
@@ -298,10 +444,18 @@ export function BrowserComparisonView({
                   </select>
                 )}
                 {mode === "profiles" && (
-                  <Badge variant="outline" className="h-5 gap-1 text-[10px]">
-                    <UserCheckIcon className="size-2.5 text-emerald-500" />
-                    <span>Profile: {profileA}</span>
-                  </Badge>
+                  <select
+                    aria-label="Profile for Pane A"
+                    value={profileA}
+                    onChange={(event) => setProfileA(event.target.value)}
+                    className="h-6 rounded border bg-background text-xs"
+                  >
+                    {profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.label}
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
 
@@ -317,8 +471,12 @@ export function BrowserComparisonView({
               <div className="border-b px-2 py-1">
                 <Input
                   className="h-6 font-mono text-[11px]"
-                  value={urlA}
-                  onChange={(e) => setUrlA(e.target.value)}
+                  key={urlA}
+                  defaultValue={urlA}
+                  onBlur={(event) => setUrlA(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") setUrlA(event.currentTarget.value);
+                  }}
                   placeholder="URL for Pane A"
                 />
               </div>
@@ -343,12 +501,10 @@ export function BrowserComparisonView({
                     {urlA}
                   </span>
                 </div>
-                <iframe
-                  key={`pane-a-${reloadKey}`}
-                  src={urlA}
-                  title="Comparison Pane A"
-                  className="w-full flex-1 border-0"
-                  sandbox="allow-same-origin allow-scripts allow-forms"
+                <div
+                  ref={paneA}
+                  aria-label="Comparison Pane A"
+                  className="w-full flex-1 min-h-0 border-0"
                 />
               </div>
             </div>
@@ -378,10 +534,18 @@ export function BrowserComparisonView({
                   </select>
                 )}
                 {mode === "profiles" && (
-                  <Badge variant="outline" className="h-5 gap-1 text-[10px]">
-                    <UsersIcon className="size-2.5 text-primary" />
-                    <span>Profile: {profileB}</span>
-                  </Badge>
+                  <select
+                    aria-label="Profile for Pane B"
+                    value={profileB}
+                    onChange={(event) => setProfileB(event.target.value)}
+                    className="h-6 rounded border bg-background text-xs"
+                  >
+                    {profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.label}
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
 
@@ -397,8 +561,12 @@ export function BrowserComparisonView({
               <div className="border-b px-2 py-1">
                 <Input
                   className="h-6 font-mono text-[11px]"
-                  value={urlB}
-                  onChange={(e) => setUrlB(e.target.value)}
+                  key={urlB}
+                  defaultValue={urlB}
+                  onBlur={(event) => setUrlB(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") setUrlB(event.currentTarget.value);
+                  }}
                   placeholder="URL for Pane B"
                 />
               </div>
@@ -423,12 +591,10 @@ export function BrowserComparisonView({
                     {urlB}
                   </span>
                 </div>
-                <iframe
-                  key={`pane-b-${reloadKey}`}
-                  src={urlB}
-                  title="Comparison Pane B"
-                  className="w-full flex-1 border-0"
-                  sandbox="allow-same-origin allow-scripts allow-forms"
+                <div
+                  ref={paneB}
+                  aria-label="Comparison Pane B"
+                  className="w-full flex-1 min-h-0 border-0"
                 />
               </div>
             </div>
