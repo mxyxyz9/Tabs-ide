@@ -286,6 +286,7 @@ type BrowserSession = {
   actionTimeline: BrowserActionEvent[];
   controller: "human" | "agent" | "none";
   controlEpoch: number;
+  humanControlLocked: boolean;
   assignedTaskId: string | null;
   temporaryAgentTab: boolean;
   userRetained: boolean;
@@ -498,6 +499,7 @@ export class BrowserHostManager {
       actionTimeline: [],
       controller: "none",
       controlEpoch: 0,
+      humanControlLocked: false,
       assignedTaskId: input.taskId ?? null,
       temporaryAgentTab: Boolean(input.temporaryAgentTab),
       userRetained: false,
@@ -1109,9 +1111,12 @@ export class BrowserHostManager {
       );
       let accessibilityTree: unknown = null;
       try {
-        accessibilityTree = await session.cdpCoordinator.withSession("automation", async (debuggerApi) => {
-          return await debuggerApi.sendCommand("Accessibility.getFullAXTree");
-        });
+        accessibilityTree = await session.cdpCoordinator.withSession(
+          "automation",
+          async (debuggerApi) => {
+            return await debuggerApi.sendCommand("Accessibility.getFullAXTree");
+          },
+        );
       } catch {
         accessibilityTree = null;
       }
@@ -1565,7 +1570,10 @@ export class BrowserHostManager {
       throw new Error(event.error);
     }
 
-    if ((session.controlEpoch ?? 0) !== scheduledEpoch || (session.controller as string) === "human") {
+    if (
+      (session.controlEpoch ?? 0) !== scheduledEpoch ||
+      (session.controller as string) === "human"
+    ) {
       event.status = "cancelled";
       event.completedAt = new Date().toISOString();
       event.error =
@@ -1616,14 +1624,13 @@ export class BrowserHostManager {
     if (!session) return;
     session.controlEpoch = (session.controlEpoch ?? 0) + 1;
     session.controller = "human";
+    session.humanControlLocked = true;
     session.userRetained = true;
     this.clearHumanControlTimer(session);
     this.emitState(session);
   }
 
-  resumeAgent(
-    input: DesktopBrowserHostControlInput & { taskId?: string | undefined },
-  ): void {
+  resumeAgent(input: DesktopBrowserHostControlInput & { taskId?: string | undefined }): void {
     const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session) return;
     if (input.taskId && session.assignedTaskId && session.assignedTaskId !== input.taskId) {
@@ -1631,6 +1638,7 @@ export class BrowserHostManager {
     }
     session.controlEpoch = (session.controlEpoch ?? 0) + 1;
     session.controller = "none";
+    session.humanControlLocked = false;
     this.clearHumanControlTimer(session);
     this.emitState(session);
   }
@@ -1638,6 +1646,9 @@ export class BrowserHostManager {
   assignTabTask(input: DesktopBrowserHostControlInput & { taskId: string | null }): void {
     const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session) return;
+    if (session.assignedTaskId !== input.taskId) {
+      session.controlEpoch = (session.controlEpoch ?? 0) + 1;
+    }
     session.assignedTaskId = input.taskId ?? null;
     this.emitState(session);
   }
@@ -1909,6 +1920,7 @@ export class BrowserHostManager {
       session.userRetained = true;
       if (session.humanControlTimer) clearTimeout(session.humanControlTimer);
       this.emitState(session);
+      if (session.humanControlLocked) return;
       session.humanControlTimer = setTimeout(() => {
         session.humanControlTimer = null;
         if (session.controller !== "human") return;
@@ -2083,10 +2095,12 @@ export class BrowserHostManager {
     });
     contents.on("devtools-opened", () => {
       session.devToolsOpen = true;
+      session.cdpCoordinator?.handleDevToolsOpened();
       this.emitState(session);
     });
     contents.on("devtools-closed", () => {
       session.devToolsOpen = false;
+      session.cdpCoordinator?.handleDevToolsClosed();
       this.emitState(session);
       void this.applyColorScheme(session);
     });

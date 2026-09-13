@@ -83,3 +83,51 @@ describe("BrowserCdpCoordinator", () => {
     expect(coordinator.currentOwner).toBe("none");
   });
 });
+
+describe("CDP concurrency", () => {
+  it("serializes operations so one cannot detach another's session", async () => {
+    const contents = createMockWebContents();
+    const coordinator = new BrowserCdpCoordinator(contents as any);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const events: string[] = [];
+    const first = coordinator.withSession("automation", async () => {
+      events.push("first");
+      await gate;
+      events.push("first done");
+    });
+    const second = coordinator.withSession("emulation", async (dbg) => {
+      events.push("second");
+      expect(dbg.isAttached()).toBe(true);
+    });
+    await Promise.resolve();
+    expect(events).toEqual(["first"]);
+    release();
+    await Promise.all([first, second]);
+    expect(events).toEqual(["first", "first done", "second"]);
+  });
+
+  it("releases the queue after a failed operation", async () => {
+    const contents = createMockWebContents();
+    const coordinator = new BrowserCdpCoordinator(contents as any);
+    const first = coordinator.withSession("automation", async () => {
+      throw new Error("failed");
+    });
+    const second = coordinator.withSession("emulation", async () => "next");
+    await expect(first).rejects.toThrow("failed");
+    await expect(second).resolves.toBe("next");
+    expect(contents.debugger.detach).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not run commands while DevTools owns the debugger", async () => {
+    const contents = createMockWebContents();
+    const coordinator = new BrowserCdpCoordinator(contents as any);
+    coordinator.handleDevToolsOpened();
+    const command = vi.fn();
+    await expect(coordinator.withSession("automation", command)).rejects.toThrow("DevTools");
+    expect(command).not.toHaveBeenCalled();
+    expect(contents.debugger.attach).not.toHaveBeenCalled();
+  });
+});

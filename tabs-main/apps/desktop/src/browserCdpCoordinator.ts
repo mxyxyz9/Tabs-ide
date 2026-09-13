@@ -13,6 +13,7 @@ export class BrowserCdpCoordinator {
   private owner: CdpOwner = "none";
   private isAttached = false;
   private devToolsOpen = false;
+  private operationQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly contents: WebContents) {
     if (!contents.isDestroyed() && contents.debugger) {
@@ -50,7 +51,10 @@ export class BrowserCdpCoordinator {
   }
 
   get attached(): boolean {
-    return this.isAttached || (this.contents && !this.contents.isDestroyed() && this.contents.debugger.isAttached());
+    return (
+      this.isAttached ||
+      (this.contents && !this.contents.isDestroyed() && this.contents.debugger.isAttached())
+    );
   }
 
   /**
@@ -60,8 +64,31 @@ export class BrowserCdpCoordinator {
     owner: "automation" | "emulation" | "recording",
     fn: (debuggerApi: Debugger) => Promise<T>,
   ): Promise<T> {
+    // Reserve a queue slot before yielding, including when the previous operation fails.
+    const previous = this.operationQueue;
+    let release!: () => void;
+    this.operationQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await this.runSession(owner, fn);
+    } finally {
+      release();
+    }
+  }
+
+  private async runSession<T>(
+    owner: "automation" | "emulation" | "recording",
+    fn: (debuggerApi: Debugger) => Promise<T>,
+  ): Promise<T> {
     if (this.contents.isDestroyed()) {
       throw new Error("Cannot perform CDP operation: WebContents is destroyed.");
+    }
+    if (this.devToolsOpen) {
+      throw new Error(
+        "Cannot perform CDP operation while DevTools is open. Close DevTools and retry.",
+      );
     }
 
     const dbg = this.contents.debugger;

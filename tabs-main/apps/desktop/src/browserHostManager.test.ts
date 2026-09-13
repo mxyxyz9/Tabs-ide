@@ -706,10 +706,7 @@ describe("reliable browser tabs and agent control", () => {
   it("cancels queued automation operations when human takes control before execution", async () => {
     const manager = new BrowserHostManager(() => null);
     const { session, executeJavaScript } = createMockSession();
-    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(
-      session.key,
-      session,
-    );
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(session.key, session);
 
     // Block the automation queue with a long-running promise
     let unblockFirst!: () => void;
@@ -768,13 +765,42 @@ describe("reliable browser tabs and agent control", () => {
     expect(lastEvent?.status).toBe("cancelled");
   });
 
+  it("keeps explicit human takeover latched after keyboard input until resumed", async () => {
+    vi.useFakeTimers();
+    try {
+      const manager = new BrowserHostManager(() => null);
+      const { session, webContents } = createMockSession();
+      Object.assign(webContents, { setWindowOpenHandler: vi.fn() });
+      const internals = manager as any;
+      internals.sessions.set(session.key, session);
+      internals.registerSessionEvents(session);
+      manager.takeControl({ projectId: "project-1", sessionId: "tab-1" });
+      const listener = (webContents.on.mock.calls as unknown as Array<[string, () => void]>).find(
+        (call) => call[0] === "before-input-event",
+      )?.[1] as unknown as () => void;
+      listener();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(session.controller).toBe("human");
+      manager.resumeAgent({ projectId: "project-1", sessionId: "tab-1" });
+      expect(session.controller).toBe("none");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("invalidates queued work when tab ownership changes", () => {
+    const manager = new BrowserHostManager(() => null);
+    const { session } = createMockSession({ assignedTaskId: "task-A" });
+    (manager as any).sessions.set(session.key, session);
+    manager.assignTabTask({ projectId: "project-1", sessionId: "tab-1", taskId: "task-B" });
+    manager.assignTabTask({ projectId: "project-1", sessionId: "tab-1", taskId: "task-A" });
+    expect(session.controlEpoch).toBe(2);
+  });
+
   it("enforces task-to-tab ownership and rejects operations from unauthorized tasks", async () => {
     const manager = new BrowserHostManager(() => null);
     const { session } = createMockSession({ assignedTaskId: "task-A" });
-    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(
-      session.key,
-      session,
-    );
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(session.key, session);
 
     // Running with matching task ID succeeds
     await expect(
@@ -796,7 +822,9 @@ describe("reliable browser tabs and agent control", () => {
         operation: "evaluate",
         input: { expression: "true" },
       }),
-    ).rejects.toThrow('Browser tab is assigned to task "task-A", but automation was requested by task "task-B".');
+    ).rejects.toThrow(
+      'Browser tab is assigned to task "task-A", but automation was requested by task "task-B".',
+    );
   });
 
   it("cleans up temporary agent tabs while preserving user-retained tabs", () => {
@@ -846,10 +874,7 @@ describe("reliable browser tabs and agent control", () => {
       currentUrl: "https://github.com/pulls",
       pageTitle: "Pull Requests",
     });
-    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(
-      session.key,
-      session,
-    );
+    (manager as unknown as { sessions: Map<string, unknown> }).sessions.set(session.key, session);
 
     manager.destroySession({ projectId: "project-1", sessionId: "tab-1" });
 
