@@ -25,7 +25,9 @@ import {
   stopNativeBrowserRecording,
 } from "./NativePreviewAutomationHost";
 import { PreviewAnnotationEditor } from "./PreviewAnnotationEditor";
+import { BrowserComparisonView } from "./browser/BrowserComparisonView";
 import { RecordIssueDialog } from "./browser/RecordIssueDialog";
+import { ServerReadinessBadge } from "./browser/ServerReadinessBadge";
 import {
   type ProjectToolKind,
   type ProjectWorkspaceSettings,
@@ -51,6 +53,7 @@ import {
   ArchiveRestoreIcon,
   BugIcon,
   CameraIcon,
+  Columns2Icon,
   BotIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -7100,6 +7103,7 @@ function DesktopBrowserChrome(props: {
   const [pickingElement, setPickingElement] = useState(false);
   const [clearingBrowserData, setClearingBrowserData] = useState(false);
   const [recordIssueDialogOpen, setRecordIssueDialogOpen] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [pendingAnnotation, setPendingAnnotation] = useState<PreviewAnnotationPayload | null>(null);
   const browserHistory = useBrowserHistoryStore((state) => state.entries);
   const recordBrowserHistory = useBrowserHistoryStore((state) => state.record);
@@ -7515,6 +7519,17 @@ function DesktopBrowserChrome(props: {
               <Button
                 type="button"
                 size="xs"
+                variant="outline"
+                onClick={() => setComparisonOpen(true)}
+                className="gap-1 text-xs"
+                title="Open side-by-side browser comparison view"
+              >
+                <Columns2Icon className="size-3.5 text-primary" />
+                Compare
+              </Button>
+              <Button
+                type="button"
+                size="xs"
                 variant={pickingElement ? "secondary" : "outline"}
                 disabled={pickingElement}
                 onClick={() => void pickElement()}
@@ -7629,6 +7644,16 @@ function DesktopBrowserChrome(props: {
                       props.sessionState.currentUrl ?? props.normalizedUrl,
                     )
                   }
+                />
+                <ServerReadinessBadge
+                  currentUrl={props.sessionState.currentUrl || props.normalizedUrl}
+                  onNavigateToUrl={(url) => {
+                    props.setDraftUrl(url);
+                    void bridge?.navigateBrowserSession({ ...sessionArg, url });
+                  }}
+                  onReload={() => {
+                    void bridge?.reloadBrowserSession(sessionArg);
+                  }}
                 />
                 <Input
                   className="h-8"
@@ -7903,6 +7928,14 @@ function DesktopBrowserChrome(props: {
           }
           profileId={props.sessionState.profileId}
           assignedTaskId={props.sessionState.assignedTaskId}
+        />
+        <BrowserComparisonView
+          isOpen={comparisonOpen}
+          onOpenChange={setComparisonOpen}
+          projectId={props.projectId}
+          sessionId={props.sessionId}
+          primaryUrl={props.sessionState.currentUrl || props.normalizedUrl}
+          primaryProfileId={props.sessionState.profileId}
         />
       </div>
     </div>
