@@ -67,13 +67,13 @@ describe("googleAuthHandler", () => {
       expect(rejection.code).toBe("disallowed_useragent");
     });
 
-    it("flags prohibited OAuth endpoints as requiring external browser", () => {
+    it("permits standard OAuth authorization endpoints without premature rejection", () => {
       const rejection = detectGoogleRejection(
         "https://accounts.google.com/o/oauth2/v2/auth?client_id=xyz",
+        "Sign in - Google Accounts",
       );
-      expect(rejection.isRejected).toBe(true);
-      expect(rejection.code).toBe("embedded_oauth_blocked");
-      expect(rejection.title).toContain("External System Browser Required");
+      expect(rejection.isRejected).toBe(false);
+      expect(rejection.code).toBe("none");
     });
 
     it("permits direct account login without rejection", () => {

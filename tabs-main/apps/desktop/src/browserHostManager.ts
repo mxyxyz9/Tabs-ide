@@ -184,7 +184,9 @@ export function configurePartitionSession(s: Session): void {
   if (configuredSessions.has(s)) return;
   configuredSessions.add(s);
   try {
-    s.setUserAgent(sanitizeEmbeddedBrowserUserAgent(s.getUserAgent()));
+    // Retain native Electron User-Agent string across partition sessions.
+    // Rewriting or stripping tokens causes Cloudflare Turnstile (Error 600010)
+    // and Google/OpenAI bot-detection challenges to fail or loop (#5002 reference).
     s.cookies.on("changed", () => {
       void s.cookies.flushStore().catch((err) => {
         console.error("[browserHostManager] Failed to persist browser cookies:", err);
@@ -424,10 +426,6 @@ export class BrowserHostManager {
     const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
     view.webContents?.setZoomFactor(initialZoom);
 
-    view.webContents.setUserAgent(
-      sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
-    );
-
     const session: BrowserSession = {
       projectId: input.projectId,
       sessionId,
@@ -524,10 +522,6 @@ export class BrowserHostManager {
     const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
     view.webContents?.setZoomFactor(initialZoom * session.zoomFactor);
     view.webContents.setAudioMuted(session.audioMuted);
-
-    view.webContents.setUserAgent(
-      sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
-    );
 
     session.view = view;
     session.partition = partition;
@@ -1674,15 +1668,6 @@ export class BrowserHostManager {
         event.preventDefault();
         return;
       }
-      if (classification.kind === "externalOAuthRequired") {
-        event.preventDefault();
-        // Preserve the blocked destination so the explicit "Open In Browser"
-        // action launches the authorization page rather than the previous URL.
-        session.currentUrl = url;
-        session.lastError = EXTERNAL_OAUTH_REQUIRED_MESSAGE;
-        this.emitState(session);
-        return;
-      }
     });
 
     contents.on("did-start-loading", () => {
@@ -1840,23 +1825,30 @@ export class BrowserHostManager {
         navigationType:
           decision.action === "allow"
             ? "new_window"
-            : decision.handledExternally
-              ? "external_browser"
-              : "new_window",
+            : decision.handledInTab
+              ? "in_page"
+              : decision.handledExternally
+                ? "external_browser"
+                : "new_window",
         rawUrl: details.url,
         outcome: decision.action === "allow" ? "in_progress" : "completed",
         summary:
           decision.action === "allow"
             ? "Scripted popup allowed with shared partition"
-            : decision.handledExternally
-              ? "Routed to external browser"
-              : "Popup blocked by browser security policy",
+            : decision.handledInTab
+              ? "Link loaded in embedded browser tab"
+              : decision.handledExternally
+                ? "Routed to external browser"
+                : "Popup blocked by browser security policy",
       });
       if (decision.action === "allow") {
         return {
           action: "allow",
           overrideBrowserWindowOptions: decision.overrideBrowserWindowOptions,
         };
+      }
+      if (decision.handledInTab && details.url) {
+        void contents.loadURL(details.url);
       }
       return { action: "deny" };
     });

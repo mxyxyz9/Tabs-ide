@@ -83,12 +83,18 @@ describe("authClassifier", () => {
       expect(result.port).toBe(45678);
     });
 
-    it("flags Google OAuth 2.0 authorization endpoints as externalOAuthRequired", () => {
+    it("allows Google OAuth 2.0 authorization endpoints in ordinary embedded navigation or popups", () => {
       const result = classifyAuthNavigation({
         url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=foo&redirect_uri=bar",
       });
-      expect(result.kind).toBe("externalOAuthRequired");
-      expect(result.provider).toBe("google");
+      expect(result.kind).toBe("ordinaryNavigation");
+
+      const popup = classifyAuthNavigation({
+        url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=foo&redirect_uri=bar",
+        isWindowOpen: true,
+      });
+      expect(popup.kind).toBe("embeddedPopupCandidate");
+      expect(popup.provider).toBe("google");
     });
 
     it("allows direct Google account browsing in samePartitionLoginWindow or ordinary navigation", () => {

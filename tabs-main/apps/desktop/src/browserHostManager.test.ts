@@ -594,10 +594,8 @@ describe("configurePartitionSession", () => {
     configurePartitionSession(profileSession as never);
     configurePartitionSession(profileSession as never);
 
-    expect(profileSession.setUserAgent).toHaveBeenCalledOnce();
-    expect(profileSession.setUserAgent).toHaveBeenCalledWith(
-      "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36",
-    );
+    // Native user agent is preserved; setUserAgent is not called to prevent Cloudflare Turnstile error 600010
+    expect(profileSession.setUserAgent).not.toHaveBeenCalled();
     expect(profileSession.setPermissionRequestHandler).toHaveBeenCalledOnce();
     expect(profileSession.cookies.on).toHaveBeenCalledOnce();
 

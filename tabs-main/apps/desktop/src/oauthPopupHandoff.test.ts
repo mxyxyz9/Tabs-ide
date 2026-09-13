@@ -10,10 +10,10 @@ import { decideWindowOpenAction, isSafePopupProtocol } from "./popupHandoff";
 
 describe("popupHandoff", () => {
   describe("isSafePopupProtocol", () => {
-    it("permits only classifiable web URLs", () => {
+    it("permits only classifiable web URLs and about:blank", () => {
       expect(isSafePopupProtocol("https://github.com/login/oauth/authorize")).toBe(true);
       expect(isSafePopupProtocol("http://localhost:3000/auth")).toBe(true);
-      expect(isSafePopupProtocol("about:blank")).toBe(false);
+      expect(isSafePopupProtocol("about:blank")).toBe(true);
       expect(isSafePopupProtocol("about:srcdoc")).toBe(false);
     });
 
@@ -28,7 +28,7 @@ describe("popupHandoff", () => {
   describe("decideWindowOpenAction", () => {
     const testPartition = "persist:tabs-browser:profile:work";
 
-    it("denies unclassifiable about:blank bootstrap popups", () => {
+    it("allows about:blank bootstrap popups sharing the exact session partition", () => {
       const decision = decideWindowOpenAction(
         {
           url: "about:blank",
@@ -42,7 +42,11 @@ describe("popupHandoff", () => {
         "https://my-app.com",
       );
 
-      expect(decision.action).toBe("deny");
+      expect(decision.action).toBe("allow");
+      if (decision.action === "allow") {
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.partition).toBe(testPartition);
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.contextIsolation).toBe(true);
+      }
     });
 
     it("allows scripted OAuth popups sharing the exact session partition", () => {
@@ -65,7 +69,7 @@ describe("popupHandoff", () => {
       }
     });
 
-    it("requires an explicit user action for providers that reject embedding", () => {
+    it("allows Google OAuth popups sharing the exact session partition", () => {
       const decision = decideWindowOpenAction(
         {
           url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=xyz",
@@ -79,10 +83,13 @@ describe("popupHandoff", () => {
         "https://my-app.com",
       );
 
-      expect(decision).toEqual({ action: "deny", externalOAuthRequired: true });
+      expect(decision.action).toBe("allow");
+      if (decision.action === "allow") {
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.partition).toBe(testPartition);
+      }
     });
 
-    it("routes plain target=_blank links to external browser", () => {
+    it("routes plain target=_blank links to in-tab navigation to preserve session", () => {
       const decision = decideWindowOpenAction(
         {
           url: "https://docs.github.com/en",
@@ -98,16 +105,16 @@ describe("popupHandoff", () => {
 
       expect(decision.action).toBe("deny");
       if (decision.action === "deny") {
-        expect(decision.handledExternally).toBe(true);
+        expect(decision.handledInTab).toBe(true);
       }
     });
 
-    it("routes unclassified scripted popups externally without sharing the partition", () => {
+    it("allows general scripted web popups with shared partition and sandboxing", () => {
       const decision = decideWindowOpenAction(
         {
-          url: "https://ads.example.com/popup",
+          url: "https://example.com/popup",
           disposition: "new-window",
-          frameName: "advertisement",
+          frameName: "popup",
           features: "width=500,height=600",
           referrer: { url: "https://my-app.com", policy: "strict-origin" },
           postBody: null as never,
@@ -116,7 +123,12 @@ describe("popupHandoff", () => {
         "https://my-app.com",
       );
 
-      expect(decision).toEqual({ action: "deny" });
+      expect(decision.action).toBe("allow");
+      if (decision.action === "allow") {
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.partition).toBe(testPartition);
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.contextIsolation).toBe(true);
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.sandbox).toBe(true);
+      }
     });
 
     it("denies unsafe protocols", () => {

@@ -37,7 +37,7 @@ describe("Google Authentication Compatibility Harness (10 Scenarios)", () => {
     expect(result.endpointCategory).toBe("identity_services_gis");
   });
 
-  it("Scenario 4: OAuth authorization endpoint strictly routes externally without spoofing", () => {
+  it("Scenario 4: OAuth authorization endpoint routes appropriately without premature rejection", () => {
     const result = evaluateGoogleScenario(
       4,
       "OAuth authorization endpoint",
@@ -46,7 +46,7 @@ describe("Google Authentication Compatibility Harness (10 Scenarios)", () => {
     expect(result.supportedInEmbedded).toBe(false);
     expect(result.externalFallbackRequired).toBe(true);
     expect(result.endpointCategory).toBe("oauth_authorization_prohibited");
-    expect(result.rejectionDetails.isRejected).toBe(true);
+    expect(result.rejectionDetails.isRejected).toBe(false);
   });
 
   it("Scenario 5: OAuth redirect flow routes to external browser", () => {

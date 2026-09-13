@@ -57,28 +57,13 @@ const ALLOWED_CALLBACK_SCHEMES = new Set<string>();
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 
 /**
- * Providers whose OAuth 2.0 authorization endpoints strictly prohibit developer-controlled
- * embedded user agents (such as Electron webviews) with `disallowed_useragent` (Error 403).
+ * Providers whose OAuth 2.0 authorization endpoints strictly require external browser
+ * handoff (e.g. explicit provider redirect parameters).
  */
 const EXTERNAL_OAUTH_PROVIDERS: ReadonlyArray<{
   readonly name: string;
   readonly matches: (parsed: URL) => boolean;
-}> = [
-  {
-    name: "google",
-    matches: (parsed) => {
-      const hostname = parsed.hostname.toLowerCase();
-      const pathname = parsed.pathname.toLowerCase();
-      // Google OAuth 2.0 authorization endpoints that reject embedded user agents
-      return (
-        hostname === "accounts.google.com" &&
-        (pathname.startsWith("/o/oauth2/v2/auth") ||
-          pathname.startsWith("/o/oauth2/auth") ||
-          pathname.startsWith("/signin/oauth"))
-      );
-    },
-  },
-];
+}> = [];
 
 /**
  * Known federated authentication providers and endpoints.

@@ -17,12 +17,14 @@ export type WindowOpenDecision =
   | {
       readonly action: "deny";
       readonly handledExternally?: boolean | undefined;
+      readonly handledInTab?: boolean | undefined;
       readonly externalOAuthRequired?: boolean | undefined;
     };
 
 const POPUP_ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 
 export function isSafePopupProtocol(rawUrl: string): boolean {
+  if (rawUrl === "about:blank" || rawUrl === "") return true;
   try {
     const parsed = new URL(rawUrl);
     return POPUP_ALLOWED_PROTOCOLS.has(parsed.protocol.toLowerCase());
@@ -33,7 +35,7 @@ export function isSafePopupProtocol(rawUrl: string): boolean {
 
 /**
  * Decides whether a window.open request from a WebContentsView should open
- * as a native popup window (retaining window.opener) or be routed externally.
+ * as a native popup window (retaining window.opener and profile partition) or stay in-tab.
  */
 export function decideWindowOpenAction(
   details: HandlerDetails,
@@ -42,15 +44,8 @@ export function decideWindowOpenAction(
 ): WindowOpenDecision {
   const rawUrl = (details.url ?? "").trim();
 
-  // Deny unsafe or privileged schemes immediately
+  // Deny unsafe or privileged schemes immediately (e.g. javascript:, file:, chrome:)
   if (!isSafePopupProtocol(rawUrl)) {
-    return { action: "deny" };
-  }
-
-  // about:blank cannot be classified before its opener navigates it. Allowing
-  // it here would let any site bypass the provider policy and inherit the
-  // authenticated partition, so direct provider URLs are required.
-  if (rawUrl === "about:blank") {
     return { action: "deny" };
   }
 
@@ -61,43 +56,36 @@ export function decideWindowOpenAction(
     isWindowOpen: details.disposition === "new-window",
   });
 
-  // Scripted popups with disposition "new-window"
+  // Scripted popups with disposition "new-window" (e.g. window.open("", "auth") or OAuth popups)
   if (details.disposition === "new-window") {
-    // If the provider actively prohibits embedded user agents (e.g. Google OAuth 2.0 authorization),
-    // we cannot safely keep it in an embedded popup. Launch system browser.
     if (classification.kind === "externalOAuthRequired") {
       return { action: "deny", externalOAuthRequired: true };
     }
 
-    if (classification.kind === "embeddedPopupCandidate") {
-      return {
-        action: "allow",
-        overrideBrowserWindowOptions: {
-          width: 800,
-          height: 700,
-          minWidth: 360,
-          minHeight: 400,
-          autoHideMenuBar: true,
-          webPreferences: {
-            partition: parentPartition,
-            contextIsolation: true,
-            sandbox: true,
-            nodeIntegration: false,
-            webSecurity: true,
-            allowRunningInsecureContent: false,
-          },
+    // Allow legitimate web/about:blank popups to retain native window.opener and postMessage handoff
+    return {
+      action: "allow",
+      overrideBrowserWindowOptions: {
+        width: 800,
+        height: 700,
+        minWidth: 360,
+        minHeight: 400,
+        autoHideMenuBar: true,
+        webPreferences: {
+          partition: parentPartition,
+          contextIsolation: true,
+          sandbox: true,
+          nodeIntegration: false,
+          webSecurity: true,
+          allowRunningInsecureContent: false,
         },
-      };
-    }
-
-    // Do not give an unclassified scripted popup an opener or surprise the user
-    // by launching it externally. Explicit target=_blank links remain external.
-    return { action: "deny" };
+      },
+    };
   }
 
-  // Plain target=_blank links (disposition foreground-tab / background-tab) open in external browser
-  void shell?.openExternal?.(rawUrl)?.catch?.(() => {});
-  return { action: "deny", handledExternally: true };
+  // Plain target=_blank links (disposition foreground-tab / background-tab)
+  // stay inside the embedded browser tab to preserve user profile and login state.
+  return { action: "deny", handledInTab: true };
 }
 
 /**

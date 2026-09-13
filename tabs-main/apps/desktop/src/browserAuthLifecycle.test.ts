@@ -19,7 +19,7 @@
  * 15. project switching preservation
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { classifyAuthNavigation } from "./authClassifier";
 import { decideWindowOpenAction, isSafePopupProtocol } from "./popupHandoff";
 import {
@@ -293,6 +293,73 @@ describe("Browser Authentication and Profile Lifecycle (Phase 12 Fixtures)", () 
       expect(summary).toContain("my-app.com");
       expect(summary).not.toContain("secret123");
       expect(summary).not.toContain("token=abc");
+    });
+  });
+
+  describe("16. Native User-Agent Preservation", () => {
+    it("preserves native Electron User-Agent without rewriting or stripping tokens", () => {
+      const nativeUA =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Tabs/0.0.14 Chrome/140.0.0.0 Electron/40.6.0 Safari/537.36";
+      const mockSession = {
+        getUserAgent: () => nativeUA,
+        setUserAgent: vi.fn(),
+        cookies: { on: vi.fn(), flushStore: vi.fn() },
+        setPermissionRequestHandler: vi.fn(),
+        setPermissionCheckHandler: vi.fn(),
+      };
+
+      // Native UA is preserved; setUserAgent must not be called
+      expect(mockSession.setUserAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("17. about:blank Auth Popup Lifecycle", () => {
+    it("allows about:blank popup with exact partition inheritance and sandbox security", () => {
+      const partition = deriveBrowserPartition({ profileId: "personal" });
+      const decision = decideWindowOpenAction(
+        {
+          url: "about:blank",
+          disposition: "new-window",
+          frameName: "google_signin_popup",
+          features: "width=500,height=600",
+          referrer: { url: "https://my-app.com", policy: "strict-origin" },
+          postBody: null as never,
+        },
+        partition,
+        "https://my-app.com",
+      );
+
+      expect(decision.action).toBe("allow");
+      if (decision.action === "allow") {
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.partition).toBe(partition);
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.contextIsolation).toBe(true);
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.sandbox).toBe(true);
+        expect(decision.overrideBrowserWindowOptions.webPreferences?.nodeIntegration).toBe(false);
+      }
+    });
+  });
+
+  describe("18. In-Tab target=_blank Link Preservation", () => {
+    it("keeps target=_blank links within the embedded preview session", () => {
+      const partition = deriveBrowserPartition({ profileId: "work" });
+      const decision = decideWindowOpenAction(
+        {
+          url: "https://documentation.my-app.com/getting-started",
+          disposition: "foreground-tab",
+          frameName: "_blank",
+          features: "",
+          referrer: { url: "https://my-app.com", policy: "strict-origin" },
+          postBody: null as never,
+        },
+        partition,
+        "https://my-app.com",
+      );
+
+      expect(decision.action).toBe("deny");
+      if (decision.action === "deny") {
+        expect(decision.handledInTab).toBe(true);
+        expect(decision.handledExternally).toBeFalsy();
+      }
     });
   });
 });

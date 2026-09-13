@@ -94,29 +94,26 @@ export function detectGoogleRejection(
   const category = classifyGoogleEndpoint(rawUrl);
 
   const titleLower = (pageTitle ?? "").toLowerCase();
-  const isErrorTitle =
-    titleLower.includes("disallowed_useragent") ||
-    titleLower.includes("403. that's an error") ||
-    titleLower.includes("couldn't sign you in");
+  const isGoogleHost = (() => {
+    try {
+      const h = new URL(rawUrl.trim()).hostname.toLowerCase();
+      return h === "google.com" || h.endsWith(".google.com");
+    } catch {
+      return false;
+    }
+  })();
 
-  if (category === "disallowed_useragent_error" || isErrorTitle) {
+  const hasExplicitProviderRejection =
+    category === "disallowed_useragent_error" ||
+    (isGoogleHost && titleLower.includes("disallowed_useragent"));
+
+  if (hasExplicitProviderRejection) {
     return {
       isRejected: true,
       code: "disallowed_useragent",
       title: "Google Authentication Blocked (Embedded Browser)",
       explanation:
         "Google prohibits OAuth 2.0 authorization inside developer-controlled embedded user agents (such as Electron) to prevent credential interception (Google Error 403: disallowed_useragent). Tabs complies with this security policy and does not bypass it through user-agent spoofing. Please complete sign-in using your default system browser.",
-      externalUrl: rawUrl,
-    };
-  }
-
-  if (category === "oauth_authorization_prohibited") {
-    return {
-      isRejected: true,
-      code: "embedded_oauth_blocked",
-      title: "External System Browser Required for Google OAuth",
-      explanation:
-        "This application is requesting Google OAuth authorization. Because Google restricts embedded browser logins, this request must be completed in your default system browser.",
       externalUrl: rawUrl,
     };
   }
