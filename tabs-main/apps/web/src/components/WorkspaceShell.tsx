@@ -83,6 +83,7 @@ import {
   SearchIcon,
   ServerIcon,
   SettingsIcon,
+  SlidersHorizontalIcon,
   SmartphoneIcon,
   TabletIcon,
   Trash2Icon,
@@ -103,6 +104,7 @@ import {
   TriangleAlertIcon,
   Volume2Icon,
   VolumeXIcon,
+  WrenchIcon,
 } from "lucide-react";
 import {
   Fragment,
@@ -448,19 +450,24 @@ function BrowserViewportSelector(props: {
   );
 }
 
-function BrowserViewportHiddenNotice() {
+function BrowserViewportHiddenNotice(props?: {
+  title?: string;
+  description?: string;
+  icon?: ReactNode;
+}) {
   return (
     <div className="pointer-events-none absolute left-1/2 top-5 z-40 w-[min(38rem,calc(100%-1.5rem))] -translate-x-1/2 px-3">
-      <div className="flex items-start gap-3 rounded-2xl border border-border/80 bg-background/95 px-4 py-3 shadow-2xl shadow-black/40 ring-1 ring-white/5 backdrop-blur-xl">
+      <div className="flex items-start gap-3 rounded-2xl border border-border/80 bg-background/95 px-4 py-3 shadow-2xl shadow-black/40 ring-1 ring-white/5 backdrop-blur-xl animate-in fade-in duration-150">
         <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-500/12 text-sky-300">
-          <GlobeIcon className="size-4.5" />
+          {props?.icon ?? <GlobeIcon className="size-4.5" />}
         </div>
         <div className="min-w-0">
           <div className="text-sm font-semibold text-foreground">
-            Preview hidden for screen sizing
+            {props?.title ?? "Preview hidden for screen sizing"}
           </div>
           <div className="mt-0.5 text-sm leading-5 text-muted-foreground">
-            Close the screen-size menu and the preview will return automatically.
+            {props?.description ??
+              "Close the screen-size menu and the preview will return automatically."}
           </div>
         </div>
       </div>
@@ -7093,11 +7100,64 @@ function DesktopBrowserChrome(props: {
   normalizedUrl: string;
   setBrowserViewport: typeof workspaceShellActions.setBrowserViewport;
   setViewportSelectorOpen: (open: boolean) => void;
+  viewportSelectorOpen?: boolean;
   toolbarTarget: HTMLElement | null;
   children: ReactNode;
 }) {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
+  const [activeToolbarMenu, setActiveToolbarMenu] = useState<
+    "view" | "capture" | "tools" | "history" | "server" | null
+  >(null);
+
+  const activeNotice = useMemo(() => {
+    switch (activeToolbarMenu) {
+      case "capture":
+        return {
+          icon: <CameraIcon className="size-4.5" />,
+          title: "Preview hidden for capture menu",
+          description: "Close the capture menu and the preview will return automatically.",
+        };
+      case "tools":
+        return {
+          icon: <WrenchIcon className="size-4.5" />,
+          title: "Preview hidden for browser tools",
+          description: "Close the tools menu and the preview will return automatically.",
+        };
+      case "view":
+        return {
+          icon: <SlidersHorizontalIcon className="size-4.5" />,
+          title: "Preview hidden for view settings",
+          description: "Close the view menu and the preview will return automatically.",
+        };
+      case "history":
+        return {
+          icon: <HistoryIcon className="size-4.5" />,
+          title: "Preview hidden for browser history",
+          description: "Close the history menu and the preview will return automatically.",
+        };
+      case "server":
+        return {
+          icon: <ServerIcon className="size-4.5" />,
+          title: "Preview hidden for server details",
+          description: "Close the server menu and the preview will return automatically.",
+        };
+      default:
+        if (props.viewportSelectorOpen) {
+          return {
+            icon: <GlobeIcon className="size-4.5" />,
+            title: "Preview hidden for screen sizing",
+            description: "Close the screen-size menu and the preview will return automatically.",
+          };
+        }
+        return null;
+    }
+  }, [activeToolbarMenu, props.viewportSelectorOpen]);
+
+  useEffect(() => {
+    props.setViewportSelectorOpen(activeNotice !== null);
+  }, [activeNotice, props.setViewportSelectorOpen]);
+
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
   const recordingSessionId = props.sessionId ?? props.sessionState.sessionId;
   const [recordingBrowser, setRecordingBrowser] = useState(() =>
@@ -7309,7 +7369,7 @@ function DesktopBrowserChrome(props: {
     <div
       className={cn(
         "relative flex h-full min-h-0 flex-col",
-        props.isChromeExpanded ? "gap-2 p-2" : "",
+        props.isChromeExpanded ? "gap-2 pt-2" : "",
       )}
     >
       {props.isChromeExpanded ? (
@@ -7379,7 +7439,15 @@ function DesktopBrowserChrome(props: {
                 void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
               }
               onCollapse={() => props.setIsChromeExpanded(false)}
-              onViewOpenChange={props.setViewportSelectorOpen}
+              onViewOpenChange={(open) => {
+                setActiveToolbarMenu(open ? "view" : null);
+              }}
+              onCaptureOpenChange={(open) => {
+                setActiveToolbarMenu(open ? "capture" : null);
+              }}
+              onToolsOpenChange={(open) => {
+                setActiveToolbarMenu(open ? "tools" : null);
+              }}
               address={
                 <form
                   className="flex h-9 min-w-0 items-center gap-1 rounded-lg border border-border/70 bg-muted/40 px-1.5 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10"
@@ -7414,6 +7482,9 @@ function DesktopBrowserChrome(props: {
                       void bridge?.navigateBrowserSession({ ...sessionArg, url });
                     }}
                     onReload={() => void bridge?.reloadBrowserSession(sessionArg)}
+                    onOpenChange={(open) => {
+                      setActiveToolbarMenu(open ? "server" : null);
+                    }}
                   />
                   <Button
                     type="submit"
@@ -7606,7 +7677,13 @@ function DesktopBrowserChrome(props: {
                     <p className="text-xs text-muted-foreground">
                       Profile: {props.sessionState.profileId || "Project session"}
                     </p>
-                    <Menu>
+                    <Menu
+                      onOpenChange={(open) => {
+                        setActiveToolbarMenu(
+                          open ? "history" : activeToolbarMenu === "history" ? "view" : null,
+                        );
+                      }}
+                    >
                       <MenuTrigger
                         render={
                           <Button
@@ -7901,12 +7978,14 @@ function DesktopBrowserChrome(props: {
           props.toolbarTarget,
         )
       ) : null}
-      <div
-        className={cn(
-          "relative z-0 min-h-0 flex-1 overflow-hidden bg-card",
-          props.isChromeExpanded ? "rounded-2xl border border-border/70 p-1.5" : "",
-        )}
-      >
+      <div className="relative z-0 min-h-0 flex-1 overflow-hidden">
+        {activeNotice ? (
+          <BrowserViewportHiddenNotice
+            icon={activeNotice.icon}
+            title={activeNotice.title}
+            description={activeNotice.description}
+          />
+        ) : null}
         {props.children}
         {pendingAnnotation ? (
           <PreviewAnnotationEditor
@@ -8321,17 +8400,25 @@ function DesktopBrowserTool(props: {
     }
   }, [bridge, hostState.available, viewportSelectorOpen, isLocalOffline, props.project.id]);
 
+  // Keep a ref so the overlay-detection closure below always reads the current
+  // loading/error state without needing to re-register the MutationObserver.
+  const sessionStateRef = useRef(sessionState);
+  useEffect(() => {
+    sessionStateRef.current = sessionState;
+  });
+
   useEffect(() => {
     if (!bridge || !hostState.available) {
       return;
     }
 
     let suspendedForOverlay = false;
-    let frameId = 0;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const syncOverlayVisibility = () => {
-      frameId = 0;
-      const surfaceReady = !sessionState.loading && !sessionState.lastError;
+      debounceTimer = null;
+      const s = sessionStateRef.current;
+      const surfaceReady = !s.loading && !s.lastError;
       const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
         surfaceReady,
         document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
@@ -8354,10 +8441,10 @@ function DesktopBrowserTool(props: {
     };
 
     const scheduleSync = () => {
-      if (frameId !== 0) {
+      if (debounceTimer !== null) {
         return;
       }
-      frameId = window.requestAnimationFrame(syncOverlayVisibility);
+      debounceTimer = setTimeout(syncOverlayVisibility, 50);
     };
 
     const observer = new MutationObserver(() => {
@@ -8373,8 +8460,8 @@ function DesktopBrowserTool(props: {
 
     return () => {
       observer.disconnect();
-      if (frameId !== 0) {
-        window.cancelAnimationFrame(frameId);
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
       }
     };
   }, [bridge, hostState.available, props.project.id]);
@@ -8433,9 +8520,9 @@ function DesktopBrowserTool(props: {
       normalizedUrl={normalizedUrl}
       setBrowserViewport={setBrowserViewport}
       setViewportSelectorOpen={setViewportSelectorOpen}
+      viewportSelectorOpen={viewportSelectorOpen}
       toolbarTarget={toolbarTarget}
     >
-      {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
       {isTransientStartup && matchingRunningPreset ? (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 bg-background/80 backdrop-blur-xl animate-in fade-in duration-200">
           <div className="pointer-events-auto max-w-md w-full rounded-2xl border border-border bg-card shadow-2xl p-5 space-y-5">
@@ -9241,17 +9328,25 @@ function DesktopCustomEmbedTool(props: {
     }
   }, [bridge, hostState.available, viewportSelectorOpen, props.project.id]);
 
+  // Keep a ref so the overlay-detection closure below always reads the current
+  // loading/error state without needing to re-register the MutationObserver.
+  const sessionStateRef = useRef(sessionState);
+  useEffect(() => {
+    sessionStateRef.current = sessionState;
+  });
+
   useEffect(() => {
     if (!bridge || !hostState.available) {
       return;
     }
 
     let suspendedForOverlay = false;
-    let frameId = 0;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const syncOverlayVisibility = () => {
-      frameId = 0;
-      const surfaceReady = !sessionState.loading && !sessionState.lastError;
+      debounceTimer = null;
+      const s = sessionStateRef.current;
+      const surfaceReady = !s.loading && !s.lastError;
       const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
         surfaceReady,
         document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
@@ -9275,10 +9370,10 @@ function DesktopCustomEmbedTool(props: {
     };
 
     const scheduleSync = () => {
-      if (frameId !== 0) {
+      if (debounceTimer !== null) {
         return;
       }
-      frameId = window.requestAnimationFrame(syncOverlayVisibility);
+      debounceTimer = setTimeout(syncOverlayVisibility, 50);
     };
 
     const observer = new MutationObserver(() => {
@@ -9294,8 +9389,8 @@ function DesktopCustomEmbedTool(props: {
 
     return () => {
       observer.disconnect();
-      if (frameId !== 0) {
-        window.cancelAnimationFrame(frameId);
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
       }
     };
   }, [bridge, hostState.available, props.project.id]);
@@ -9350,9 +9445,9 @@ function DesktopCustomEmbedTool(props: {
       normalizedUrl={normalizedUrl}
       setBrowserViewport={setBrowserViewport}
       setViewportSelectorOpen={setViewportSelectorOpen}
+      viewportSelectorOpen={viewportSelectorOpen}
       toolbarTarget={toolbarTarget}
     >
-      {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
       <BrowserViewportResizeFrame
         width={viewportWidth}
         height={viewportHeight}

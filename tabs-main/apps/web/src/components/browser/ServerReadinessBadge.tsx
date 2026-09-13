@@ -49,6 +49,7 @@ interface ServerReadinessBadgeProps {
   environmentId?: EnvironmentId | null | undefined;
   onNavigateToUrl?: (url: string) => void;
   onReload?: () => void;
+  onOpenChange?: ((open: boolean) => void) | undefined;
 }
 
 export function ServerReadinessBadge({
@@ -57,6 +58,7 @@ export function ServerReadinessBadge({
   environmentId = null,
   onNavigateToUrl,
   onReload,
+  onOpenChange,
 }: ServerReadinessBadgeProps) {
   const [probeResult, setProbeResult] = useState<ServerProbeResult>({ state: "probing" });
   const [autoReload, setAutoReload] = useState(true);
@@ -124,7 +126,7 @@ export function ServerReadinessBadge({
         : "destructive";
 
   return (
-    <Menu>
+    <Menu onOpenChange={onOpenChange}>
       <MenuTrigger
         render={
           <Button

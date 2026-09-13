@@ -178,62 +178,68 @@ export function BrowserViewportResizeFrame(props: {
     props.onCommit(next);
   };
 
+  // When no device preset with fixed dimensions is selected (the default "Project"
+  // preset where width/height are null), render a full-bleed transparent wrapper so
+  // the webview extends edge-to-edge without any padding, border, or shadow creating
+  // a visible gap around the content (particularly noticeable with dark-themed sites).
+  if (!displayed) {
+    return <div className="relative h-full min-h-0 w-full overflow-hidden">{props.children}</div>;
+  }
+
   return (
     <div className="flex h-full min-h-0 items-center justify-center overflow-hidden p-2.5">
       <div
         className="relative shrink-0"
         style={{
-          width: displayed ? `min(${displayed.width}px, 100%)` : "100%",
-          height: displayed ? `min(${displayed.height}px, 100%)` : "100%",
+          width: `min(${displayed.width}px, 100%)`,
+          height: `min(${displayed.height}px, 100%)`,
         }}
       >
         <div className="absolute inset-0 overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg">
           {props.children}
         </div>
-        {displayed ? (
-          <>
-            <ResizeHandle
-              direction="west"
-              label="Resize browser viewport from left edge"
-              className="-left-2.5 top-0 h-full w-2.5 cursor-ew-resize"
-              active={activeDirection === "west"}
-              onPointerDown={handlePointerDown}
-              onKeyDown={handleKeyDown}
-            />
-            <ResizeHandle
-              direction="east"
-              label="Resize browser viewport from right edge"
-              className="-right-2.5 top-0 h-full w-2.5 cursor-ew-resize"
-              active={activeDirection === "east"}
-              onPointerDown={handlePointerDown}
-              onKeyDown={handleKeyDown}
-            />
-            <ResizeHandle
-              direction="south"
-              label="Resize browser viewport from bottom edge"
-              className="-bottom-2.5 left-0 h-2.5 w-full cursor-ns-resize"
-              active={activeDirection === "south"}
-              onPointerDown={handlePointerDown}
-              onKeyDown={handleKeyDown}
-            />
-            <ResizeHandle
-              direction="southwest"
-              label="Resize browser viewport from bottom-left corner"
-              className="-bottom-2.5 -left-2.5 size-2.5 cursor-nesw-resize"
-              active={activeDirection === "southwest"}
-              onPointerDown={handlePointerDown}
-              onKeyDown={handleKeyDown}
-            />
-            <ResizeHandle
-              direction="southeast"
-              label="Resize browser viewport from bottom-right corner"
-              className="-bottom-2.5 -right-2.5 size-2.5 cursor-nwse-resize"
-              active={activeDirection === "southeast"}
-              onPointerDown={handlePointerDown}
-              onKeyDown={handleKeyDown}
-            />
-          </>
-        ) : null}
+        <>
+          <ResizeHandle
+            direction="west"
+            label="Resize browser viewport from left edge"
+            className="-left-2.5 top-0 h-full w-2.5 cursor-ew-resize"
+            active={activeDirection === "west"}
+            onPointerDown={handlePointerDown}
+            onKeyDown={handleKeyDown}
+          />
+          <ResizeHandle
+            direction="east"
+            label="Resize browser viewport from right edge"
+            className="-right-2.5 top-0 h-full w-2.5 cursor-ew-resize"
+            active={activeDirection === "east"}
+            onPointerDown={handlePointerDown}
+            onKeyDown={handleKeyDown}
+          />
+          <ResizeHandle
+            direction="south"
+            label="Resize browser viewport from bottom edge"
+            className="-bottom-2.5 left-0 h-2.5 w-full cursor-ns-resize"
+            active={activeDirection === "south"}
+            onPointerDown={handlePointerDown}
+            onKeyDown={handleKeyDown}
+          />
+          <ResizeHandle
+            direction="southwest"
+            label="Resize browser viewport from bottom-left corner"
+            className="-bottom-2.5 -left-2.5 size-2.5 cursor-nesw-resize"
+            active={activeDirection === "southwest"}
+            onPointerDown={handlePointerDown}
+            onKeyDown={handleKeyDown}
+          />
+          <ResizeHandle
+            direction="southeast"
+            label="Resize browser viewport from bottom-right corner"
+            className="-bottom-2.5 -right-2.5 size-2.5 cursor-nwse-resize"
+            active={activeDirection === "southeast"}
+            onPointerDown={handlePointerDown}
+            onKeyDown={handleKeyDown}
+          />
+        </>
       </div>
     </div>
   );

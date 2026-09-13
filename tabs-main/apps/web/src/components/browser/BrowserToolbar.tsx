@@ -27,13 +27,15 @@ function ActionMenu({
   label,
   icon,
   actions,
+  onOpenChange,
 }: {
   label: string;
   icon: ReactNode;
   actions: BrowserToolbarAction[];
+  onOpenChange?: ((open: boolean) => void) | undefined;
 }) {
   return (
-    <Menu>
+    <Menu onOpenChange={onOpenChange}>
       <MenuTrigger
         render={
           <Button variant="ghost" size="sm" className="h-8 gap-1.5" aria-label={label}>
@@ -81,7 +83,9 @@ export function BrowserToolbar(props: {
   captureActions: BrowserToolbarAction[];
   toolActions: BrowserToolbarAction[];
   viewControls: ReactNode;
-  onViewOpenChange?: (open: boolean) => void;
+  onViewOpenChange?: ((open: boolean) => void) | undefined;
+  onCaptureOpenChange?: ((open: boolean) => void) | undefined;
+  onToolsOpenChange?: ((open: boolean) => void) | undefined;
   status?: ReactNode;
 }) {
   return (
@@ -128,15 +132,22 @@ export function BrowserToolbar(props: {
           role="group"
           aria-label="Browser tools"
         >
+          {props.status && (
+            <div className="flex items-center gap-1.5" aria-live="polite">
+              {props.status}
+            </div>
+          )}
           <ActionMenu
             label="Capture"
             icon={<CameraIcon className="size-3.5" />}
             actions={props.captureActions}
+            onOpenChange={props.onCaptureOpenChange}
           />
           <ActionMenu
             label="Tools"
             icon={<WrenchIcon className="size-3.5" />}
             actions={props.toolActions}
+            onOpenChange={props.onToolsOpenChange}
           />
           <Popover onOpenChange={props.onViewOpenChange}>
             <PopoverTrigger
@@ -179,11 +190,6 @@ export function BrowserToolbar(props: {
           <PanelTopCloseIcon className="size-3.5" />
         </Button>
       </div>
-      {props.status && (
-        <div className="flex flex-wrap items-center gap-2 pt-1.5" aria-live="polite">
-          {props.status}
-        </div>
-      )}
     </div>
   );
 }
