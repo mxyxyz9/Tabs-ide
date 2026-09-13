@@ -41,6 +41,11 @@ if (typeof localStorage !== "undefined") {
 const decodeProjectWorkspaceSettingsSchema = Schema.decodeUnknownSync(ProjectWorkspaceSettings);
 const decodeProjectWorkspaceSessionState = Schema.decodeSync(ProjectWorkspaceSessionState);
 
+/** Persistent browser state uses project/tab keys; environment-scoped UI keys belong to a different store. */
+export function browserSessionStateKey(projectId: ProjectId, sessionId = "browser"): string {
+  return `${projectId}:${sessionId}`;
+}
+
 export interface ProjectBrowserToolState {
   currentUrl: string;
   devicePreset: BrowserDevicePresetType;
@@ -628,7 +633,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
       setBrowserCurrentUrl: (projectId, url, sessionId) =>
         set((state) => {
           const effectiveSessionId = sessionId ?? "browser";
-          const sessionKey = `${projectId}:${effectiveSessionId}`;
+          const sessionKey = browserSessionStateKey(projectId, effectiveSessionId);
           const currentSessionState =
             state.browserStateBySessionKey[sessionKey] ??
             (effectiveSessionId === "browser"
@@ -670,7 +675,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
       setBrowserChromeExpanded: (projectId, expanded, sessionId) =>
         set((state) => {
           const effectiveSessionId = sessionId ?? "browser";
-          const sessionKey = `${projectId}:${effectiveSessionId}`;
+          const sessionKey = browserSessionStateKey(projectId, effectiveSessionId);
           const currentSessionState =
             state.browserStateBySessionKey[sessionKey] ??
             (effectiveSessionId === "browser"
@@ -706,7 +711,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
         }),
       setBrowserSessionUrl: (projectId, sessionId, url) =>
         set((state) => {
-          const key = `${projectId}:${sessionId}`;
+          const key = browserSessionStateKey(projectId, sessionId);
           const existingUrl = state.browserUrlBySessionKey[key];
           const existingSessionState = state.browserStateBySessionKey[key];
           if (existingUrl === url && existingSessionState?.currentUrl === url) {
@@ -733,7 +738,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
       setBrowserViewport: (projectId, input, sessionId) =>
         set((state) => {
           const effectiveSessionId = sessionId ?? "browser";
-          const sessionKey = `${projectId}:${effectiveSessionId}`;
+          const sessionKey = browserSessionStateKey(projectId, effectiveSessionId);
           const currentSessionState =
             state.browserStateBySessionKey[sessionKey] ??
             (effectiveSessionId === "browser"

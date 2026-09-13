@@ -73,6 +73,33 @@ describe("workspaceShellStore", () => {
     useWorkspaceShellStore.setState(createDefaultWorkspaceShellPersistedState());
   });
 
+  it("keeps custom-tab controls, viewport, and navigation under the same persistence key", async () => {
+    const { browserSessionStateKey } = await import("./workspaceShellStore");
+    const projectId = ProjectId.makeUnsafe("toolbar-project");
+    const store = useWorkspaceShellStore.getState();
+    store.setBrowserChromeExpanded(projectId, true, "chatgpt");
+    store.setBrowserViewport(projectId, { devicePreset: "wide" }, "chatgpt");
+    store.setBrowserSessionUrl(projectId, "chatgpt", "https://chatgpt.com/");
+    const key = browserSessionStateKey(projectId, "chatgpt");
+    expect(useWorkspaceShellStore.getState().browserStateBySessionKey[key]).toMatchObject({
+      chromeExpanded: true,
+      devicePreset: "wide",
+    });
+    expect(useWorkspaceShellStore.getState().browserUrlBySessionKey[key]).toBe(
+      "https://chatgpt.com/",
+    );
+    expect(
+      useWorkspaceShellStore.getState().browserStateBySessionKey[
+        browserSessionStateKey(projectId, "canva")
+      ],
+    ).toBeUndefined();
+    store.setBrowserChromeExpanded(projectId, false, "chatgpt");
+    expect(useWorkspaceShellStore.getState().browserStateBySessionKey[key]?.chromeExpanded).toBe(
+      false,
+    );
+    expect(useWorkspaceShellStore.getState().browserStateByProjectId[projectId]).toBeUndefined();
+  });
+
   it("isolates the active tool and browser state per project", () => {
     const projectAlpha = ProjectId.makeUnsafe("project-alpha");
     const projectBeta = ProjectId.makeUnsafe("project-beta");

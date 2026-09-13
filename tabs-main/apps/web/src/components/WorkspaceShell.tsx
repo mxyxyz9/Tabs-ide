@@ -1,3 +1,4 @@
+import { BrowserToolbar } from "./browser/BrowserToolbar";
 import type { FileDiffMetadata, Hunk } from "@pierre/diffs";
 import { createPortal } from "react-dom";
 import { useAtomValue } from "@effect/atom-react";
@@ -253,6 +254,7 @@ import { getGitWorkspaceLayoutSection } from "./GitToolLayout.logic";
 import type { GitWorkspaceMode, GitWorkspaceSwitchReason } from "./GitToolLayout.logic";
 import { useConfirm } from "~/hooks/useConfirm";
 import {
+  browserSessionStateKey,
   EMPTY_PROJECT_CODE_TOOL_STATE,
   EMPTY_PROJECT_GIT_TOOL_STATE,
   resolveProjectTools,
@@ -389,7 +391,7 @@ function BrowserViewportSelector(props: {
   };
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       <Select
         value={props.browserState.devicePreset}
         onValueChange={(devicePreset) =>
@@ -7281,6 +7283,28 @@ function DesktopBrowserChrome(props: {
     [props.projectId],
   );
 
+  const activeRecordingControls = (
+    <>
+      {recordingBrowser && (
+        <Button
+          size="xs"
+          variant="destructive"
+          disabled={changingRecording}
+          onClick={() => void toggleRecording()}
+        >
+          <SquareIcon className="size-3" />
+          Stop video recording
+        </Button>
+      )}
+      {issueRecording && (
+        <Button size="xs" variant="destructive" onClick={() => setRecordIssueDialogOpen(true)}>
+          <SquareIcon className="size-3" />
+          Stop & review issue
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <div
       className={cn(
@@ -7342,415 +7366,382 @@ function DesktopBrowserChrome(props: {
                 </div>
               </div>
             ) : null}
-            <div className="flex flex-wrap items-center gap-1">
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="outline"
-                disabled={!props.sessionState.canGoBack}
-                onClick={() => void bridge?.goBackBrowserSession(sessionArg)}
-              >
-                <ArrowLeftIcon className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="outline"
-                disabled={!props.sessionState.canGoForward}
-                onClick={() => void bridge?.goForwardBrowserSession(sessionArg)}
-              >
-                <ArrowRightIcon className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={(event) =>
-                  void bridge?.reloadBrowserSession({
-                    ...sessionArg,
-                    ignoreCache: event.shiftKey,
-                  })
-                }
-                title="Refresh (hold Shift to bypass the cache)"
-              >
-                <RefreshCwIcon className="size-3.5" />
-                Refresh
-              </Button>
-              <div className="flex items-center rounded-md border border-border/70">
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  disabled={props.sessionState.zoomFactor <= 0.5}
-                  onClick={() =>
-                    void bridge?.setBrowserZoomFactor({
-                      ...sessionArg,
-                      zoomFactor: props.sessionState.zoomFactor - 0.1,
-                    })
-                  }
-                  aria-label="Zoom browser out"
-                >
-                  <MinusIcon className="size-3" />
-                </Button>
-                <button
-                  type="button"
-                  className="min-w-10 text-[10px] tabular-nums text-muted-foreground"
-                  onClick={() =>
-                    void bridge?.setBrowserZoomFactor({ ...sessionArg, zoomFactor: 1 })
-                  }
-                  title="Reset browser zoom"
-                >
-                  {Math.round(props.sessionState.zoomFactor * 100)}%
-                </button>
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  disabled={props.sessionState.zoomFactor >= 2}
-                  onClick={() =>
-                    void bridge?.setBrowserZoomFactor({
-                      ...sessionArg,
-                      zoomFactor: props.sessionState.zoomFactor + 0.1,
-                    })
-                  }
-                  aria-label="Zoom browser in"
-                >
-                  <PlusIcon className="size-3" />
-                </Button>
-              </div>
-              <Button
-                type="button"
-                size="xs"
-                variant={props.sessionState.devToolsOpen ? "secondary" : "outline"}
-                onClick={() => void bridge?.toggleBrowserDevTools(sessionArg)}
-              >
-                <BugIcon className="size-3.5" />
-                Inspect
-              </Button>
-              <Button
-                type="button"
-                size="icon-xs"
-                variant={props.sessionState.audioMuted ? "secondary" : "outline"}
-                onClick={() =>
-                  void bridge?.setBrowserAudioMuted({
-                    ...sessionArg,
-                    audioMuted: !props.sessionState.audioMuted,
-                  })
-                }
-                aria-label={props.sessionState.audioMuted ? "Unmute browser" : "Mute browser"}
-              >
-                {props.sessionState.audioMuted ? (
-                  <VolumeXIcon className="size-3.5" />
-                ) : (
-                  <Volume2Icon className="size-3.5" />
-                )}
-              </Button>
-              <Button
-                type="button"
-                size="icon-xs"
-                variant={props.sessionState.pictureInPicture ? "secondary" : "outline"}
-                onClick={() =>
-                  void (props.sessionState.pictureInPicture
-                    ? bridge?.closeBrowserPictureInPicture(sessionArg)
-                    : bridge?.openBrowserPictureInPicture(sessionArg))
-                }
-                aria-label={
-                  props.sessionState.pictureInPicture
-                    ? "Close popped-out browser preview"
-                    : "Pop browser preview into separate window"
-                }
-                aria-pressed={props.sessionState.pictureInPicture}
-              >
-                <PictureInPicture2Icon className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon-xs"
-                variant={props.sessionState.colorScheme === "system" ? "outline" : "secondary"}
-                onClick={() => {
-                  const colorScheme =
-                    props.sessionState.colorScheme === "system"
-                      ? "light"
-                      : props.sessionState.colorScheme === "light"
-                        ? "dark"
-                        : "system";
-                  void bridge?.setBrowserColorScheme({ ...sessionArg, colorScheme });
-                }}
-                aria-label={`Browser appearance: ${props.sessionState.colorScheme}. Click to change.`}
-              >
-                <MonitorIcon className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                disabled={capturingScreenshot}
-                onClick={() => void captureScreenshot()}
-              >
-                <CameraIcon className="size-3.5" />
-                {capturingScreenshot ? "Capturing…" : "Screenshot"}
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant={recordingBrowser ? "destructive" : "outline"}
-                disabled={changingRecording}
-                aria-pressed={recordingBrowser}
-                onClick={() => void toggleRecording()}
-              >
-                {recordingBrowser ? (
-                  <SquareIcon className="size-3.5" />
-                ) : (
-                  <RadioIcon className="size-3.5" />
-                )}
-                {changingRecording
-                  ? recordingBrowser
-                    ? "Stopping…"
-                    : "Starting…"
-                  : recordingBrowser
-                    ? "Stop recording"
-                    : "Record"}
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() => setRecordIssueDialogOpen(true)}
-                className="gap-1 text-xs hover:text-red-400"
-                title={
-                  issueRecording
-                    ? "Recording — stop and review"
-                    : "Record an issue reproduction with assertions"
-                }
-              >
-                <RadioIcon className="size-3.5 text-red-500" />
-                {issueRecording ? "Stop & review issue" : "Record issue"}
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() => setComparisonOpen(true)}
-                className="gap-1 text-xs"
-                title="Open side-by-side browser comparison view"
-              >
-                <Columns2Icon className="size-3.5 text-primary" />
-                Compare
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant={pickingElement ? "secondary" : "outline"}
-                disabled={pickingElement}
-                onClick={() => void pickElement()}
-              >
-                <MousePointer2Icon className="size-3.5" />
-                {pickingElement ? "Pick on page…" : "Pick element"}
-              </Button>
-              {props.sessionState.assignedTaskId ? (
-                <Badge
-                  variant="outline"
-                  className="h-6 text-xs text-muted-foreground"
-                  title={`Assigned to task ${props.sessionState.assignedTaskId}`}
-                >
-                  Task: {props.sessionState.assignedTaskId.slice(0, 8)}
-                </Badge>
-              ) : null}
-              {props.sessionState.controller && props.sessionState.controller !== "none" ? (
-                <Badge
-                  variant={props.sessionState.controller === "agent" ? "default" : "secondary"}
-                  aria-live="polite"
-                >
-                  {props.sessionState.controller === "agent" ? "Agent control" : "Human control"}
-                </Badge>
-              ) : null}
-              {props.sessionState.controller === "agent" ? (
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="secondary"
-                  className="h-6 text-xs text-amber-500 hover:text-amber-400"
-                  onClick={() => void bridge?.takeBrowserControl?.(sessionArg)}
-                >
-                  Take control
-                </Button>
-              ) : props.sessionState.controller === "human" && props.sessionState.assignedTaskId ? (
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="secondary"
-                  className="h-6 text-xs"
-                  onClick={() =>
-                    void bridge?.resumeBrowserAgent?.({
-                      ...sessionArg,
-                      taskId: props.sessionState.assignedTaskId ?? undefined,
-                    })
-                  }
-                >
-                  Resume agent
-                </Button>
-              ) : null}
-              {props.sessionState.temporaryAgentTab && !props.sessionState.userRetained ? (
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  className="h-6 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => void bridge?.retainBrowserTab?.(sessionArg)}
-                  title="Keep this tab open after agent task finishes"
-                >
-                  Keep tab
-                </Button>
-              ) : null}
-              <Menu>
-                <MenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon-xs"
-                      variant="outline"
-                      aria-label="Browser history"
-                    >
-                      <HistoryIcon className="size-3.5" />
-                    </Button>
-                  }
-                />
-                <MenuPopup align="start" className="max-h-80 w-96 overflow-y-auto">
-                  {browserHistory.length === 0 ? (
-                    <MenuItem disabled>No browser history</MenuItem>
-                  ) : (
-                    browserHistory.slice(0, 30).map((entry) => (
-                      <MenuItem
-                        key={entry.url}
-                        onClick={() => {
-                          props.setDraftUrl(entry.url);
-                          void bridge?.navigateBrowserSession({ ...sessionArg, url: entry.url });
-                        }}
-                      >
-                        <span className="min-w-0 flex-1 truncate" title={entry.url}>
-                          {entry.title}
-                        </span>
-                      </MenuItem>
-                    ))
-                  )}
-                  {browserHistory.length > 0 ? (
-                    <>
-                      <MenuSeparator />
-                      <MenuItem onClick={clearBrowserHistory}>Clear browser history</MenuItem>
-                    </>
-                  ) : null}
-                  <MenuSeparator />
-                  <MenuItem disabled={clearingBrowserData} onClick={() => void clearBrowserData()}>
-                    {clearingBrowserData ? "Clearing browser data…" : "Clear cookies and cache"}
-                  </MenuItem>
-                </MenuPopup>
-              </Menu>
-              <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
-                <BrowserSecurityBadge
-                  securityContext={props.sessionState.securityContext}
-                  currentUrl={props.sessionState.currentUrl}
-                  onOpenExternal={() =>
-                    void api?.shell.openExternal(
-                      props.sessionState.currentUrl ?? props.normalizedUrl,
-                    )
-                  }
-                />
-                <ServerReadinessBadge
-                  currentUrl={props.sessionState.currentUrl || props.normalizedUrl}
-                  onNavigateToUrl={(url) => {
-                    props.setDraftUrl(url);
-                    void bridge?.navigateBrowserSession({ ...sessionArg, url });
-                  }}
-                  onReload={() => {
-                    void bridge?.reloadBrowserSession(sessionArg);
-                  }}
-                />
-                <Input
-                  className="h-8"
-                  value={props.draftUrl}
-                  onChange={(event) => props.setDraftUrl(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
+            <BrowserToolbar
+              title={props.title}
+              canGoBack={props.sessionState.canGoBack}
+              canGoForward={props.sessionState.canGoForward}
+              onBack={() => void bridge?.goBackBrowserSession(sessionArg)}
+              onForward={() => void bridge?.goForwardBrowserSession(sessionArg)}
+              onReload={(ignoreCache) =>
+                void bridge?.reloadBrowserSession({ ...sessionArg, ignoreCache })
+              }
+              onExternal={() =>
+                void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
+              }
+              onCollapse={() => props.setIsChromeExpanded(false)}
+              onViewOpenChange={props.setViewportSelectorOpen}
+              address={
+                <form
+                  className="flex h-9 min-w-0 items-center gap-1 rounded-lg border border-border/70 bg-muted/40 px-1.5 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10"
+                  onSubmit={(event) => {
+                    event.preventDefault();
                     props.submitDraftUrl();
                   }}
-                  placeholder="Enter a URL"
-                  aria-label={`${props.title} URL`}
-                />
-                <Button type="button" size="xs" onClick={props.submitDraftUrl}>
-                  Go
-                </Button>
-              </div>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      className="hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
-                      onClick={() =>
-                        void api?.shell.openExternal(
-                          props.sessionState.currentUrl ?? props.normalizedUrl,
-                        )
-                      }
-                    >
-                      <ExternalLinkIcon className="size-3.5" />
-                      External
-                    </Button>
-                  }
-                />
-                <TooltipPopup side="bottom">Open page in default system browser</TooltipPopup>
-              </Tooltip>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  onClick={() =>
-                    props.setBrowserViewport(
-                      props.projectId,
-                      {
-                        devicePreset: props.browserState.devicePreset,
-                        landscape: !props.browserState.landscape,
-                      },
-                      props.sessionId,
-                    )
-                  }
                 >
-                  <RotateCwIcon className="size-3.5" />
-                  {props.browserState.landscape ? "Portrait" : "Landscape"}
-                </Button>
-                <BrowserViewportSelector
-                  browserState={props.browserState}
-                  projectId={props.projectId}
-                  sessionId={props.sessionId}
-                  setBrowserViewport={props.setBrowserViewport}
-                  onOpenChange={props.setViewportSelectorOpen}
-                />
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
+                  <BrowserSecurityBadge
+                    compact
+                    securityContext={props.sessionState.securityContext}
+                    currentUrl={props.sessionState.currentUrl}
+                    onOpenExternal={() =>
+                      void api?.shell.openExternal(
+                        props.sessionState.currentUrl ?? props.normalizedUrl,
+                      )
+                    }
+                  />
+                  <Input
+                    className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 font-mono text-xs shadow-none focus-visible:ring-0"
+                    value={props.draftUrl}
+                    onChange={(event) => props.setDraftUrl(event.target.value)}
+                    onFocus={(event) => event.currentTarget.select()}
+                    placeholder="Enter a URL"
+                    aria-label={`${props.title} URL`}
+                  />
+                  <ServerReadinessBadge
+                    compact
+                    currentUrl={props.sessionState.currentUrl || props.normalizedUrl}
+                    onNavigateToUrl={(url) => {
+                      props.setDraftUrl(url);
+                      void bridge?.navigateBrowserSession({ ...sessionArg, url });
+                    }}
+                    onReload={() => void bridge?.reloadBrowserSession(sessionArg)}
+                  />
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Navigate to address"
+                    title="Go to address (Enter)"
+                  >
+                    <ArrowRightIcon className="size-3.5" />
+                  </Button>
+                </form>
+              }
+              captureActions={[
+                {
+                  label: capturingScreenshot ? "Capturing screenshot…" : "Take screenshot",
+                  description: "Save an image of this page",
+                  icon: <CameraIcon className="size-4" />,
+                  disabled: capturingScreenshot,
+                  onClick: () => void captureScreenshot(),
+                },
+                {
+                  label: recordingBrowser ? "Stop video recording" : "Record video",
+                  description: "Capture a video of this tab",
+                  icon: <RadioIcon className="size-4" />,
+                  disabled: changingRecording,
+                  active: recordingBrowser,
+                  onClick: () => void toggleRecording(),
+                },
+                {
+                  label: issueRecording ? "Stop & review issue" : "Record issue",
+                  description: "Reproduce a bug and send it to a task",
+                  icon: <BugIcon className="size-4" />,
+                  active: issueRecording,
+                  onClick: () => setRecordIssueDialogOpen(true),
+                },
+              ]}
+              toolActions={[
+                {
+                  label: props.sessionState.devToolsOpen
+                    ? "Close developer tools"
+                    : "Developer tools",
+                  description: "Inspect the page and console",
+                  icon: <BugIcon className="size-4" />,
+                  active: props.sessionState.devToolsOpen,
+                  onClick: () => void bridge?.toggleBrowserDevTools(sessionArg),
+                },
+                {
+                  label: pickingElement ? "Pick on page…" : "Pick element",
+                  description: "Attach an element to your task",
+                  icon: <MousePointer2Icon className="size-4" />,
+                  disabled: pickingElement,
+                  onClick: () => void pickElement(),
+                },
+                {
+                  label: "Compare pages",
+                  description: "Compare viewports, routes, or profiles",
+                  icon: <Columns2Icon className="size-4" />,
+                  onClick: () => setComparisonOpen(true),
+                },
+              ]}
+              viewControls={
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">Zoom</span>
+                    <div className="flex items-center rounded-md border border-border/70">
                       <Button
                         type="button"
                         size="icon-xs"
-                        variant="outline"
-                        className="hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
-                        onClick={() => props.setIsChromeExpanded(false)}
-                        aria-label={`Collapse ${props.title} controls`}
+                        variant="ghost"
+                        disabled={props.sessionState.zoomFactor <= 0.5}
+                        onClick={() =>
+                          void bridge?.setBrowserZoomFactor({
+                            ...sessionArg,
+                            zoomFactor: props.sessionState.zoomFactor - 0.1,
+                          })
+                        }
+                        aria-label="Zoom browser out"
                       >
-                        <PanelTopCloseIcon className="size-3.5" />
+                        <MinusIcon className="size-3" />
                       </Button>
-                    }
-                  />
-                  <TooltipPopup side="bottom">Collapse browser controls</TooltipPopup>
-                </Tooltip>
-              </div>
-            </div>
+                      <button
+                        type="button"
+                        className="min-w-10 text-[10px] tabular-nums text-muted-foreground"
+                        onClick={() =>
+                          void bridge?.setBrowserZoomFactor({ ...sessionArg, zoomFactor: 1 })
+                        }
+                        title="Reset browser zoom"
+                      >
+                        {Math.round(props.sessionState.zoomFactor * 100)}%
+                      </button>
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        disabled={props.sessionState.zoomFactor >= 2}
+                        onClick={() =>
+                          void bridge?.setBrowserZoomFactor({
+                            ...sessionArg,
+                            zoomFactor: props.sessionState.zoomFactor + 0.1,
+                          })
+                        }
+                        aria-label="Zoom browser in"
+                      >
+                        <PlusIcon className="size-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2 border-t pt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Viewport</span>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() =>
+                          props.setBrowserViewport(
+                            props.projectId,
+                            {
+                              devicePreset: props.browserState.devicePreset,
+                              landscape: !props.browserState.landscape,
+                            },
+                            props.sessionId,
+                          )
+                        }
+                      >
+                        <RotateCwIcon className="size-3.5" />
+                        {props.browserState.landscape ? "Portrait" : "Landscape"}
+                      </Button>
+                    </div>
+                    <BrowserViewportSelector
+                      browserState={props.browserState}
+                      projectId={props.projectId}
+                      sessionId={props.sessionId}
+                      setBrowserViewport={props.setBrowserViewport}
+                    />
+                  </div>
+                  <div className="grid gap-1 border-t pt-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="justify-start"
+                      onClick={() => {
+                        const colorScheme =
+                          props.sessionState.colorScheme === "system"
+                            ? "light"
+                            : props.sessionState.colorScheme === "light"
+                              ? "dark"
+                              : "system";
+                        void bridge?.setBrowserColorScheme({ ...sessionArg, colorScheme });
+                      }}
+                    >
+                      <MonitorIcon className="size-3.5" />
+                      Appearance:{" "}
+                      <span className="capitalize">{props.sessionState.colorScheme}</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="justify-start"
+                      onClick={() =>
+                        void bridge?.setBrowserAudioMuted({
+                          ...sessionArg,
+                          audioMuted: !props.sessionState.audioMuted,
+                        })
+                      }
+                    >
+                      {props.sessionState.audioMuted ? (
+                        <VolumeXIcon className="size-3.5" />
+                      ) : (
+                        <Volume2Icon className="size-3.5" />
+                      )}
+                      {props.sessionState.audioMuted ? "Unmute audio" : "Mute audio"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="justify-start"
+                      onClick={() =>
+                        void (props.sessionState.pictureInPicture
+                          ? bridge?.closeBrowserPictureInPicture(sessionArg)
+                          : bridge?.openBrowserPictureInPicture(sessionArg))
+                      }
+                    >
+                      <PictureInPicture2Icon className="size-3.5" />
+                      {props.sessionState.pictureInPicture
+                        ? "Return popped-out page"
+                        : "Pop out page"}
+                    </Button>
+                  </div>
+                  <div className="space-y-2 border-t pt-3">
+                    <p className="text-xs text-muted-foreground">
+                      Profile: {props.sessionState.profileId || "Project session"}
+                    </p>
+                    <Menu>
+                      <MenuTrigger
+                        render={
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            aria-label="Browser history"
+                          >
+                            <HistoryIcon className="size-3.5" /> History and site data
+                          </Button>
+                        }
+                      />
+                      <MenuPopup align="start" className="max-h-80 w-96 overflow-y-auto">
+                        {browserHistory.length === 0 ? (
+                          <MenuItem disabled>No browser history</MenuItem>
+                        ) : (
+                          browserHistory.slice(0, 30).map((entry) => (
+                            <MenuItem
+                              key={entry.url}
+                              onClick={() => {
+                                props.setDraftUrl(entry.url);
+                                void bridge?.navigateBrowserSession({
+                                  ...sessionArg,
+                                  url: entry.url,
+                                });
+                              }}
+                            >
+                              <span className="min-w-0 flex-1 truncate" title={entry.url}>
+                                {entry.title}
+                              </span>
+                            </MenuItem>
+                          ))
+                        )}
+                        {browserHistory.length > 0 ? (
+                          <>
+                            <MenuSeparator />
+                            <MenuItem onClick={clearBrowserHistory}>Clear browser history</MenuItem>
+                          </>
+                        ) : null}
+                        <MenuSeparator />
+                        <MenuItem
+                          disabled={clearingBrowserData}
+                          onClick={() => void clearBrowserData()}
+                        >
+                          {clearingBrowserData
+                            ? "Clearing browser data…"
+                            : "Clear cookies and cache"}
+                        </MenuItem>
+                      </MenuPopup>
+                    </Menu>
+                  </div>
+                </>
+              }
+              status={
+                props.sessionState.assignedTaskId ||
+                (props.sessionState.controller && props.sessionState.controller !== "none") ||
+                (props.sessionState.temporaryAgentTab && !props.sessionState.userRetained) ||
+                recordingBrowser ||
+                issueRecording ||
+                pickingElement ? (
+                  <>
+                    {activeRecordingControls}
+                    {pickingElement && (
+                      <span className="text-xs text-primary">Select an element on the page…</span>
+                    )}
+                    {props.sessionState.assignedTaskId ? (
+                      <Badge
+                        variant="outline"
+                        className="h-6 text-xs text-muted-foreground"
+                        title={`Assigned to task ${props.sessionState.assignedTaskId}`}
+                      >
+                        Task: {props.sessionState.assignedTaskId.slice(0, 8)}
+                      </Badge>
+                    ) : null}
+                    {props.sessionState.controller && props.sessionState.controller !== "none" ? (
+                      <Badge
+                        variant={
+                          props.sessionState.controller === "agent" ? "default" : "secondary"
+                        }
+                        aria-live="polite"
+                      >
+                        {props.sessionState.controller === "agent"
+                          ? "Agent control"
+                          : "Human control"}
+                      </Badge>
+                    ) : null}
+                    {props.sessionState.controller === "agent" ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="secondary"
+                        className="h-6 text-xs text-amber-500 hover:text-amber-400"
+                        onClick={() => void bridge?.takeBrowserControl?.(sessionArg)}
+                      >
+                        Take control
+                      </Button>
+                    ) : props.sessionState.controller === "human" &&
+                      props.sessionState.assignedTaskId ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="secondary"
+                        className="h-6 text-xs"
+                        onClick={() =>
+                          void bridge?.resumeBrowserAgent?.({
+                            ...sessionArg,
+                            taskId: props.sessionState.assignedTaskId ?? undefined,
+                          })
+                        }
+                      >
+                        Resume agent
+                      </Button>
+                    ) : null}
+                    {props.sessionState.temporaryAgentTab && !props.sessionState.userRetained ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        className="h-6 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => void bridge?.retainBrowserTab?.(sessionArg)}
+                        title="Keep this tab open after agent task finishes"
+                      >
+                        Keep tab
+                      </Button>
+                    ) : null}
+                  </>
+                ) : null
+              }
+            />
           </CardContent>
         </Card>
       ) : props.toolbarTarget ? (
         createPortal(
           <div className="flex items-center gap-1.5 pr-1">
+            {activeRecordingControls}
             {props.sessionState.assignedTaskId ? (
               <Badge
                 variant="outline"
@@ -8009,9 +8000,9 @@ function DesktopBrowserTool(props: {
     };
   }, [props.project.environmentId]);
   const bridge = window.desktopBridge;
-  const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:browser`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
-    const sessionExisting = state.browserStateBySessionKey?.[sessionKey];
+    const sessionExisting =
+      state.browserStateBySessionKey?.[browserSessionStateKey(props.project.id)];
     if (sessionExisting) {
       return sessionExisting;
     }
@@ -8554,9 +8545,9 @@ function EmbeddedBrowserTool(props: {
   onRunProcess?: ((processId: string) => void) | undefined;
 }) {
   const api = readNativeApi();
-  const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:browser`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
-    const sessionExisting = state.browserStateBySessionKey?.[sessionKey];
+    const sessionExisting =
+      state.browserStateBySessionKey?.[browserSessionStateKey(props.project.id)];
     if (sessionExisting) {
       return sessionExisting;
     }
@@ -8922,7 +8913,8 @@ function DesktopCustomEmbedTool(props: {
   const projectSettings = useProjectWorkspaceSettings(props.project.id);
   const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:${props.sessionId}`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
-    const existing = state.browserStateBySessionKey?.[sessionKey];
+    const existing =
+      state.browserStateBySessionKey?.[browserSessionStateKey(props.project.id, props.sessionId)];
     if (existing) {
       return existing;
     }
@@ -8968,7 +8960,8 @@ function DesktopCustomEmbedTool(props: {
   const lastRequestedUrlRef = useRef<string | null>(null);
   const storedUrl = useAtomValue(
     workspaceShellAtom,
-    (state) => state.browserUrlBySessionKey[sessionKey],
+    (state) =>
+      state.browserUrlBySessionKey[browserSessionStateKey(props.project.id, props.sessionId)],
   );
   const setBrowserSessionUrl = workspaceShellActions.setBrowserSessionUrl;
   // A custom tab optionally reopens at the URL the user last navigated to (persisted),
@@ -8982,7 +8975,7 @@ function DesktopCustomEmbedTool(props: {
   // navigate effect below), which recomputes `normalizedUrl` and drives the
   // BrowserView. Lets the user recover a tab whose page broke by editing the
   // URL and reloading, without going back to Settings.
-  const draftUrl = browserScopedState.draftUrl || normalizedUrl;
+  const draftUrl = browserScopedState.draftUrl;
   const setDraftUrl = useCallback(
     (v: string | ((prev: string) => string)) => {
       setBrowserScopedState((prev) => ({
@@ -9450,10 +9443,10 @@ function CustomEmbedTool(props: {
   const api = readNativeApi();
   const [loading, setLoading] = useState(true);
   const [embedBlocked, setEmbedBlocked] = useState(false);
-  const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:${props.sessionId}`;
   const storedUrl = useAtomValue(
     workspaceShellAtom,
-    (state) => state.browserUrlBySessionKey[sessionKey],
+    (state) =>
+      state.browserUrlBySessionKey[browserSessionStateKey(props.project.id, props.sessionId)],
   );
   const normalizedUrl = normalizeBrowserUrl(
     props.resumeLastVisitedPage ? (storedUrl ?? props.lastVisitedUrl ?? props.url) : props.url,

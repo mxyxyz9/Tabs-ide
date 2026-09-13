@@ -12,6 +12,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 
 export interface BrowserSecurityBadgeProps {
+  readonly compact?: boolean;
   readonly securityContext?: DesktopBrowserSecurityContext | undefined;
   readonly currentUrl: string | null;
   readonly onOpenExternal?: (() => void) | undefined;
@@ -19,6 +20,7 @@ export interface BrowserSecurityBadgeProps {
 
 export function BrowserSecurityBadge({
   securityContext,
+  compact = false,
   currentUrl,
   onOpenExternal,
 }: BrowserSecurityBadgeProps) {
@@ -39,11 +41,12 @@ export function BrowserSecurityBadge({
   return (
     <div className="flex items-center gap-1 shrink-0">
       {/* Profile indicator */}
-      {profileId ? (
+      {profileId && !compact ? (
         <Tooltip>
           <TooltipTrigger
             render={
               <Badge
+                tabIndex={0}
                 variant="outline"
                 className="h-6 px-1.5 py-0 text-[10px] font-medium border-border/80 text-muted-foreground flex items-center gap-1 cursor-default"
               >
@@ -65,11 +68,14 @@ export function BrowserSecurityBadge({
           <TooltipTrigger
             render={
               <Badge
+                tabIndex={0}
                 variant="outline"
                 className="h-6 px-1.5 py-0 text-[10px] font-medium bg-primary/5 text-primary border-primary/20 flex items-center gap-1 cursor-default"
               >
                 <ShieldCheckIcon className="size-2.5 text-primary" />
-                <span className="font-mono text-[10px]">{registrableDomain || "Secure"}</span>
+                <span className={compact ? "sr-only" : "font-mono text-[10px]"}>
+                  {registrableDomain || "Secure"}
+                </span>
               </Badge>
             }
           />
@@ -97,6 +103,7 @@ export function BrowserSecurityBadge({
           <TooltipTrigger
             render={
               <Badge
+                tabIndex={0}
                 variant="destructive"
                 className="h-6 px-1.5 py-0 text-[10px] font-medium flex items-center gap-1 cursor-pointer"
                 onClick={onOpenExternal}
@@ -133,11 +140,12 @@ export function BrowserSecurityBadge({
           <TooltipTrigger
             render={
               <Badge
+                tabIndex={0}
                 variant="secondary"
                 className="h-6 px-1.5 py-0 text-[10px] font-medium text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 cursor-default"
               >
                 <ShieldOffIcon className="size-2.5" />
-                <span>Not Secure (HTTP)</span>
+                <span className={compact ? "sr-only" : undefined}>Not Secure (HTTP)</span>
               </Badge>
             }
           />
@@ -153,6 +161,7 @@ export function BrowserSecurityBadge({
           <TooltipTrigger
             render={
               <Badge
+                tabIndex={0}
                 variant="destructive"
                 className="h-6 px-1.5 py-0 text-[10px] font-medium flex items-center gap-1 cursor-default"
               >

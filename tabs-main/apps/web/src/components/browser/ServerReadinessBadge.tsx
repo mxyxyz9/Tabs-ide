@@ -44,6 +44,7 @@ export async function probeServerReadiness(
 }
 
 interface ServerReadinessBadgeProps {
+  compact?: boolean;
   currentUrl?: string | undefined;
   environmentId?: EnvironmentId | null | undefined;
   onNavigateToUrl?: (url: string) => void;
@@ -52,6 +53,7 @@ interface ServerReadinessBadgeProps {
 
 export function ServerReadinessBadge({
   currentUrl,
+  compact = false,
   environmentId = null,
   onNavigateToUrl,
   onReload,
@@ -130,6 +132,7 @@ export function ServerReadinessBadge({
             size="xs"
             variant="ghost"
             className="h-6 gap-1 px-1.5 text-[11px] font-medium"
+            aria-label={`Server on port ${currentPort}: ${probeResult.state}`}
             title={`Local dev server on port ${currentPort}: ${probeResult.state}. Click to inspect servers.`}
           >
             {probeResult.state === "ready" ? (
@@ -138,17 +141,17 @@ export function ServerReadinessBadge({
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
                 </span>
-                <span className="font-mono">{currentPort}</span>
+                <span className={compact ? "sr-only" : "font-mono"}>{currentPort}</span>
               </span>
             ) : probeResult.state === "probing" || probing ? (
               <span className="flex items-center gap-1 text-amber-500">
                 <RadioIcon className="size-3 animate-spin" />
-                <span className="font-mono">{currentPort}</span>
+                <span className={compact ? "sr-only" : "font-mono"}>{currentPort}</span>
               </span>
             ) : (
               <span className="flex items-center gap-1 text-red-500">
                 <WifiOffIcon className="size-3" />
-                <span className="font-mono">{currentPort}</span>
+                <span className={compact ? "sr-only" : "font-mono"}>{currentPort}</span>
               </span>
             )}
           </Button>
