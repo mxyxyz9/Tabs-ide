@@ -252,6 +252,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.removeListener(CODE_HOST_CHROME_STATE_CHANNEL, wrappedListener);
     };
   },
+  probeBrowserReadiness: (input) => ipcRenderer.invoke("desktop:browser-readiness", input),
+  configureBrowserComparison: (input) =>
+    ipcRenderer.invoke("desktop:browser-comparison:configure", input),
+  closeBrowserComparison: (input) => ipcRenderer.invoke("desktop:browser-comparison:close", input),
+  captureBrowserComparison: (input) =>
+    ipcRenderer.invoke("desktop:browser-comparison:capture", input),
   getBrowserHostState: () => ipcRenderer.invoke(BROWSER_HOST_GET_STATE_CHANNEL),
   getBrowserSessionState: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_GET_SESSION_STATE_CHANNEL, input),
@@ -299,6 +305,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   clearBrowserProfileDomain: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL, input),
   listBrowserImportSources: () => ipcRenderer.invoke(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL),
+  cancelBrowserImport: (requestId) =>
+    ipcRenderer.invoke("desktop:browser-host:cancel-import", requestId),
   importBrowserCookies: (input) => ipcRenderer.invoke(BROWSER_HOST_IMPORT_COOKIES_CHANNEL, input),
   respondBrowserPermission: (response) =>
     ipcRenderer.invoke(BROWSER_HOST_RESPOND_PERMISSION_CHANNEL, response),

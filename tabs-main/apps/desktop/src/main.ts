@@ -1,3 +1,5 @@
+import { probeBrowserReadiness } from "./browserReadiness";
+import type { BrowserComparisonInput } from "@tabs/contracts";
 import * as ChildProcess from "node:child_process";
 import * as Crypto from "node:crypto";
 import * as FS from "node:fs";
@@ -2372,6 +2374,41 @@ function registerIpcHandlers(): void {
     );
   });
 
+  ipcMain.removeHandler("desktop:browser-readiness");
+  ipcMain.handle("desktop:browser-readiness", (_event, input) => {
+    if (!input || typeof input.url !== "string") throw new Error("Invalid readiness probe.");
+    return probeBrowserReadiness(
+      input.url,
+      typeof input.timeoutMs === "number" && Number.isFinite(input.timeoutMs)
+        ? input.timeoutMs
+        : 2500,
+    );
+  });
+
+  for (const [channel, action] of [
+    [
+      "desktop:browser-comparison:configure",
+      (input: BrowserComparisonInput) => browserHostManager.comparisons.configure(input),
+    ],
+    [
+      "desktop:browser-comparison:close",
+      (input: BrowserComparisonInput) =>
+        browserHostManager.comparisons.close(input.projectId, input.comparisonId),
+    ],
+    [
+      "desktop:browser-comparison:capture",
+      (input: BrowserComparisonInput) =>
+        browserHostManager.comparisons.capture(input.projectId, input.comparisonId),
+    ],
+  ] as const) {
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, (_event, input) => {
+      if (!input || typeof input.projectId !== "string" || typeof input.comparisonId !== "string")
+        throw new Error("Invalid comparison request.");
+      return action(input);
+    });
+  }
+
   ipcMain.removeHandler(BROWSER_HOST_ENSURE_SESSION_CHANNEL);
   ipcMain.handle(BROWSER_HOST_ENSURE_SESSION_CHANNEL, async (_event, input: unknown) => {
     if (
@@ -2398,6 +2435,15 @@ function registerIpcHandlers(): void {
       sessionId: readBrowserSessionId(input),
       initialUrl: safeUrl,
       partition,
+      profileId:
+        typeof (input as { profileId?: unknown }).profileId === "string"
+          ? (input as { profileId: string }).profileId
+          : undefined,
+      taskId:
+        typeof (input as { taskId?: unknown }).taskId === "string"
+          ? (input as { taskId: string }).taskId
+          : undefined,
+      temporaryAgentTab: (input as { temporaryAgentTab?: unknown }).temporaryAgentTab === true,
     });
   });
 
@@ -2815,6 +2861,11 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL);
   ipcMain.handle(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL, async () => {
     return await browserHostManager.listBrowserImportSources();
+  });
+
+  ipcMain.removeHandler("desktop:browser-host:cancel-import");
+  ipcMain.handle("desktop:browser-host:cancel-import", (_event, requestId: unknown) => {
+    if (typeof requestId === "string") browserHostManager.cancelBrowserImport(requestId);
   });
 
   ipcMain.removeHandler(BROWSER_HOST_IMPORT_COOKIES_CHANNEL);

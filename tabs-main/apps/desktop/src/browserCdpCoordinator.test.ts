@@ -29,7 +29,7 @@ function createMockWebContents() {
 }
 
 describe("BrowserCdpCoordinator", () => {
-  it("attaches for scoped session and detaches cleanly after execution", async () => {
+  it("retains its connection between scoped operations until explicit release", async () => {
     const webContents = createMockWebContents();
     const coordinator = new BrowserCdpCoordinator(webContents as any);
 
@@ -43,19 +43,21 @@ describe("BrowserCdpCoordinator", () => {
 
     expect(capturedInBlock).toBe(true);
     expect(result).toEqual({ success: true });
+    expect(coordinator.attached).toBe(true);
+    coordinator.detach();
     expect(coordinator.attached).toBe(false);
     expect(webContents.debugger.attach).toHaveBeenCalledWith("1.3");
     expect(webContents.debugger.detach).toHaveBeenCalled();
   });
 
-  it("reuses existing attachment if debugger was already attached", async () => {
+  it("rejects an attachment owned by another client", async () => {
     const webContents = createMockWebContents();
     webContents.debugger.isAttached.mockReturnValue(true);
     const coordinator = new BrowserCdpCoordinator(webContents as any);
 
-    await coordinator.withSession("emulation", async (dbg) => {
-      expect(dbg.isAttached()).toBe(true);
-    });
+    await expect(coordinator.withSession("emulation", async () => undefined)).rejects.toThrow(
+      "another client",
+    );
 
     // When wasAttached was true, coordinator does NOT detach at the end
     expect(webContents.debugger.attach).not.toHaveBeenCalled();
@@ -118,7 +120,8 @@ describe("CDP concurrency", () => {
     const second = coordinator.withSession("emulation", async () => "next");
     await expect(first).rejects.toThrow("failed");
     await expect(second).resolves.toBe("next");
-    expect(contents.debugger.detach).toHaveBeenCalledTimes(2);
+    expect(contents.debugger.attach).toHaveBeenCalledTimes(1);
+    expect(contents.debugger.detach).not.toHaveBeenCalled();
   });
 
   it("does not run commands while DevTools owns the debugger", async () => {
@@ -130,4 +133,27 @@ describe("CDP concurrency", () => {
     expect(command).not.toHaveBeenCalled();
     expect(contents.debugger.attach).not.toHaveBeenCalled();
   });
+});
+
+it("invalidates running and queued commands when DevTools preempts the connection", async () => {
+  const contents = createMockWebContents();
+  const coordinator = new BrowserCdpCoordinator(contents as any);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const first = coordinator.withSession("automation", async (debug) => {
+    await gate;
+    await debug.sendCommand("Runtime.evaluate");
+  });
+  await Promise.resolve();
+  const second = coordinator.withSession("automation", async (debug) =>
+    debug.sendCommand("Runtime.evaluate"),
+  );
+  coordinator.prepareForDevTools();
+  coordinator.handleDevToolsClosed();
+  release();
+  await expect(first).rejects.toThrow("interrupted");
+  await expect(second).rejects.toThrow("interrupted");
+  expect(contents.debugger.sendCommand).not.toHaveBeenCalled();
 });

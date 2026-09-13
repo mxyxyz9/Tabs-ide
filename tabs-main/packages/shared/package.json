@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./browserReproduction": {
+      "types": "./src/browserReproduction.ts",
+      "import": "./src/browserReproduction.ts"
+    },
     "./assistantCitations": {
       "types": "./src/assistantCitations.ts",
       "import": "./src/assistantCitations.ts"

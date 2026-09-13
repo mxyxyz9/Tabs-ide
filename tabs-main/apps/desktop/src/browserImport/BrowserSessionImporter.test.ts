@@ -126,7 +126,7 @@ describe("BrowserSessionImporter", () => {
         top_frame_site_key TEXT
       );
     `);
-    const webkitExpiry = (1767225600 + 11644473600) * 1000000;
+    const webkitExpiry = (2208988800 + 11644473600) * 1000000;
     const stmt = db.prepare(`
       INSERT INTO cookies VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -174,9 +174,84 @@ describe("BrowserSessionImporter", () => {
       secure: true,
       httpOnly: true,
       sameSite: "lax",
-      expirationDate: 1767225600,
+      expirationDate: 2208988800,
     });
     expect(mockFlush).toHaveBeenCalled();
+  });
+
+  it("reports Windows App-Bound cookies as partial while preserving readable cookies", async () => {
+    const dbPath = Path.join(tempDir, "windows-cookies");
+    const statePath = Path.join(tempDir, "Local State");
+    await FS.writeFile(
+      statePath,
+      JSON.stringify({ os_crypt: { app_bound_encrypted_key: "synthetic" } }),
+    );
+    const db = new DatabaseSync(dbPath);
+    db.exec(
+      "CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, encrypted_value BLOB, path TEXT, expires_utc INTEGER, is_secure INTEGER, is_httponly INTEGER, samesite INTEGER, top_frame_site_key TEXT)",
+    );
+    const insert = db.prepare(
+      "INSERT INTO cookies VALUES ('example.com', ?, ?, ?, '/', 0, 1, 1, 1, '')",
+    );
+    insert.run("readable", "synthetic", Buffer.alloc(0));
+    insert.run("bound", "", Buffer.concat([Buffer.from("v20"), Buffer.alloc(64)]));
+    db.close();
+    const result = await readChromiumCookies({
+      cookieDatabasePath: dbPath,
+      windowsLocalStatePath: statePath,
+      platform: "win32",
+    });
+    expect(result.cookies.map((cookie) => cookie.name)).toEqual(["readable"]);
+    expect(result.undecryptable).toBe(1);
+    expect(result.warnings?.join(" ")).toContain("App-Bound");
+  });
+
+  it("stops importing after cancellation and flushes only completed writes", async () => {
+    const userData = Path.join(tempDir, "CancelChrome");
+    await FS.mkdir(Path.join(userData, "Default"), { recursive: true });
+    const db = new DatabaseSync(Path.join(userData, "Default", "Cookies"));
+    db.exec(
+      "CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, encrypted_value BLOB, path TEXT, expires_utc INTEGER, is_secure INTEGER, is_httponly INTEGER, samesite INTEGER, top_frame_site_key TEXT)",
+    );
+    const insert = db.prepare(
+      "INSERT INTO cookies VALUES ('example.com', ?, 'synthetic', X'', '/', 0, 1, 1, 1, '')",
+    );
+    insert.run("first");
+    insert.run("second");
+    db.close();
+    const controller = new AbortController();
+    const set = vi.fn(async () => {
+      controller.abort();
+    });
+    const flushStore = vi.fn(async () => undefined);
+    const importer = new BrowserSessionImporter(
+      "darwin",
+      async () => false,
+      { chrome: userData },
+      { chrome: { cbcV10: Buffer.alloc(16) } },
+    );
+    const result = await importer.importSelectedCookies(
+      { sourceId: "chrome", sourceProfileDirectory: "Default", targetProfileId: "test" },
+      { cookies: { set, flushStore } },
+      controller.signal,
+    );
+    expect(result).toMatchObject({ cancelled: true, imported: 1 });
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(flushStore).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a pre-cancelled import before reading the source", async () => {
+    const running = vi.fn(async () => false);
+    const importer = new BrowserSessionImporter("darwin", running);
+    const signal = AbortSignal.abort();
+    await expect(
+      importer.importSelectedCookies(
+        { sourceId: "chrome", sourceProfileDirectory: "Default", targetProfileId: "test" },
+        undefined,
+        signal,
+      ),
+    ).rejects.toThrow();
+    expect(running).not.toHaveBeenCalled();
   });
 
   describe("CookieDatabase utilities", () => {

@@ -46,3 +46,9 @@ export * from "./browserImport.ts";
 export * from "./desktopCapture.ts";
 export * from "./ws.ts";
 export { WS_METHODS } from "./ws.ts";
+
+export * from "./browserReproduction.ts";
+
+export * from "./browserComparison.ts";
+
+export * from "./browserReadiness.ts";

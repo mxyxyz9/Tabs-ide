@@ -1,3 +1,5 @@
+import type { BrowserReadinessResult } from "./browserReadiness.ts";
+import type { BrowserComparisonInput } from "./browserComparison.ts";
 import type {
   VcsCreateRefInput,
   VcsCreateRefResult,
@@ -1224,6 +1226,16 @@ export interface DesktopBridge {
   onCodeChromeState: (
     listener: (update: { projectId: string; state: CodeChromeState }) => void,
   ) => () => void;
+  probeBrowserReadiness: (input: {
+    url: string;
+    timeoutMs?: number;
+  }) => Promise<BrowserReadinessResult>;
+  configureBrowserComparison: (input: BrowserComparisonInput) => Promise<void>;
+  closeBrowserComparison: (input: { projectId: string; comparisonId: string }) => Promise<void>;
+  captureBrowserComparison: (input: {
+    projectId: string;
+    comparisonId: string;
+  }) => Promise<DesktopPreviewScreenshotArtifact[]>;
   getBrowserHostState: () => Promise<DesktopBrowserHostState>;
   getBrowserSessionState: (
     input: DesktopBrowserHostControlInput,
@@ -1275,6 +1287,7 @@ export interface DesktopBridge {
   getBrowserProfileDomains: (input: { profileId: string }) => Promise<BrowserProfileDomainInfo[]>;
   clearBrowserProfileDomain: (input: { profileId: string; domain: string }) => Promise<void>;
   listBrowserImportSources?: () => Promise<BrowserImportSource[]>;
+  cancelBrowserImport?: (requestId: string) => Promise<void>;
   importBrowserCookies?: (input: BrowserImportInput) => Promise<BrowserImportResult>;
   respondBrowserPermission?: (response: BrowserPermissionResponse) => Promise<void>;
   getBrowserProfilePermissions?: (input: {
@@ -1833,6 +1846,7 @@ export interface DesktopBrowserHostControlInput {
 }
 
 export interface DesktopBrowserAutomationInput extends DesktopBrowserHostControlInput {
+  source?: "human" | "agent" | undefined;
   taskId?: string | undefined;
   operation:
     | "status"
@@ -1843,6 +1857,10 @@ export interface DesktopBrowserAutomationInput extends DesktopBrowserHostControl
     | "scroll"
     | "evaluate"
     | "waitFor"
+    | "verify"
+    | "assertControl"
+    | "cancelVerification"
+    | "navigate"
     | "recordStart"
     | "recordStop"
     | "recordStatus";

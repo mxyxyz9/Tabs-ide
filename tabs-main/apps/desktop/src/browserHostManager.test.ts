@@ -788,6 +788,28 @@ describe("reliable browser tabs and agent control", () => {
     }
   });
 
+  it("ignores stationary hover from surface attachment but preempts real movement", () => {
+    vi.useFakeTimers();
+    try {
+      const manager = new BrowserHostManager(() => null);
+      const { session, webContents } = createMockSession({ assignedTaskId: "task-A" });
+      Object.assign(webContents, { setWindowOpenHandler: vi.fn() });
+      (manager as any).sessions.set(session.key, session);
+      (manager as any).registerSessionEvents(session);
+      const listener = session.view.webContents.on.mock.calls.find(
+        ([event]) => event === "before-mouse-event",
+      )?.[1];
+      listener(undefined, { type: "mouseMove", movementX: 0, movementY: 0 });
+      expect(session.controlEpoch).toBe(0);
+      listener(undefined, { type: "mouseMove", movementX: 1, movementY: 0 });
+      expect(session.controlEpoch).toBe(1);
+      expect(session.controller).toBe("human");
+      manager.resumeAgent({ projectId: "project-1", sessionId: "tab-1" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("invalidates queued work when tab ownership changes", () => {
     const manager = new BrowserHostManager(() => null);
     const { session } = createMockSession({ assignedTaskId: "task-A" });
@@ -795,6 +817,23 @@ describe("reliable browser tabs and agent control", () => {
     manager.assignTabTask({ projectId: "project-1", sessionId: "tab-1", taskId: "task-B" });
     manager.assignTabTask({ projectId: "project-1", sessionId: "tab-1", taskId: "task-A" });
     expect(session.controlEpoch).toBe(2);
+  });
+
+  it("requires identity for assigned-tab observations but permits explicit human controls", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const { session } = createMockSession({ assignedTaskId: "task-A" });
+    (manager as any).sessions.set(session.key, session);
+    await expect(
+      manager.runAutomation({ projectId: "project-1", sessionId: "tab-1", operation: "status" }),
+    ).rejects.toThrow("matching task identity");
+    await expect(
+      manager.runAutomation({
+        projectId: "project-1",
+        sessionId: "tab-1",
+        source: "human",
+        operation: "status",
+      }),
+    ).resolves.toMatchObject({ available: true });
   });
 
   it("enforces task-to-tab ownership and rejects operations from unauthorized tasks", async () => {
@@ -823,7 +862,7 @@ describe("reliable browser tabs and agent control", () => {
         input: { expression: "true" },
       }),
     ).rejects.toThrow(
-      'Browser tab is assigned to task "task-A", but automation was requested by task "task-B".',
+      'Browser tab is assigned to task "task-A"; the matching task identity is required.',
     );
   });
 

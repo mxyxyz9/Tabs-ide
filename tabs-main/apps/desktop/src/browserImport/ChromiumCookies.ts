@@ -1,6 +1,11 @@
 import * as NodeCrypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { type ChromiumKeyMaterial, readWindowsKey, resolveChromiumKeys } from "./ChromiumKeys";
+import {
+  ChromiumKeyError,
+  type ChromiumKeyMaterial,
+  readWindowsKey,
+  resolveChromiumKeys,
+} from "./ChromiumKeys";
 import {
   bareHost,
   cookieScope,
@@ -145,10 +150,22 @@ export async function readChromiumCookies(
   source: ChromiumCookieSource,
   overrideKeys?: ChromiumKeyMaterial,
 ): Promise<CookieReadResult> {
+  let windowsWarning: string | undefined;
+  const windowsKeys = async (): Promise<ChromiumKeyMaterial> => {
+    try {
+      return { gcmV10: await readWindowsKey(source.windowsLocalStatePath!) };
+    } catch (error) {
+      if (!(error instanceof ChromiumKeyError) || error.reason !== "unsupportedPlatform")
+        throw error;
+      windowsWarning =
+        "Windows App-Bound (v20) cookies cannot be imported. Sign in directly in Tabs for those sites.";
+      return {};
+    }
+  };
   const keys =
     overrideKeys ??
     (source.platform === "win32" && source.windowsLocalStatePath
-      ? { gcmV10: await readWindowsKey(source.windowsLocalStatePath) }
+      ? await windowsKeys()
       : await resolveChromiumKeys({
           platform: source.platform,
           keychainService: source.keychainService,
@@ -250,6 +267,19 @@ export async function readChromiumCookies(
         cookies,
         undecryptable,
         undecryptableHosts: Array.from(undecryptableHosts),
+        warnings: [
+          ...(keys.cbcV11Error && undecryptable > 0
+            ? [
+                "Some Linux cookies require Secret Service access. Install secret-tool (libsecret tools), unlock the desktop keyring, and retry.",
+              ]
+            : []),
+          ...(source.platform === "win32" && undecryptable > 0
+            ? [
+                windowsWarning ??
+                  "Some Windows cookies use unsupported encryption, including App-Bound (v20). Sign in directly in Tabs for those sites.",
+              ]
+            : []),
+        ],
       };
     } finally {
       db.close();

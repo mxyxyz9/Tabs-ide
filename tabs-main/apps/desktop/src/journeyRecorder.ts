@@ -1,3 +1,5 @@
+import { generateReproductionPlaywrightCode } from "@tabs/shared/browserReproduction";
+import { BrowserCdpCoordinator } from "./browserCdpCoordinator";
 import type { WebContents } from "electron";
 
 export type JourneyAction =
@@ -28,83 +30,15 @@ export type JourneyStep = {
 };
 
 export function journeyCode(url: string, steps: readonly JourneyStep[]): string {
-  let input = 0;
-  const lines: string[] = [
-    'import { test, expect } from "playwright/test";',
-    "",
-    'test("Recorded journey - review assertions before use", async ({ page }) => {',
-    `  await page.goto(${JSON.stringify(url)});`,
-  ];
-
-  for (const step of steps) {
-    if (step.action === "goto") {
-      lines.push(`  await page.goto(${JSON.stringify(step.url || url)});`);
-      continue;
-    }
-
-    const sel = step.selector ?? "body";
-    const locator = `page.locator(${JSON.stringify(sel)})`;
-
-    switch (step.action) {
-      case "click":
-        lines.push(`  await ${locator}.click();`);
-        break;
-      case "fill": {
-        const name = step.placeholder || `RECORDED_INPUT_${++input}`;
-        if (step.value !== undefined && step.value !== "") {
-          lines.push(`  await ${locator}.fill(${JSON.stringify(step.value)});`);
-        } else {
-          lines.push(
-            `  // Supply reviewed test data; typed values were not recorded.\n  if (process.env.${name} === undefined) throw new Error("Set ${name}");\n  await ${locator}.fill(process.env.${name}!);`,
-          );
-        }
-        break;
-      }
-      case "selectOption": {
-        if (step.value !== undefined && step.value !== "") {
-          lines.push(`  await ${locator}.selectOption(${JSON.stringify(step.value)});`);
-        } else {
-          const name = step.placeholder || `RECORDED_INPUT_${++input}`;
-          lines.push(
-            `  // Supply reviewed test data; typed values were not recorded.\n  if (process.env.${name} === undefined) throw new Error("Set ${name}");\n  await ${locator}.selectOption(process.env.${name}!);`,
-          );
-        }
-        break;
-      }
-      case "check":
-        lines.push(`  await ${locator}.check();`);
-        break;
-      case "uncheck":
-        lines.push(`  await ${locator}.uncheck();`);
-        break;
-      case "press":
-        lines.push(`  await ${locator}.press(${JSON.stringify(step.key || "Enter")});`);
-        break;
-      case "assertVisible":
-        lines.push(`  await expect(${locator}).toBeVisible();`);
-        break;
-      case "assertText":
-        lines.push(
-          `  await expect(${locator}).toHaveText(${JSON.stringify(step.expectedValue ?? "")});`,
-        );
-        break;
-      case "assertValue":
-        lines.push(
-          `  await expect(${locator}).toHaveValue(${JSON.stringify(step.expectedValue ?? "")});`,
-        );
-        break;
-    }
-  }
-
-  const hasAssertion = steps.some((s) => s.action.startsWith("assert"));
-  if (!hasAssertion) {
-    lines.push("  // Replace this guard with reviewed business assertions before running.");
-    lines.push('  throw new Error("Add expected-result assertions to this recording");');
-  }
-
-  lines.push("});");
-  lines.push("");
-  return lines.join("\n");
+  return generateReproductionPlaywrightCode(
+    url,
+    steps.map((step, index) => ({
+      ...step,
+      id: step.id ?? `step-${index + 1}`,
+      selector: step.selector ?? "",
+    })),
+    "Recorded journey",
+  );
 }
 
 function safeUrl(value: string): string {
@@ -120,12 +54,16 @@ function safeUrl(value: string): string {
 export class JourneyRecorder {
   private steps: JourneyStep[] = [];
   private scriptId: string | undefined;
-  private attached = false;
+  private unsubscribeInterruption: (() => void) | undefined;
+  private interrupted = false;
   private active = false;
   private initialUrl = "";
   private lastNavigatedUrl = "";
   private readonly binding = `__tabsJourney${crypto.randomUUID().replaceAll("-", "")}`;
-  constructor(private readonly contents: WebContents) {}
+  constructor(
+    private readonly contents: WebContents,
+    private readonly coordinator = new BrowserCdpCoordinator(contents),
+  ) {}
 
   private readonly message = (
     _event: unknown,
@@ -187,7 +125,7 @@ export class JourneyRecorder {
     if (!this.active || this.steps.length >= 500) return;
     try {
       const sUrl = safeUrl(url);
-      if (sUrl !== this.lastNavigatedUrl && sUrl !== this.initialUrl) {
+      if (sUrl !== this.lastNavigatedUrl) {
         this.lastNavigatedUrl = sUrl;
         this.steps.push({
           id: `step-${this.steps.length + 1}`,
@@ -210,23 +148,26 @@ export class JourneyRecorder {
     this.lastNavigatedUrl = this.initialUrl;
     this.steps = [];
     this.active = true;
-    const debug = this.contents.debugger;
-    this.attached = !debug.isAttached();
+    this.interrupted = false;
+    this.unsubscribeInterruption = this.coordinator.onInterrupted(() => {
+      this.interrupted = true;
+      void this.stop();
+    });
     try {
-      if (this.attached) debug.attach("1.3");
-      debug.on("message", this.message);
-      this.contents.once("destroyed", this.destroyed);
-      if (typeof (this.contents as any).on === "function") {
-        this.contents.on("did-navigate", this.navigated);
-        this.contents.on("did-navigate-in-page", this.navigated);
-      }
-      await debug.sendCommand("Runtime.enable");
-      await debug.sendCommand("Page.enable");
-      await debug.sendCommand("Runtime.addBinding", { name: this.binding });
+      await this.coordinator.withSession("recording", async (debug) => {
+        debug.on("message", this.message);
+        this.contents.once("destroyed", this.destroyed);
+        if (typeof (this.contents as any).on === "function") {
+          this.contents.on("did-navigate", this.navigated);
+          this.contents.on("did-navigate-in-page", this.navigated);
+        }
+        await debug.sendCommand("Runtime.enable");
+        await debug.sendCommand("Page.enable");
+        await debug.sendCommand("Runtime.addBinding", { name: this.binding });
 
-      // Only structural selectors and action types cross the binding. No input values,
-      // text labels, hrefs or attributes that could contain personal data are captured.
-      const source = `(() => {
+        // Only structural selectors and action types cross the binding. No input values,
+        // text labels, hrefs or attributes that could contain personal data are captured.
+        const source = `(() => {
         if (window !== window.top || window[${JSON.stringify(this.binding + "Stop")}]) return;
         const cleanups = [];
         let lastFilledElement = null;
@@ -302,9 +243,10 @@ export class JourneyRecorder {
           delete window[${JSON.stringify(this.binding + "Stop")}];
         };
       })();`;
-      const script = await debug.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source });
-      this.scriptId = script.identifier;
-      await this.contents.executeJavaScript(source);
+        const script = await debug.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source });
+        this.scriptId = script.identifier;
+        await this.contents.executeJavaScript(source);
+      });
     } catch (error) {
       await this.stop();
       throw error;
@@ -312,7 +254,12 @@ export class JourneyRecorder {
   }
 
   status() {
-    return { recording: this.active, count: this.steps.length, limit: 500 };
+    return {
+      recording: this.active,
+      interrupted: this.interrupted,
+      count: this.steps.length,
+      limit: 500,
+    };
   }
 
   async stop(): Promise<{
@@ -322,6 +269,8 @@ export class JourneyRecorder {
     initialUrl: string;
   }> {
     this.active = false;
+    this.unsubscribeInterruption?.();
+    this.unsubscribeInterruption = undefined;
     const debug = this.contents.debugger;
     debug.removeListener("message", this.message);
     this.contents.removeListener("destroyed", this.destroyed);
@@ -333,16 +282,19 @@ export class JourneyRecorder {
       await this.contents
         .executeJavaScript(`window[${JSON.stringify(this.binding + "Stop")}]?.()`)
         .catch(() => undefined);
-      if (this.scriptId)
-        await debug
-          .sendCommand("Page.removeScriptToEvaluateOnNewDocument", {
-            identifier: this.scriptId,
-          })
-          .catch(() => undefined);
-      await debug
-        .sendCommand("Runtime.removeBinding", { name: this.binding })
+      await this.coordinator
+        .withSession("recording", async (debug) => {
+          if (this.scriptId)
+            await debug
+              .sendCommand("Page.removeScriptToEvaluateOnNewDocument", {
+                identifier: this.scriptId,
+              })
+              .catch(() => undefined);
+          await debug
+            .sendCommand("Runtime.removeBinding", { name: this.binding })
+            .catch(() => undefined);
+        })
         .catch(() => undefined);
-      if (this.attached && debug.isAttached()) debug.detach();
     }
     this.scriptId = undefined;
     const steps = [...this.steps];

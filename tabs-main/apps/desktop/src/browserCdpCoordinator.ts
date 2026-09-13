@@ -2,69 +2,61 @@ import type { Debugger, WebContents } from "electron";
 
 export type CdpOwner = "none" | "automation" | "emulation" | "devtools" | "recording";
 
-/**
- * Coordinated owner for debugger/CDP operations across automation,
- * DevTools, emulation, snapshots, and recording.
- *
- * Prevents "Already attached" collisions, safely coordinates with
- * DevTools opening/closing, and handles unexpected detach events.
- */
+/** One persistent, serialized debugger connection per page. Keeping the connection
+ * alive preserves emulation overrides and recorder bindings between commands. */
 export class BrowserCdpCoordinator {
   private owner: CdpOwner = "none";
-  private isAttached = false;
+  private ownsAttachment = false;
   private devToolsOpen = false;
+  private generation = 0;
   private operationQueue: Promise<void> = Promise.resolve();
+  private readonly interruptions = new Set<() => void>();
 
   constructor(private readonly contents: WebContents) {
-    if (!contents.isDestroyed() && contents.debugger) {
-      contents.debugger.on("detach", (_event, reason) => {
-        this.isAttached = false;
-        this.owner = "none";
-      });
-    }
+    contents.debugger.on("detach", () => this.handleDetach());
+  }
+
+  onInterrupted(listener: () => void): () => void {
+    this.interruptions.add(listener);
+    return () => this.interruptions.delete(listener);
   }
 
   handleDevToolsOpened(): void {
-    this.devToolsOpen = true;
+    if (!this.devToolsOpen) {
+      this.devToolsOpen = true;
+      this.detach();
+    }
     this.owner = "devtools";
   }
 
   prepareForDevTools(): void {
-    this.detach();
     this.handleDevToolsOpened();
   }
 
   handleDevToolsClosed(): void {
     this.devToolsOpen = false;
-    if (this.owner === "devtools") {
-      this.owner = "none";
-    }
+    this.owner = "none";
   }
 
   handleDetach(_reason?: string): void {
-    this.isAttached = false;
-    this.owner = "none";
+    this.generation++;
+    this.ownsAttachment = false;
+    this.owner = this.devToolsOpen ? "devtools" : "none";
+    for (const listener of [...this.interruptions]) listener();
   }
 
   get currentOwner(): CdpOwner {
     return this.owner;
   }
-
   get attached(): boolean {
-    return (
-      this.isAttached ||
-      (this.contents && !this.contents.isDestroyed() && this.contents.debugger.isAttached())
-    );
+    return !this.contents.isDestroyed() && this.contents.debugger.isAttached();
   }
 
-  /**
-   * Executes a scoped CDP command block with coordinated debugger ownership.
-   */
   async withSession<T>(
     owner: "automation" | "emulation" | "recording",
     fn: (debuggerApi: Debugger) => Promise<T>,
   ): Promise<T> {
-    // Reserve a queue slot before yielding, including when the previous operation fails.
+    const generation = this.generation;
     const previous = this.operationQueue;
     let release!: () => void;
     this.operationQueue = new Promise<void>((resolve) => {
@@ -72,71 +64,64 @@ export class BrowserCdpCoordinator {
     });
     await previous;
     try {
-      return await this.runSession(owner, fn);
+      const assertAvailable = () => {
+        if (this.contents.isDestroyed()) throw new Error("CDP interrupted: page was destroyed.");
+        if (this.devToolsOpen) throw new Error("CDP interrupted: close DevTools and retry.");
+        if (generation !== this.generation)
+          throw new Error("CDP interrupted: debugger connection changed.");
+      };
+      assertAvailable();
+      const dbg = this.contents.debugger;
+      if (!this.ownsAttachment) {
+        if (dbg.isAttached()) throw new Error("CDP debugger is owned by another client.");
+        dbg.attach("1.3");
+        this.ownsAttachment = true;
+      }
+      this.owner = owner;
+      // Guard every command, including commands following a long await in a caller.
+      const expire = () => this.detach();
+      const guarded = new Proxy(dbg, {
+        get(target, property) {
+          if (property === "sendCommand")
+            return async (...args: Parameters<Debugger["sendCommand"]>) => {
+              assertAvailable();
+              let timer: ReturnType<typeof setTimeout> | undefined;
+              const result = await Promise.race([
+                target.sendCommand(...args),
+                new Promise<never>((_resolve, reject) => {
+                  timer = setTimeout(() => {
+                    expire();
+                    reject(new Error("CDP interrupted: command timed out."));
+                  }, 10000);
+                }),
+              ]).finally(() => {
+                if (timer) clearTimeout(timer);
+              });
+              assertAvailable();
+              return result;
+            };
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      const result = await fn(guarded);
+      assertAvailable();
+      return result;
     } finally {
+      this.owner = this.devToolsOpen ? "devtools" : "none";
       release();
     }
   }
 
-  private async runSession<T>(
-    owner: "automation" | "emulation" | "recording",
-    fn: (debuggerApi: Debugger) => Promise<T>,
-  ): Promise<T> {
-    if (this.contents.isDestroyed()) {
-      throw new Error("Cannot perform CDP operation: WebContents is destroyed.");
-    }
-    if (this.devToolsOpen) {
-      throw new Error(
-        "Cannot perform CDP operation while DevTools is open. Close DevTools and retry.",
-      );
-    }
-
-    const dbg = this.contents.debugger;
-    const wasAttached = dbg.isAttached();
-
-    if (!wasAttached) {
-      try {
-        dbg.attach("1.3");
-        this.isAttached = true;
-        this.owner = owner;
-      } catch (err) {
-        if (!dbg.isAttached()) {
-          throw new Error(
-            `Failed to attach debugger for ${owner}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-    }
-
-    try {
-      return await fn(dbg);
-    } finally {
-      // If we attached specifically for this operation and DevTools is not using it,
-      // release cleanly to avoid holding the debugger lock.
-      if (!wasAttached && !this.devToolsOpen) {
-        try {
-          if (dbg.isAttached()) {
-            dbg.detach();
-          }
-        } catch {
-          // Non-fatal if already detached
-        }
-        this.isAttached = false;
-        this.owner = "none";
-      }
-    }
-  }
-
   detach(): void {
-    if (this.contents.isDestroyed()) return;
-    try {
-      if (this.contents.debugger?.isAttached()) {
-        this.contents.debugger.detach();
-      }
-    } catch {
-      // Ignore
+    if (
+      this.ownsAttachment &&
+      !this.contents.isDestroyed() &&
+      this.contents.debugger.isAttached()
+    ) {
+      this.contents.debugger.detach();
     }
-    this.isAttached = false;
-    this.owner = "none";
+    // Some hosts do not emit detach synchronously, so invalidate pending work explicitly.
+    this.handleDetach();
   }
 }

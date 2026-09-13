@@ -183,6 +183,33 @@ const BROWSER_CONFIGS: readonly BrowserSourceConfig[] = [
     },
   },
   {
+    id: "chromium",
+    name: "Chromium",
+    engine: "chromium",
+    processNames: ["Chromium", "chromium", "chromium-browser", "chromium.exe"],
+    keychainService: "Chromium Safe Storage",
+    keychainAccount: "Chromium",
+    linuxSecretApplication: "chromium",
+    getUserDataDir: (platform) =>
+      platform === "darwin"
+        ? Path.join(Os.homedir(), "Library/Application Support/Chromium")
+        : platform === "win32"
+          ? Path.join(process.env.LOCALAPPDATA || "", "Chromium/User Data")
+          : Path.join(Os.homedir(), ".config/chromium"),
+  },
+  {
+    id: "arc",
+    name: "Arc",
+    engine: "chromium",
+    processNames: ["Arc"],
+    keychainService: "Arc Safe Storage",
+    keychainAccount: "Arc",
+    getUserDataDir: (platform) =>
+      platform === "darwin"
+        ? Path.join(Os.homedir(), "Library/Application Support/Arc/User Data")
+        : null,
+  },
+  {
     id: "firefox",
     name: "Mozilla Firefox",
     engine: "firefox",
@@ -409,7 +436,9 @@ export class BrowserSessionImporter {
   async importSelectedCookies(
     input: BrowserImportInput,
     overrideSession?: { cookies: Pick<Session["cookies"], "set" | "flushStore"> },
+    signal?: AbortSignal,
   ): Promise<BrowserImportResult> {
+    signal?.throwIfAborted();
     const targetProfileId = normalizeBrowserProfileId(input.targetProfileId);
     const config = BROWSER_CONFIGS.find((c) => c.id === input.sourceId);
     if (!config) {
@@ -477,6 +506,7 @@ export class BrowserSessionImporter {
     // Read cookies based on engine
     let cookies: readonly ImportedCookie[] = [];
     let initialUndecryptable = 0;
+    let warnings: readonly string[] = [];
     const skippedDomains = new Set<string>();
 
     if (config.engine === "safari") {
@@ -498,10 +528,21 @@ export class BrowserSessionImporter {
       );
       cookies = readResult.cookies;
       initialUndecryptable = readResult.undecryptable;
+      warnings = readResult.warnings ?? [];
       for (const host of readResult.undecryptableHosts) {
         skippedDomains.add(host);
       }
     }
+
+    // Cancellation after reading stops before any destination cookie is changed.
+    if (signal?.aborted)
+      return {
+        cancelled: true,
+        imported: 0,
+        skipped: initialUndecryptable,
+        skippedDomains: [],
+        warnings: [...warnings],
+      };
 
     // Resolve Electron target session
     const partition = `persist:tabs-browser:profile:${targetProfileId}`;
@@ -511,6 +552,11 @@ export class BrowserSessionImporter {
     let skipped = initialUndecryptable;
 
     for (const cookie of cookies) {
+      if (signal?.aborted) break;
+      if (cookie.expirationDate !== undefined && cookie.expirationDate <= Date.now() / 1000) {
+        skipped++;
+        continue;
+      }
       try {
         const details: Electron.CookiesSetDetails = {
           url: cookie.url,
@@ -542,14 +588,19 @@ export class BrowserSessionImporter {
       try {
         await targetSession.cookies.flushStore();
       } catch {
-        // Non-fatal if flushStore fails
+        warnings = [
+          ...warnings,
+          "Cookies were accepted but could not be flushed to disk. Persistence after restart is unverified.",
+        ];
       }
     }
 
     return {
+      cancelled: signal?.aborted ?? false,
       imported,
       skipped,
       skippedDomains: Array.from(skippedDomains).slice(0, 20),
+      warnings: [...warnings],
     };
   }
 }
@@ -565,9 +616,20 @@ async function isProcessRunningDefault(processNames: readonly string[]): Promise
       return processNames.some((name) => stdout.toLowerCase().includes(name.toLowerCase()));
     }
 
-    const { stdout } = await execFileAsync("pgrep", ["-f", processNames[0] || ""]);
-    return Boolean(stdout.trim());
-  } catch {
+    for (const name of processNames) {
+      try {
+        const { stdout } = await execFileAsync(
+          "pgrep",
+          ["-f", name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")],
+          { timeout: 5000 },
+        );
+        if (stdout.trim()) return true;
+      } catch (error) {
+        if ((error as { code?: unknown }).code !== 1) throw error;
+      }
+    }
     return false;
+  } catch {
+    throw new Error("Could not check whether the source browser is running. Close it and retry.");
   }
 }

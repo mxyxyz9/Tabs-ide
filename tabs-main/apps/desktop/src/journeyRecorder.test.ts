@@ -60,8 +60,8 @@ describe("embedded journey recorder", () => {
       { action: "fill", selector: "input:nth-of-type(1)" },
       { action: "click", selector: "button" },
     ]);
-    expect(code).toContain("RECORDED_INPUT_1");
-    expect(code).toContain('throw new Error("Add expected-result assertions');
+    expect(code).toContain("TEST_INPUT_1");
+    expect(code).toContain('throw new Error("Add an assertion');
     expect(code).not.toContain("test.skip");
   });
 
@@ -99,7 +99,7 @@ describe("embedded journey recorder", () => {
     );
     expect(code).toContain('await expect(page.locator("input#status")).toHaveValue("Active");');
     // Guard is omitted because business assertions were reviewed and provided
-    expect(code).not.toContain('throw new Error("Add expected-result assertions');
+    expect(code).not.toContain('throw new Error("Add an assertion');
   });
 
   it("deduplicates consecutive fill messages and tracks in-preview navigation", async () => {

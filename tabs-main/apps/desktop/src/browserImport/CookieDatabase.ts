@@ -34,6 +34,7 @@ export interface CookieReadResult {
   readonly undecryptable: number;
   /** Distinct hosts of the rows that could not be decrypted. */
   readonly undecryptableHosts: readonly string[];
+  readonly warnings?: readonly string[];
 }
 
 /** A host without the leading dot both engines put on a domain cookie, for display. */
@@ -97,31 +98,21 @@ export async function snapshotCookieDatabase(
     }
   };
 
-  // First try SQLite VACUUM INTO if possible, which produces a clean standalone checkpoint.
-  let vacuumSucceeded = false;
   try {
     const db = new DatabaseSync(cookiePath, { readOnly: true });
     try {
+      db.exec("PRAGMA busy_timeout = 2500");
       db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
-      vacuumSucceeded = true;
     } finally {
       db.close();
     }
-  } catch {
-    vacuumSucceeded = false;
+    await FS.chmod(target, 0o600);
+    return { path: target, cleanup };
+  } catch (error) {
+    await cleanup();
+    throw new Error(
+      "Could not create a consistent cookie snapshot. Close the source browser and retry.",
+      { cause: error },
+    );
   }
-
-  if (!vacuumSucceeded) {
-    // Fallback to file copy, including WAL and SHM files if present
-    await FS.copyFile(cookiePath, target);
-    for (const ext of ["-wal", "-shm"]) {
-      try {
-        await FS.copyFile(`${cookiePath}${ext}`, `${target}${ext}`);
-      } catch {
-        // WAL/SHM might not exist, which is normal
-      }
-    }
-  }
-
-  return { path: target, cleanup };
 }

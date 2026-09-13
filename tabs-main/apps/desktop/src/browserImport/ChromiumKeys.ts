@@ -78,15 +78,12 @@ async function readKeychainSecret(service: string, account: string): Promise<str
 
   // 2. Shell out to /usr/bin/security
   try {
-    const { stdout } = await execFileAsync("/usr/bin/security", [
-      "find-generic-password",
-      "-w",
-      "-s",
-      service,
-      "-a",
-      account,
-    ]);
-    const secret = stdout.trim();
+    const { stdout } = await execFileAsync(
+      "/usr/bin/security",
+      ["find-generic-password", "-w", "-s", service, "-a", account],
+      { timeout: 30000, maxBuffer: 8192 },
+    );
+    const secret = stdout.replace(/\r?\n$/, "");
     if (!secret) {
       throw new ChromiumKeyError("keychainItemMissing");
     }
@@ -130,7 +127,7 @@ export async function readWindowsKey(localStatePath: string): Promise<Buffer> {
     throw new ChromiumKeyError("readFailed", err);
   }
 
-  if (parsed.os_crypt?.app_bound_encrypted_key) {
+  if (parsed.os_crypt?.app_bound_encrypted_key && !parsed.os_crypt.encrypted_key) {
     // Windows Chromium with App-Bound Encryption cannot be decrypted outside the browser
     throw new ChromiumKeyError("unsupportedPlatform");
   }
@@ -159,6 +156,11 @@ export async function readWindowsKey(localStatePath: string): Promise<Buffer> {
     ]);
 
     const stdoutChunks: Buffer[] = [];
+    proc.stderr.resume();
+    proc.stdin.on("error", () => undefined);
+    const timeout = setTimeout(() => proc.kill(), 15000);
+    proc.once("close", () => clearTimeout(timeout));
+    proc.once("error", () => clearTimeout(timeout));
     proc.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
     proc.stdin.write(wrapped.toString("base64"));
     proc.stdin.end();
@@ -184,6 +186,27 @@ export async function readWindowsKey(localStatePath: string): Promise<Buffer> {
   }
 }
 
+export type LinuxSecretLookup = (application: string) => Promise<string>;
+
+/** Match Chromium's v2 libsecret schema and application attribute. */
+export async function readLinuxSecret(application: string): Promise<string> {
+  if (!/^[a-z0-9_-]+$/.test(application)) throw new ChromiumKeyError("keychainItemMissing");
+  try {
+    const { stdout } = await execFileAsync(
+      "secret-tool",
+      ["lookup", "xdg:schema", "chrome_libsecret_os_crypt_password_v2", "application", application],
+      { timeout: 30000, maxBuffer: 8192 },
+    );
+    const secret = stdout.replace(/\r?\n$/, "");
+    if (!secret) throw new ChromiumKeyError("keychainItemMissing");
+    return secret;
+  } catch (error) {
+    if (error instanceof ChromiumKeyError) throw error;
+    // Do not attach subprocess stderr/stdout: either could contain private data.
+    throw new ChromiumKeyError("keychainUnavailable");
+  }
+}
+
 export interface ChromiumKeyRequest {
   readonly platform: NodeJS.Platform;
   readonly keychainService?: string | undefined;
@@ -193,6 +216,7 @@ export interface ChromiumKeyRequest {
 
 export async function resolveChromiumKeys(
   request: ChromiumKeyRequest,
+  lookupLinuxSecret: LinuxSecretLookup = readLinuxSecret,
 ): Promise<ChromiumKeyMaterial> {
   if (request.platform === "darwin") {
     if (!request.keychainService || !request.keychainAccount) {
@@ -205,10 +229,22 @@ export async function resolveChromiumKeys(
   }
 
   if (request.platform === "linux") {
-    return {
+    const fallback = {
       cbcV10: deriveKey(LINUX_FALLBACK_PASSPHRASE, LINUX_KEY_ITERATIONS),
       cbcEmpty: deriveKey("", LINUX_KEY_ITERATIONS),
     };
+    try {
+      if (!request.linuxSecretApplication) throw new ChromiumKeyError("keychainItemMissing");
+      const secret = await lookupLinuxSecret(request.linuxSecretApplication);
+      if (!secret) throw new ChromiumKeyError("keychainItemMissing");
+      return { ...fallback, cbcV11: deriveKey(secret, LINUX_KEY_ITERATIONS) };
+    } catch (error) {
+      return {
+        ...fallback,
+        cbcV11Error:
+          error instanceof ChromiumKeyError ? error : new ChromiumKeyError("keychainUnavailable"),
+      };
+    }
   }
 
   throw new ChromiumKeyError("unsupportedPlatform");
