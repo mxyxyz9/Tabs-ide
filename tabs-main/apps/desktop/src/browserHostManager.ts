@@ -1877,6 +1877,7 @@ export class BrowserHostManager {
   ): Promise<T> {
     const window = this.getWindow();
     const contents = session.view.webContents;
+    const epoch = session.controlEpoch;
     const attached =
       window && !window.isDestroyed() && !window.contentView.children.includes(session.view);
     if (attached) {
@@ -1888,6 +1889,13 @@ export class BrowserHostManager {
         await session.cdpCoordinator.withSession("automation", (debug) =>
           debug.sendCommand("Page.captureScreenshot", { format: "png", fromSurface: true }),
         );
+      if (
+        session.controlEpoch !== epoch ||
+        this.sessions.get(session.key) !== session ||
+        session.view.webContents !== contents ||
+        contents.isDestroyed()
+      )
+        throw new Error("Browser action interrupted during surface preparation.");
       return await run();
     } finally {
       if (attached && !contents.isDestroyed() && this.activeKey !== session.key)

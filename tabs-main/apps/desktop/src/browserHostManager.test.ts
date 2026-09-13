@@ -788,6 +788,30 @@ describe("reliable browser tabs and agent control", () => {
     }
   });
 
+  it("does not execute an action after takeover while preparing a background surface", async () => {
+    const window = {
+      isDestroyed: () => false,
+      contentView: { children: [], addChildView: vi.fn(), removeChildView: vi.fn() },
+    };
+    const manager = new BrowserHostManager(() => window as any);
+    const { session } = createMockSession();
+    Object.assign(session.view, { setBounds: vi.fn() });
+    Object.assign(session, {
+      cdpCoordinator: {
+        withSession: vi.fn(async () => {
+          session.controlEpoch++;
+          return {};
+        }),
+      },
+    });
+    (manager as any).sessions.set(session.key, session);
+    const run = vi.fn(async () => true);
+    await expect((manager as any).withAutomationSurface(session, run)).rejects.toThrow(
+      "interrupted during surface preparation",
+    );
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("ignores stationary hover from surface attachment but preempts real movement", () => {
     vi.useFakeTimers();
     try {
