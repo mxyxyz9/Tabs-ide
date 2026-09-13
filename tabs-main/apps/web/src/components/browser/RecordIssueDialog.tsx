@@ -104,7 +104,7 @@ export function isFragileSelector(selector: string): boolean {
 
 export function evaluateVerification(
   hasAssertions: boolean,
-  expectedResult: string,
+  _expectedResult: string,
   error?: Error | string | null,
 ): { status: VerificationStatus; message: string } {
   if (error) {
@@ -114,7 +114,7 @@ export function evaluateVerification(
     }
     return { status: "fail", message: `Verification failed: ${msg}` };
   }
-  if (!hasAssertions && !expectedResult.trim()) {
+  if (!hasAssertions) {
     return {
       status: "not_verified",
       message:
@@ -127,6 +127,29 @@ export function evaluateVerification(
   };
 }
 
+/** The current automation bridge cannot evaluate locator-scoped Playwright assertions. */
+export function getLiveReplayLimitation(steps: readonly RecordedStep[]): string | null {
+  if (steps.some((step) => step.action.startsWith("assert"))) {
+    return "Not verified: live replay cannot evaluate these assertions reliably. Run the generated Playwright spec to verify the outcome.";
+  }
+  if (steps.some((step) => ["selectOption", "check", "uncheck"].includes(step.action))) {
+    return "Not verified: this sequence contains actions unsupported by live replay. Run the generated Playwright spec.";
+  }
+  if (
+    steps.some(
+      (step) =>
+        step.action === "fill" &&
+        (step.value === undefined ||
+          /password|secret|token|api[-_]?key|auth|bearer|pin|credential/i.test(
+            `${step.selector} ${step.placeholder ?? ""}`,
+          )),
+    )
+  ) {
+    return "Not verified: this sequence requires reviewed input parameters. Set the environment variables and run the generated Playwright spec.";
+  }
+  return null;
+}
+
 export function generateReproductionPlaywrightCode(
   url: string,
   steps: readonly RecordedStep[],
@@ -134,13 +157,13 @@ export function generateReproductionPlaywrightCode(
 ): string {
   let inputCount = 0;
   const lines: string[] = [
-    'import { test, expect } from "@playwright/test";',
+    'import { test, expect } from "playwright/test";',
     "",
-    `/**`,
-    ` * Issue Reproduction`,
-    ` * Expected outcome: ${expectedResult || "Reviewed expected behavior"}`,
-    ` */`,
-    `test("reproduce and verify: ${JSON.stringify(expectedResult.slice(0, 80) || "reported issue")}", async ({ page }) => {`,
+    `// Expected outcome: ${JSON.stringify(expectedResult || "Reviewed expected behavior")}`,
+    `test(${JSON.stringify(`reproduce and verify: ${expectedResult.slice(0, 80) || "reported issue"}`)}, async ({ page }) => {`,
+    ...(steps.some((step) => step.action.startsWith("assert"))
+      ? []
+      : ['  throw new Error("Add an assertion before running verification.");']),
     `  await page.goto(${JSON.stringify(url || "https://example.com")});`,
   ];
 
@@ -166,22 +189,24 @@ export function generateReproductionPlaywrightCode(
 
         if (isSensitive) {
           lines.push(
-            `  // Masked sensitive input: passwords and auth tokens are parameterized via environment variables\n  const input_${inputCount} = process.env.${sanitizedEnvVar} ?? "test-secret";\n  await ${locator}.fill(input_${inputCount});`,
+            `  // Masked sensitive input: passwords and auth tokens are parameterized via environment variables\n  const input_${inputCount} = process.env[${JSON.stringify(sanitizedEnvVar)}];\n  if (input_${inputCount} === undefined) throw new Error(${JSON.stringify(`Missing environment variable: ${sanitizedEnvVar}`)});\n  await ${locator}.fill(input_${inputCount});`,
           );
-        } else if (step.value !== undefined && step.value.trim() !== "") {
+        } else if (step.value !== undefined) {
           lines.push(`  await ${locator}.fill(${JSON.stringify(step.value)});`);
         } else {
           lines.push(
-            `  // Supply reviewed parameter; sensitive inputs were not recorded\n  const input_${inputCount} = process.env.${sanitizedEnvVar} ?? "test-value";\n  await ${locator}.fill(input_${inputCount});`,
+            `  // Supply reviewed parameter; sensitive inputs were not recorded\n  const input_${inputCount} = process.env[${JSON.stringify(sanitizedEnvVar)}];\n  if (input_${inputCount} === undefined) throw new Error(${JSON.stringify(`Missing environment variable: ${sanitizedEnvVar}`)});\n  await ${locator}.fill(input_${inputCount});`,
           );
         }
         break;
       }
       case "selectOption": {
-        if (step.value !== undefined && step.value.trim() !== "") {
+        if (step.value !== undefined) {
           lines.push(`  await ${locator}.selectOption(${JSON.stringify(step.value)});`);
         } else {
-          lines.push(`  await ${locator}.selectOption("1");`);
+          lines.push(
+            `  throw new Error("Review the missing selectOption value before replaying.");`,
+          );
         }
         break;
       }
@@ -208,14 +233,6 @@ export function generateReproductionPlaywrightCode(
         );
         break;
     }
-  }
-
-  const hasAssertion = steps.some((s) => s.action.startsWith("assert"));
-  if (!hasAssertion) {
-    lines.push(
-      `  // Assertion required for verification: review expected outcome`,
-      `  expect(true, "Add expected result assertion to verify issue").toBe(true);`,
-    );
   }
 
   lines.push("});");
@@ -247,8 +264,7 @@ export function RecordIssueDialog({
   const [selectedTaskId, setSelectedTaskId] = useState<string>(assignedTaskId ?? "");
   const [beforeScreenshot, setBeforeScreenshot] = useState<string | null>(null);
   const [afterScreenshot, setAfterScreenshot] = useState<string | null>(null);
-  const [verificationStatus, setVerificationStatus] =
-    useState<VerificationStatus>("not_verified");
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("not_verified");
   const [verificationMessage, setVerificationMessage] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"steps" | "code" | "evidence">("steps");
 
@@ -474,6 +490,11 @@ export function RecordIssueDialog({
     setVerificationMessage("Running reproduction steps against live browser tab...");
 
     try {
+      const limitation = getLiveReplayLimitation(steps);
+      if (limitation) {
+        setVerificationMessage(limitation);
+        return;
+      }
       // Execute each step in sequence against the live session
       for (const step of steps) {
         if (step.action === "goto" && step.url) {
@@ -492,7 +513,7 @@ export function RecordIssueDialog({
             projectId,
             sessionId,
             operation: "type",
-            input: { selector: step.selector, text: step.value || "test-input", clear: true },
+            input: { selector: step.selector, text: step.value ?? "", clear: true },
           });
         } else if (step.action === "press") {
           await bridge.runBrowserAutomation({

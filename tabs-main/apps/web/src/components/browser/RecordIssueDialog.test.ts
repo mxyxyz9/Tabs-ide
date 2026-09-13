@@ -1,6 +1,8 @@
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   evaluateVerification,
+  getLiveReplayLimitation,
   generateReproductionPlaywrightCode,
   isFragileSelector,
   type RecordedStep,
@@ -25,13 +27,13 @@ describe("RecordIssueDialog helpers", () => {
         "Checkout error banner should be displayed",
       );
 
-      expect(code).toContain('import { test, expect } from "@playwright/test";');
+      expect(code).toContain('import { test, expect } from "playwright/test";');
       expect(code).toContain('await page.goto("https://example.com/checkout");');
       expect(code).toContain('await page.locator("[data-testid=\\"checkout-btn\\"]").click();');
       expect(code).toContain(
         'await expect(page.locator("[data-testid=\\"error-message\\"]")).toBeVisible();',
       );
-      expect(code).toContain("Expected outcome: Checkout error banner should be displayed");
+      expect(code).toContain('Expected outcome: "Checkout error banner should be displayed"');
     });
 
     it("parameterizes sensitive input without recording plaintext secrets or passwords", () => {
@@ -69,18 +71,16 @@ describe("RecordIssueDialog helpers", () => {
       expect(code).not.toContain("sk-live-987654321");
 
       // Parameterized via process.env
-      expect(code).toContain("process.env.USER_PASSWORD");
-      expect(code).toContain("process.env.TEST_INPUT_2");
+      expect(code).toContain('process.env["USER_PASSWORD"]');
+      expect(code).toContain('process.env["TEST_INPUT_2"]');
       expect(code).toContain("Masked sensitive input");
 
       // Non-sensitive normal text is preserved
       expect(code).toContain('"alice_developer"');
     });
 
-    it("appends review comment and fallback assertion when no assertions are defined", () => {
-      const steps: RecordedStep[] = [
-        { id: "1", action: "click", selector: "button.submit" },
-      ];
+    it("fails before navigation when no assertions are defined", () => {
+      const steps: RecordedStep[] = [{ id: "1", action: "click", selector: "button.submit" }];
 
       const code = generateReproductionPlaywrightCode(
         "https://example.com",
@@ -88,8 +88,9 @@ describe("RecordIssueDialog helpers", () => {
         "Form submits properly",
       );
 
-      expect(code).toContain("Assertion required for verification: review expected outcome");
-      expect(code).toContain('expect(true, "Add expected result assertion to verify issue").toBe(true);');
+      expect(code).not.toContain("expect(true");
+      expect(code).toContain('throw new Error("Add an assertion before running verification.")');
+      expect(code.indexOf("throw new Error")).toBeLessThan(code.indexOf("await page.goto"));
     });
 
     it("generates text and value assertions properly", () => {
@@ -114,7 +115,9 @@ describe("RecordIssueDialog helpers", () => {
         "Header and count are accurate",
       );
 
-      expect(code).toContain('await expect(page.locator("h1.title")).toHaveText("Dashboard Overview");');
+      expect(code).toContain(
+        'await expect(page.locator("h1.title")).toHaveText("Dashboard Overview");',
+      );
       expect(code).toContain('await expect(page.locator("input#total-count")).toHaveValue("42");');
     });
   });
@@ -186,4 +189,54 @@ describe("RecordIssueDialog helpers", () => {
       expect(result.message).toContain("no expected-result assertions were defined");
     });
   });
+});
+
+it("does not mistake an expected-result description for executed assertions", () => {
+  expect(evaluateVerification(false, "Checkout succeeds").status).toBe("not_verified");
+});
+
+it("emits parseable code for quotes, newlines, comment terminators and numeric environment names", () => {
+  const code = generateReproductionPlaywrightCode(
+    "https://example.com",
+    [
+      { id: "1", action: "fill", selector: "#password", placeholder: "123_password" },
+      { id: "2", action: "assertVisible", selector: "#success" },
+    ],
+    'Works "correctly" */\nthrow new Error("injected")',
+  );
+  const result = ts.transpileModule(code, {
+    reportDiagnostics: true,
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  });
+  expect(
+    result.diagnostics?.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
+  ).toEqual([]);
+  expect(code).not.toContain("test-secret");
+  expect(code).toContain('process.env["123_PASSWORD"]');
+  expect(code).toContain("Missing environment variable");
+});
+
+it.each([
+  "assertVisible",
+  "assertText",
+  "assertValue",
+  "selectOption",
+  "check",
+  "uncheck",
+] as const)("blocks unsupported live replay action %s before execution", (action) => {
+  expect(getLiveReplayLimitation([{ id: "1", action, selector: "#target" }])).toContain(
+    "Not verified",
+  );
+});
+
+it("does not replay secrets or invent missing inputs", () => {
+  expect(
+    getLiveReplayLimitation([{ id: "1", action: "fill", selector: "#password", value: "secret" }]),
+  ).toContain("parameters");
+  expect(getLiveReplayLimitation([{ id: "1", action: "fill", selector: "#name" }])).toContain(
+    "parameters",
+  );
+  expect(
+    getLiveReplayLimitation([{ id: "1", action: "fill", selector: "#name", value: "" }]),
+  ).toBeNull();
 });
