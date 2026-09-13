@@ -1,5 +1,7 @@
 # Browser implementation review
 
+**September 13 follow-up:** the implementation findings below are historical and have now been addressed in local corrective work. See [the updated implementation and validation handoff](browser_improvements_handoff.md) for current behavior, evidence, and the remaining account-owner/platform checks. The original review is preserved below for traceability.
+
 Reviewed the Anti-Gravity changes from `13385788` through `54db0476` in `/Users/rushil.dev/Desktop/tabs/tabs-main`, then made the corrective commits listed below. This is an independent code review, not confirmation that every milestone works end to end.
 
 **Verdict: useful foundations, but the five-milestone completion claim is not supported.** The biggest gaps are real browser comparison, the recording-to-task workflow, end-to-end ownership enforcement, and platform/account validation. Do not treat passing helper tests as evidence of working third-party login or complete user workflows.
@@ -11,7 +13,7 @@ Reviewed the Anti-Gravity changes from `13385788` through `54db0476` in `/Users/
 
 Existing user changes to `tabs-main/bun.lock` were deliberately left unstaged and intact. Nothing was pushed.
 
-## Findings that still require implementation
+## Findings recorded before the corrective implementation
 
 ### P1 — Comparison does not use independent browser sessions
 
