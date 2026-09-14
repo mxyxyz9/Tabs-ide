@@ -32,11 +32,11 @@ import {
   CpuIcon,
   DatabaseIcon,
   LayersIcon,
-  LoaderIcon,
   SlidersHorizontalIcon,
   SparklesIcon,
   ZapIcon,
 } from "lucide-react";
+import { PageLoadingState } from "../../PageLoadingState";
 
 const PROVIDER_ICONS: Record<string, Icon> = {
   codex: OpenAI,
@@ -224,10 +224,12 @@ export function UsageTab() {
       ) : null}
 
       {summaryState.loading && !summary ? (
-        <div className="flex h-64 flex-col items-center justify-center gap-3 text-muted-foreground">
-          <LoaderIcon className="size-6 animate-spin" />
-          <span className="text-sm">Aggregating historical transcript metrics...</span>
-        </div>
+        <PageLoadingState
+          compact
+          className="h-64"
+          label="Loading usage history"
+          detail="Aggregating transcript activity and cost metrics…"
+        />
       ) : !hasActivity ? (
         <div className="flex h-56 flex-col items-center justify-center rounded-xl border border-dashed border-border/80 p-8 text-center bg-card/20">
           <DatabaseIcon className="size-8 text-muted-foreground/60 mb-2" />

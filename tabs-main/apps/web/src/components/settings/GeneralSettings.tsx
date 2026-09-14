@@ -116,12 +116,7 @@ export function GeneralSettings() {
   const textGenProvider = textGenInstanceEntry?.driverKind ?? "codex";
   const gitModelOptionsByInstance = useMemo(
     () =>
-      getCustomModelOptionsByInstance(
-        settings,
-        serverProviders,
-        textGenInstanceId,
-        textGenModel,
-      ),
+      getCustomModelOptionsByInstance(settings, serverProviders, textGenInstanceId, textGenModel),
     [settings, serverProviders, textGenInstanceId, textGenModel],
   );
 
@@ -220,9 +215,8 @@ export function GeneralSettings() {
                     className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
                     onClick={() =>
                       updateZoom(
-                        ZOOM_SNAP_POINTS[
-                          Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
-                        ] ?? 1.0,
+                        ZOOM_SNAP_POINTS[Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)] ??
+                          1.0,
                       )
                     }
                     title="Zoom In (Cmd +)"
@@ -239,11 +233,7 @@ export function GeneralSettings() {
                       type="button"
                       onClick={() => updateZoom(pt)}
                       className="hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1"
-                      style={
-                        Math.abs(zoomFactor - pt) < 0.01
-                          ? { fontWeight: "bold" }
-                          : undefined
-                      }
+                      style={Math.abs(zoomFactor - pt) < 0.01 ? { fontWeight: "bold" } : undefined}
                     >
                       {Math.round(pt * 100)}%
                     </button>
@@ -887,4 +877,3 @@ export function GeneralSettings() {
 }
 
 export default GeneralSettings;
-

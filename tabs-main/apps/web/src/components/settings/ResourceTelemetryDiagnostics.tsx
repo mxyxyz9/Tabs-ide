@@ -36,7 +36,7 @@ import { formatRelativeTime } from "../../timestampFormat";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { SettingsSection } from "../../routes/_chat.settings";
+import { SettingsSection } from "./SettingsLayout";
 import {
   resourceHistoryBarHeight,
   resourceHistoryCpuScaleMax,

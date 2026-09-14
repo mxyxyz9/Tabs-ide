@@ -764,7 +764,14 @@ function ThemePickerGrid({
 
 export function ThemesSettings() {
   const { confirm } = useConfirm();
-  const { theme, setTheme, customThemeConfig, setCustomThemeConfig, fontPreferences, setFontPreferences } = useTheme();
+  const {
+    theme,
+    setTheme,
+    customThemeConfig,
+    setCustomThemeConfig,
+    fontPreferences,
+    setFontPreferences,
+  } = useTheme();
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
   const serverConfig = useServerConfig();
@@ -774,7 +781,9 @@ export function ThemesSettings() {
   const [importExportTab, setImportExportTab] = useState<"import" | "export">("import");
   const [isCustomFontMode, setIsCustomFontMode] = useState(false);
   const [editingStudioPresetName, setEditingStudioPresetName] = useState("");
-  const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() => getStoredSavedPresets());
+  const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() =>
+    getStoredSavedPresets(),
+  );
 
   const handleImportTheme = useCallback(
     (name: string, config: CustomThemeConfig) => {
@@ -1175,8 +1184,12 @@ export function ThemesSettings() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
               <div className="space-y-1.5 rounded-lg border border-border/60 bg-card/60 p-3">
-                <label className="text-xs font-semibold text-foreground block">Interface Font</label>
-                <p className="text-[10px] text-muted-foreground line-clamp-1">UI labels, buttons, navigation</p>
+                <label className="text-xs font-semibold text-foreground block">
+                  Interface Font
+                </label>
+                <p className="text-[10px] text-muted-foreground line-clamp-1">
+                  UI labels, buttons, navigation
+                </p>
                 <Select
                   value={fontPreferences.uiFont}
                   onValueChange={(val) =>
@@ -1202,7 +1215,9 @@ export function ThemesSettings() {
 
               <div className="space-y-1.5 rounded-lg border border-border/60 bg-card/60 p-3">
                 <label className="text-xs font-semibold text-foreground block">Heading Font</label>
-                <p className="text-[10px] text-muted-foreground line-clamp-1">Headings, section titles, headers</p>
+                <p className="text-[10px] text-muted-foreground line-clamp-1">
+                  Headings, section titles, headers
+                </p>
                 <Select
                   value={fontPreferences.headingFont}
                   onValueChange={(val) =>
@@ -1228,7 +1243,9 @@ export function ThemesSettings() {
 
               <div className="space-y-1.5 rounded-lg border border-border/60 bg-card/60 p-3">
                 <label className="text-xs font-semibold text-foreground block">Editor Font</label>
-                <p className="text-[10px] text-muted-foreground line-clamp-1">Monospace code, terminals, inputs</p>
+                <p className="text-[10px] text-muted-foreground line-clamp-1">
+                  Monospace code, terminals, inputs
+                </p>
                 <Select
                   value={fontPreferences.editorFont}
                   onValueChange={(val) =>
@@ -1323,11 +1340,15 @@ export function ThemesSettings() {
             <div className="space-y-2 rounded-xl border border-border/60 bg-card/40 p-3.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-xs font-semibold text-foreground block">Interface Size</label>
+                  <label className="text-xs font-semibold text-foreground block">
+                    Interface Size
+                  </label>
                   <p className="text-[10px] text-muted-foreground">UI, tabs, sidebar, dialogs</p>
                 </div>
                 <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
-                  {fontPreferences.fontSizeInterface ?? settings.fontSizeInterface ?? DEFAULT_INTERFACE_FONT_SIZE}{" "}
+                  {fontPreferences.fontSizeInterface ??
+                    settings.fontSizeInterface ??
+                    DEFAULT_INTERFACE_FONT_SIZE}{" "}
                   px
                 </span>
               </div>
@@ -1362,11 +1383,14 @@ export function ThemesSettings() {
             <div className="space-y-2 rounded-xl border border-border/60 bg-card/40 p-3.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-xs font-semibold text-foreground block">Code &amp; Diffs Size</label>
+                  <label className="text-xs font-semibold text-foreground block">
+                    Code &amp; Diffs Size
+                  </label>
                   <p className="text-[10px] text-muted-foreground">Editor, code blocks, diffs</p>
                 </div>
                 <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
-                  {fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE} px
+                  {fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE}{" "}
+                  px
                 </span>
               </div>
               <input
@@ -1374,7 +1398,9 @@ export function ThemesSettings() {
                 min={MIN_CODE_FONT_SIZE}
                 max={MAX_CODE_FONT_SIZE}
                 step={1}
-                value={fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE}
+                value={
+                  fontPreferences.fontSizeCode ?? settings.fontSizeCode ?? DEFAULT_CODE_FONT_SIZE
+                }
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setFontPreferences((prev) => ({
@@ -1396,11 +1422,16 @@ export function ThemesSettings() {
             <div className="space-y-2 rounded-xl border border-border/60 bg-card/40 p-3.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-xs font-semibold text-foreground block">Prompt Composer Size</label>
+                  <label className="text-xs font-semibold text-foreground block">
+                    Prompt Composer Size
+                  </label>
                   <p className="text-[10px] text-muted-foreground">Message input area</p>
                 </div>
                 <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded-md border border-border/50">
-                  {fontPreferences.fontSizePrompt ?? settings.fontSizePrompt ?? DEFAULT_PROMPT_FONT_SIZE} px
+                  {fontPreferences.fontSizePrompt ??
+                    settings.fontSizePrompt ??
+                    DEFAULT_PROMPT_FONT_SIZE}{" "}
+                  px
                 </span>
               </div>
               <input
@@ -1567,4 +1598,3 @@ export function ThemesSettings() {
 }
 
 export default ThemesSettings;
-

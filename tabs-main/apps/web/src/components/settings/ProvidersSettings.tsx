@@ -1,10 +1,4 @@
-import {
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from "react";
+import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import {
   DndContext,
   closestCenter,
@@ -109,18 +103,9 @@ import {
   type UnifiedSettings,
 } from "@tabs/contracts";
 import { SettingsHeaderPortal } from "./SettingsLayout";
+import { PROVIDER_SETTINGS_KEYS, type ProviderSettingsKey } from "./providerSettings.shared";
 
-export type ProviderSettingsKey =
-  | "codex"
-  | "claudeAgent"
-  | "cursor"
-  | "copilot"
-  | "grok"
-  | "opencode"
-  | "kilo"
-  | "droid"
-  | "antigravity"
-  | "openrouter";
+export type { ProviderSettingsKey } from "./providerSettings.shared";
 
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 
@@ -239,6 +224,10 @@ export const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     hasApiKey: true,
   },
 ];
+
+if (import.meta.env.DEV && PROVIDER_SETTINGS.length !== PROVIDER_SETTINGS_KEYS.length) {
+  throw new Error("Provider settings metadata is out of sync with the provider key list");
+}
 
 const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
   codex: "codex login",
@@ -664,17 +653,14 @@ export interface ProvidersSettingsProps {
 }
 
 export default function ProvidersSettings(props: ProvidersSettingsProps) {
-  const {
-    refreshProviders,
-    isRefreshingProviders,
-    startProviderAction,
-    providerActionBusy,
-  } = props;
+  const { refreshProviders, isRefreshingProviders, startProviderAction, providerActionBusy } =
+    props;
 
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
   const serverConfig = useServerConfig();
-  const serverProviders = props.serverProviders ?? serverConfig?.providers ?? EMPTY_SERVER_PROVIDERS;
+  const serverProviders =
+    props.serverProviders ?? serverConfig?.providers ?? EMPTY_SERVER_PROVIDERS;
   const { fontPreferences } = useTheme();
   const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
   const { copyToClipboard } = useCopyToClipboard<{ providerName: string }>();
@@ -802,7 +788,9 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
       if (
         serverProviders
           .find((candidate: ServerProvider) => candidate.instanceId === provider)
-          ?.models.some((option: ServerProviderModel) => !option.isCustom && option.slug === normalized)
+          ?.models.some(
+            (option: ServerProviderModel) => !option.isCustom && option.slug === normalized,
+          )
       ) {
         setCustomModelErrorByProvider((existing) => ({
           ...existing,
@@ -854,7 +842,13 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
         setTimeout(() => observer.disconnect(), 2000);
       }
     },
-    [customModelInputByProvider, serverProviders, setCustomModelInputByProvider, settings.providers, updateSettings],
+    [
+      customModelInputByProvider,
+      serverProviders,
+      setCustomModelInputByProvider,
+      settings.providers,
+      updateSettings,
+    ],
   );
 
   const removeCustomModel = useCallback(
@@ -890,8 +884,10 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
       const defaultProvidersMap = DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
       const currentProvidersMap = settings.providers as Record<string, any>;
       const defaultProviderConfig = defaultProvidersMap[providerSettings.provider];
-      const providerConfig = currentProvidersMap[providerSettings.provider] ?? defaultProviderConfig;
-      const statusKey = (liveProvider?.status ?? (providerConfig?.enabled ? "warning" : "disabled")) as keyof typeof PROVIDER_STATUS_STYLES;
+      const providerConfig =
+        currentProvidersMap[providerSettings.provider] ?? defaultProviderConfig;
+      const statusKey = (liveProvider?.status ??
+        (providerConfig?.enabled ? "warning" : "disabled")) as keyof typeof PROVIDER_STATUS_STYLES;
       const statusStyle = PROVIDER_STATUS_STYLES[statusKey] ?? PROVIDER_STATUS_STYLES.disabled;
       const summary = getProviderSummary(liveProvider);
       const baseModels =
@@ -963,7 +959,8 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
           PROVIDER_LOGIN_COMMAND[providerSettings.provider] ??
           null,
         logoutCommand:
-          liveProvider?.lifecycleActions?.find((action: any) => action.kind === "logout")?.command ?? null,
+          liveProvider?.lifecycleActions?.find((action: any) => action.kind === "logout")
+            ?.command ?? null,
       };
     });
   }, [draftModelOrders, serverProviders, settings.providerModelPreferences, settings.providers]);
@@ -1032,16 +1029,14 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Pinned Models
-                    </h3>
+                    <h3 className="text-sm font-semibold text-foreground">Pinned Models</h3>
                     <span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
                       {pinnedEntries.length}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Quick access models pinned across all providers. Appears at the
-                    top of FusedModelPicker.
+                    Quick access models pinned across all providers. Appears at the top of
+                    FusedModelPicker.
                   </p>
                 </div>
               </div>
@@ -1058,12 +1053,10 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
             {pinnedEntries.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 py-6 px-4 text-center">
                 <PinIcon className="size-6 text-muted-foreground/40 mb-1.5" />
-                <div className="text-xs font-medium text-foreground">
-                  No Pinned Models Yet
-                </div>
+                <div className="text-xs font-medium text-foreground">No Pinned Models Yet</div>
                 <div className="text-[11px] text-muted-foreground max-w-sm mt-0.5">
-                  Click "+ Pin Model" above or the pin icon next to any model in your
-                  provider lists below to pin it.
+                  Click "+ Pin Model" above or the pin icon next to any model in your provider lists
+                  below to pin it.
                 </div>
               </div>
             ) : (
@@ -1092,9 +1085,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                 }}
               >
                 <SortableContext
-                  items={pinnedEntries.map(
-                    (entry) => `${entry.provider}:${entry.model}`,
-                  )}
+                  items={pinnedEntries.map((entry) => `${entry.provider}:${entry.model}`)}
                   strategy={rectSortingStrategy}
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1104,16 +1095,10 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                         PROVIDER_DISPLAY_NAMES[
                           entry.provider as keyof typeof PROVIDER_DISPLAY_NAMES
                         ] ?? entry.provider;
-                      const IconComponent =
-                        PROVIDER_ICONS_BY_KIND[entry.provider] ?? BotIcon;
+                      const IconComponent = PROVIDER_ICONS_BY_KIND[entry.provider] ?? BotIcon;
 
-                      const providerModels = getProviderModels(
-                        serverProviders,
-                        entry.provider,
-                      );
-                      const matchedModel = providerModels.find(
-                        (m) => m.slug === entry.model,
-                      );
+                      const providerModels = getProviderModels(serverProviders, entry.provider);
+                      const matchedModel = providerModels.find((m) => m.slug === entry.model);
                       const displayName = matchedModel?.name ?? entry.model;
 
                       return (
@@ -1201,9 +1186,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                 );
                 return rel.suffix ? (
                   <>
-                    Checked{" "}
-                    <span className="font-mono tabular-nums">{rel.value}</span>{" "}
-                    {rel.suffix}
+                    Checked <span className="font-mono tabular-nums">{rel.value}</span> {rel.suffix}
                   </>
                 ) : (
                   <>Checked {rel.value}</>
@@ -1243,10 +1226,8 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
           return providerCards.map((providerCard) => {
             const isLastEnabledProvider =
               providerCard.providerConfig.enabled && enabledProvidersCount <= 1;
-            const customModelInput =
-              customModelInputByProvider[providerCard.provider];
-            const customModelError =
-              customModelErrorByProvider[providerCard.provider] ?? null;
+            const customModelInput = customModelInputByProvider[providerCard.provider];
+            const customModelError = customModelErrorByProvider[providerCard.provider] ?? null;
             const providerDisplayName =
               PROVIDER_DISPLAY_NAMES[
                 providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
@@ -1298,12 +1279,9 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                   className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-500 hover:text-amber-400"
                                   onClick={() =>
                                     providerCard.updatePrompt?.command &&
-                                    copyToClipboard(
-                                      providerCard.updatePrompt.command,
-                                      {
-                                        providerName: providerDisplayName,
-                                      },
-                                    )
+                                    copyToClipboard(providerCard.updatePrompt.command, {
+                                      providerName: providerDisplayName,
+                                    })
                                   }
                                 >
                                   <ArrowUpCircleIcon className="size-3.5" />
@@ -1322,7 +1300,8 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const defaultProvidersMap = DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
+                                    const defaultProvidersMap =
+                                      DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
                                     updateSettings({
                                       providers: {
                                         ...settings.providers,
@@ -1348,9 +1327,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                         <span className="text-muted-foreground">
                           {providerCard.summary.headline}
-                          {providerCard.summary.detail
-                            ? ` — ${providerCard.summary.detail}`
-                            : null}
+                          {providerCard.summary.detail ? ` — ${providerCard.summary.detail}` : null}
                         </span>
                         {providerCard.badgeLabel ? (
                           <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
@@ -1427,9 +1404,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                         className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                         onClick={() =>
                           setOpenProviderDetails((existing) => {
-                            const isCurrentlyOpen = Boolean(
-                              existing[providerCard.provider],
-                            );
+                            const isCurrentlyOpen = Boolean(existing[providerCard.provider]);
                             if (isCurrentlyOpen) {
                               return {};
                             }
@@ -1443,8 +1418,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                         <ChevronDownIcon
                           className={cn(
                             "size-3.5 transition-transform duration-200",
-                            openProviderDetails[providerCard.provider] &&
-                              "rotate-180",
+                            openProviderDetails[providerCard.provider] && "rotate-180",
                           )}
                         />
                       </Button>
@@ -1475,10 +1449,10 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                             }
                             const isDisabling = !checked;
                             const shouldClearModelSelection =
-                              isDisabling &&
-                              textGenInstanceId === providerCard.provider;
+                              isDisabling && textGenInstanceId === providerCard.provider;
                             const currentProvidersMap = settings.providers as Record<string, any>;
-                            const defaultProvidersMap = DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
+                            const defaultProvidersMap =
+                              DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
                             updateSettings({
                               providers: {
                                 ...settings.providers,
@@ -1507,9 +1481,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                   open={Boolean(openProviderDetails[providerCard.provider])}
                   onOpenChange={(open) =>
                     setOpenProviderDetails((existing) => {
-                      const isCurrentlyOpen = Boolean(
-                        existing[providerCard.provider],
-                      );
+                      const isCurrentlyOpen = Boolean(existing[providerCard.provider]);
                       if (open && !isCurrentlyOpen) {
                         return { [providerCard.provider]: true };
                       }
@@ -1537,8 +1509,12 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                               className="mt-1.5"
                               value={providerCard.binaryPathValue}
                               onChange={(event) => {
-                                const currentProvidersMap = settings.providers as Record<string, any>;
-                                const defaultProvidersMap = DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
+                                const currentProvidersMap = settings.providers as Record<
+                                  string,
+                                  any
+                                >;
+                                const defaultProvidersMap =
+                                  DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
                                 updateSettings({
                                   providers: {
                                     ...settings.providers,
@@ -1564,9 +1540,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                         <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                           <label className="block">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-foreground">
-                                API key
-                              </span>
+                              <span className="text-xs font-medium text-foreground">API key</span>
                               {"apiKey" in providerCard.providerConfig &&
                               providerCard.providerConfig.apiKey ? (
                                 <RedactedSensitiveText
@@ -1605,8 +1579,8 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                               spellCheck={false}
                             />
                             <span className="mt-1 block text-xs text-muted-foreground">
-                              Stored in the operating system credential store and
-                              never written to settings.json.
+                              Stored in the operating system credential store and never written to
+                              settings.json.
                             </span>
                           </label>
                         </div>
@@ -1653,10 +1627,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                       {providerCard.provider === "copilot" ? (
                         <>
                           <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                            <label
-                              htmlFor="provider-copilot-ghe-host"
-                              className="block"
-                            >
+                            <label htmlFor="provider-copilot-ghe-host" className="block">
                               <span className="text-xs font-medium text-foreground">
                                 GitHub Enterprise Host (optional)
                               </span>
@@ -1680,8 +1651,8 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                 spellCheck={false}
                               />
                               <span className="mt-1 block text-xs text-muted-foreground">
-                                Leave blank for github.com. Appends --host to terminal
-                                sign-in automatically.
+                                Leave blank for github.com. Appends --host to terminal sign-in
+                                automatically.
                               </span>
                             </label>
                           </div>
@@ -1711,8 +1682,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                 spellCheck={false}
                               />
                               <span className="mt-1 block text-xs text-muted-foreground">
-                                For token-based authentication instead of interactive
-                                web login.
+                                For token-based authentication instead of interactive web login.
                               </span>
                             </label>
                           </div>
@@ -1769,8 +1739,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                               void api.server
                                 .updateSettings(secretPatch)
                                 .then(() => {
-                                  const isCopilot =
-                                    providerCard.provider === "copilot";
+                                  const isCopilot = providerCard.provider === "copilot";
                                   startProviderAction(
                                     isCopilot
                                       ? {
@@ -1809,8 +1778,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                       <div className="border-t border-border/60 px-4 py-4 sm:px-5">
                         <div className="rounded-xl border border-border/50 bg-muted/10 overflow-hidden shadow-2xs">
                           {(() => {
-                            const filterValue =
-                              modelFilters[providerCard.provider] ?? "";
+                            const filterValue = modelFilters[providerCard.provider] ?? "";
                             const isFiltering = filterValue.trim().length > 0;
                             const normalizedFilter = filterValue.trim().toLowerCase();
                             const filteredModels = isFiltering
@@ -1822,13 +1790,11 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                               : providerCard.models;
 
                             const hiddenModelsList =
-                              settings.providerModelPreferences?.[
-                                providerCard.provider as any
-                              ]?.hiddenModels ?? [];
+                              settings.providerModelPreferences?.[providerCard.provider as any]
+                                ?.hiddenModels ?? [];
                             const hiddenSet = new Set(hiddenModelsList);
                             const hiddenCount = providerCard.models.filter(
-                              (m: ServerProviderModel) =>
-                                !m.isCustom && hiddenSet.has(m.slug),
+                              (m: ServerProviderModel) => !m.isCustom && hiddenSet.has(m.slug),
                             ).length;
 
                             const defaultModelSlug = getDefaultServerModel(
@@ -1875,8 +1841,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                           ({filteredModels.length} shown)
                                         </span>
                                       ) : null}
-                                      {providerCard.liveProvider?.catalogStatus ===
-                                      "stale" ? (
+                                      {providerCard.liveProvider?.catalogStatus === "stale" ? (
                                         <Badge
                                           variant="secondary"
                                           className="text-[10px] px-1.5 py-0"
@@ -1886,8 +1851,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                       ) : null}
                                     </div>
                                     <div className="mt-0.5 text-[11px] text-muted-foreground truncate">
-                                      {providerCard.liveProvider?.catalogStatus ===
-                                      "stale"
+                                      {providerCard.liveProvider?.catalogStatus === "stale"
                                         ? "Showing the last successful catalog. Refresh to retry discovery."
                                         : isFiltering
                                           ? "Filtered results. Clear search to reorder models."
@@ -1935,20 +1899,18 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                         variant="ghost"
                                         className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground font-medium cursor-pointer border border-border/40"
                                         onClick={() => {
-                                          const nextHidden =
-                                            nextHiddenModelsForBulkToggle(
-                                              filteredModels,
-                                              hiddenModelsList,
-                                              { preserveSlugs },
-                                            );
+                                          const nextHidden = nextHiddenModelsForBulkToggle(
+                                            filteredModels,
+                                            hiddenModelsList,
+                                            { preserveSlugs },
+                                          );
                                           const nextPrefs = updateHiddenModels(
                                             settings.providerModelPreferences,
                                             providerCard.provider,
                                             nextHidden,
                                           );
                                           updateSettings({
-                                            providerModelPreferences:
-                                              nextPrefs as any,
+                                            providerModelPreferences: nextPrefs as any,
                                           });
                                         }}
                                         title={
@@ -1964,16 +1926,12 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                         {allTargetHidden ? (
                                           <>
                                             <EyeIcon className="size-3" />
-                                            {isFiltering
-                                              ? "Enable shown"
-                                              : "Enable all"}
+                                            {isFiltering ? "Enable shown" : "Enable all"}
                                           </>
                                         ) : (
                                           <>
                                             <EyeOffIcon className="size-3" />
-                                            {isFiltering
-                                              ? "Disable shown"
-                                              : "Disable all"}
+                                            {isFiltering ? "Disable shown" : "Disable all"}
                                           </>
                                         )}
                                       </Button>
@@ -1984,9 +1942,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                         size="xs"
                                         variant="default"
                                         className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
-                                        onClick={() =>
-                                          handleSaveModelOrder(providerCard.provider)
-                                        }
+                                        onClick={() => handleSaveModelOrder(providerCard.provider)}
                                         title="Save model order changes"
                                       >
                                         <SaveIcon className="size-3" />
@@ -2013,8 +1969,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                             providerCard.provider,
                                           );
                                           updateSettings({
-                                            providerModelPreferences:
-                                              nextPrefs as any,
+                                            providerModelPreferences: nextPrefs as any,
                                           });
                                         }}
                                         title="Restore default model order"
@@ -2044,20 +1999,15 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                   ) : null}
                                   <DndContext
                                     collisionDetection={closestCenter}
-                                    modifiers={[
-                                      restrictToVerticalAxis,
-                                      restrictToParentElement,
-                                    ]}
+                                    modifiers={[restrictToVerticalAxis, restrictToParentElement]}
                                     onDragEnd={(event: DragEndEvent) => {
                                       const { active, over } = event;
                                       if (!over || active.id === over.id) return;
                                       const oldIndex = providerCard.models.findIndex(
-                                        (m: ServerProviderModel) =>
-                                          m.slug === active.id,
+                                        (m: ServerProviderModel) => m.slug === active.id,
                                       );
                                       const newIndex = providerCard.models.findIndex(
-                                        (m: ServerProviderModel) =>
-                                          m.slug === over.id,
+                                        (m: ServerProviderModel) => m.slug === over.id,
                                       );
                                       if (oldIndex !== -1 && newIndex !== -1) {
                                         const reordered = arrayMove(
@@ -2076,196 +2026,181 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                     }}
                                   >
                                     <SortableContext
-                                      items={filteredModels.map(
-                                        (m: ServerProviderModel) => m.slug,
-                                      )}
+                                      items={filteredModels.map((m: ServerProviderModel) => m.slug)}
                                       strategy={verticalListSortingStrategy}
                                     >
-                                      {filteredModels.map(
-                                        (model: ServerProviderModel) => {
-                                          const caps = model.capabilities;
-                                          const capLabels: string[] = [];
-                                          if (caps?.supportsFastMode)
-                                            capLabels.push("Fast");
-                                          if (caps?.supportsThinkingToggle)
-                                            capLabels.push("Thinking");
-                                          if (
-                                            caps?.reasoningEffortLevels &&
-                                            caps.reasoningEffortLevels.length > 0
-                                          )
-                                            capLabels.push("Reasoning");
-                                          const isPinned = isPinnedModel(
-                                            getPinnedModels(settings),
-                                            providerCard.provider,
-                                            model.slug,
-                                          );
-                                          const isHidden =
-                                            !model.isCustom &&
-                                            hiddenSet.has(model.slug);
+                                      {filteredModels.map((model: ServerProviderModel) => {
+                                        const caps = model.capabilities;
+                                        const capLabels: string[] = [];
+                                        if (caps?.supportsFastMode) capLabels.push("Fast");
+                                        if (caps?.supportsThinkingToggle)
+                                          capLabels.push("Thinking");
+                                        if (
+                                          caps?.reasoningEffortLevels &&
+                                          caps.reasoningEffortLevels.length > 0
+                                        )
+                                          capLabels.push("Reasoning");
+                                        const isPinned = isPinnedModel(
+                                          getPinnedModels(settings),
+                                          providerCard.provider,
+                                          model.slug,
+                                        );
+                                        const isHidden =
+                                          !model.isCustom && hiddenSet.has(model.slug);
 
-                                          return (
-                                            <SortableModelRowItem
-                                              key={`${providerCard.provider}:${model.slug}`}
-                                              id={model.slug}
-                                            >
-                                              {(handle) => (
-                                                <div
-                                                  className={cn(
-                                                    "group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all",
-                                                    isHidden &&
-                                                      "opacity-60 bg-muted/20",
-                                                  )}
-                                                >
-                                                  <div className="flex items-center gap-2 min-w-0">
-                                                    {!isFiltering ? (
-                                                      <button
-                                                        type="button"
-                                                        className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
-                                                        aria-label={`Reorder ${model.name}`}
-                                                        {...handle.attributes}
-                                                        {...handle.listeners}
-                                                      >
-                                                        <GripVerticalIcon className="size-3.5" />
-                                                      </button>
-                                                    ) : null}
-                                                    <span
-                                                      className={cn(
-                                                        "min-w-0 truncate text-xs font-medium",
-                                                        isHidden
-                                                          ? "text-muted-foreground"
-                                                          : "text-foreground/90",
-                                                      )}
-                                                    >
-                                                      {model.name}
-                                                    </span>
-                                                    {capLabels.map((label) => (
-                                                      <span
-                                                        key={label}
-                                                        className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
-                                                      >
-                                                        {label}
-                                                      </span>
-                                                    ))}
-                                                  </div>
-
-                                                  <div className="flex items-center gap-1.5 shrink-0">
+                                        return (
+                                          <SortableModelRowItem
+                                            key={`${providerCard.provider}:${model.slug}`}
+                                            id={model.slug}
+                                          >
+                                            {(handle) => (
+                                              <div
+                                                className={cn(
+                                                  "group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all",
+                                                  isHidden && "opacity-60 bg-muted/20",
+                                                )}
+                                              >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                  {!isFiltering ? (
                                                     <button
                                                       type="button"
-                                                      aria-label={
-                                                        isPinned
-                                                          ? `Unpin ${model.name}`
-                                                          : `Pin ${model.name}`
-                                                      }
-                                                      className={cn(
-                                                        "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
-                                                        isPinned
-                                                          ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
-                                                          : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
-                                                      )}
-                                                      onClick={() => {
-                                                        const nextPinned =
-                                                          togglePinnedModel(
-                                                            settings,
+                                                      className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
+                                                      aria-label={`Reorder ${model.name}`}
+                                                      {...handle.attributes}
+                                                      {...handle.listeners}
+                                                    >
+                                                      <GripVerticalIcon className="size-3.5" />
+                                                    </button>
+                                                  ) : null}
+                                                  <span
+                                                    className={cn(
+                                                      "min-w-0 truncate text-xs font-medium",
+                                                      isHidden
+                                                        ? "text-muted-foreground"
+                                                        : "text-foreground/90",
+                                                    )}
+                                                  >
+                                                    {model.name}
+                                                  </span>
+                                                  {capLabels.map((label) => (
+                                                    <span
+                                                      key={label}
+                                                      className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
+                                                    >
+                                                      {label}
+                                                    </span>
+                                                  ))}
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                  <button
+                                                    type="button"
+                                                    aria-label={
+                                                      isPinned
+                                                        ? `Unpin ${model.name}`
+                                                        : `Pin ${model.name}`
+                                                    }
+                                                    className={cn(
+                                                      "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
+                                                      isPinned
+                                                        ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
+                                                        : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
+                                                    )}
+                                                    onClick={() => {
+                                                      const nextPinned = togglePinnedModel(
+                                                        settings,
+                                                        providerCard.provider,
+                                                        model.slug,
+                                                      );
+                                                      updateSettings({
+                                                        pinnedModels: nextPinned as any,
+                                                      });
+                                                    }}
+                                                  >
+                                                    <PinIcon className="size-3.5 fill-current" />
+                                                  </button>
+
+                                                  {model.name !== model.slug ? (
+                                                    <Tooltip>
+                                                      <TooltipTrigger
+                                                        render={
+                                                          <button
+                                                            type="button"
+                                                            className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted cursor-pointer"
+                                                            aria-label={`Details for ${model.name}`}
+                                                          >
+                                                            <InfoIcon className="size-3.5" />
+                                                          </button>
+                                                        }
+                                                      />
+                                                      <TooltipPopup side="top" className="max-w-56">
+                                                        <code className="text-[11px] text-foreground">
+                                                          {model.slug}
+                                                        </code>
+                                                      </TooltipPopup>
+                                                    </Tooltip>
+                                                  ) : null}
+
+                                                  {model.isCustom ? (
+                                                    <div className="flex items-center gap-1 pl-1">
+                                                      <Badge
+                                                        variant="secondary"
+                                                        className="text-[9px] px-1 py-0 font-normal"
+                                                      >
+                                                        custom
+                                                      </Badge>
+                                                      <button
+                                                        type="button"
+                                                        className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                                                        aria-label={`Remove ${model.slug}`}
+                                                        onClick={() =>
+                                                          removeCustomModel(
                                                             providerCard.provider,
                                                             model.slug,
-                                                          );
-                                                        updateSettings({
-                                                          pinnedModels:
-                                                            nextPinned as any,
-                                                        });
-                                                      }}
-                                                    >
-                                                      <PinIcon className="size-3.5 fill-current" />
-                                                    </button>
-
-                                                    {model.name !== model.slug ? (
-                                                      <Tooltip>
-                                                        <TooltipTrigger
-                                                          render={
-                                                            <button
-                                                              type="button"
-                                                              className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted cursor-pointer"
-                                                              aria-label={`Details for ${model.name}`}
-                                                            >
-                                                              <InfoIcon className="size-3.5" />
-                                                            </button>
-                                                          }
-                                                        />
-                                                        <TooltipPopup
-                                                          side="top"
-                                                          className="max-w-56"
-                                                        >
-                                                          <code className="text-[11px] text-foreground">
-                                                            {model.slug}
-                                                          </code>
-                                                        </TooltipPopup>
-                                                      </Tooltip>
-                                                    ) : null}
-
-                                                    {model.isCustom ? (
-                                                      <div className="flex items-center gap-1 pl-1">
-                                                        <Badge
-                                                          variant="secondary"
-                                                          className="text-[9px] px-1 py-0 font-normal"
-                                                        >
-                                                          custom
-                                                        </Badge>
-                                                        <button
-                                                          type="button"
-                                                          className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
-                                                          aria-label={`Remove ${model.slug}`}
-                                                          onClick={() =>
-                                                            removeCustomModel(
-                                                              providerCard.provider,
-                                                              model.slug,
-                                                            )
-                                                          }
-                                                        >
-                                                          <XIcon className="size-3" />
-                                                        </button>
-                                                      </div>
-                                                    ) : (
-                                                      <Tooltip>
-                                                        <TooltipTrigger
-                                                          render={
-                                                            <span className="flex items-center pl-1">
-                                                              <Switch
-                                                                checked={!isHidden}
-                                                                onCheckedChange={(
-                                                                  checked,
-                                                                ) => {
-                                                                  const nextPrefs =
-                                                                    toggleHiddenModel(
-                                                                      settings.providerModelPreferences,
-                                                                      providerCard.provider,
-                                                                      model.slug,
-                                                                      !checked,
-                                                                    );
-                                                                  updateSettings({
-                                                                    providerModelPreferences:
-                                                                      nextPrefs as any,
-                                                                  });
-                                                                }}
-                                                                aria-label={`${!isHidden ? "Hide" : "Show"} ${model.name} in model picker`}
-                                                                className="scale-75 origin-right cursor-pointer"
-                                                              />
-                                                            </span>
-                                                          }
-                                                        />
-                                                        <TooltipPopup side="top">
-                                                          {!isHidden
-                                                            ? "Shown in model picker"
-                                                            : "Hidden from model picker"}
-                                                        </TooltipPopup>
-                                                      </Tooltip>
-                                                    )}
-                                                  </div>
+                                                          )
+                                                        }
+                                                      >
+                                                        <XIcon className="size-3" />
+                                                      </button>
+                                                    </div>
+                                                  ) : (
+                                                    <Tooltip>
+                                                      <TooltipTrigger
+                                                        render={
+                                                          <span className="flex items-center pl-1">
+                                                            <Switch
+                                                              checked={!isHidden}
+                                                              onCheckedChange={(checked) => {
+                                                                const nextPrefs = toggleHiddenModel(
+                                                                  settings.providerModelPreferences,
+                                                                  providerCard.provider,
+                                                                  model.slug,
+                                                                  !checked,
+                                                                );
+                                                                updateSettings({
+                                                                  providerModelPreferences:
+                                                                    nextPrefs as any,
+                                                                });
+                                                              }}
+                                                              aria-label={`${!isHidden ? "Hide" : "Show"} ${model.name} in model picker`}
+                                                              className="scale-75 origin-right cursor-pointer"
+                                                            />
+                                                          </span>
+                                                        }
+                                                      />
+                                                      <TooltipPopup side="top">
+                                                        {!isHidden
+                                                          ? "Shown in model picker"
+                                                          : "Hidden from model picker"}
+                                                      </TooltipPopup>
+                                                    </Tooltip>
+                                                  )}
                                                 </div>
-                                              )}
-                                            </SortableModelRowItem>
-                                          );
-                                        },
-                                      )}
+                                              </div>
+                                            )}
+                                          </SortableModelRowItem>
+                                        );
+                                      })}
                                     </SortableContext>
                                   </DndContext>
                                 </div>
@@ -2298,9 +2233,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                   size="sm"
                                   variant="outline"
                                   className="h-8 gap-1 text-xs shrink-0 cursor-pointer"
-                                  onClick={() =>
-                                    addCustomModel(providerCard.provider)
-                                  }
+                                  onClick={() => addCustomModel(providerCard.provider)}
                                 >
                                   <PlusIcon className="size-3.5" />
                                   Add
@@ -2324,9 +2257,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                 size="sm"
                                 variant="default"
                                 className="h-7 gap-1.5 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
-                                onClick={() =>
-                                  handleSaveModelOrder(providerCard.provider)
-                                }
+                                onClick={() => handleSaveModelOrder(providerCard.provider)}
                               >
                                 <SaveIcon className="size-3.5" />
                                 Save Order

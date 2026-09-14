@@ -20,14 +20,7 @@ import {
   SettingsSectionHeader,
 } from "./SettingsLayout";
 
-function StartupPreviewOverlay({
-  loader,
-  palette,
-  theme,
-  fontComboId,
-  customFont,
-  onClose,
-}: any) {
+function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont, onClose }: any) {
   const previewHoldMs = 2_000;
   const previewExitMs = 1_000;
   const [isExiting, setIsExiting] = useState(false);
@@ -930,4 +923,3 @@ export function AnimationsSettings() {
 }
 
 export default AnimationsSettings;
-

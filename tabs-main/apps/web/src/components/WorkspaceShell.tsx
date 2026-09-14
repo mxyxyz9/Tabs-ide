@@ -47,8 +47,11 @@ import { useLocation, useNavigate, useParams, useRouterState } from "@tanstack/r
 import {
   activateProjectSurface,
   getInFlightSurfaceActivation,
+  isPathAlignedWithSurfaceActivation,
+  isPathTargetingThread,
 } from "../lib/projectSurfaceCoordinator";
 import { markStartupStage } from "../lib/startupReadiness";
+import { PageLoadingState } from "./PageLoadingState";
 
 import {
   ArrowDownIcon,
@@ -72,7 +75,6 @@ import {
   GlobeIcon,
   HelpCircleIcon,
   HistoryIcon,
-  LoaderCircleIcon,
   Maximize2Icon,
   MinusIcon,
   Minimize2Icon,
@@ -10893,11 +10895,15 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     }
     // If the requested location pathname does not contain the current routeThreadId,
     // this routeThreadId is stale leftover from an ongoing navigation to "/" or another route.
-    if (!requestedPathname.includes(routeThreadId)) {
+    if (!isPathTargetingThread(requestedPathname, routeThreadId)) {
       return;
     }
     const inFlight = getInFlightSurfaceActivation();
-    if (inFlight && inFlight.projectId !== routeProjectId && Date.now() - inFlight.timestamp < 3000) {
+    if (
+      inFlight &&
+      Date.now() - inFlight.timestamp < 3000 &&
+      !isPathAlignedWithSurfaceActivation(requestedPathname, inFlight)
+    ) {
       return;
     }
 
@@ -11085,13 +11091,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         stayOnSettings: location.pathname === "/settings",
       });
     },
-    [
-      location.pathname,
-      navigate,
-      projects,
-      threads,
-      verifyProjectExists,
-    ],
+    [location.pathname, navigate, projects, threads, verifyProjectExists],
   );
 
   const keybindings = useKeybindings();
@@ -11239,8 +11239,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               const remainingProjectIds = tabShortcutStateRef.current.openProjectIds.filter(
                 (id) => id !== closingId,
               );
-              const fallbackProjectId =
-                remainingProjectIds[remainingProjectIds.length - 1] ?? null;
+              const fallbackProjectId = remainingProjectIds[remainingProjectIds.length - 1] ?? null;
               if (fallbackProjectId) {
                 void focusProject(fallbackProjectId);
               } else {
@@ -12449,43 +12448,21 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   let content: ReactNode;
   if (isSettingsNavigationPending) {
     content = (
-      <div
-        className="flex h-full min-h-0 items-center justify-center bg-background animate-in fade-in duration-200"
-        role="status"
-        aria-live="polite"
-        aria-label="Opening Settings"
-      >
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <div className="relative grid size-11 place-items-center rounded-2xl border border-border/70 bg-card/70 shadow-sm">
-            <SettingsIcon className="size-5" aria-hidden="true" />
-            <LoaderCircleIcon
-              className="absolute -inset-1 size-[52px] animate-spin text-primary/70"
-              aria-hidden="true"
-            />
-          </div>
-          <span className="text-sm">Opening Settings…</span>
-        </div>
-      </div>
+      <PageLoadingState label="Opening Settings" detail="Restoring your last settings section…" />
     );
   } else if (!threadsHydrated) {
     content = (
-      <div
-        className="flex h-full items-center justify-center text-sm text-muted-foreground"
-        role="status"
-      >
-        Loading your projects...
-      </div>
+      <PageLoadingState
+        label="Loading your projects"
+        detail="Restoring open workspaces and their last active tools…"
+      />
     );
   } else if (isEmbeddedWorkspacePending) {
     content = (
-      <div className="flex h-full items-center justify-center bg-background px-6 text-center">
-        <div className="max-w-md space-y-3">
-          <div className="text-base font-medium text-foreground">Attaching workspace…</div>
-          <div className="text-sm text-muted-foreground">
-            Connecting the embedded Tabs panel to {embeddedMode.workspaceRoot}.
-          </div>
-        </div>
-      </div>
+      <PageLoadingState
+        label="Attaching workspace"
+        detail={`Connecting the embedded Tabs panel to ${embeddedMode.workspaceRoot}.`}
+      />
     );
   } else if (isSettingsRoute) {
     content = (
@@ -12753,6 +12730,25 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     content = browserTool;
   }
 
+  const shouldAnimateReactSurface =
+    threadsHydrated &&
+    !isEmbeddedWorkspacePending &&
+    Boolean(activeProject && activeTool) &&
+    activeTool?.kind !== "code" &&
+    activeTool?.kind !== "browser" &&
+    activeTool?.kind !== "custom_embed" &&
+    !isSettingsSurfaceActive;
+  const renderedContent = shouldAnimateReactSurface ? (
+    <div
+      key={`${activeProject?.id ?? "none"}:${activeTool?.id ?? "none"}`}
+      className="tabs-surface-enter flex h-full min-h-0 flex-1 flex-col"
+    >
+      {content}
+    </div>
+  ) : (
+    content
+  );
+
   return (
     <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
       <CloneRepositoryDialog
@@ -12775,8 +12771,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               const remainingProjectIds = workspaceState.session.openProjectIds.filter(
                 (id) => id !== projectId,
               );
-              const fallbackProjectId =
-                remainingProjectIds[remainingProjectIds.length - 1] ?? null;
+              const fallbackProjectId = remainingProjectIds[remainingProjectIds.length - 1] ?? null;
               if (fallbackProjectId) {
                 void focusProject(fallbackProjectId);
               } else {
@@ -12819,7 +12814,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         <ToolErrorBoundary
           resetKey={`${activeProject?.environmentId ?? "none"}:${activeProject?.id ?? "none"}:${activeTool?.id ?? "none"}`}
         >
-          {content}
+          {renderedContent}
         </ToolErrorBoundary>
       </div>
 

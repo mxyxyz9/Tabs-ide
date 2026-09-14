@@ -130,9 +130,7 @@ export function AboutSettings() {
         <SettingsRow
           title="Version"
           description="The version of Tabs currently installed."
-          control={
-            <code className="text-xs font-medium text-muted-foreground">{APP_VERSION}</code>
-          }
+          control={<code className="text-xs font-medium text-muted-foreground">{APP_VERSION}</code>}
         />
 
         {isElectron && updateState ? (
@@ -210,4 +208,3 @@ export function AboutSettings() {
 }
 
 export default AboutSettings;
-

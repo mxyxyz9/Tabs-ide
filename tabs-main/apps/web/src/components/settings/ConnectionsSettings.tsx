@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
-import { SettingsSection } from "~/routes/_chat.settings";
+import { SettingsSection } from "./SettingsLayout";
 import { toastManager } from "~/components/ui/toast";
 import { useConfirm } from "~/hooks/useConfirm";
 import { useTheme } from "~/hooks/useTheme";

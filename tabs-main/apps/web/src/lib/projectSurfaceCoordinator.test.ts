@@ -1,4 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const localStorageMock = vi.hoisted(() => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+    clear: () => values.clear(),
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: storage,
+  });
+  return storage;
+});
 import { ProjectId, ThreadId } from "@tabs/contracts";
 import type { Project, Thread } from "../types";
 import type { ProjectWorkspaceSettings } from "@tabs/contracts/settings";
@@ -7,6 +22,7 @@ import {
   resolveProjectTargetSurface,
   getInFlightSurfaceActivation,
   clearInFlightSurfaceActivation,
+  isPathAlignedWithSurfaceActivation,
 } from "./projectSurfaceCoordinator";
 import {
   useWorkspaceShellStore,
@@ -55,13 +71,7 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
   const threads = [threadA1, threadB1];
 
   beforeEach(() => {
-    const store = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => store.set(key, value),
-      removeItem: (key: string) => store.delete(key),
-      clear: () => store.clear(),
-    });
+    localStorageMock.clear();
     clearInFlightSurfaceActivation();
     useWorkspaceShellStore.setState({
       ...createDefaultWorkspaceShellPersistedState(),
@@ -91,7 +101,9 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
 
     // Initial state: on Project A, agents tool, thread-a1
     expect(useWorkspaceShellStore.getState().session.activeProjectId).toBe(projectA.id);
-    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectA.id]).toBe("agents");
+    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectA.id]).toBe(
+      "agents",
+    );
 
     // 1. Switch to Project B (remembered Code)
     const resB = await activateProjectSurface({
@@ -106,7 +118,9 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
     expect(resB.destination).toEqual({ to: "/" });
     expect(navigate).toHaveBeenCalledWith({ to: "/" });
     expect(useWorkspaceShellStore.getState().session.activeProjectId).toBe(projectB.id);
-    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe("code");
+    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe(
+      "code",
+    );
 
     // 2. Switch back to Project A
     const resA = await activateProjectSurface({
@@ -127,7 +141,9 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
       },
     });
     expect(useWorkspaceShellStore.getState().session.activeProjectId).toBe(projectA.id);
-    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectA.id]).toBe("agents");
+    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectA.id]).toBe(
+      "agents",
+    );
 
     // 3. Switch to Project B again -> still restores Code
     const resB2 = await activateProjectSurface({
@@ -141,25 +157,25 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
     expect(resB2.toolId).toBe("code");
     expect(resB2.destination).toEqual({ to: "/" });
     expect(useWorkspaceShellStore.getState().session.activeProjectId).toBe(projectB.id);
-    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe("code");
+    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe(
+      "code",
+    );
   });
 
   it("2. A/Agents thread → B/Git does not reactivate A during transition", async () => {
-    const navigate = vi.fn().mockResolvedValue(undefined);
+    let finishNavigation!: () => void;
+    const navigate = vi.fn(() => new Promise<void>((resolve) => (finishNavigation = resolve)));
 
     // Set B's remembered tool to Git
     useWorkspaceShellStore.getState().setActiveTool(projectB.id, "git");
 
-    const surfaceB = await activateProjectSurface({
+    const activation = activateProjectSurface({
       projectId: projectB.id,
       projects,
       threads,
       navigate,
       currentPathname: `/${projectA.environmentId}/${threadA1.id}`,
     });
-
-    expect(surfaceB.toolId).toBe("git");
-    expect(surfaceB.destination).toEqual({ to: "/" });
 
     // Verify in-flight guard is set for B
     const inFlight = getInFlightSurfaceActivation();
@@ -173,6 +189,12 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
     expect(state.session.activeToolIdByProjectId[projectB.id]).toBe("git");
     // Project A's state is preserved untouched
     expect(state.session.activeToolIdByProjectId[projectA.id]).toBe("agents");
+
+    finishNavigation();
+    const surfaceB = await activation;
+    expect(surfaceB.toolId).toBe("git");
+    expect(surfaceB.destination).toEqual({ to: "/" });
+    expect(getInFlightSurfaceActivation()).toBeNull();
   });
 
   it("3. A/Code → B/Agents remembered thread → A restores Code", async () => {
@@ -214,7 +236,9 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
     expect(surfaceA.toolId).toBe("code");
     expect(surfaceA.destination).toEqual({ to: "/" });
     expect(useWorkspaceShellStore.getState().session.activeProjectId).toBe(projectA.id);
-    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectA.id]).toBe("code");
+    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectA.id]).toBe(
+      "code",
+    );
   });
 
   it("4. Browser, Server, Testing, and custom tools route to root and preserve per-project state", async () => {
@@ -265,7 +289,9 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
 
       expect(surface.toolId).toBe(toolId);
       expect(surface.destination).toEqual({ to: "/" });
-      expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe(toolId);
+      expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe(
+        toolId,
+      );
     }
   });
 
@@ -411,9 +437,11 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
 
     // 2. Interleaving check: store was updated synchronously, but router is in flight
     expect(useWorkspaceShellStore.getState().session.activeProjectId).toBe(projectB.id);
-    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe("git");
+    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe(
+      "git",
+    );
 
-    // The in-flight guard protects project B
+    // The in-flight guard protects project B while navigation is pending.
     const inFlight = getInFlightSurfaceActivation();
     expect(inFlight?.projectId).toBe(projectB.id);
 
@@ -429,8 +457,11 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
     expect(wouldClobber).toBe(false);
 
     await activationPromise;
+    expect(getInFlightSurfaceActivation()).toBeNull();
     expect(useWorkspaceShellStore.getState().session.activeProjectId).toBe(projectB.id);
-    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe("git");
+    expect(useWorkspaceShellStore.getState().session.activeToolIdByProjectId[projectB.id]).toBe(
+      "git",
+    );
   });
 
   it("10. Browser back/forward & deliberate deep links activate correct project, thread, and agents tool", async () => {
@@ -439,7 +470,6 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
     clearInFlightSurfaceActivation();
 
     // User navigates back/forward or clicks a deep link to Project A's thread
-    const deepLinkUrl = `/${projectA.environmentId}/${threadA1.id}`;
     const targetThread = threads.find((t) => t.id === threadA1.id);
     expect(targetThread).toBeDefined();
 
@@ -474,5 +504,21 @@ describe("projectSurfaceCoordinator & Per-Project Tool Restoration", () => {
     // Project B still remembers code
     expect(state.session.activeToolIdByProjectId[projectB.id]).toBe("code");
   });
-});
 
+  it("matches route alignment by the exact decoded thread segment", () => {
+    const activation = {
+      id: 1,
+      projectId: projectA.id,
+      toolId: "agents",
+      threadId: ThreadId.makeUnsafe("thread with spaces"),
+      timestamp: Date.now(),
+    };
+
+    expect(isPathAlignedWithSurfaceActivation("/env/thread%20with%20spaces", activation)).toBe(
+      true,
+    );
+    expect(
+      isPathAlignedWithSurfaceActivation("/env/prefix-thread%20with%20spaces", activation),
+    ).toBe(false);
+  });
+});

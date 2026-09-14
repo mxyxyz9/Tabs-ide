@@ -62,7 +62,7 @@ import { Toggle } from "../ui/toggle";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AddKeybindingDialog } from "./AddKeybindingDialog";
-import { SettingsHeaderPortal } from "~/routes/_chat.settings";
+import { SettingsHeaderPortal } from "./SettingsLayout";
 import { useConfirm } from "~/hooks/useConfirm";
 
 import {

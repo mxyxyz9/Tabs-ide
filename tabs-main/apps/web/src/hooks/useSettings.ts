@@ -19,13 +19,9 @@ import {
 import { DEFAULT_SERVER_SETTINGS } from "@tabs/contracts";
 import {
   type ClientSettings,
-  ClientSettingsSchema,
   DEFAULT_DESKTOP_ICON_THEME,
-  DEFAULT_DIFF_COLOR_SCHEME,
-  DEFAULT_CLIENT_SETTINGS,
   DEFAULT_UNIFIED_SETTINGS,
   DesktopIconTheme,
-  DiffColorScheme,
   SidebarProjectSortOrder,
   SidebarThreadSortOrder,
   TimestampFormat,
@@ -188,6 +184,7 @@ export function useSettings<T = UnifiedSettings>(selector?: (s: UnifiedSettings)
 
 let latestServerUpdateSequence = 0;
 let savedTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let serverUpdateQueue: Promise<void> = Promise.resolve();
 
 /**
  * Applies a settings patch directly to the appropriate backing store (server via RPC,
@@ -218,8 +215,7 @@ export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean
         }, 3000);
       }
     } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : "Failed to save client settings";
+      const errorMsg = error instanceof Error ? error.message : "Failed to save client settings";
       setSettingsPersistence({
         status: "failed",
         error: errorMsg,
@@ -246,8 +242,15 @@ export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean
       retry: null,
     });
 
-    return ensureNativeApi()
-      .server.updateSettings(serverPatch)
+    const serverUpdate = serverUpdateQueue.then(() =>
+      ensureNativeApi().server.updateSettings(serverPatch),
+    );
+    serverUpdateQueue = serverUpdate.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return serverUpdate
       .then(async () => {
         if (currentSeq === latestServerUpdateSequence) {
           await refreshServerConfig();
@@ -269,9 +272,12 @@ export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean
         }
         return true;
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (currentSeq === latestServerUpdateSequence) {
-          rollbackServerSettings(previousSettings);
+          const refreshedConfig = await refreshServerConfig();
+          if (!refreshedConfig) {
+            rollbackServerSettings(previousSettings);
+          }
           const errorMsg =
             err instanceof Error ? err.message : String(err ?? "Failed to save settings");
           setSettingsPersistence({
@@ -400,11 +406,7 @@ export function useDebouncedSettingsUpdate(delay = 300) {
   };
 }
 
-export {
-  useSettingsPersistence,
-  type SettingsPersistenceState,
-  type SettingsSaveStatus,
-};
+export { useSettingsPersistence, type SettingsPersistenceState, type SettingsSaveStatus };
 
 // ── One-time migration from localStorage ─────────────────────────────
 

@@ -139,6 +139,7 @@ export function BrowserProfilesSettings() {
   const [profileInspections, setProfileInspections] = useState<
     Record<string, ProfileInspectionState>
   >({});
+  const inspectionGenerationRef = useRef<Record<string, number>>({});
 
   const inspectSingleProfile = useCallback(async (profileId: string) => {
     if (
@@ -147,6 +148,8 @@ export function BrowserProfilesSettings() {
     ) {
       return;
     }
+    const generation = (inspectionGenerationRef.current[profileId] ?? 0) + 1;
+    inspectionGenerationRef.current[profileId] = generation;
     setProfileInspections((prev) => ({
       ...prev,
       [profileId]: {
@@ -172,6 +175,7 @@ export function BrowserProfilesSettings() {
           inspectedAt: Date.now(),
         };
       }
+      if (inspectionGenerationRef.current[profileId] !== generation) return;
       setProfileInspections((prev) => ({
         ...prev,
         [profileId]: {
@@ -181,6 +185,7 @@ export function BrowserProfilesSettings() {
         },
       }));
     } catch (err) {
+      if (inspectionGenerationRef.current[profileId] !== generation) return;
       const errorMsg =
         err instanceof Error ? err.message : "Failed to inspect profile cookie domains";
       setProfileInspections((prev) => ({
@@ -195,9 +200,7 @@ export function BrowserProfilesSettings() {
   }, []);
 
   const refreshDomains = useCallback(async () => {
-    for (const p of profiles) {
-      await inspectSingleProfile(p.id);
-    }
+    await Promise.all(profiles.map((profile) => inspectSingleProfile(profile.id)));
   }, [profiles, inspectSingleProfile]);
 
   const profileDomains = useMemo(() => {
@@ -252,11 +255,12 @@ export function BrowserProfilesSettings() {
   useEffect(() => {
     const subscribe = window.desktopBridge?.onBrowserProfileDataChanged;
     if (!subscribe) return;
-    return subscribe(() => {
-      void refreshDomains();
-      void refreshPermissions();
+    return subscribe((profileId) => {
+      if (profiles.some((profile) => profile.id === profileId)) {
+        void inspectSingleProfile(profileId);
+      }
     });
-  }, [refreshDomains, refreshPermissions]);
+  }, [inspectSingleProfile, profiles]);
 
   // Quick portals customized by user
   const [customPortals, setCustomPortals] = useState<QuickPortal[]>(() => {
@@ -768,7 +772,10 @@ export function BrowserProfilesSettings() {
                     </span>
                     {inspection && (
                       <span className="font-mono text-[11px] text-muted-foreground">
-                        {inspection.totalDomains} {inspection.totalDomains === 1 ? "domain" : "domains"} ({inspection.totalCookies} {inspection.totalCookies === 1 ? "cookie" : "cookies"})
+                        {inspection.totalDomains}{" "}
+                        {inspection.totalDomains === 1 ? "domain" : "domains"} (
+                        {inspection.totalCookies}{" "}
+                        {inspection.totalCookies === 1 ? "cookie" : "cookies"})
                       </span>
                     )}
                   </div>
@@ -776,7 +783,8 @@ export function BrowserProfilesSettings() {
                   {/* Partition Metadata */}
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
                     <span className="bg-background/80 px-1.5 py-0.5 rounded border border-border/60">
-                      Partition: {inspection?.partition ?? `persist:tabs-browser:profile:${profile.id}`}
+                      Partition:{" "}
+                      {inspection?.partition ?? `persist:tabs-browser:profile:${profile.id}`}
                     </span>
                     {inspection && (
                       <span className="bg-background/80 px-1.5 py-0.5 rounded border border-border/60">
@@ -813,11 +821,14 @@ export function BrowserProfilesSettings() {
                   )}
 
                   {/* State: Loaded */}
-                  {(inspectionState.status === "loaded" || (inspectionState.status === "idle" && domains.length > 0)) && (
+                  {(inspectionState.status === "loaded" ||
+                    (inspectionState.status === "idle" && domains.length > 0)) && (
                     <>
                       {domains.length === 0 ? (
                         <div className="text-[11px] text-muted-foreground/70">
-                          No cookie domains detected. Existing per-project logins and unpartitioned web data are stored separately. Authentication cannot be inferred without cookies.
+                          No cookie domains detected. Existing per-project logins and unpartitioned
+                          web data are stored separately. Authentication cannot be inferred without
+                          cookies.
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -838,7 +849,9 @@ export function BrowserProfilesSettings() {
                                       aria-hidden="true"
                                     />
                                     <span className="font-medium">{item.domain}</span>
-                                    <span className="text-[10px] text-muted-foreground">({item.cookieCount})</span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      ({item.cookieCount})
+                                    </span>
                                     <button
                                       type="button"
                                       onClick={() => handleClearSingleDomain(profile, item.domain)}

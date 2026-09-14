@@ -487,4 +487,3 @@ describe("Browser resumeLastVisitedPage defaults and migrations", () => {
     expect(optInEmbed.resumeLastVisitedPage).toBe(true);
   });
 });
-

@@ -6,7 +6,8 @@ import { serverSettingsAtom } from "../../../state/settings";
 import { ProviderQuotaCard } from "./ProviderQuotaCard";
 import { UsageLimitsSection } from "../../usage/UsageLimits";
 import { UsageProviderSettings } from "../UsageProviderSettings";
-import { InfoIcon, LoaderIcon } from "lucide-react";
+import { InfoIcon } from "lucide-react";
+import { PageLoadingState } from "../../PageLoadingState";
 
 const ALL_ACP_PROVIDERS = [
   "codex",
@@ -99,14 +100,12 @@ export function LimitsTab() {
         </div>
 
         {snapshotsState.loading && snapshots.length === 0 ? (
-          <div
-            role="status"
-            aria-live="polite"
-            className="flex h-48 flex-col items-center justify-center gap-3 text-muted-foreground"
-          >
-            <LoaderIcon className="size-6 animate-spin" />
-            <span className="text-sm">Fetching live provider quotas and limits...</span>
-          </div>
+          <PageLoadingState
+            compact
+            className="h-48"
+            label="Fetching provider limits"
+            detail="Checking live quota snapshots from your configured providers…"
+          />
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {providerCards.map(({ snapshot, isEnabled }) => (

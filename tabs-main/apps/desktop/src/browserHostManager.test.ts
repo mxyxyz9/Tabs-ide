@@ -162,16 +162,25 @@ describe("BrowserHostManager profile storage", () => {
   });
 
   it("inspects profile truthfulness: returns partition, persistent state, cookie counts, and no secrets", async () => {
+    const sessionCookie = {
+      domain: ".github.com",
+      name: "user_session",
+      get value(): string {
+        throw new Error("cookie values must not be inspected");
+      },
+    };
     electronMocks.fromPartition.mockReturnValue({
       isPersistent: () => true,
       getStoragePath: () => "/tmp/tabs-storage-work",
       cookies: {
         on: vi.fn(),
-        get: vi.fn().mockResolvedValue([
-          { domain: ".github.com", name: "user_session", value: "super-secret-token-12345" },
-          { domain: ".github.com", name: "__Host-csrf", value: "secret-csrf-token" },
-          { domain: "docs.github.com", name: "theme", value: "dark" },
-        ]),
+        get: vi
+          .fn()
+          .mockResolvedValue([
+            sessionCookie,
+            { domain: ".github.com", name: "__Host-csrf", value: "secret-csrf-token" },
+            { domain: "docs.github.com", name: "theme", value: "dark" },
+          ]),
       },
     });
     const manager = new BrowserHostManager(() => null);
@@ -274,11 +283,13 @@ describe("BrowserHostManager profile storage", () => {
       getStoragePath: () => `/tmp/${partition}`,
       cookies: {
         on: vi.fn(),
-        get: vi.fn().mockResolvedValue(
-          partition.includes("personal")
-            ? [{ domain: "personal.org", name: "p_token", value: "tok1" }]
-            : [{ domain: "work.org", name: "w_token", value: "tok2" }],
-        ),
+        get: vi
+          .fn()
+          .mockResolvedValue(
+            partition.includes("personal")
+              ? [{ domain: "personal.org", name: "p_token", value: "tok1" }]
+              : [{ domain: "work.org", name: "w_token", value: "tok2" }],
+          ),
       },
     }));
 
@@ -314,10 +325,7 @@ describe("BrowserHostManager profile storage", () => {
       "https://github.com/",
       "user_session",
     );
-    expect(profileSession.cookies.remove).not.toHaveBeenCalledWith(
-      expect.anything(),
-      "sid",
-    );
+    expect(profileSession.cookies.remove).not.toHaveBeenCalledWith(expect.anything(), "sid");
     expect(profileSession.closeAllConnections).toHaveBeenCalledOnce();
     expect(profileSession.clearData).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -416,9 +424,9 @@ describe("BrowserHostManager picture in picture", () => {
     manager.openPictureInPicture({ projectId: "project-1", sessionId: "preview-1" });
     expect(mainChildren).toEqual([]);
     expect(electronMocks.browserWindows).toHaveLength(1);
-    expect(
-      (electronMocks.browserWindows[0]?.contentView as { children: unknown[] }).children,
-    ).toEqual([view]);
+    const browserWindow = electronMocks.browserWindows[0];
+    expect(browserWindow).toBeDefined();
+    expect((browserWindow!.contentView as { children: unknown[] }).children).toEqual([view]);
     expect(manager.getSessionState("project-1", "preview-1").pictureInPicture).toBe(true);
 
     manager.closePictureInPicture({ projectId: "project-1", sessionId: "preview-1" });

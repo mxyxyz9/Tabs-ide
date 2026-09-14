@@ -1,8 +1,5 @@
 import { describe, expect, it, vi, beforeEach, beforeAll, afterAll } from "vitest";
-import {
-  applySettingsUpdate,
-  createDebouncedSettingsUpdater,
-} from "./useSettings";
+import { applySettingsUpdate, createDebouncedSettingsUpdater } from "./useSettings";
 import {
   clientSettingsAtom,
   serverSettingsAtom,
@@ -68,6 +65,7 @@ describe("Settings persistence contract", () => {
       keybindings: [],
     } as unknown as ServerConfig;
     setServerConfig(initialConfig);
+    mockGetConfigRpc.mockResolvedValue(initialConfig);
     appAtomRegistry.set(clientSettingsAtom, { ...DEFAULT_CLIENT_SETTINGS, diffWordWrap: false });
     appAtomRegistry.set(settingsPersistenceAtom, {
       status: "idle",
@@ -178,7 +176,7 @@ describe("Settings persistence contract", () => {
     expect(appAtomRegistry.get(serverSettingsAtom).enableAssistantStreaming).toBe(false);
   });
 
-  it("handles multiple rapid updates resolving out of order correctly", async () => {
+  it("serializes rapid server updates so persistence order matches user intent", async () => {
     let resolveFirst!: (val: any) => void;
     const firstPromise = new Promise((resolve) => {
       resolveFirst = resolve;
@@ -196,10 +194,15 @@ describe("Settings persistence contract", () => {
     // Dispatch update 1
     const p1 = applySettingsUpdate({ enableAssistantStreaming: false });
 
-    // Dispatch update 2 (newer)
+    // Dispatch update 2 (newer). It must wait for update 1 instead of racing it.
     const p2 = applySettingsUpdate({ enableAssistantStreaming: true });
+    await Promise.resolve();
+    expect(mockUpdateSettingsRpc).toHaveBeenCalledTimes(1);
 
-    // Update 2 resolves FIRST
+    resolveFirst({ ok: true });
+    await p1;
+    await vi.waitFor(() => expect(mockUpdateSettingsRpc).toHaveBeenCalledTimes(2));
+
     mockGetConfigRpc.mockResolvedValueOnce({
       version: "1.0.0",
       settings: { ...DEFAULT_SERVER_SETTINGS, enableAssistantStreaming: true },
@@ -211,13 +214,6 @@ describe("Settings persistence contract", () => {
 
     expect(appAtomRegistry.get(serverSettingsAtom).enableAssistantStreaming).toBe(true);
     expect(appAtomRegistry.get(settingsPersistenceAtom).status).toBe("saved");
-
-    // Now Update 1 (older) resolves LATER
-    resolveFirst({ ok: true });
-    await p1;
-
-    // Update 1 must NOT overwrite Update 2
-    expect(appAtomRegistry.get(serverSettingsAtom).enableAssistantStreaming).toBe(true);
   });
 
   it("debounces rapid control updates and flushes on demand", async () => {

@@ -45,7 +45,7 @@ import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { SegmentedControl, type SegmentOption } from "../ui/segmented-control";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { SettingsHeaderPortal, SettingsRow, SettingsSection } from "../../routes/_chat.settings";
+import { SettingsHeaderPortal, SettingsRow, SettingsSection } from "./SettingsLayout";
 import { ExpandableText } from "./ExpandableText";
 import {
   AttributionTable,

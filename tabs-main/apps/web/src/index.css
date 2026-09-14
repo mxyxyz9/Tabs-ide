@@ -53,6 +53,57 @@
   --diff-deletion-foreground: light-dark(#b91c1c, #f87171);
 }
 
+@keyframes tabs-surface-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.998);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tabs-loading-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tabs-surface-enter {
+  animation: tabs-surface-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tabs-loading-enter {
+  animation: tabs-loading-enter 240ms ease-out both;
+}
+
+@keyframes settings-loading-glint {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(240%);
+  }
+}
+
+.settings-loading-glint {
+  animation: settings-loading-glint 1.15s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs-surface-enter,
+  .tabs-loading-enter,
+  .settings-loading-glint {
+    animation: none;
+  }
+}
+
 /* Normalize legacy Lucide loaders to the product's quiet ring indicator. */
 svg[class*="lucide-loader"].animate-spin {
   box-sizing: border-box;

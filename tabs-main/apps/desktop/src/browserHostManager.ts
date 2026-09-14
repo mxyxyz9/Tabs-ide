@@ -744,9 +744,7 @@ export class BrowserHostManager {
         ? Boolean((s as any).isPersistent())
         : partition.startsWith("persist:");
     const storagePath =
-      typeof (s as any).getStoragePath === "function"
-        ? (s as any).getStoragePath()
-        : null;
+      typeof (s as any).getStoragePath === "function" ? (s as any).getStoragePath() : null;
 
     const cookies = await s.cookies.get({});
     const map = new Map<string, { count: number; hasSessionHint: boolean }>();
@@ -784,8 +782,9 @@ export class BrowserHostManager {
       const cName = cookie.name.toLowerCase();
       const hasSessionHint =
         AUTH_COOKIE_NAMES.some((name) => cName === name || cName.includes(name)) ||
-        ((cName.includes("session") || cName.includes("token") || cName.includes("auth")) &&
-          Boolean(cookie.value && cookie.value.length > 10));
+        cName.includes("session") ||
+        cName.includes("token") ||
+        cName.includes("auth");
 
       if (hasSessionHint) {
         existing.hasSessionHint = true;
@@ -2161,7 +2160,7 @@ export class BrowserHostManager {
 
   syncSessions(projectIds: readonly string[]): void {
     const allowed = new Set(projectIds);
-    for (const [key, session] of this.sessions) {
+    for (const session of this.sessions.values()) {
       if (allowed.has(session.projectId)) continue;
       this.destroySession({ projectId: session.projectId, sessionId: session.sessionId });
     }

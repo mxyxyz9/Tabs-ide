@@ -303,8 +303,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL, input),
   getBrowserProfileDomains: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL, input),
-  inspectBrowserProfile: (input) =>
-    ipcRenderer.invoke(BROWSER_HOST_INSPECT_PROFILE_CHANNEL, input),
+  inspectBrowserProfile: (input) => ipcRenderer.invoke(BROWSER_HOST_INSPECT_PROFILE_CHANNEL, input),
   clearBrowserProfileDomain: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL, input),
   listBrowserImportSources: () => ipcRenderer.invoke(BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL),

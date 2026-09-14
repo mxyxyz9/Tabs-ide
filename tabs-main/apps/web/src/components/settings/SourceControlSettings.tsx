@@ -15,7 +15,7 @@ import {
 } from "~/components/Icons";
 import { cn } from "~/lib/utils";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
-import { SettingsSection } from "~/routes/_chat.settings";
+import { SettingsSection } from "./SettingsLayout";
 import { useTheme } from "~/hooks/useTheme";
 import { getActiveFontCombo } from "~/lib/themes";
 

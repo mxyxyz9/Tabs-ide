@@ -1,12 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,7 +14,6 @@ import {
   InfoIcon,
   KeyboardIcon,
   Link2Icon,
-  LoaderIcon,
   LogInIcon,
   LogOutIcon,
   MonitorPlayIcon,
@@ -32,20 +23,16 @@ import {
   XIcon,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogPopup,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "~/components/ui/dialog";
 import { SidebarTrigger } from "~/components/ui/sidebar";
 import { toastManager } from "~/components/ui/toast";
 import { SettingsPersistenceStatus } from "~/components/settings/SettingsPersistenceStatus";
+import { SettingsLoadingState } from "~/components/settings/SettingsLoadingState";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
-import { useTheme } from "~/hooks/useTheme";
 import { refreshServerConfig, useServerConfig } from "~/state/settings";
 import { useSettingsViewState } from "~/state/scopedStateStore";
 import ThreadTerminalDrawer from "~/components/ThreadTerminalDrawer";
-import { DEFAULT_THREAD_TERMINAL_HEIGHT, DEFAULT_THREAD_TERMINAL_ID } from "~/types";
+import { DEFAULT_THREAD_TERMINAL_ID } from "~/types";
 import { ensureNativeApi, readNativeApi } from "~/nativeApi";
 import { serverQueryKeys } from "~/lib/serverReactQuery";
 import { cn, getHashAwareSearchParams, isPopoutMode } from "~/lib/utils";
@@ -60,9 +47,9 @@ import {
   ThreadId,
 } from "@tabs/contracts";
 import {
-  PROVIDER_SETTINGS,
+  PROVIDER_SETTINGS_KEYS,
   type ProviderSettingsKey,
-} from "~/components/settings/ProvidersSettings";
+} from "~/components/settings/providerSettings.shared";
 
 export {
   SettingsSection,
@@ -158,7 +145,6 @@ const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 function SettingsRouteView() {
   const { confirmDialog } = useConfirm();
   const navigate = useNavigate();
-  const { theme } = useTheme();
   const serverConfig = useServerConfig();
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
@@ -352,8 +338,8 @@ function SettingsRouteView() {
   }, [providerActionSession, refreshProviders]);
 
   useEffect(() => {
-    const hasAnyEnabled = PROVIDER_SETTINGS.some((p) => {
-      const cfg = settings.providers[p.provider];
+    const hasAnyEnabled = PROVIDER_SETTINGS_KEYS.some((provider) => {
+      const cfg = settings.providers[provider];
       return cfg ? cfg.enabled : true;
     });
     if (!hasAnyEnabled) {
@@ -408,13 +394,7 @@ function SettingsRouteView() {
   if (isPopout) {
     return (
       <div className="isolate flex h-screen min-h-0 min-w-0 flex-col overflow-y-auto overscroll-y-none bg-background text-foreground">
-        <Suspense
-          fallback={
-            <div className="flex h-64 items-center justify-center">
-              <LoaderIcon className="size-6 animate-spin text-muted-foreground" />
-            </div>
-          }
-        >
+        <Suspense fallback={<SettingsLoadingState label="Loading settings" className="h-64" />}>
           {activeSettingsSection === "documentation" ? (
             <div className="p-6 max-w-7xl mx-auto w-full">
               <DocumentationSettings />
@@ -495,44 +475,48 @@ function SettingsRouteView() {
               <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-12">
                 <Suspense
                   fallback={
-                    <div className="flex h-64 items-center justify-center">
-                      <LoaderIcon className="size-6 animate-spin text-muted-foreground" />
-                    </div>
+                    <SettingsLoadingState
+                      label={`Loading ${SETTINGS_NAV.find((item) => item.id === activeSettingsSection)?.label ?? "settings"}`}
+                    />
                   }
                 >
-                  {activeSettingsSection === "general" ? <GeneralSettings /> : null}
-                  {activeSettingsSection === "themes" ? <ThemesSettings /> : null}
-                  {activeSettingsSection === "startup-animation" ? <AnimationsSettings /> : null}
-                  {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
-                  {activeSettingsSection === "profiles" ? <BrowserProfilesSettings /> : null}
-                  {activeSettingsSection === "source-control" ? (
-                    <SourceControlSettingsPanel
-                      startProviderAction={startProviderAction}
-                      providerActionBusy={providerActionSession !== null}
-                    />
-                  ) : null}
-                  {activeSettingsSection === "connections" ? <ConnectionsSettings /> : null}
-                  {activeSettingsSection === "documentation" ? <DocumentationSettings /> : null}
-                  {activeSettingsSection === "providers" ? (
-                    <ProvidersSettings
-                      refreshProviders={refreshProviders}
-                      isRefreshingProviders={isRefreshingProviders}
-                      startProviderAction={startProviderAction}
-                      providerActionBusy={providerActionSession !== null}
-                    />
-                  ) : null}
-                  {activeSettingsSection === "keybindings" ? (
-                    <KeybindingsSettings
-                      keybindings={resolvedKeybindings}
-                      onUpsert={handleUpsertKeybinding}
-                      onRemove={handleRemoveKeybinding}
-                      keybindingsConfigPath={keybindingsConfigPath as string}
-                      availableEditors={(availableEditors as any) ?? []}
-                    />
-                  ) : null}
-                  {activeSettingsSection === "usage" ? <UsageLimitsPage /> : null}
-                  {activeSettingsSection === "diagnostics" ? <DiagnosticsSettings /> : null}
-                  {activeSettingsSection === "about" ? <AboutSettings /> : null}
+                  <div key={activeSettingsSection} className="tabs-surface-enter">
+                    {activeSettingsSection === "general" ? <GeneralSettings /> : null}
+                    {activeSettingsSection === "themes" ? <ThemesSettings /> : null}
+                    {activeSettingsSection === "startup-animation" ? <AnimationsSettings /> : null}
+                    {activeSettingsSection === "workspace" ? (
+                      <ProjectWorkspaceSettingsSection />
+                    ) : null}
+                    {activeSettingsSection === "profiles" ? <BrowserProfilesSettings /> : null}
+                    {activeSettingsSection === "source-control" ? (
+                      <SourceControlSettingsPanel
+                        startProviderAction={startProviderAction}
+                        providerActionBusy={providerActionSession !== null}
+                      />
+                    ) : null}
+                    {activeSettingsSection === "connections" ? <ConnectionsSettings /> : null}
+                    {activeSettingsSection === "documentation" ? <DocumentationSettings /> : null}
+                    {activeSettingsSection === "providers" ? (
+                      <ProvidersSettings
+                        refreshProviders={refreshProviders}
+                        isRefreshingProviders={isRefreshingProviders}
+                        startProviderAction={startProviderAction}
+                        providerActionBusy={providerActionSession !== null}
+                      />
+                    ) : null}
+                    {activeSettingsSection === "keybindings" ? (
+                      <KeybindingsSettings
+                        keybindings={resolvedKeybindings}
+                        onUpsert={handleUpsertKeybinding}
+                        onRemove={handleRemoveKeybinding}
+                        keybindingsConfigPath={keybindingsConfigPath as string}
+                        availableEditors={(availableEditors as any) ?? []}
+                      />
+                    ) : null}
+                    {activeSettingsSection === "usage" ? <UsageLimitsPage /> : null}
+                    {activeSettingsSection === "diagnostics" ? <DiagnosticsSettings /> : null}
+                    {activeSettingsSection === "about" ? <AboutSettings /> : null}
+                  </div>
                 </Suspense>
               </div>
             </div>
@@ -582,6 +566,17 @@ function SettingsRouteView() {
                   <XIcon className="size-3.5" />
                   Close
                 </Button>
+              </div>
+              <DialogDescription className="sr-only">
+                Interactive terminal for installing, updating, signing in to, or logging out of a
+                provider.
+              </DialogDescription>
+              <div role="status" aria-live="polite" className="sr-only">
+                {providerActionSession.kind === "login"
+                  ? "Sign-in terminal opened"
+                  : providerActionSession.kind === "logout"
+                    ? "Log-out terminal opened"
+                    : "Provider command terminal opened"}
               </div>
               <div className="min-h-0 w-full flex-1 bg-background p-2">
                 <ThreadTerminalDrawer

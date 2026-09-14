@@ -32,7 +32,7 @@ import { Input } from "~/components/ui/input";
 import { useTheme } from "~/hooks/useTheme";
 import { getActiveFontCombo } from "~/lib/themes";
 import { cn } from "~/lib/utils";
-import { SettingsSection } from "~/routes/_chat.settings";
+import { SettingsSection } from "./SettingsLayout";
 import { useSettingsViewState } from "~/state/scopedStateStore";
 
 export type DocCategory =

@@ -15,12 +15,8 @@ export function SettingsPersistenceStatus({ className }: { readonly className?: 
       role="status"
       className={cn("flex items-center gap-2 text-xs", className)}
     >
-      {persistence.status === "saving" && (
-        <span className="text-muted-foreground">Saving...</span>
-      )}
-      {persistence.status === "saved" && (
-        <span className="text-muted-foreground">Saved</span>
-      )}
+      {persistence.status === "saving" && <span className="text-muted-foreground">Saving...</span>}
+      {persistence.status === "saved" && <span className="text-muted-foreground">Saved</span>}
       {persistence.status === "failed" && (
         <div className="flex items-center gap-1.5 text-destructive font-medium">
           <span>Failed to save</span>

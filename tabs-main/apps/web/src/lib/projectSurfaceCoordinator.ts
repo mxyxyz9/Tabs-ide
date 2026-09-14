@@ -29,7 +29,9 @@ export function resolveMostRecentThreadForProject(
   projectId: ProjectId,
   threads: ReadonlyArray<Thread>,
 ): Thread | null {
-  const activeThreads = threads.filter((thread) => thread.projectId === projectId && thread.archivedAt === null);
+  const activeThreads = threads.filter(
+    (thread) => thread.projectId === projectId && thread.archivedAt === null,
+  );
   return sortProjectThreads(activeThreads)[0] ?? null;
 }
 
@@ -132,7 +134,9 @@ export function resolveProjectTargetSurface(
         ? input.targetThreadId
         : input.rememberedThreadId !== undefined
           ? input.rememberedThreadId
-          : (useWorkspaceShellStore.getState().session.rememberedThreadIdByProjectId[input.projectId] ?? null);
+          : (useWorkspaceShellStore.getState().session.rememberedThreadIdByProjectId[
+              input.projectId
+            ] ?? null);
 
     const threadId = resolveProjectAgentThreadId(input.projectId, input.threads, candidateThreadId);
 
@@ -183,11 +187,14 @@ export interface ActivateProjectSurfaceOptions {
  * clobbering destination state.
  */
 let inFlightSurfaceActivation: {
+  id: number;
   projectId: ProjectId;
   toolId: string;
   threadId: ThreadId | null;
   timestamp: number;
 } | null = null;
+
+let nextSurfaceActivationId = 0;
 
 export function getInFlightSurfaceActivation() {
   return inFlightSurfaceActivation;
@@ -195,6 +202,29 @@ export function getInFlightSurfaceActivation() {
 
 export function clearInFlightSurfaceActivation() {
   inFlightSurfaceActivation = null;
+}
+
+export function isPathTargetingThread(pathname: string, threadId: ThreadId): boolean {
+  const lastSegment = pathname.split("/").filter(Boolean).at(-1);
+  if (!lastSegment) return false;
+  try {
+    return decodeURIComponent(lastSegment) === threadId;
+  } catch {
+    return lastSegment === threadId;
+  }
+}
+
+export function isPathAlignedWithSurfaceActivation(
+  pathname: string,
+  activation: NonNullable<ReturnType<typeof getInFlightSurfaceActivation>>,
+): boolean {
+  if (activation.toolId !== "agents") {
+    return pathname === "/";
+  }
+  if (!activation.threadId) {
+    return pathname === "/";
+  }
+  return isPathTargetingThread(pathname, activation.threadId);
 }
 
 /**
@@ -230,19 +260,17 @@ export async function activateProjectSurface(
   });
 
   // Track activation to guard against concurrent route-sync races
-  inFlightSurfaceActivation = {
+  const activation = {
+    id: ++nextSurfaceActivationId,
     projectId: surface.projectId,
     toolId: surface.toolId,
     threadId: surface.threadId,
     timestamp: Date.now(),
   };
+  inFlightSurfaceActivation = activation;
 
   // Atomically commit active project, valid tool, and optional thread to store
-  store.openProjectSurface(
-    surface.projectId,
-    surface.toolId,
-    surface.threadId,
-  );
+  store.openProjectSurface(surface.projectId, surface.toolId, surface.threadId);
 
   if (codeFocusedPath !== undefined) {
     store.setCodeFocusedPath(surface.projectId, codeFocusedPath);
@@ -250,11 +278,20 @@ export async function activateProjectSurface(
 
   // If user is on /settings and explicitly chose to stay on settings, do not navigate away
   if (currentPathname === "/settings" && stayOnSettings) {
+    if (inFlightSurfaceActivation?.id === activation.id) {
+      inFlightSurfaceActivation = null;
+    }
     return surface;
   }
 
   // Navigate to authoritative destination (either /$environmentId/$threadId or /)
-  await navigate(surface.destination);
+  try {
+    await navigate(surface.destination);
+  } finally {
+    if (inFlightSurfaceActivation?.id === activation.id) {
+      inFlightSurfaceActivation = null;
+    }
+  }
 
   return surface;
 }
