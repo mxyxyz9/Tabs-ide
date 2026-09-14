@@ -21,15 +21,97 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 147;
+export const TOTAL_TAGS_COUNT = 148;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.5",
+    title: "Antigravity protocol, collaborative browser engine, PR stacks, and streaming performance",
+    date: "September 14, 2026",
+    shortDate: "Sep 14",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Native Antigravity protocol support, real-browser cookie and session import with isolated profiles, GitHub pull request stacks, and major streaming timeline optimizations.",
+    highlights: [
+      "Native Antigravity protocol integration with interactive approval options and resilient provider streams.",
+      "Collaborative browser engine with real session import, passkey capabilities, CDP operation serialization, and side-by-side comparison replay.",
+      "Manage GitHub PR stacks directly from Tabs with linked threads, status checks, and inline review annotations.",
+      "Incremental markdown parsing, resumable syntax highlighting, and DOM stabilization for streaming code lines.",
+    ],
+    categories: [
+      {
+        title: "Antigravity Protocol & Server",
+        items: [
+          "Native Antigravity protocol support with interactive approval options.",
+          "Optimized server logging, turn queueing during compaction, and resilient provider streams.",
+        ],
+      },
+      {
+        title: "Collaborative Browser Engine",
+        items: [
+          "Real-browser session and cookie import engine with profile-scoped permissions.",
+          "CDP operation serialization, human takeover preemption, and external OAuth fallback.",
+          "Side-by-side comparison replay and restored custom tab controls.",
+        ],
+      },
+      {
+        title: "Pull Request Stacks & Reviews",
+        items: [
+          "Navigate and manage GitHub PR stacks directly within the IDE.",
+          "Bi-directional linking between agent threads and PRs with multi-PR support.",
+          "Status checks, review metadata, and inline review annotations.",
+        ],
+      },
+      {
+        title: "Streaming & Timeline Performance",
+        items: [
+          "Incremental markdown parsing and resumable syntax highlighting during token streaming.",
+          "DOM stabilization for completed code lines to reduce layout shifts.",
+          "Bounded live timeline rendering and state preservation across large threads.",
+        ],
+      },
+      {
+        title: "Settings & Workspace Resilience",
+        items: [
+          "Split heavyweight settings sections into lazy-loaded panels.",
+          "Recoverable configuration persistence failures and complete keybinding configuration.",
+          "Preserved per-project active tools across workspace navigation.",
+        ],
+      },
+    ],
+    installers: [
+      {
+        platform: "macOS",
+        arch: "Apple Silicon",
+        filename: "Tabs-1.3.5-arm64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.5/Tabs-1.3.5-arm64.dmg",
+      },
+      {
+        platform: "macOS",
+        arch: "Intel",
+        filename: "Tabs-1.3.5-x64.dmg",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.5/Tabs-1.3.5-x64.dmg",
+      },
+      {
+        platform: "Windows",
+        arch: "x64",
+        filename: "Tabs-Setup-1.3.5.exe",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.5/Tabs-Setup-1.3.5.exe",
+      },
+      {
+        platform: "Linux",
+        arch: "x64 AppImage",
+        filename: "Tabs-1.3.5-x86_64.AppImage",
+        url: "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.5/Tabs-1.3.5-x86_64.AppImage",
+      },
+    ],
+  },
   {
     tag: "v1.3.4",
     title: "Toast notifications over native views, clean activity rail, and heartbeat optimization",
     date: "September 11, 2026",
     shortDate: "Sep 11",
-    isLatest: true,
     type: "patch",
     summary:
       "Toast notifications remain visible over embedded views, auxiliary items are cleaned from Code activity rail, and background heartbeat latency warnings are eliminated.",

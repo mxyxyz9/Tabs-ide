@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { resolveReleaseNotes } from "./release-note-content";
 
 describe("release note content", () => {
+  it("uses authored in-site notes for v1.3.5", () => {
+    const notes = resolveReleaseNotes(
+      "v1.3.5",
+      "**Full Changelog**: https://github.com/mxyxyz9/Tabs-ide/compare/v1.3.4...v1.3.5",
+    );
+    expect(notes).toContain("Antigravity protocol");
+    expect(notes).not.toContain("Full Changelog");
+  });
+
   it("uses authored in-site notes for v1.3.4", () => {
     const notes = resolveReleaseNotes(
       "v1.3.4",
