@@ -1,5 +1,6 @@
 import { CustomThemeStudioModal } from "../components/CustomThemeStudioModal";
 import { ThemeImportExportModal } from "../components/ThemeImportExportModal";
+import { SettingsPersistenceStatus } from "../components/settings/SettingsPersistenceStatus";
 import { useSettingsViewState } from "~/state/scopedStateStore";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -3312,7 +3313,9 @@ function SettingsRouteView() {
                 Back
               </Button>
               <span className="text-sm font-medium text-foreground">Settings</span>
-              <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
+              <div id="settings-header-actions" className="ms-auto flex items-center gap-2">
+                <SettingsPersistenceStatus />
+              </div>
             </div>
           </header>
         )}
@@ -3331,7 +3334,9 @@ function SettingsRouteView() {
             <span className="ml-2 text-xs font-medium tracking-wide text-muted-foreground/70">
               Settings
             </span>
-            <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
+            <div id="settings-header-actions" className="ms-auto flex items-center gap-2">
+              <SettingsPersistenceStatus />
+            </div>
           </div>
         )}
 
@@ -5185,14 +5190,6 @@ function SettingsRouteView() {
                                   size="sm"
                                   className="h-7 text-xs"
                                   onClick={() => {
-                                    updateSettings({
-                                      splashLoaderStyle: previewStyle,
-                                      splashLoaderPalette: previewPalette,
-                                      splashLoaderTheme: previewTheme,
-                                      closeLoaderStyle: closePreviewStyle,
-                                      closeLoaderPalette: closePreviewPalette,
-                                      closeLoaderTheme: closePreviewTheme,
-                                    });
                                     if (animationTab === "startup") {
                                       setStartupReplayKey((k) => k + 1);
                                       setFullscreenStartupPreview(true);

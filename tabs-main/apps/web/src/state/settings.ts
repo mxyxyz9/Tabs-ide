@@ -88,6 +88,44 @@ export function patchServerSettings(
   );
 }
 
+export function rollbackServerSettings(previousSettings: ServerSettings) {
+  appAtomRegistry.update(serverConfigAtom, (config) =>
+    config === null ? config : { ...config, settings: previousSettings },
+  );
+}
+
+export type SettingsSaveStatus = "idle" | "saving" | "saved" | "failed";
+
+export interface SettingsPersistenceState {
+  status: SettingsSaveStatus;
+  error?: string | null;
+  lastSavedAt?: number | null;
+  failedPatch?: Record<string, any> | null;
+  retry?: (() => Promise<boolean>) | null;
+}
+
+export const settingsPersistenceAtom = Atom.make<SettingsPersistenceState>({
+  status: "idle",
+  error: null,
+  lastSavedAt: null,
+  failedPatch: null,
+  retry: null,
+}).pipe(Atom.withLabel("tabs-settings-persistence"), Atom.keepAlive);
+
+export function setSettingsPersistence(state: SettingsPersistenceState) {
+  appAtomRegistry.set(settingsPersistenceAtom, state);
+}
+
+export function updateSettingsPersistence(
+  updater: (prev: SettingsPersistenceState) => SettingsPersistenceState,
+) {
+  appAtomRegistry.update(settingsPersistenceAtom, updater);
+}
+
+export function useSettingsPersistence(): SettingsPersistenceState {
+  return useAtomValue(settingsPersistenceAtom);
+}
+
 export function hydrateClientSettings(force = false) {
   if (clientSettingsHydrated && !force) return;
   clientSettingsHydrated = true;

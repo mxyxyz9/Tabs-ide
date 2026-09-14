@@ -9,7 +9,7 @@
  * write. The hook transparently routes reads/writes to the correct backing
  * store.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ServerSettings,
   ServerSettingsPatch,
@@ -39,10 +39,18 @@ import { deepMerge } from "@tabs/shared/Struct";
 import {
   patchServerSettings,
   refreshServerConfig,
+  rollbackServerSettings,
+  serverConfigAtom,
+  setSettingsPersistence,
   updateClientSettings,
+  updateSettingsPersistence,
   useClientSettings,
   useServerSettings,
+  useSettingsPersistence,
+  type SettingsPersistenceState,
+  type SettingsSaveStatus,
 } from "../state/settings";
+import { appAtomRegistry } from "../state/atomRegistry";
 
 const CLIENT_SETTINGS_STORAGE_KEY = "tabs:client-settings:v1";
 const OLD_SETTINGS_KEY = "tabs:app-settings:v1";
@@ -178,37 +186,225 @@ export function useSettings<T = UnifiedSettings>(selector?: (s: UnifiedSettings)
   );
 }
 
+let latestServerUpdateSequence = 0;
+let savedTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Applies a settings patch directly to the appropriate backing store (server via RPC,
+ * client via localStorage) with optimistic update, rollback on server rejection,
+ * and out-of-order sequence protection.
+ */
+export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean> {
+  const { serverPatch, clientPatch } = splitPatch(patch);
+  const hasServerPatch = Object.keys(serverPatch).length > 0;
+  const hasClientPatch = Object.keys(clientPatch).length > 0;
+
+  if (hasClientPatch) {
+    try {
+      updateClientSettings((current) => ({ ...current, ...clientPatch }));
+      if (!hasServerPatch) {
+        setSettingsPersistence({
+          status: "saved",
+          error: null,
+          lastSavedAt: Date.now(),
+          failedPatch: null,
+          retry: null,
+        });
+        if (savedTimeoutId) clearTimeout(savedTimeoutId);
+        savedTimeoutId = setTimeout(() => {
+          updateSettingsPersistence((prev) =>
+            prev.status === "saved" ? { ...prev, status: "idle" } : prev,
+          );
+        }, 3000);
+      }
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : "Failed to save client settings";
+      setSettingsPersistence({
+        status: "failed",
+        error: errorMsg,
+        lastSavedAt: null,
+        failedPatch: patch,
+        retry: () => applySettingsUpdate(patch),
+      });
+      return Promise.resolve(false);
+    }
+  }
+
+  if (hasServerPatch) {
+    const currentSeq = ++latestServerUpdateSequence;
+    const currentConfig = appAtomRegistry.get(serverConfigAtom);
+    const previousSettings = currentConfig?.settings ?? DEFAULT_SERVER_SETTINGS;
+
+    patchServerSettings(serverPatch, (current) => mergeServerSettingsPatch(current, serverPatch));
+
+    setSettingsPersistence({
+      status: "saving",
+      error: null,
+      lastSavedAt: null,
+      failedPatch: null,
+      retry: null,
+    });
+
+    return ensureNativeApi()
+      .server.updateSettings(serverPatch)
+      .then(async () => {
+        if (currentSeq === latestServerUpdateSequence) {
+          await refreshServerConfig();
+          setSettingsPersistence({
+            status: "saved",
+            error: null,
+            lastSavedAt: Date.now(),
+            failedPatch: null,
+            retry: null,
+          });
+          if (savedTimeoutId) clearTimeout(savedTimeoutId);
+          savedTimeoutId = setTimeout(() => {
+            if (latestServerUpdateSequence === currentSeq) {
+              updateSettingsPersistence((prev) =>
+                prev.status === "saved" ? { ...prev, status: "idle" } : prev,
+              );
+            }
+          }, 3000);
+        }
+        return true;
+      })
+      .catch((err) => {
+        if (currentSeq === latestServerUpdateSequence) {
+          rollbackServerSettings(previousSettings);
+          const errorMsg =
+            err instanceof Error ? err.message : String(err ?? "Failed to save settings");
+          setSettingsPersistence({
+            status: "failed",
+            error: errorMsg,
+            lastSavedAt: null,
+            failedPatch: serverPatch,
+            retry: () => applySettingsUpdate(serverPatch),
+          });
+        }
+        return false;
+      });
+  }
+
+  return Promise.resolve(true);
+}
+
 /**
  * Returns an updater that routes each key to the correct backing store.
  *
- * Server keys are optimistically patched in the React Query cache, then
- * persisted via RPC. Client keys go straight to localStorage.
+ * Server keys are optimistically patched in the local state, then
+ * persisted via RPC. If the RPC fails, the change is rolled back and the failure
+ * is surfaced with a retry callback. Client keys go directly to localStorage.
  */
 export function useUpdateSettings() {
-  const updateSettings = useCallback((patch: Record<string, any>) => {
-    const { serverPatch, clientPatch } = splitPatch(patch);
-
-    if (Object.keys(serverPatch).length > 0) {
-      patchServerSettings(serverPatch, (current) => mergeServerSettingsPatch(current, serverPatch));
-      void ensureNativeApi()
-        .server.updateSettings(serverPatch)
-        .then(() => refreshServerConfig());
-    }
-
-    if (Object.keys(clientPatch).length > 0) {
-      updateClientSettings((current) => ({ ...current, ...clientPatch }));
-    }
-  }, []);
+  const updateSettings = useCallback(
+    (patch: Record<string, any>): Promise<boolean> => applySettingsUpdate(patch),
+    [],
+  );
 
   const resetSettings = useCallback(() => {
-    updateSettings(DEFAULT_UNIFIED_SETTINGS);
-  }, [updateSettings]);
+    return applySettingsUpdate(DEFAULT_UNIFIED_SETTINGS);
+  }, []);
 
   return {
     updateSettings,
     resetSettings,
   };
 }
+
+/**
+ * Controller for debouncing rapid settings updates (e.g. text fields or sliders)
+ * and flushing pending changes on demand.
+ */
+export function createDebouncedSettingsUpdater(
+  updater: (patch: Record<string, any>) => Promise<boolean> = applySettingsUpdate,
+  delay = 300,
+) {
+  let pendingPatch: Record<string, any> = {};
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const flush = (): Promise<boolean> => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    const patch = { ...pendingPatch };
+    if (Object.keys(patch).length > 0) {
+      pendingPatch = {};
+      return updater(patch);
+    }
+    return Promise.resolve(true);
+  };
+
+  const queueUpdate = (patch: Record<string, any>) => {
+    pendingPatch = {
+      ...pendingPatch,
+      ...patch,
+    };
+    if (timer) {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(() => {
+      timer = null;
+      void flush();
+    }, delay);
+  };
+
+  const cancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    pendingPatch = {};
+  };
+
+  return {
+    updateSettings: queueUpdate,
+    flush,
+    cancel,
+    getPendingPatch: () => pendingPatch,
+  };
+}
+
+/**
+ * Hook for debouncing rapid settings updates (e.g. text fields or sliders)
+ * and automatically flushing pending changes on blur or window unload.
+ */
+export function useDebouncedSettingsUpdate(delay = 300) {
+  const { updateSettings } = useUpdateSettings();
+  const updaterRef = useRef<ReturnType<typeof createDebouncedSettingsUpdater> | null>(null);
+  if (!updaterRef.current) {
+    updaterRef.current = createDebouncedSettingsUpdater(updateSettings, delay);
+  }
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      void updaterRef.current?.flush();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      return () => {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+        void updaterRef.current?.flush();
+      };
+    }
+    return () => {
+      void updaterRef.current?.flush();
+    };
+  }, []);
+
+  return {
+    updateSettings: updaterRef.current.updateSettings,
+    flush: updaterRef.current.flush,
+    pendingPatch: updaterRef.current.getPendingPatch(),
+  };
+}
+
+export {
+  useSettingsPersistence,
+  type SettingsPersistenceState,
+  type SettingsSaveStatus,
+};
 
 // ── One-time migration from localStorage ─────────────────────────────
 
