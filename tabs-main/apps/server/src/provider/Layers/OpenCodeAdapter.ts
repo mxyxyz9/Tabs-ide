@@ -61,6 +61,7 @@ export function parseOpenCodeResume(raw: unknown): { readonly sessionId: string 
   if (typeof cursor.sessionId !== "string" || cursor.sessionId.trim().length === 0) {
     return undefined;
   }
+  if (cursor.protocol !== undefined && cursor.protocol !== "http") return undefined;
   return { sessionId: cursor.sessionId.trim() };
 }
 

@@ -15,6 +15,7 @@ import {
 } from "./baseSchemas.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
 import { ProviderUsageLimitsUpdate } from "./providerUsageLimits.ts";
+import { ProviderApprovalOption } from "./orchestration.ts";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -423,6 +424,8 @@ export type ContentDeltaPayload = typeof ContentDeltaPayload.Type;
 const RequestOpenedPayload = Schema.Struct({
   requestType: CanonicalRequestType,
   detail: Schema.optional(TrimmedNonEmptyStringSchema),
+  appName: Schema.optional(TrimmedNonEmptyStringSchema),
+  options: Schema.optional(Schema.Array(ProviderApprovalOption)),
   args: Schema.optional(Schema.Unknown),
 });
 export type RequestOpenedPayload = typeof RequestOpenedPayload.Type;
@@ -437,6 +440,7 @@ export type RequestResolvedPayload = typeof RequestResolvedPayload.Type;
 const UserInputQuestionOption = Schema.Struct({
   label: TrimmedNonEmptyStringSchema,
   description: TrimmedNonEmptyStringSchema,
+  value: Schema.optional(Schema.String),
 });
 export type UserInputQuestionOption = typeof UserInputQuestionOption.Type;
 
@@ -445,6 +449,7 @@ export const UserInputQuestion = Schema.Struct({
   header: TrimmedNonEmptyStringSchema,
   question: TrimmedNonEmptyStringSchema,
   options: Schema.Array(UserInputQuestionOption),
+  allowCustomAnswer: Schema.optional(Schema.Boolean),
   multiSelect: Schema.optional(Schema.Boolean).pipe(
     Schema.withConstructorDefault(Effect.succeed(false)),
   ),

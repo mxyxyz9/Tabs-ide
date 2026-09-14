@@ -9,7 +9,14 @@ import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import { ServerConfig } from "../../config.ts";
 import { getTelemetryIdentifier } from "../Identify.ts";
 import { AnalyticsService } from "../Services/AnalyticsService.ts";
-import { AnalyticsServiceLayerLive } from "./AnalyticsService.ts";
+import { AnalyticsServiceLayerLive, telemetryRetryDelayMs } from "./AnalyticsService.ts";
+
+it("backs telemetry retries off to a five-minute ceiling", () => {
+  assert.equal(telemetryRetryDelayMs(1), 5_000);
+  assert.equal(telemetryRetryDelayMs(2), 10_000);
+  assert.equal(telemetryRetryDelayMs(7), 300_000);
+  assert.equal(telemetryRetryDelayMs(100), 300_000);
+});
 
 interface RecordedBatchRequest {
   readonly path: string;

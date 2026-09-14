@@ -18,10 +18,23 @@ import {
   OPENCODE_LOCAL_SERVER_IDLE_TTL_MS,
   parseOpenCodeCliModelsOutput,
   parseOpenCodeCredentialProviderIDs,
+  resolveOpenCodeConfigContent,
   toOpenCodeFileParts,
 } from "./opencodeRuntime.ts";
 
 const encoder = new TextEncoder();
+
+describe("OpenCode process configuration", () => {
+  it("preserves explicit and inherited config content", () => {
+    expect(resolveOpenCodeConfigContent({ OPENCODE_CONFIG_CONTENT: '{"model":"explicit"}' })).toBe(
+      '{"model":"explicit"}',
+    );
+    expect(
+      resolveOpenCodeConfigContent({}, { OPENCODE_CONFIG_CONTENT: '{"model":"inherited"}' }),
+    ).toBe('{"model":"inherited"}');
+    expect(resolveOpenCodeConfigContent({}, {})).toBe("{}");
+  });
+});
 
 describe("OpenCode permission policy", () => {
   it("keeps full access non-interactive while enforcing read-only Plan turns", () => {

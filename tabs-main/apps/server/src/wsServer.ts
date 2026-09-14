@@ -462,11 +462,20 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   function logOutgoingPush(push: WsPushEnvelopeBase, recipients: number) {
     if (!logWebSocketEvents) return;
+    const payload = push.data;
+    const payloadShape = Array.isArray(payload)
+      ? { kind: "array", itemCount: payload.length }
+      : payload !== null && typeof payload === "object"
+        ? { kind: "object", keys: Object.keys(payload).slice(0, 20) }
+        : { kind: typeof payload };
     logger.event("outgoing push", {
       channel: push.channel,
       sequence: push.sequence,
       recipients,
-      payload: push.data,
+      // Push bodies can contain complete provider/model/skill catalogs and
+      // user content. Logging their shape is enough to trace fan-out without
+      // serializing hundreds of kilobytes or leaking sensitive text.
+      payloadShape,
     });
   }
 
@@ -1102,15 +1111,23 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
-  yield* Stream.runForEach(providerRegistry.streamChanges, (providers) =>
-    Effect.gen(function* () {
-      yield* Ref.set(providersRef, providers);
-      const effectiveProviders = yield* getEffectiveProviders(providers);
-      yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, {
-        providers: effectiveProviders,
-      });
-    }),
-  ).pipe(Effect.forkIn(subscriptionsScope));
+  yield* providerRegistry.streamChanges.pipe(
+    // A startup refresh can produce one complete snapshot per provider in a
+    // short burst. Only the latest complete array matters to clients, so
+    // coalesce that burst instead of repeatedly serializing and broadcasting
+    // the entire provider/model catalog.
+    Stream.debounce(Duration.millis(100)),
+    Stream.runForEach((providers) =>
+      Effect.gen(function* () {
+        yield* Ref.set(providersRef, providers);
+        const effectiveProviders = yield* getEffectiveProviders(providers);
+        yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, {
+          providers: effectiveProviders,
+        });
+      }),
+    ),
+    Effect.forkIn(subscriptionsScope),
+  );
 
   yield* Stream.runForEach(previewManager.events, (event) =>
     pushBus.publishAll(WS_CHANNELS.previewEvent, event),
@@ -1125,12 +1142,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       const settings = yield* serverSettingsManager.getSettings;
       yield* Effect.sleep(settings.providerHealthRefreshInterval);
       if (!(yield* backgroundPolicy.shouldRunScopeWork({ type: "provider-status" }))) return;
-      const providers = yield* providerRegistry.refresh();
-      yield* Ref.set(providersRef, providers);
-      const effectiveProviders = yield* getEffectiveProviders(providers);
-      yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, {
-        providers: effectiveProviders,
-      });
+      // refresh() publishes changed snapshots through streamChanges. That
+      // single path updates providersRef and notifies clients; broadcasting
+      // here as well duplicated the full catalog on every periodic refresh.
+      yield* providerRegistry.refresh();
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("background provider refresh failed", {

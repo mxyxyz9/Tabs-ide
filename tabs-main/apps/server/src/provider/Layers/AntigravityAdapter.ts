@@ -9,6 +9,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   RuntimeRequestId,
+  RuntimeTaskId,
   type ThreadId,
   TurnId,
 } from "@tabs/contracts";
@@ -52,8 +53,20 @@ import {
 import { parsePermissionRequest } from "../acp/AcpRuntimeModel";
 import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging";
 import {
+  antigravityApprovalOptions,
+  extractAntigravityUserInputQuestion,
+  isAntigravityUserInputRequest,
+  classifyAntigravitySubagentToolCall,
+  antigravitySubagentOutput,
+  makeAntigravityUserInputResponse,
+  normalizeAntigravityToolCall,
+  planAntigravitySubagentUpdate,
+  selectAntigravityPermissionOptionId,
+} from "../acp/AntigravityProtocol";
+import {
   antigravityPermissionMode,
   applyAntigravityAcpModelSelection,
+  buildAntigravityPrompt,
   currentAntigravityModelIdFromSessionSetup,
   discoverAntigravityAcpModels,
   makeAntigravityAcpRuntime,
@@ -107,6 +120,7 @@ interface AntigravitySessionContext {
   lastPlanFingerprint: string | undefined;
   activeTurnId: TurnId | undefined;
   currentModelId: string | undefined;
+  readonly subagentStates: Map<string, "active" | "finished">;
   stopped: boolean;
 }
 
@@ -139,33 +153,6 @@ function parseAntigravityResume(raw: unknown): { sessionId: string } | undefined
   if (raw.schemaVersion !== ANTIGRAVITY_RESUME_VERSION) return undefined;
   if (typeof raw.sessionId !== "string" || !raw.sessionId.trim()) return undefined;
   return { sessionId: raw.sessionId.trim() };
-}
-
-function selectPermissionOptionId(
-  request: EffectAcpSchema.RequestPermissionRequest,
-  decision: Exclude<ProviderApprovalDecision, "cancel">,
-): string | undefined {
-  const kind =
-    decision === "acceptForSession"
-      ? "allow_always"
-      : decision === "accept"
-        ? "allow_once"
-        : "reject_once";
-  const option = request.options.find((entry) => entry.kind === kind);
-  return option?.optionId.trim() || undefined;
-}
-
-function selectAutoApprovedPermissionOption(
-  request: EffectAcpSchema.RequestPermissionRequest,
-): string | undefined {
-  return (
-    selectPermissionOptionId(request, "acceptForSession") ??
-    selectPermissionOptionId(request, "accept")
-  );
-}
-
-function isAntigravityUserQuestion(request: EffectAcpSchema.RequestPermissionRequest): boolean {
-  return request.toolCall.toolCallId.startsWith("interaction_");
 }
 
 export function makeAntigravityAdapter(
@@ -436,12 +423,18 @@ export function makeAntigravityAdapter(
               mapAcpCallbackFailure(
                 Effect.gen(function* () {
                   yield* logNative(input.threadId, "session/request_permission", params);
-                  if (isAntigravityUserQuestion(params)) {
+                  // AG-002: Distinguish native Antigravity interaction questions from security approvals.
+                  if (isAntigravityUserInputRequest(params)) {
+                    const question = extractAntigravityUserInputQuestion(params);
+                    if (!question) {
+                      return {
+                        outcome: { outcome: "cancelled" },
+                      } satisfies EffectAcpSchema.RequestPermissionResponse;
+                    }
                     const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
                     const runtimeRequestId = requestId as unknown as RuntimeRequestId;
                     const resolution = yield* Deferred.make<PendingUserInputResolution>();
                     pendingUserInputs.set(requestId, { resolution });
-                    const questionId = params.toolCall.toolCallId;
                     yield* offerRuntimeEvent({
                       type: "user-input.requested",
                       ...(yield* makeEventStamp()),
@@ -450,18 +443,7 @@ export function makeAntigravityAdapter(
                       turnId: sessions.get(input.threadId)?.activeTurnId,
                       requestId: runtimeRequestId,
                       payload: {
-                        questions: [
-                          {
-                            id: questionId,
-                            header: "Question",
-                            question: params.toolCall.title?.trim() || "Choose an option.",
-                            options: params.options.map((option) => ({
-                              label: option.name.trim() || option.optionId,
-                              description: option.name.trim() || option.optionId,
-                            })),
-                            multiSelect: false,
-                          },
-                        ],
+                        questions: [question],
                       },
                       raw: {
                         source: "acp.jsonrpc",
@@ -486,25 +468,19 @@ export function makeAntigravityAdapter(
                         payload: params,
                       },
                     });
-                    const answer = answers[questionId];
-                    const selected = Array.isArray(answer) ? answer[0] : answer;
-                    const option =
-                      typeof selected === "string"
-                        ? params.options.find(
-                            (candidate) =>
-                              candidate.optionId === selected || candidate.name === selected,
-                          )
-                        : undefined;
-                    return option
-                      ? ({
-                          outcome: { outcome: "selected", optionId: option.optionId },
-                        } satisfies EffectAcpSchema.RequestPermissionResponse)
-                      : ({
-                          outcome: { outcome: "cancelled" },
-                        } satisfies EffectAcpSchema.RequestPermissionResponse);
+                    const response = makeAntigravityUserInputResponse(params, answers);
+                    return (
+                      response ??
+                      ({
+                        outcome: { outcome: "cancelled" },
+                      } satisfies EffectAcpSchema.RequestPermissionResponse)
+                    );
                   }
+
                   if (input.runtimeMode === "full-access") {
-                    const autoOptionId = selectAutoApprovedPermissionOption(params);
+                    const autoOptionId =
+                      selectAntigravityPermissionOptionId(params, "acceptForSession") ??
+                      selectAntigravityPermissionOptionId(params, "accept");
                     if (autoOptionId) {
                       return {
                         outcome: {
@@ -516,6 +492,8 @@ export function makeAntigravityAdapter(
                   }
 
                   const permissionRequest = parsePermissionRequest(params);
+                  // AG-004: Surface native prompt injection warnings on approval options.
+                  const approvalOptions = antigravityApprovalOptions(params);
                   const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
                   const runtimeRequestId = requestId as unknown as RuntimeRequestId;
                   const decisionDeferred = yield* Deferred.make<ProviderApprovalDecision>();
@@ -529,6 +507,7 @@ export function makeAntigravityAdapter(
                       turnId: sessions.get(input.threadId)?.activeTurnId,
                       requestId: runtimeRequestId,
                       permissionRequest,
+                      options: approvalOptions,
                       detail:
                         permissionRequest.detail ??
                         encodeJsonStringForDiagnostics(params)?.slice(0, 2000) ??
@@ -560,7 +539,7 @@ export function makeAntigravityAdapter(
                     } satisfies EffectAcpSchema.RequestPermissionResponse;
                   }
 
-                  const optionId = selectPermissionOptionId(params, decision);
+                  const optionId = selectAntigravityPermissionOptionId(params, decision);
                   if (!optionId) {
                     return {
                       outcome: { outcome: "cancelled" },
@@ -666,6 +645,7 @@ export function makeAntigravityAdapter(
             lastPlanFingerprint: undefined,
             activeTurnId: undefined,
             currentModelId,
+            subagentStates: new Map(),
             stopped: false,
           };
 
@@ -711,16 +691,81 @@ export function makeAntigravityAdapter(
                     );
                     break;
                   case "ToolCallUpdated":
-                    yield* offerRuntimeEvent(
-                      makeAcpToolCallEvent({
-                        stamp: yield* makeEventStamp(),
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: ctx.activeTurnId,
-                        toolCall: parsedEvent.toolCall,
+                    {
+                      const toolCall = normalizeAntigravityToolCall(parsedEvent.toolCall);
+                      const classification = classifyAntigravitySubagentToolCall(
+                        toolCall,
+                        parsedEvent.rawPayload,
+                      );
+                      if (classification !== "subagent") {
+                        yield* offerRuntimeEvent(
+                          makeAcpToolCallEvent({
+                            stamp: yield* makeEventStamp(),
+                            provider: PROVIDER,
+                            threadId: ctx.threadId,
+                            turnId: ctx.activeTurnId,
+                            toolCall,
+                            rawPayload: parsedEvent.rawPayload,
+                          }),
+                        );
+                        break;
+                      }
+
+                      const previousState = ctx.subagentStates.get(toolCall.toolCallId);
+                      const lifecycle = planAntigravitySubagentUpdate({
+                        toolCall,
                         rawPayload: parsedEvent.rawPayload,
-                      }),
-                    );
+                        previousState,
+                      });
+                      if (!lifecycle) break;
+                      const taskId = RuntimeTaskId.makeUnsafe(toolCall.toolCallId);
+                      const description =
+                        toolCall.detail ?? toolCall.title ?? "Antigravity subagent";
+                      if (lifecycle.start) {
+                        yield* offerRuntimeEvent({
+                          type: "task.started",
+                          ...(yield* makeEventStamp()),
+                          provider: PROVIDER,
+                          threadId: ctx.threadId,
+                          turnId: ctx.activeTurnId,
+                          payload: {
+                            taskId,
+                            description,
+                            taskType: "antigravity-subagent",
+                          },
+                        });
+                      }
+                      if (lifecycle.completion === "failed") {
+                        yield* offerRuntimeEvent({
+                          type: "task.completed",
+                          ...(yield* makeEventStamp()),
+                          provider: PROVIDER,
+                          threadId: ctx.threadId,
+                          turnId: ctx.activeTurnId,
+                          payload: {
+                            taskId,
+                            status: "failed",
+                            ...(antigravitySubagentOutput(toolCall)
+                              ? { summary: antigravitySubagentOutput(toolCall) }
+                              : {}),
+                          },
+                        });
+                        ctx.subagentStates.set(toolCall.toolCallId, "finished");
+                        break;
+                      }
+                      const progress = antigravitySubagentOutput(toolCall) ?? description;
+                      if (lifecycle.progress) {
+                        yield* offerRuntimeEvent({
+                          type: "task.progress",
+                          ...(yield* makeEventStamp()),
+                          provider: PROVIDER,
+                          threadId: ctx.threadId,
+                          turnId: ctx.activeTurnId,
+                          payload: { taskId, description: progress, summary: progress },
+                        });
+                      }
+                      ctx.subagentStates.set(toolCall.toolCallId, lifecycle.nextState);
+                    }
                     break;
                 }
               }),
@@ -769,47 +814,24 @@ export function makeAntigravityAdapter(
               };
             }
 
-            const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
-            const promptText = input.input?.trim();
-            if (promptText) {
-              promptParts.push({ type: "text", text: promptText });
-            }
-            for (const attachment of input.attachments ?? []) {
-              const attachmentPath = resolveAttachmentPath({
-                attachmentsDir: serverConfig.attachmentsDir,
-                attachment,
-              });
-              if (!attachmentPath) {
-                return yield* new ProviderAdapterRequestError({
-                  provider: PROVIDER,
-                  method: "session/prompt",
-                  detail: `Invalid attachment id '${attachment.id}'.`,
-                });
-              }
-              const bytes = yield* fileSystem.readFile(attachmentPath).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ProviderAdapterRequestError({
-                      provider: PROVIDER,
-                      method: "session/prompt",
-                      detail: cause.message,
-                      cause,
-                    }),
-                ),
-              );
-              promptParts.push({
-                type: "image",
-                data: Buffer.from(bytes).toString("base64"),
-                mimeType: attachment.mimeType,
-              });
-            }
-            if (promptParts.length === 0) {
-              return yield* new ProviderAdapterValidationError({
-                provider: PROVIDER,
-                operation: "sendTurn",
-                issue: "Turn requires non-empty text or attachments.",
-              });
-            }
+            // AG-007: Safe attachment parsing and bounded prompts.
+            const promptParts = yield* buildAntigravityPrompt({
+              input: input.input,
+              attachments: input.attachments,
+              attachmentsDir: serverConfig.attachmentsDir,
+            }).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+              Effect.mapError(
+                (cause) =>
+                  new ProviderAdapterRequestError({
+                    provider: PROVIDER,
+                    method: "session/prompt",
+                    detail: cause.message,
+                    cause,
+                  }),
+              ),
+            );
             yield* offerRuntimeEvent({
               type: "turn.started",
               ...(yield* makeEventStamp()),
@@ -851,6 +873,21 @@ export function makeAntigravityAdapter(
               activeTurnId: undefined,
               updatedAt: yield* nowIso,
             };
+            for (const [subagentId, state] of ctx.subagentStates) {
+              if (state !== "active") continue;
+              yield* offerRuntimeEvent({
+                type: "task.completed",
+                ...(yield* makeEventStamp()),
+                provider: PROVIDER,
+                threadId: input.threadId,
+                turnId: prepared.turnId,
+                payload: {
+                  taskId: RuntimeTaskId.makeUnsafe(subagentId),
+                  status: result.stopReason === "cancelled" ? "stopped" : "completed",
+                },
+              });
+              ctx.subagentStates.set(subagentId, "finished");
+            }
             yield* offerRuntimeEvent({
               type: "turn.completed",
               ...(yield* makeEventStamp()),

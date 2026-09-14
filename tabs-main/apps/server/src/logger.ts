@@ -4,6 +4,8 @@ type LogLevel = "info" | "warn" | "error" | "event";
 
 type LogContext = Record<string, unknown>;
 
+const MAX_LOG_LINE_LENGTH = 4096;
+
 const ANSI = {
   reset: "\u001b[0m",
   dim: "\u001b[2m",
@@ -72,7 +74,11 @@ function write(level: LogLevel, scope: string, message: string, context?: LogCon
   const ts = colorize(timeStamp(), ANSI.dim, colorEnabled);
   const levelLabel = colorize(LEVEL_LABEL[level], LEVEL_COLOR[level], colorEnabled);
   const contextText = formatContext(context);
-  const line = `${ts} ${levelLabel} [${scope}] ${message}${contextText ? ` ${contextText}` : ""}`;
+  const unboundedLine = `${ts} ${levelLabel} [${scope}] ${message}${contextText ? ` ${contextText}` : ""}`;
+  const line =
+    unboundedLine.length <= MAX_LOG_LINE_LENGTH
+      ? unboundedLine
+      : `${unboundedLine.slice(0, MAX_LOG_LINE_LENGTH)}… [truncated; originalChars=${unboundedLine.length}]`;
 
   if (level === "warn") {
     console.warn(line);

@@ -39,7 +39,7 @@ function makeAcpGrokWrapper(dir: string, env: Record<string, string>): string {
     [
       "#!/bin/sh",
       ...Object.entries(env).map(([key, value]) => `export ${key}=${shellSingleQuote(value)}`),
-      'if [ "$1" != "agent" ] || [ "$2" != "stdio" ]; then',
+      'if [ "$1" != "--no-auto-update" ] || [ "$2" != "agent" ] || [ "$3" != "stdio" ]; then',
       '  printf "%s\\n" "unexpected args: $*" >&2',
       "  exit 11",
       "fi",

@@ -25,7 +25,7 @@ describe("buildGrokAcpSpawnInput", () => {
 
     expect(spawn).toEqual({
       command: "/usr/local/bin/grok",
-      args: ["agent", "stdio"],
+      args: ["--no-auto-update", "agent", "stdio"],
       cwd: "/tmp/project",
       env: {},
     });

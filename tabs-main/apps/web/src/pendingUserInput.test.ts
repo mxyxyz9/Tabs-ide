@@ -27,6 +27,15 @@ describe("resolvePendingUserInputAnswer", () => {
     ).toBe("Scaffold only");
   });
 
+  it("returns a provider option value while retaining its display label", () => {
+    expect(
+      resolvePendingUserInputAnswer({
+        selectedOptionLabel: "Use Bun",
+        selectedOptionValue: "bun",
+      }),
+    ).toBe("bun");
+  });
+
   it("clears the preset selection when a custom answer is entered", () => {
     expect(
       setPendingUserInputCustomAnswer(

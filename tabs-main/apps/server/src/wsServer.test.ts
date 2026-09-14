@@ -917,6 +917,13 @@ describe("WebSocket Server", () => {
         );
       }),
     ).toBe(true);
+    const websocketLines = logSpy.mock.calls
+      .map(([message]) => message)
+      .filter(
+        (message): message is string => typeof message === "string" && message.includes("[ws]"),
+      );
+    expect(websocketLines.every((message) => message.length <= 4_200)).toBe(true);
+    expect(websocketLines.every((message) => !message.includes("/test/project"))).toBe(true);
   });
 
   it("responds to server.getConfig", async () => {

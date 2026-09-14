@@ -11,7 +11,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import { beforeEach } from "vitest";
+import { beforeEach, expect } from "vitest";
 
 import {
   OpenCodeSettings,
@@ -34,7 +34,20 @@ import {
   isOpenCodeIdleEvent,
   makeOpenCodeAdapter,
   mergeOpenCodeAssistantText,
+  parseOpenCodeResume,
 } from "./OpenCodeAdapter";
+
+it("accepts only HTTP OpenCode resume cursors", () => {
+  expect(
+    parseOpenCodeResume({ schemaVersion: 1, protocol: "http", sessionId: " session-1 " }),
+  ).toEqual({ sessionId: "session-1" });
+  expect(parseOpenCodeResume({ schemaVersion: 1, sessionId: "session-2" })).toEqual({
+    sessionId: "session-2",
+  });
+  expect(
+    parseOpenCodeResume({ schemaVersion: 1, protocol: "acp", sessionId: "session-3" }),
+  ).toBeUndefined();
+});
 
 // Test-local service tag so the rest of the file can keep using `yield* OpenCodeAdapter`.
 class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterShape>()(
@@ -100,6 +113,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       );
       return {
         url,
+        isRunning: Effect.succeed(true),
         exitCode: Effect.never,
       };
     }),

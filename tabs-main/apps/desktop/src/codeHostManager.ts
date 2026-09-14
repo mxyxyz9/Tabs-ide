@@ -71,7 +71,12 @@ const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
 const CODE_OSS_WEBVIEW_PROTOCOL = "vscode-webview";
 const CODE_OSS_WEBVIEW_RESOURCES = new Set(["index.html", "fake.html", "service-worker.js"]);
 const CODE_OSS_NAVIGATION_TIMEOUT_MS = 30_000;
-const MAX_WARM_CODE_SESSIONS = 3;
+const CODE_OSS_DEFAULT_EXTENSIONS_GALLERY = {
+  serviceUrl: "https://open-vsx.org/vscode/gallery",
+  itemUrl: "https://open-vsx.org/vscode/item",
+} as const;
+// Bound warm sessions so detached Code-OSS renderers cannot accumulate without limit.
+const MAX_WARM_CODE_SESSIONS = 2;
 const DEFAULT_CODE_HOST_STATE_DIR = Path.join(
   process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs"),
   "userdata",
@@ -87,10 +92,64 @@ const codeHostDiagnosticSink = new RotatingFileSink({
   maxBytes: 5 * 1024 * 1024,
   maxFiles: 2,
 });
+// Batch diagnostic writes away from the Electron main-process event loop.
+let diagnosticQueue: string[] = [];
+let diagnosticQueuedBytes = 0;
+let droppedDiagnosticLines = 0;
+let flushScheduled = false;
+const MAX_DIAGNOSTIC_QUEUE_BYTES = 256 * 1024;
+const MAX_DIAGNOSTIC_DETAIL_CHARS = 8 * 1024;
+
+function formatDiagnosticDetails(details: unknown): string {
+  const serialized = JSON.stringify(details, (_key, value: unknown) => {
+    if (typeof value === "string" && value.length > 2_048) {
+      return `${value.slice(0, 2_048)}… [truncated]`;
+    }
+    if (Array.isArray(value) && value.length > 50) {
+      return [...value.slice(0, 50), `… ${value.length - 50} more items`];
+    }
+    return value;
+  });
+  if (serialized === undefined || serialized.length <= MAX_DIAGNOSTIC_DETAIL_CHARS) {
+    return serialized ?? "";
+  }
+  return `${serialized.slice(0, MAX_DIAGNOSTIC_DETAIL_CHARS)}… [truncated]`;
+}
+
+function flushDiagnosticQueue(): void {
+  flushScheduled = false;
+  if (diagnosticQueue.length === 0 && droppedDiagnosticLines === 0) return;
+  const droppedNotice =
+    droppedDiagnosticLines > 0
+      ? `${new Date().toISOString()} dropped ${droppedDiagnosticLines} Code host diagnostic lines because the async queue was full\n`
+      : "";
+  const chunk = `${droppedNotice}${diagnosticQueue.join("")}`;
+  diagnosticQueue = [];
+  diagnosticQueuedBytes = 0;
+  droppedDiagnosticLines = 0;
+  try {
+    codeHostDiagnosticSink.write(chunk);
+  } catch {
+    // Diagnostics must never affect the host lifecycle.
+  }
+}
+
 function writeCodeHostDiagnostic(message: string, details?: unknown): void {
   try {
-    const suffix = details === undefined ? "" : ` ${JSON.stringify(details)}`;
-    codeHostDiagnosticSink.write(`${new Date().toISOString()} ${message}${suffix}\n`);
+    const formattedDetails = details === undefined ? "" : formatDiagnosticDetails(details);
+    const suffix = formattedDetails.length === 0 ? "" : ` ${formattedDetails}`;
+    const line = `${new Date().toISOString()} ${message}${suffix}\n`;
+    const lineBytes = Buffer.byteLength(line);
+    if (diagnosticQueuedBytes + lineBytes <= MAX_DIAGNOSTIC_QUEUE_BYTES) {
+      diagnosticQueue.push(line);
+      diagnosticQueuedBytes += lineBytes;
+    } else {
+      droppedDiagnosticLines += 1;
+    }
+    if (!flushScheduled) {
+      flushScheduled = true;
+      setImmediate(flushDiagnosticQueue);
+    }
   } catch {
     // Diagnostics must never affect the host lifecycle.
   }
@@ -307,7 +366,7 @@ function findDefaultWorkspaceFile(workspaceRoot: string): string | null {
   return null;
 }
 
-const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
+export const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   "workbench.startupEditor": "none",
   "workbench.welcomePage.walkthroughs.openOnInstall": false,
   "workbench.welcome.enabled": false,
@@ -357,7 +416,11 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   // transport/package layer and do not apply the incompatible repository
   // signature policy to this gallery.
   "extensions.verifySignature": false,
-  "extensions.autoCheckUpdates": false,
+  // Update discovery must remain enabled for gallery-managed extensions.
+  // Disabling this makes the per-extension "Auto Update" toggle misleading:
+  // Code-OSS cannot install an update it never discovers.
+  "extensions.autoCheckUpdates": true,
+  "extensions.autoUpdate": true,
 };
 
 // Older builds wrote cosmetic editor choices on every extension activation.
@@ -621,6 +684,24 @@ export function mergeProductConfigurationDefaults(
     },
     changed: true,
   };
+}
+
+/**
+ * Code - OSS deliberately ships without a marketplace. Tabs uses Open VSX,
+ * matching other Code-OSS distributions, so installed gallery extensions can
+ * be searched and updated. Preserve a gallery supplied by a branded runtime.
+ */
+export function addDefaultExtensionGallery(
+  product: Record<string, unknown>,
+): Record<string, unknown> {
+  if (
+    typeof product.extensionsGallery === "object" &&
+    product.extensionsGallery !== null &&
+    typeof (product.extensionsGallery as Record<string, unknown>).serviceUrl === "string"
+  ) {
+    return product;
+  }
+  return { ...product, extensionsGallery: CODE_OSS_DEFAULT_EXTENSIONS_GALLERY };
 }
 
 function isDirectory(pathname: string, fs: FsLike): boolean {
@@ -1940,6 +2021,13 @@ export class CodeHostManager {
     if (window.contentView.children.includes(session.view)) {
       window.contentView.removeChildView(session.view);
     }
+    // Keep background throttling enabled. Foreground contents are unaffected,
+    // while disabling it on any view can unthrottle the entire BrowserWindow.
+    try {
+      session.view.webContents.setBackgroundThrottling(true);
+    } catch {
+      // Best-effort
+    }
   }
 
   private disposeSessionConfigChannel(session: CodeSession): void {
@@ -2385,8 +2473,9 @@ export class CodeHostManager {
         parsed.version = packageConfiguration.version;
       }
     }
-    productConfigurationCache.set(vscodeRoot, parsed);
-    return parsed;
+    const configuredProduct = addDefaultExtensionGallery(parsed);
+    productConfigurationCache.set(vscodeRoot, configuredProduct);
+    return configuredProduct;
   }
 
   private getNlsMessages(vscodeRoot: string): string[] {

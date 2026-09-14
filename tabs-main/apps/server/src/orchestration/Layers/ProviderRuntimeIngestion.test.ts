@@ -1611,6 +1611,15 @@ describe("ProviderRuntimeIngestion", () => {
       payload: {
         requestType: "command_execution_approval",
         detail: "pwd",
+        appName: "Antigravity",
+        options: [
+          { decision: "accept", label: "Allow once" },
+          {
+            decision: "acceptForSession",
+            label: "Allow for this thread",
+            warning: "Review the provider warning.",
+          },
+        ],
       },
     });
 
@@ -1651,6 +1660,15 @@ describe("ProviderRuntimeIngestion", () => {
         : undefined;
     expect(requestedPayload?.requestKind).toBe("command");
     expect(requestedPayload?.requestType).toBe("command_execution_approval");
+    expect(requestedPayload?.appName).toBe("Antigravity");
+    expect(requestedPayload?.options).toEqual([
+      { decision: "accept", label: "Allow once" },
+      {
+        decision: "acceptForSession",
+        label: "Allow for this thread",
+        warning: "Review the provider warning.",
+      },
+    ]);
 
     const resolved = thread?.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-request-resolved",

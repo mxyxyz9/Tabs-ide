@@ -501,10 +501,13 @@ export const ProviderRegistryLive = Layer.effect(
       const sources = yield* getLiveSources;
       const remoteCatalog = yield* fetchRemoteModelCatalog();
 
+      // Refresh independently: a timeout or broken CLI must not cancel probes
+      // for every provider scheduled after it.
       yield* Effect.forEach(
         sources,
         (source) =>
           refreshOneSource(source).pipe(
+            Effect.timeout("15 seconds"),
             Effect.tap((providers) =>
               Effect.forEach(providers, (provider) => {
                 const remoteModels =
@@ -517,9 +520,18 @@ export const ProviderRegistryLive = Layer.effect(
                 return Effect.void;
               }),
             ),
+            Effect.catchCause((cause) =>
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.interrupt
+                : Effect.logWarning("provider refresh failed; continuing with cached snapshot", {
+                    instanceId: source.instanceId,
+                    driver: source.driverKind,
+                    cause: Cause.pretty(cause),
+                  }),
+            ),
           ),
         {
-          concurrency: "unbounded",
+          concurrency: 2,
           discard: true,
         },
       );
@@ -540,7 +552,7 @@ export const ProviderRegistryLive = Layer.effect(
       if (!providerSource) {
         return yield* Ref.get(providersRef);
       }
-      return yield* refreshOneSource(providerSource);
+      return yield* refreshOneSource(providerSource).pipe(Effect.timeout("15 seconds"));
     });
 
     const refreshInstance = Effect.fn("refreshInstance")(function* (
@@ -551,7 +563,7 @@ export const ProviderRegistryLive = Layer.effect(
       if (!providerSource) {
         return yield* Ref.get(providersRef);
       }
-      return yield* refreshOneSource(providerSource);
+      return yield* refreshOneSource(providerSource).pipe(Effect.timeout("15 seconds"));
     });
 
     const getProviderMaintenanceCapabilitiesForInstance = Effect.fn(
@@ -634,17 +646,37 @@ export const ProviderRegistryLive = Layer.effect(
           ).pipe(Effect.forkScoped);
         }
 
-        // Force-refresh every new/rebuilt instance in parallel and wait
-        // for them all to complete. The refresh's result is piped
-        // directly into `syncProvider`, so `providersRef` is populated
-        // deterministically by the time this block returns — regardless
-        // of PubSub subscription timing. Failures are logged and
-        // swallowed so one bad driver can't wedge the whole registry.
+        // PR-004: Bounded concurrency and prioritization for startup provider refreshes.
+        // Sort enabled instances first, prioritize active/default driver (codex),
+        // apply bounded concurrency (2), and apply explicit per-provider timeout (15s).
+        const currentProviders = yield* Ref.get(providersRef);
+        const currentByInstance = new Map(
+          currentProviders.map((provider) => [snapshotInstanceKey(provider), provider] as const),
+        );
+
+        const refreshOrder = [...newlyAdded].toSorted(([leftId], [rightId]) => {
+          const leftEnabled = currentByInstance.get(leftId)?.enabled !== false ? 1 : 0;
+          const rightEnabled = currentByInstance.get(rightId)?.enabled !== false ? 1 : 0;
+          if (leftEnabled !== rightEnabled) return rightEnabled - leftEnabled;
+          const leftIsDefault = leftId === "codex" ? 1 : 0;
+          const rightIsDefault = rightId === "codex" ? 1 : 0;
+          return rightIsDefault - leftIsDefault;
+        });
+
         yield* Effect.forEach(
-          newlyAdded,
-          ([, instance]) =>
-            refreshOneSource(buildSnapshotSource(instance)).pipe(Effect.ignoreCause({ log: true })),
-          { concurrency: "unbounded", discard: true },
+          refreshOrder,
+          ([instanceId, instance]) => {
+            // PR-005: Do not trigger expensive health probes on deliberately disabled instances at boot.
+            const current = currentByInstance.get(instanceId);
+            if (current && !current.enabled) {
+              return Effect.void;
+            }
+            return refreshOneSource(buildSnapshotSource(instance)).pipe(
+              Effect.timeout("15 seconds"),
+              Effect.ignoreCause({ log: true }),
+            );
+          },
+          { concurrency: 2, discard: true },
         );
         yield* upsertProviders(unavailableProviders, {
           persist: false,

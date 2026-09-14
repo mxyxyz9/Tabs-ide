@@ -56,6 +56,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       );
       return {
         url,
+        isRunning: Effect.succeed(true),
         exitCode: Effect.never,
       };
     }),

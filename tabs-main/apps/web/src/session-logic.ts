@@ -5,6 +5,7 @@ import {
   type OrchestrationThreadActivity,
   type OrchestrationProposedPlanId,
   type ProviderKind,
+  type ProviderApprovalOption,
   type ToolLifecycleItemType,
   type UserInputQuestion,
   type EnvironmentId,
@@ -79,6 +80,8 @@ export interface PendingApproval {
   requestKind: "command" | "file-read" | "file-change";
   createdAt: string;
   detail?: string;
+  appName?: string;
+  options?: ReadonlyArray<ProviderApprovalOption>;
 }
 
 export interface PendingUserInput {
@@ -234,6 +237,19 @@ export function derivePendingApprovals(
           ? requestKindFromRequestType(payload.requestType)
           : null;
     const detail = payload && typeof payload.detail === "string" ? payload.detail : undefined;
+    const appName = payload && typeof payload.appName === "string" ? payload.appName : undefined;
+    const options =
+      payload && Array.isArray(payload.options)
+        ? payload.options.filter(
+            (option): option is ProviderApprovalOption =>
+              Boolean(option) &&
+              typeof option === "object" &&
+              ["accept", "acceptForSession", "decline", "cancel"].includes(
+                String((option as { decision?: unknown }).decision),
+              ) &&
+              typeof (option as { label?: unknown }).label === "string",
+          )
+        : undefined;
 
     if (activity.kind === "approval.requested" && requestId && requestKind) {
       openByRequestId.set(requestId, {
@@ -241,6 +257,8 @@ export function derivePendingApprovals(
         requestKind,
         createdAt: activity.createdAt,
         ...(detail ? { detail } : {}),
+        ...(appName ? { appName } : {}),
+        ...(options && options.length > 0 ? { options } : {}),
       });
       continue;
     }
@@ -297,6 +315,7 @@ function parseUserInputQuestions(
           return {
             label: optionRecord.label,
             description: optionRecord.description,
+            ...(typeof optionRecord.value === "string" ? { value: optionRecord.value } : {}),
           };
         })
         .filter((option): option is UserInputQuestion["options"][number] => option !== null);
@@ -308,6 +327,10 @@ function parseUserInputQuestions(
         header: question.header,
         question: question.question,
         options,
+        ...(typeof question.allowCustomAnswer === "boolean"
+          ? { allowCustomAnswer: question.allowCustomAnswer }
+          : {}),
+        ...(typeof question.multiSelect === "boolean" ? { multiSelect: question.multiSelect } : {}),
       };
     })
     .filter((question): question is UserInputQuestion => question !== null);

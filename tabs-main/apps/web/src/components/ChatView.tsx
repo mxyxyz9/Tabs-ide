@@ -1279,6 +1279,8 @@ export default function ChatView({
   const activePendingIsResponding = activePendingUserInput
     ? respondingUserInputRequestIds.includes(activePendingUserInput.requestId)
     : false;
+  const activePendingAllowsCustomAnswer =
+    activePendingProgress?.activeQuestion?.allowCustomAnswer !== false;
   const activeProposedPlan = useMemo(() => {
     if (!latestTurnSettled) {
       return null;
@@ -3920,7 +3922,7 @@ export default function ChatView({
   );
 
   const onSelectActivePendingUserInputOption = useCallback(
-    (questionId: string, optionLabel: string) => {
+    (questionId: string, optionLabel: string, optionValue?: string) => {
       if (!activePendingUserInput) {
         return;
       }
@@ -3930,6 +3932,7 @@ export default function ChatView({
           ...existing[activePendingUserInput.requestId],
           [questionId]: {
             selectedOptionLabel: optionLabel,
+            ...(optionValue ? { selectedOptionValue: optionValue } : {}),
             customAnswer: "",
           },
         },
@@ -5287,12 +5290,18 @@ export default function ChatView({
                       ? (activePendingApproval?.detail ??
                         "Resolve this approval request to continue")
                       : activePendingProgress
-                        ? "Type your own answer, or leave this blank to use the selected option"
+                        ? activePendingAllowsCustomAnswer
+                          ? "Type your own answer, or leave this blank to use the selected option"
+                          : "Choose one of the available options"
                         : showPlanFollowUpPrompt && activeProposedPlan
                           ? "Add feedback to refine the plan, or leave this blank to implement it"
                           : baseComposerPlaceholder
                   }
-                  disabled={isConnecting || isComposerApprovalState}
+                  disabled={
+                    isConnecting ||
+                    isComposerApprovalState ||
+                    (activePendingProgress !== null && !activePendingAllowsCustomAnswer)
+                  }
                 />
               </div>
 
@@ -5302,6 +5311,7 @@ export default function ChatView({
                   <ComposerPendingApprovalActions
                     requestId={activePendingApproval.requestId}
                     isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
+                    options={activePendingApproval.options}
                     onRespondToApproval={onRespondToApproval}
                   />
                 ) : isPreparingWorktree ? (

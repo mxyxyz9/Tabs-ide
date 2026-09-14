@@ -28,6 +28,7 @@ import {
   STARTUP_ANIMATION_EXIT_MS,
   STARTUP_ANIMATION_HOLD_MS,
 } from "../components/SplashScreen";
+import { markStartupStage } from "../lib/startupReadiness";
 import { cn, isPopoutMode } from "../lib/utils";
 import { DiagnosticsSettings } from "../components/settings/DiagnosticsSettings";
 import { providerQueryKeys } from "../lib/providerReactQuery";
@@ -139,7 +140,7 @@ function FullAppRootView() {
       {mounted && (
         <div
           className={cn(
-            "pointer-events-auto fixed inset-0 z-[9999] bg-background transition-transform duration-200 ease-out",
+            "pointer-events-auto fixed inset-0 z-[9999] bg-background transition-transform duration-1000 ease-in-out motion-reduce:duration-0",
             ready ? "-translate-y-full" : "translate-y-0",
           )}
         >
@@ -420,10 +421,13 @@ function EventRouter() {
       );
     });
     const unsubWelcome = onServerWelcome((payload) => {
+      // DS-001: Backend connection established
+      markStartupStage("backend-connection-ready");
       // Migrate old localStorage settings to server on first connect
       migrateLocalSettingsToServer();
       void (async () => {
         await syncSnapshot();
+        markStartupStage("provider-inventory-available");
         const primaryEnvironmentId = await primaryEnvironmentIdPromise;
         if (disposed) {
           return;
@@ -560,6 +564,7 @@ function EventRouter() {
       });
     });
     const unsubProvidersUpdated = onServerProvidersUpdated(() => {
+      markStartupStage("provider-update-received");
       void refreshServerConfig();
       void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
     });

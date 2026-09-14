@@ -21,6 +21,14 @@ interface BufferedAnalyticsEvent {
   readonly capturedAt: string;
 }
 
+const TELEMETRY_RETRY_BASE_MS = 5_000;
+const TELEMETRY_RETRY_MAX_MS = 5 * 60_000;
+
+export function telemetryRetryDelayMs(consecutiveFailures: number): number {
+  const exponent = Math.max(0, Math.min(16, Math.floor(consecutiveFailures) - 1));
+  return Math.min(TELEMETRY_RETRY_MAX_MS, TELEMETRY_RETRY_BASE_MS * 2 ** exponent);
+}
+
 const TelemetryEnvConfig = Config.all({
   posthogKey: Config.string("TABS_POSTHOG_KEY").pipe(
     Config.withDefault("phc_XOWci4oZP4VvLiEyrFqkFjP4CZn55mjYYBMREK5Wd6m"),
@@ -41,6 +49,8 @@ const makeAnalyticsService = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig;
   const identifier = yield* getTelemetryIdentifier;
   const bufferRef = yield* Ref.make<ReadonlyArray<BufferedAnalyticsEvent>>([]);
+  const consecutiveFailuresRef = yield* Ref.make(0);
+  const retryAfterRef = yield* Ref.make(0);
   const clientType = serverConfig.mode === "desktop" ? "desktop-app" : "cli-web-client";
 
   const enqueueBufferedEvent = (event: string, properties?: Readonly<Record<string, unknown>>) =>
@@ -100,6 +110,7 @@ const makeAnalyticsService = Effect.gen(function* () {
     });
 
   const flush: AnalyticsServiceShape["flush"] = Effect.gen(function* () {
+    if (Date.now() < (yield* Ref.get(retryAfterRef))) return;
     while (true) {
       const batch = yield* Ref.modify(bufferRef, (current) => {
         if (current.length === 0) {
@@ -115,6 +126,11 @@ const makeAnalyticsService = Effect.gen(function* () {
       }
 
       yield* sendBatch(batch).pipe(
+        Effect.tap(() =>
+          Effect.all([Ref.set(consecutiveFailuresRef, 0), Ref.set(retryAfterRef, 0)]).pipe(
+            Effect.asVoid,
+          ),
+        ),
         Effect.catch((error) =>
           Ref.update(bufferRef, (current) => [...batch, ...current]).pipe(
             Effect.flatMap(() => Effect.fail(error)),
@@ -122,7 +138,20 @@ const makeAnalyticsService = Effect.gen(function* () {
         ),
       );
     }
-  }).pipe(Effect.catch((cause) => Effect.logError("Failed to flush telemetry", { cause })));
+  }).pipe(
+    Effect.catch((cause) =>
+      Effect.gen(function* () {
+        const failures = yield* Ref.updateAndGet(consecutiveFailuresRef, (value) => value + 1);
+        const retryInMs = telemetryRetryDelayMs(failures);
+        yield* Ref.set(retryAfterRef, Date.now() + retryInMs);
+        yield* Effect.logWarning("Telemetry flush failed; backing off", {
+          failureCount: failures,
+          retryInMs,
+          cause,
+        });
+      }),
+    ),
+  );
 
   const record: AnalyticsServiceShape["record"] = Effect.fnUntraced(function* (event, properties) {
     if (!telemetryConfig.enabled || !identifier) return;

@@ -44,6 +44,7 @@ import {
 } from "~/state/scopedStateStore";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { markStartupStage } from "../lib/startupReadiness";
 
 import {
   ArrowDownIcon,
@@ -67,6 +68,7 @@ import {
   GlobeIcon,
   HelpCircleIcon,
   HistoryIcon,
+  LoaderCircleIcon,
   Maximize2Icon,
   MinusIcon,
   Minimize2Icon,
@@ -3049,6 +3051,10 @@ function DesktopCodeTool(props: { project: Project }) {
       .then(() => {
         if (!cancelled) {
           setHostReady(true);
+          // The desktop bridge guarantees only that the host session is ready.
+          // Workbench, integration-extension, and optional-extension readiness
+          // require distinct native signals and must not be fabricated here.
+          markStartupStage("code-host-session-ready");
         }
       })
       .catch((error: unknown) => {
@@ -3240,7 +3246,9 @@ function DesktopCodeTool(props: { project: Project }) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-medium text-foreground">
-                Embedded Code-OSS unavailable
+                {hostError?.includes("project folder no longer exists")
+                  ? "Project folder unavailable"
+                  : "Embedded Code-OSS unavailable"}
               </div>
               <div className="text-xs text-muted-foreground">
                 {getCodeHostUnavailableMessage(hostError ?? codeHostState?.reason ?? null)}
@@ -10687,6 +10695,24 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const openAddProjectCommandPalette = useOpenAddProjectCommandPalette();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isSettingsNavigationPending, setIsSettingsNavigationPending] = useState(false);
+  const openSettings = useCallback(() => {
+    if (location.pathname === "/settings") return;
+
+    // TanStack Router can retain the current match while the destination is
+    // resolving. Hide that stale surface immediately so a slow first render of
+    // Settings never looks like an ignored click or a frozen Agents view.
+    setIsSettingsNavigationPending(true);
+    void navigate({ to: "/settings" }).catch(() => {
+      setIsSettingsNavigationPending(false);
+    });
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    if (location.pathname === "/settings") {
+      setIsSettingsNavigationPending(false);
+    }
+  }, [location.pathname]);
   const routeThreadId = useParams({
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
@@ -12218,7 +12244,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       <ServerTool
         project={activeProject}
         projectSettings={activeProjectSettings}
-        onOpenSettings={() => void navigate({ to: "/settings" })}
+        onOpenSettings={openSettings}
         onRunProcess={(processId) => void runServerProcessWithDependencies(processId)}
         onRestartProcess={(processId) => void restartServerProcess(processId)}
         onStopProcess={(processId) => void stopServerProcess(processId)}
@@ -12377,6 +12403,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   // intent clear and guards against any unexpected state.
 
   const isSettingsRoute = location.pathname === "/settings";
+  const isSettingsSurfaceActive = isSettingsRoute || isSettingsNavigationPending;
   const shouldHideShellChrome = embeddedMode.enabled;
   const isEmbeddedWorkspacePending =
     embeddedMode.enabled &&
@@ -12384,7 +12411,27 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     (!activeProject || activeProject.cwd !== embeddedMode.workspaceRoot || !activeProjectSettings);
 
   let content: ReactNode;
-  if (!threadsHydrated) {
+  if (isSettingsNavigationPending) {
+    content = (
+      <div
+        className="flex h-full min-h-0 items-center justify-center bg-background animate-in fade-in duration-200"
+        role="status"
+        aria-live="polite"
+        aria-label="Opening Settings"
+      >
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="relative grid size-11 place-items-center rounded-2xl border border-border/70 bg-card/70 shadow-sm">
+            <SettingsIcon className="size-5" aria-hidden="true" />
+            <LoaderCircleIcon
+              className="absolute -inset-1 size-[52px] animate-spin text-primary/70"
+              aria-hidden="true"
+            />
+          </div>
+          <span className="text-sm">Opening Settings…</span>
+        </div>
+      </div>
+    );
+  } else if (!threadsHydrated) {
     content = (
       <div
         className="flex h-full items-center justify-center text-sm text-muted-foreground"
@@ -12405,7 +12452,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       </div>
     );
   } else if (isSettingsRoute) {
-    content = props.settingsContent;
+    content = (
+      <div className="flex h-full min-h-0 flex-col animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none">
+        {props.settingsContent}
+      </div>
+    );
   } else if (isActivePendingTab) {
     // The focused tab is a pending/unassigned "New Tab" — show the landing
     // screen inside that tab's content area so the user can pick a project.
@@ -12472,7 +12523,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
-                  onClick={() => void navigate({ to: "/settings" })}
+                  onClick={openSettings}
                 >
                   <SettingsIcon className="size-4 text-muted-foreground" />
                   <span>Workspace Settings</span>
@@ -12568,7 +12619,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
-                  onClick={() => void navigate({ to: "/settings" })}
+                  onClick={openSettings}
                 >
                   <SettingsIcon className="size-4 text-muted-foreground" />
                   <span>Workspace Settings</span>
@@ -12706,17 +12757,22 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           onClosePendingTab={(pendingId) => {
             closePendingTab(pendingId);
           }}
-          showSettings={!isSettingsRoute && Boolean(activeProject) && availableTools.length <= 1}
-          onOpenSettings={() => void navigate({ to: "/settings" })}
+          showSettings={
+            !isSettingsSurfaceActive && Boolean(activeProject) && availableTools.length <= 1
+          }
+          onOpenSettings={openSettings}
         />
       )}
 
-      {!shouldHideShellChrome && !isSettingsRoute && activeProject && availableTools.length >= 2 ? (
+      {!shouldHideShellChrome &&
+      !isSettingsSurfaceActive &&
+      activeProject &&
+      availableTools.length >= 2 ? (
         <ProjectToolBar
           activeToolId={activeTool?.id ?? ""}
           availableTools={availableTools}
           onSelectTool={(toolId) => void handleSelectTool(toolId)}
-          onOpenSettings={() => void navigate({ to: "/settings" })}
+          onOpenSettings={openSettings}
         />
       ) : null}
 

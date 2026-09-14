@@ -104,7 +104,8 @@ describe("BackgroundService", () => {
     });
     expect(info).toContain("Tabs headless server is active and running in background.");
     expect(info).toContain("Listening at: http://0.0.0.0:4000");
-    expect(info).toContain("Auth token:   secret-token-123");
+    expect(info).toContain("Auth token:   [configured]");
+    expect(info).not.toContain("secret-token-123");
     expect(info).toContain("Home dir:     /data/tabs");
   });
 });

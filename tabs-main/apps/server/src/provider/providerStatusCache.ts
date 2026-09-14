@@ -1,18 +1,36 @@
 import {
-  type ProviderDriverKind,
-  type ProviderInstanceId,
+  ProviderDriverKind,
+  ProviderInstanceId,
   type ServerProvider,
   ServerProvider as ServerProviderSchema,
 } from "@tabs/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import { writeFileStringAtomically } from "../atomicWrite";
 
-const decodeProviderStatusCache = Schema.decodeUnknownEffect(
+// Versioned identity envelope. Time-derived freshness is intentionally not
+// persisted: a stored "fresh" bit becomes false as time passes, and provider
+// errors must not silently advance a supposed last-success timestamp.
+export const PROVIDER_STATUS_CACHE_SCHEMA_VERSION = 1 as const;
+
+export const ProviderStatusCacheEnvelope = Schema.Struct({
+  schemaVersion: Schema.Literal(PROVIDER_STATUS_CACHE_SCHEMA_VERSION),
+  instanceId: ProviderInstanceId,
+  driver: ProviderDriverKind,
+  provider: ServerProviderSchema,
+});
+export type ProviderStatusCacheEnvelope = typeof ProviderStatusCacheEnvelope.Type;
+
+const decodeProviderStatusCacheEnvelope = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(ProviderStatusCacheEnvelope),
+);
+
+const decodeLegacyProviderStatusCache = Schema.decodeUnknownEffect(
   Schema.fromJsonString(ServerProviderSchema),
 );
 
@@ -57,9 +75,15 @@ export const hydrateCachedProvider = (input: {
   }
 
   const { message: _fallbackMessage, ...fallbackWithoutMessage } = input.fallbackProvider;
+  // PR-003: Preserve last-known-good model catalog when fallback provider has empty models or during refresh failure
+  const models =
+    input.fallbackProvider.models.length > 0
+      ? mergeProviderModels(input.fallbackProvider.models, input.cachedProvider.models)
+      : input.cachedProvider.models;
+
   const hydratedProvider: ServerProvider = {
     ...fallbackWithoutMessage,
-    models: mergeProviderModels(input.fallbackProvider.models, input.cachedProvider.models),
+    models,
     installed: input.cachedProvider.installed,
     version: input.cachedProvider.version,
     status: input.cachedProvider.status,
@@ -115,7 +139,7 @@ export const resolveLegacyProviderStatusCachePath = Effect.fn(
   return path.join(input.cacheDir, `${input.provider}.json`);
 });
 
-export const readProviderStatusCache = (filePath: string) =>
+export const readProviderStatusCacheEnvelope = (filePath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const exists = yield* fs.exists(filePath).pipe(Effect.orElseSucceed(() => false));
@@ -129,25 +153,44 @@ export const readProviderStatusCache = (filePath: string) =>
       return undefined;
     }
 
-    return yield* decodeProviderStatusCache(trimmed).pipe(
-      Effect.matchCauseEffect({
-        onFailure: (cause) =>
-          Effect.logWarning("failed to parse provider status cache, ignoring", {
-            path: filePath,
-            issues: Cause.pretty(cause),
-          }).pipe(Effect.as(undefined)),
-        onSuccess: Effect.succeed,
-      }),
-    );
+    const envelopeExit = yield* decodeProviderStatusCacheEnvelope(trimmed).pipe(Effect.exit);
+    if (Exit.isSuccess(envelopeExit)) {
+      return envelopeExit.value;
+    }
+
+    const legacyExit = yield* decodeLegacyProviderStatusCache(trimmed).pipe(Effect.exit);
+    if (Exit.isSuccess(legacyExit)) {
+      const provider = legacyExit.value;
+      return {
+        schemaVersion: PROVIDER_STATUS_CACHE_SCHEMA_VERSION,
+        instanceId: provider.instanceId,
+        driver: provider.driver,
+        provider,
+      } satisfies ProviderStatusCacheEnvelope;
+    }
+
+    yield* Effect.logWarning("failed to parse provider status cache, ignoring", {
+      path: filePath,
+    });
+    return undefined;
   });
+
+export const readProviderStatusCache = (filePath: string) =>
+  Effect.map(readProviderStatusCacheEnvelope(filePath), (envelope) => envelope?.provider);
 
 export const writeProviderStatusCache = (input: {
   readonly filePath: string;
   readonly provider: ServerProvider;
 }) => {
   const { updateState: _updateState, ...cacheableProvider } = input.provider;
+  const envelope: ProviderStatusCacheEnvelope = {
+    schemaVersion: PROVIDER_STATUS_CACHE_SCHEMA_VERSION,
+    instanceId: input.provider.instanceId,
+    driver: input.provider.driver,
+    provider: cacheableProvider,
+  };
   return writeFileStringAtomically({
     filePath: input.filePath,
-    contents: `${JSON.stringify(cacheableProvider, null, 2)}\n`,
+    contents: `${JSON.stringify(envelope, null, 2)}\n`,
   });
 };

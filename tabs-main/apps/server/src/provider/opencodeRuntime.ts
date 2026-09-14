@@ -52,6 +52,7 @@ const STARTUP_OUTPUT_SECRET_ASSIGNMENT_PATTERN =
 export const KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS = [500, 1_500] as const;
 export interface OpenCodeServerProcess {
   readonly url: string;
+  readonly isRunning: Effect.Effect<boolean, never>;
   readonly exitCode: Effect.Effect<number, never>;
 }
 
@@ -256,6 +257,17 @@ function truncateStartupOutput(value: string): string | null {
   return `${trimmed.slice(0, OPENCODE_STARTUP_OUTPUT_MAX_CHARS)}\n\n[truncated ${trimmed.length - OPENCODE_STARTUP_OUTPUT_MAX_CHARS} chars]`;
 }
 
+export function resolveOpenCodeConfigContent(
+  inputEnvironment: Readonly<Record<string, string | undefined>> | undefined,
+  inheritedEnvironment: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  return (
+    inputEnvironment?.OPENCODE_CONFIG_CONTENT ??
+    inheritedEnvironment.OPENCODE_CONFIG_CONTENT ??
+    OPENCODE_EMPTY_CONFIG_CONTENT
+  );
+}
+
 function formatOpenCodeServerStartupDetail(input: {
   readonly summary: string;
   readonly binaryPath: string;
@@ -350,6 +362,34 @@ export interface OpenCodeRuntimeLiveOptions {
   readonly netService?: NetService.NetServiceShape;
 }
 
+const OPEN_CODE_PROCESS_GROUP_GRACE_MS = 1_000;
+const OPEN_CODE_PROCESS_GROUP_POLL_MS = 50;
+
+async function stopDetachedOpenCodeProcessGroup(pid: number): Promise<void> {
+  const signalGroup = (signal: NodeJS.Signals): boolean => {
+    try {
+      process.kill(-pid, signal);
+      return true;
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === "ESRCH") return false;
+      throw cause;
+    }
+  };
+
+  if (!signalGroup("SIGTERM")) return;
+  const deadline = Date.now() + OPEN_CODE_PROCESS_GROUP_GRACE_MS;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(-pid, 0);
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === "ESRCH") return;
+      throw cause;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, OPEN_CODE_PROCESS_GROUP_POLL_MS));
+  }
+  signalGroup("SIGKILL");
+}
+
 const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -435,7 +475,7 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
               ...(input.cwd ? { cwd: input.cwd } : {}),
               env: {
                 ...(input.environment ?? process.env),
-                OPENCODE_CONFIG_CONTENT: OPENCODE_EMPTY_CONFIG_CONTENT,
+                OPENCODE_CONFIG_CONTENT: resolveOpenCodeConfigContent(input.environment),
               },
             }),
           )
@@ -451,31 +491,41 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
             ),
           );
 
+        // PR-008: Signal detached process group on POSIX before fallback process-tree teardown.
         yield* Scope.addFinalizer(
           runtimeScope,
-          Effect.tryPromise({
-            try: () =>
-              teardownEffectProcessTree(
+          Effect.promise(async () => {
+            try {
+              if (process.platform !== "win32" && !options?.teardownProcessTree) {
+                await stopDetachedOpenCodeProcessGroup(Number(child.pid));
+                return;
+              }
+              await teardownEffectProcessTree(
                 child,
                 options?.teardownProcessTree ?? teardownProviderProcessTree,
-              ),
-            catch: (cause) =>
-              new OpenCodeRuntimeError({
-                operation: "stopOpenCodeServerProcess",
-                detail: `Failed to prove OpenCode server process-tree exit: ${openCodeRuntimeErrorDetail(cause)}`,
-                cause,
-              }),
-          }).pipe(Effect.asVoid, Effect.orDie),
+              );
+            } catch (cause) {
+              // Teardown is best-effort during scope exit, but a failure must
+              // remain diagnosable because it can otherwise become an orphan.
+              console.warn("Failed to stop OpenCode process group", {
+                pid: Number(child.pid),
+                cause: openCodeRuntimeErrorDetail(cause),
+              });
+            }
+          }),
         );
 
-        const stdoutRef = yield* Ref.make("");
-        const stderrRef = yield* Ref.make("");
+        const stdoutRef = yield* Ref.make<string | null>("");
+        const stderrRef = yield* Ref.make<string | null>("");
         const readyDeferred = yield* Deferred.make<string, OpenCodeRuntimeError>();
 
         const setReadyFromStdoutChunk = (chunk: string) =>
-          Ref.updateAndGet(stdoutRef, (stdout) => `${stdout}${chunk}`).pipe(
-            Effect.flatMap((nextStdout) => {
-              const parsed = parseServerUrlFromOutput(nextStdout);
+          Ref.modify(stdoutRef, (stdout) => {
+            if (stdout === null) return [null, null] as const;
+            const nextStdout = `${stdout}${chunk}`;
+            return [parseServerUrlFromOutput(nextStdout), nextStdout] as const;
+          }).pipe(
+            Effect.flatMap((parsed) => {
               return parsed
                 ? Deferred.succeed(readyDeferred, parsed).pipe(Effect.ignore)
                 : Effect.void;
@@ -490,7 +540,9 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
         );
         const stderrFiber = yield* child.stderr.pipe(
           Stream.decodeText(),
-          Stream.runForEach((chunk) => Ref.update(stderrRef, (stderr) => `${stderr}${chunk}`)),
+          Stream.runForEach((chunk) =>
+            Ref.update(stderrRef, (stderr) => (stderr === null ? null : `${stderr}${chunk}`)),
+          ),
           Effect.ignore,
           Effect.forkIn(runtimeScope),
         );
@@ -498,8 +550,8 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
         const exitFiber = yield* child.exitCode.pipe(
           Effect.flatMap((code) =>
             Effect.gen(function* () {
-              const stdout = yield* Ref.get(stdoutRef);
-              const stderr = yield* Ref.get(stderrRef);
+              const stdout = (yield* Ref.get(stdoutRef)) ?? "";
+              const stderr = (yield* Ref.get(stderrRef)) ?? "";
               const exitCode = Number(code);
               yield* Deferred.fail(
                 readyDeferred,
@@ -525,14 +577,8 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
           Deferred.await(readyDeferred).pipe(Effect.timeoutOption(timeoutMs)),
         );
 
-        // Startup-time fibers are no longer needed once ready has resolved (either
-        // way). The exit fiber is only interrupted on failure; on success it keeps
-        // the caller's `exitCode` effect observable until the scope closes.
-        yield* Fiber.interrupt(stdoutFiber).pipe(Effect.ignore);
-        yield* Fiber.interrupt(stderrFiber).pipe(Effect.ignore);
-
         if (Exit.isFailure(readyExit)) {
-          yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
+          yield* Fiber.interruptAll([stdoutFiber, stderrFiber, exitFiber]).pipe(Effect.ignore);
           const squashed = Cause.squash(readyExit.cause);
           return yield* ensureRuntimeError(
             "startOpenCodeServerProcess",
@@ -543,9 +589,9 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
 
         const readyOption = readyExit.value;
         if (Option.isNone(readyOption)) {
-          yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
-          const stdout = yield* Ref.get(stdoutRef);
-          const stderr = yield* Ref.get(stderrRef);
+          yield* Fiber.interruptAll([stdoutFiber, stderrFiber, exitFiber]).pipe(Effect.ignore);
+          const stdout = (yield* Ref.get(stdoutRef)) ?? "";
+          const stderr = (yield* Ref.get(stderrRef)) ?? "";
           const redactedStdout = redactStartupOutput(stdout);
           const redactedStderr = redactStartupOutput(stderr);
           return yield* new OpenCodeRuntimeError({
@@ -568,8 +614,15 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
           });
         }
 
+        // Keep draining both pipes for the process lifetime. Stopping the readers
+        // can block or terminate OpenCode once its output buffers fill. Discard
+        // post-startup output instead of retaining an unbounded log in memory.
+        yield* Ref.set(stdoutRef, null);
+        yield* Ref.set(stderrRef, null);
+
         return {
           url: readyOption.value,
+          isRunning: child.isRunning.pipe(Effect.orElseSucceed(() => false)),
           exitCode: child.exitCode.pipe(
             Effect.map(Number),
             Effect.orElseSucceed(() => 0),
@@ -622,8 +675,11 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
           const existing = pooledServers.get(key);
           if (existing) {
             yield* cancelIdleClose(existing);
-            existing.refCount += 1;
-            return existing;
+            if (yield* existing.server.isRunning) {
+              existing.refCount += 1;
+              return existing;
+            }
+            yield* closePooledServer(existing);
           }
 
           const startInput = {
@@ -782,7 +838,7 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
     } satisfies OpenCodeRuntimeShape;
   });
 
-export const OPENCODE_LOCAL_SERVER_IDLE_TTL_MS = 5 * 60_000;
+export const OPENCODE_LOCAL_SERVER_IDLE_TTL_MS = 30_000;
 
 export function buildOpenCodeServerProcessEnv(input: {
   readonly cliSpec?: { readonly dataDirectoryName: string };

@@ -1,6 +1,9 @@
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type AntigravityAuthMethod,
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+  type ProviderSendTurnInput,
   type RuntimeMode,
 } from "@tabs/contracts";
 import * as Effect from "effect/Effect";
@@ -8,10 +11,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
+import { resolveAttachmentPath } from "../../attachmentStore";
 import {
   buildAntigravityAcpSpawnInput,
   makeAntigravityStderrHandler,
@@ -23,6 +28,7 @@ import {
   type AcpSessionRuntimeOptions,
   type AcpSessionRuntimeShape,
 } from "./AcpSessionRuntime";
+import { normalizeAntigravitySessionUpdate } from "./AntigravityProtocol";
 import { getProviderSecret } from "../ProviderSecretStore";
 
 export type AntigravityAcpRuntimeSettings = Partial<
@@ -113,6 +119,7 @@ export const makeAntigravityAcpRuntime = Effect.fn("makeAntigravityAcpRuntime")(
       onStderr: makeAntigravityStderrHandler(
         input.onAuthorizationUrl ? { onAuthorizationUrl: input.onAuthorizationUrl } : {},
       ),
+      transformSessionUpdate: normalizeAntigravitySessionUpdate,
     }).pipe(
       Layer.provide(
         Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, input.childProcessSpawner),
@@ -217,3 +224,212 @@ export const applyAntigravityAcpModelSelection = Effect.fn("applyAntigravityAcpM
     return resolved;
   },
 );
+
+const IMAGE_MIME_TYPES = new Set(["image/bmp", "image/jpeg", "image/png", "image/webp"]);
+export const ANTIGRAVITY_MAX_AUDIO_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const AUDIO_MIME_TYPES = new Set([
+  "audio/aac",
+  "audio/flac",
+  "audio/mp3",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/ogg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/webm",
+]);
+const TEXT_MIME_TYPES = new Set([
+  "application/json",
+  "application/ld+json",
+  "application/javascript",
+  "application/typescript",
+  "application/xml",
+  "application/yaml",
+  "application/x-yaml",
+  "application/x-sh",
+]);
+const TEXT_FILE_EXTENSIONS = new Set([
+  ".txt",
+  ".md",
+  ".mdx",
+  ".json",
+  ".jsonl",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".xml",
+  ".csv",
+  ".tsv",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".ts",
+  ".tsx",
+  ".html",
+  ".css",
+  ".scss",
+  ".less",
+  ".py",
+  ".rs",
+  ".go",
+  ".java",
+  ".kt",
+  ".swift",
+  ".c",
+  ".h",
+  ".cc",
+  ".cpp",
+  ".hpp",
+  ".cs",
+  ".rb",
+  ".php",
+  ".sh",
+  ".bash",
+  ".zsh",
+  ".sql",
+  ".graphql",
+  ".svelte",
+  ".vue",
+  ".log",
+  ".diff",
+  ".patch",
+  ".ini",
+  ".conf",
+]);
+export const ANTIGRAVITY_MAX_TEXT_ATTACHMENT_BYTES = 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = PROVIDER_SEND_TURN_MAX_FILE_BYTES;
+
+// AG-007: Sends uploads as native ACP content with bounded buffers and MIME checks.
+export const buildAntigravityPrompt = Effect.fn("buildAntigravityPrompt")(function* (input: {
+  readonly input: ProviderSendTurnInput["input"];
+  readonly attachments: ProviderSendTurnInput["attachments"];
+  readonly attachmentsDir: string;
+}): Effect.fn.Return<
+  ReadonlyArray<EffectAcpSchema.ContentBlock>,
+  EffectAcpErrors.AcpError,
+  FileSystem.FileSystem | Path.Path
+> {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const blocks: Array<EffectAcpSchema.ContentBlock> = [];
+  const text = input.input?.trim();
+  if (text) blocks.push({ type: "text", text });
+  let totalBytes = 0;
+
+  for (const attachment of input.attachments ?? []) {
+    const isPastedText =
+      attachment.type === "file" &&
+      "source" in attachment &&
+      (attachment as Record<string, unknown>).source !== null &&
+      typeof (attachment as Record<string, unknown>).source === "object" &&
+      ((attachment as Record<string, unknown>).source as { _tag?: string })?._tag === "pasted-text";
+
+    const mimeType = attachment.mimeType.toLowerCase().split(";", 1)[0] ?? "";
+    const image = attachment.type === "image" && IMAGE_MIME_TYPES.has(mimeType);
+    const audio = attachment.type === "file" && AUDIO_MIME_TYPES.has(mimeType);
+    const pdf = attachment.type === "file" && mimeType === "application/pdf";
+    const textFile =
+      attachment.type === "file" &&
+      (mimeType.startsWith("text/") ||
+        TEXT_MIME_TYPES.has(mimeType) ||
+        TEXT_FILE_EXTENSIONS.has(path.extname(attachment.name).toLowerCase()));
+    if (!image && !audio && !pdf && !textFile) {
+      return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+        `Antigravity does not support '${attachment.name}' (${attachment.mimeType}). Attach a BMP, JPEG, PNG, WebP, PDF, audio, or text file.`,
+      );
+    }
+    const attachmentPath = resolveAttachmentPath({
+      attachmentsDir: input.attachmentsDir,
+      attachment,
+    });
+    if (!attachmentPath) {
+      return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+        `Invalid attachment '${attachment.name}'.`,
+      );
+    }
+    const info = yield* fileSystem
+      .stat(attachmentPath)
+      .pipe(
+        Effect.mapError(() =>
+          EffectAcpErrors.AcpRequestError.invalidParams(
+            `Could not read attachment '${attachment.name}'.`,
+          ),
+        ),
+      );
+    if (isPastedText) {
+      if (info.type !== "File") {
+        return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+          `Could not read attachment '${attachment.name}'.`,
+        );
+      }
+      continue;
+    }
+    const size = Number(info.size);
+    const limit = image
+      ? PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
+      : audio
+        ? ANTIGRAVITY_MAX_AUDIO_ATTACHMENT_BYTES
+        : pdf
+          ? PROVIDER_SEND_TURN_MAX_FILE_BYTES
+          : ANTIGRAVITY_MAX_TEXT_ATTACHMENT_BYTES;
+    totalBytes += size;
+    if (info.type !== "File" || size > limit || totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+      return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+        `Attachment '${attachment.name}' is too large. Antigravity accepts text files up to 1 MiB, images up to 10 MiB, audio up to 20 MiB, and 50 MiB total attachments.`,
+      );
+    }
+    const uri = yield* path.toFileUrl(attachmentPath).pipe(
+      Effect.map((url) => url.href),
+      Effect.mapError(() =>
+        EffectAcpErrors.AcpRequestError.invalidParams(`Invalid attachment '${attachment.name}'.`),
+      ),
+    );
+    if (pdf) {
+      blocks.push({ type: "resource_link", uri, name: attachment.name, mimeType });
+      continue;
+    }
+    const bytes = yield* fileSystem.stream(attachmentPath, { bytesToRead: limit + 1 }).pipe(
+      Stream.runCollect,
+      Effect.map((chunks) => Buffer.concat(chunks)),
+      Effect.mapError(() =>
+        EffectAcpErrors.AcpRequestError.invalidParams(
+          `Could not read attachment '${attachment.name}'.`,
+        ),
+      ),
+    );
+    totalBytes += bytes.length - size;
+    if (bytes.length > limit || totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+      return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+        `Attachment '${attachment.name}' changed while being read and is too large.`,
+      );
+    }
+    if (image) {
+      blocks.push({ type: "image", data: Buffer.from(bytes).toString("base64"), mimeType });
+    } else if (audio) {
+      blocks.push({ type: "audio", data: Buffer.from(bytes).toString("base64"), mimeType });
+    } else {
+      const decoded = yield* Effect.try({
+        try: () => new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+        catch: () =>
+          EffectAcpErrors.AcpRequestError.invalidParams(
+            `Attachment '${attachment.name}' is not a UTF-8 text file.`,
+          ),
+      });
+      if (decoded.includes("\0")) {
+        return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+          `Attachment '${attachment.name}' contains binary data.`,
+        );
+      }
+      blocks.push({ type: "resource", resource: { uri, mimeType, text: decoded } });
+    }
+  }
+  if (blocks.length === 0) {
+    return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+      "A turn requires text or supported attachments.",
+    );
+  }
+  return blocks;
+});

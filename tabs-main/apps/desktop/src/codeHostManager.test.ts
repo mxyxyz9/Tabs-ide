@@ -22,6 +22,7 @@ const { webContentsViews, MockWebContentsView } = vi.hoisted(() => {
       isDestroyed: vi.fn(() => false),
       isLoading: vi.fn(() => false),
       stop: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
     };
 
     readonly loadedUrls: string[] = [];
@@ -49,6 +50,8 @@ vi.mock("electron", () => ({
 }));
 
 import {
+  addDefaultExtensionGallery,
+  CODE_OSS_EMBED_DEFAULT_SETTINGS,
   CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH,
   CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH,
   CODE_OSS_NLS_MESSAGES_RELATIVE_PATH,
@@ -71,6 +74,33 @@ import {
   shouldOpenCodeOssUrlExternally,
   writeWorkspaceTabs,
 } from "./codeHostManager";
+
+describe("addDefaultExtensionGallery", () => {
+  it("adds Open VSX to an unbranded Code-OSS product", () => {
+    expect(addDefaultExtensionGallery({ nameShort: "Code - OSS" })).toMatchObject({
+      extensionsGallery: {
+        serviceUrl: "https://open-vsx.org/vscode/gallery",
+        itemUrl: "https://open-vsx.org/vscode/item",
+      },
+    });
+  });
+
+  it("preserves a marketplace supplied by the runtime", () => {
+    const product = {
+      extensionsGallery: { serviceUrl: "https://example.test/gallery" },
+    };
+    expect(addDefaultExtensionGallery(product)).toBe(product);
+  });
+});
+
+describe("CODE_OSS_EMBED_DEFAULT_SETTINGS", () => {
+  it("allows gallery-managed extensions to discover and install updates", () => {
+    expect(CODE_OSS_EMBED_DEFAULT_SETTINGS).toMatchObject({
+      "extensions.autoCheckUpdates": true,
+      "extensions.autoUpdate": true,
+    });
+  });
+});
 
 describe("resolveCodeOssAiProviderSettings", () => {
   it.each(["tabs", "copilot"] as const)(
@@ -528,6 +558,10 @@ describe("CodeHostManager", () => {
     expect(window.contentView.removeChildView).toHaveBeenCalledTimes(1);
     expect(window.contentView.addChildView).toHaveBeenCalledTimes(2);
     expect(window.contentView.children).toHaveLength(1);
+    expect(webContentsViews[0]!.webContents.setBackgroundThrottling).toHaveBeenCalledWith(true);
+    expect(webContentsViews[1]!.webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(
+      false,
+    );
   });
 
   it("captures an embedded session for transient native-surface overlays", async () => {
@@ -585,7 +619,7 @@ describe("CodeHostManager", () => {
     expect(webContentsViews[1]!.webContents.close).not.toHaveBeenCalled();
   });
 
-  it("keeps only three warm Code sessions", async () => {
+  it("keeps only bounded warm Code sessions (CO-003)", async () => {
     const window = createMockWindow();
     const manager = new CodeHostManager(() => window as never, {
       state: {
@@ -606,11 +640,16 @@ describe("CodeHostManager", () => {
       await manager.activateSession({ projectId });
     }
 
+    // CO-003: With MAX_WARM_CODE_SESSIONS = 2, older sessions (a and b) are pruned,
+    // and only the 2 most recent sessions (c and d) remain warm.
     expect(webContentsViews[0]!.webContents.close).toHaveBeenCalledWith({
       waitForBeforeUnload: false,
     });
+    expect(webContentsViews[1]!.webContents.close).toHaveBeenCalledWith({
+      waitForBeforeUnload: false,
+    });
     expect(
-      webContentsViews.slice(1).every((view) => !view.webContents.close.mock.calls.length),
+      webContentsViews.slice(2).every((view) => !view.webContents.close.mock.calls.length),
     ).toBe(true);
   });
 

@@ -42,7 +42,9 @@ export function buildGrokAcpSpawnInput(
   delete subscriptionEnvironment.GROK_OAUTH2_REFERRER;
   return {
     command: grokSettings?.binaryPath || "grok",
-    args: ["agent", "stdio"],
+    // xAI recommends suppressing update checks for ACP/automation launches.
+    // Updates remain available through the explicit provider maintenance action.
+    args: ["--no-auto-update", "agent", "stdio"],
     cwd,
     env: subscriptionEnvironment,
   };

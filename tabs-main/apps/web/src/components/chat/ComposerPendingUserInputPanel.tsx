@@ -13,7 +13,7 @@ interface PendingUserInputPanelProps {
   respondingRequestIds: ApprovalRequestId[];
   answers: Record<string, PendingUserInputDraftAnswer>;
   questionIndex: number;
-  onSelectOption: (questionId: string, optionLabel: string) => void;
+  onSelectOption: (questionId: string, optionLabel: string, optionValue?: string) => void;
   onAdvance: () => void;
 }
 
@@ -54,7 +54,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   isResponding: boolean;
   answers: Record<string, PendingUserInputDraftAnswer>;
   questionIndex: number;
-  onSelectOption: (questionId: string, optionLabel: string) => void;
+  onSelectOption: (questionId: string, optionLabel: string, optionValue?: string) => void;
   onAdvance: () => void;
 }) {
   const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
@@ -71,8 +71,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   }, []);
 
   const selectOptionAndAutoAdvance = useCallback(
-    (questionId: string, optionLabel: string) => {
-      onSelectOption(questionId, optionLabel);
+    (questionId: string, optionLabel: string, optionValue?: string) => {
+      onSelectOption(questionId, optionLabel, optionValue);
       if (autoAdvanceTimerRef.current !== null) {
         window.clearTimeout(autoAdvanceTimerRef.current);
       }
@@ -109,7 +109,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       const option = activeQuestion.options[optionIndex];
       if (!option) return;
       event.preventDefault();
-      selectOptionAndAutoAdvance(activeQuestion.id, option.label);
+      selectOptionAndAutoAdvance(activeQuestion.id, option.label, option.value);
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -143,7 +143,9 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               key={`${activeQuestion.id}:${option.label}`}
               type="button"
               disabled={isResponding}
-              onClick={() => selectOptionAndAutoAdvance(activeQuestion.id, option.label)}
+              onClick={() =>
+                selectOptionAndAutoAdvance(activeQuestion.id, option.label, option.value)
+              }
               className={cn(
                 "group flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-all duration-150",
                 isSelected

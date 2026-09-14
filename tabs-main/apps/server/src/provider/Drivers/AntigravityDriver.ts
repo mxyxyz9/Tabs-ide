@@ -1,6 +1,9 @@
 import { AntigravitySettings, ProviderDriverKind, type ServerProvider } from "@tabs/contracts";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FileSystem from "effect/FileSystem";
@@ -105,31 +108,6 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
       });
 
       const textGeneration = makeUnsupportedTextGeneration("Antigravity");
-      const checkProvider = checkAntigravityProviderStatus(effectiveConfig, processEnv).pipe(
-        Effect.map(stampIdentity),
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-      );
-
-      const snapshot = yield* makeManagedServerProvider<AntigravitySettings>({
-        maintenanceCapabilities,
-        getSettings: Effect.succeed(effectiveConfig),
-        streamSettings: Stream.never,
-        haveSettingsChanged: () => false,
-        initialSnapshot: () => checkProvider,
-        checkProvider,
-        enrichSnapshot: ({ snapshot: currentSnapshot }) => Effect.succeed(currentSnapshot),
-        refreshInterval: SNAPSHOT_REFRESH_INTERVAL,
-      }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProviderDriverError({
-              driver: DRIVER_KIND,
-              instanceId,
-              detail: `Failed to build Antigravity snapshot: ${cause.message ?? String(cause)}`,
-              cause,
-            }),
-        ),
-      );
 
       const antigravityAdapter = yield* usesNativeAcp
         ? makeAntigravityAdapter(effectiveConfig, {
@@ -144,6 +122,105 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
             defaultCwd: serverConfig.cwd,
             attachmentsDir: serverConfig.attachmentsDir,
           });
+
+      const nativeInitialSnapshot = Effect.gen(function* () {
+        const checkedAt = DateTime.formatIso(yield* DateTime.now);
+        return stampIdentity(
+          buildServerProvider({
+            presentation: { displayName: "Antigravity" },
+            enabled,
+            checkedAt,
+            models: [],
+            probe: {
+              // A configured native ACP executable is also a native install;
+              // `nativeBinaryPath` is populated only for the managed runtime.
+              installed: usesNativeAcp,
+              version: managedExecutable?._tag === "Some" ? managedExecutable.value.version : null,
+              // AG-001: Publish immediate installed state for native ACP without blocking startup on account discovery.
+              status: "warning",
+              auth: { status: "unknown" },
+              message: enabled
+                ? "Antigravity ACP is installed. Checking Google account access in the background."
+                : "Antigravity is disabled in Tabs settings.",
+            },
+          }),
+        );
+      });
+
+      const checkNativeProvider = Effect.gen(function* () {
+        const checkedAt = DateTime.formatIso(yield* DateTime.now);
+        const discovery = yield* antigravityAdapter.listModels!({
+          cwd: serverConfig.cwd,
+          binaryPath: effectiveConfig.binaryPath,
+        }).pipe(Effect.timeoutOption("90 seconds"), Effect.result);
+        const completed = Result.isSuccess(discovery)
+          ? Option.getOrUndefined(discovery.success)
+          : undefined;
+        const detail = Result.isFailure(discovery)
+          ? discovery.failure.message
+          : completed === undefined
+            ? "Antigravity ACP health check timed out."
+            : undefined;
+        const unauthenticated = Boolean(
+          detail && /sign in|authenticate|unauthenticated|authorization/iu.test(detail),
+        );
+        const missing = Boolean(detail && /enoent|not installed|not found/iu.test(detail));
+        return stampIdentity(
+          buildServerProvider({
+            presentation: { displayName: "Antigravity" },
+            enabled,
+            checkedAt,
+            models:
+              completed?.models.map((model) => ({
+                slug: model.slug,
+                name: model.name,
+                isCustom: false,
+                capabilities: null,
+              })) ?? [],
+            probe: {
+              installed: !missing,
+              version: managedExecutable?._tag === "Some" ? managedExecutable.value.version : null,
+              status: completed ? "ready" : unauthenticated ? "warning" : "error",
+              auth: {
+                status: completed
+                  ? "authenticated"
+                  : unauthenticated
+                    ? "unauthenticated"
+                    : "unknown",
+              },
+              ...(detail ? { message: detail } : {}),
+            },
+          }),
+        );
+      });
+
+      const checkProvider = usesNativeAcp
+        ? checkNativeProvider
+        : checkAntigravityProviderStatus(effectiveConfig, processEnv).pipe(
+            Effect.map(stampIdentity),
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          );
+
+      const snapshot = yield* makeManagedServerProvider<AntigravitySettings>({
+        maintenanceCapabilities,
+        getSettings: Effect.succeed(effectiveConfig),
+        streamSettings: Stream.never,
+        haveSettingsChanged: () => false,
+        initialSnapshot: () => (usesNativeAcp ? nativeInitialSnapshot : checkProvider),
+        checkProvider,
+        enrichSnapshot: ({ snapshot: currentSnapshot }) => Effect.succeed(currentSnapshot),
+        refreshInterval: SNAPSHOT_REFRESH_INTERVAL,
+      }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER_KIND,
+              instanceId,
+              detail: `Failed to build Antigravity snapshot: ${cause.message ?? String(cause)}`,
+              cause,
+            }),
+        ),
+      );
 
       const userHome = resolveAntigravityUserHome(process.platform, processEnv);
       const snapshotForCwd = (cwd: string) =>

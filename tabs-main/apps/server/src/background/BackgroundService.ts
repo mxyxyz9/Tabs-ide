@@ -288,7 +288,9 @@ export function formatHeadlessInfo(config: {
     `Home dir:     ${config.baseDir}`,
   ];
   if (config.authToken) {
-    lines.push(`Auth token:   ${config.authToken}`);
+    // The token can be recovered from the configured environment/state. Never
+    // echo it into terminals, CI logs, crash reports, or screen recordings.
+    lines.push("Auth token:   [configured]");
   }
   lines.push("----------------------------------------------------------------");
   return lines.join("\n");

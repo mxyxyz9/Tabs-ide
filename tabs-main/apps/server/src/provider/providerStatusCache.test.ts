@@ -13,7 +13,9 @@ import * as FileSystem from "effect/FileSystem";
 import {
   hydrateCachedProvider,
   isCachedProviderCorrelated,
+  PROVIDER_STATUS_CACHE_SCHEMA_VERSION,
   readProviderStatusCache,
+  readProviderStatusCacheEnvelope,
   resolveProviderStatusCachePath,
   writeProviderStatusCache,
 } from "./providerStatusCache";
@@ -233,5 +235,88 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       }),
       fallbackCodex,
     );
+  });
+
+  it.effect("writes and reads versioned provider cache identity envelopes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-envelope-test-" });
+      const codexProvider = makeProvider(CODEX_DRIVER, {
+        checkedAt: "2026-09-13T12:00:00.000Z",
+      });
+      const cachePath = yield* resolveProviderStatusCachePath({
+        cacheDir: tempDir,
+        instanceId: codexProvider.instanceId,
+      });
+
+      yield* writeProviderStatusCache({
+        filePath: cachePath,
+        provider: codexProvider,
+      });
+
+      const envelope = yield* readProviderStatusCacheEnvelope(cachePath);
+      assert.ok(envelope !== undefined);
+      assert.strictEqual(envelope.schemaVersion, PROVIDER_STATUS_CACHE_SCHEMA_VERSION);
+      assert.strictEqual(envelope.instanceId, codexProvider.instanceId);
+      assert.strictEqual(envelope.driver, codexProvider.driver);
+      assert.deepStrictEqual(envelope.provider, codexProvider);
+
+      // readProviderStatusCache unwraps to the provider
+      const unwrapped = yield* readProviderStatusCache(cachePath);
+      assert.deepStrictEqual(unwrapped, codexProvider);
+    }),
+  );
+
+  it.effect("synthesizes envelope when reading legacy un-enveloped cache files", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-legacy-test-" });
+      const codexProvider = makeProvider(CODEX_DRIVER, {
+        checkedAt: "2026-04-10T12:00:00.000Z",
+      });
+      const cachePath = yield* resolveProviderStatusCachePath({
+        cacheDir: tempDir,
+        instanceId: codexProvider.instanceId,
+      });
+
+      // Write raw ServerProvider JSON without envelope
+      yield* fs.writeFileString(cachePath, JSON.stringify(codexProvider, null, 2));
+
+      const envelope = yield* readProviderStatusCacheEnvelope(cachePath);
+      assert.ok(envelope !== undefined);
+      assert.strictEqual(envelope.schemaVersion, PROVIDER_STATUS_CACHE_SCHEMA_VERSION);
+      assert.strictEqual(envelope.instanceId, codexProvider.instanceId);
+      assert.strictEqual(envelope.driver, codexProvider.driver);
+      assert.deepStrictEqual(envelope.provider, codexProvider);
+    }),
+  );
+
+  it("preserves last-known-good models when fallback provider has empty models list", () => {
+    const cachedCodex = makeProvider(CODEX_DRIVER, {
+      checkedAt: "2026-04-10T12:00:00.000Z",
+      models: [
+        {
+          slug: "gpt-5.4",
+          name: "GPT-5.4",
+          isCustom: false,
+          capabilities: emptyCapabilities,
+        },
+      ],
+    });
+    // Fallback provider returned by an un-probed or failed refresh has empty models
+    const fallbackCodex = makeProvider(CODEX_DRIVER, {
+      models: [],
+      status: "warning",
+      message: "Temporary probe failure",
+    });
+
+    const hydrated = hydrateCachedProvider({
+      cachedProvider: cachedCodex,
+      fallbackProvider: fallbackCodex,
+    });
+
+    // Models should be preserved from cache!
+    assert.strictEqual(hydrated.models.length, 1);
+    assert.strictEqual(hydrated.models[0]?.slug, "gpt-5.4");
   });
 });

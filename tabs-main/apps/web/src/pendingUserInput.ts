@@ -2,6 +2,7 @@ import type { UserInputQuestion } from "@tabs/contracts";
 
 export interface PendingUserInputDraftAnswer {
   selectedOptionLabel?: string;
+  selectedOptionValue?: string;
   customAnswer?: string;
 }
 
@@ -36,7 +37,7 @@ export function resolvePendingUserInputAnswer(
     return customAnswer;
   }
 
-  return normalizeDraftAnswer(draft?.selectedOptionLabel);
+  return normalizeDraftAnswer(draft?.selectedOptionValue ?? draft?.selectedOptionLabel);
 }
 
 export function setPendingUserInputCustomAnswer(
@@ -49,6 +50,9 @@ export function setPendingUserInputCustomAnswer(
   return {
     customAnswer,
     ...(selectedOptionLabel ? { selectedOptionLabel } : {}),
+    ...(selectedOptionLabel && draft?.selectedOptionValue
+      ? { selectedOptionValue: draft.selectedOptionValue }
+      : {}),
   };
 }
 

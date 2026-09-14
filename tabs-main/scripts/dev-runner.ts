@@ -33,7 +33,10 @@ const MODE_ARGS = {
   // The desktop package watches its own authenticated backend bundle via
   // `dev:backend-bundle`; do not run the standalone server here because it
   // competes for state and is not the process Electron connects to.
-  "dev:desktop": ["run", "dev", "--filter=@tabs/desktop", "--filter=@tabs/web"],
+  // Both desktop and web resolve workspace packages from source while their
+  // watchers are active. `--only` skips the root dev task's contracts build,
+  // which otherwise blocks first paint on ~15s of declaration generation.
+  "dev:desktop": ["run", "dev", "--only", "--filter=@tabs/desktop", "--filter=@tabs/web"],
 } as const satisfies Record<string, ReadonlyArray<string>>;
 
 type DevMode = keyof typeof MODE_ARGS;
@@ -393,7 +396,10 @@ const resolveOptionalBooleanOverride = (
   return envValue;
 };
 
-function terminateExistingDevInstances(): void {
+function terminateExistingDevInstances(options?: {
+  readonly protectCurrentDescendants?: boolean;
+  readonly restrictToCurrentWorkingTree?: boolean;
+}): number {
   try {
     // 1. Get the current process ancestors to protect them from being terminated.
     const ancestors = new Set<number>([process.pid]);
@@ -403,7 +409,7 @@ function terminateExistingDevInstances(): void {
     const psOutput = execSync("ps -ax -o pid,ppid,command").toString();
     const lines = psOutput.split("\n");
 
-    const processesToInspect: Array<{ pid: number; command: string }> = [];
+    const processesToInspect: Array<{ pid: number; ppid: number; command: string }> = [];
 
     for (let i = 1; i < lines.length; i++) {
       const rawLine = lines[i];
@@ -421,7 +427,7 @@ function terminateExistingDevInstances(): void {
         const ppid = parseInt(match[2], 10);
         const command = match[3];
         ppidMap.set(pid, ppid);
-        processesToInspect.push({ pid, command });
+        processesToInspect.push({ pid, ppid, command });
       }
     }
 
@@ -450,7 +456,10 @@ function terminateExistingDevInstances(): void {
     }
 
     // Combine ancestors and current process descendants into a single protected PIDs set
-    const protectedPids = new Set<number>([...ancestors, ...descendants]);
+    const protectedPids = new Set<number>([
+      ...ancestors,
+      ...(options?.protectCurrentDescendants === false ? [process.pid] : descendants),
+    ]);
 
     // Designate the process pattern matching targets
     const TARGET_PATTERNS = [
@@ -464,38 +473,87 @@ function terminateExistingDevInstances(): void {
       "dev:bundle dev:backend-bundle",
     ];
 
+    const matchesDevProcess = (command: string) =>
+      TARGET_PATTERNS.some((pattern) =>
+        pattern.includes(".*") ? new RegExp(pattern).test(command) : command.includes(pattern),
+      );
+    const staleDevPids = new Set(
+      processesToInspect
+        .filter(({ pid, command }) => !protectedPids.has(pid) && matchesDevProcess(command))
+        .map(({ pid }) => pid),
+    );
+    const descendsFromStaleDevProcess = (pid: number): boolean => {
+      const visited = new Set<number>();
+      let current = ppidMap.get(pid);
+      while (current !== undefined && current > 1 && !visited.has(current)) {
+        if (staleDevPids.has(current)) return true;
+        visited.add(current);
+        current = ppidMap.get(current);
+      }
+      return false;
+    };
+    const isOwnedProviderServer = (input: {
+      readonly pid: number;
+      readonly ppid: number;
+      readonly command: string;
+    }): boolean => {
+      const exactLocalServer =
+        /(?:^|\s)(?:\S*\/)?opencode serve --hostname 127\.0\.0\.1 --port \d+(?:\s|$)/u.test(
+          input.command,
+        ) ||
+        /(?:^|\s)(?:\S*\/)?kilo serve --hostname 127\.0\.0\.1 --port \d+(?:\s|$)/u.test(
+          input.command,
+        );
+      return exactLocalServer && (input.ppid === 1 || descendsFromStaleDevProcess(input.pid));
+    };
+    const belongsToCurrentWorkingTree = (pid: number): boolean => {
+      if (options?.restrictToCurrentWorkingTree !== true) return true;
+      try {
+        const output = execSync(`lsof -a -p ${pid} -d cwd -Fn`, {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+        const cwd = output
+          .split("\n")
+          .find((line) => line.startsWith("n"))
+          ?.slice(1);
+        const root = process.cwd();
+        return cwd === root || cwd?.startsWith(`${root}/`) === true;
+      } catch {
+        return false;
+      }
+    };
+
     // Identify processes to kill
     const pidsToKill: number[] = [];
-    for (const { pid, command } of processesToInspect) {
+    for (const processInfo of processesToInspect) {
+      const { pid, command } = processInfo;
       // Never kill protected processes (ourselves, ancestors, or our own spawned descendants)
       if (protectedPids.has(pid)) {
         continue;
       }
 
-      const matchesPattern = TARGET_PATTERNS.some((pattern) => {
-        if (pattern.includes(".*")) {
-          return new RegExp(pattern).test(command);
-        }
-        return command.includes(pattern);
-      });
+      const matchesPattern = matchesDevProcess(command) || isOwnedProviderServer(processInfo);
 
-      if (matchesPattern) {
+      if (matchesPattern && belongsToCurrentWorkingTree(pid)) {
         pidsToKill.push(pid);
       }
     }
 
     // Kill the target processes
-    if (pidsToKill.length > 0) {
-      for (const pid of pidsToKill) {
-        try {
-          process.kill(pid, "SIGKILL");
-        } catch {
-          // ignore if process already exited
-        }
+    let terminated = 0;
+    for (const pid of pidsToKill) {
+      try {
+        process.kill(pid, "SIGKILL");
+        terminated += 1;
+      } catch {
+        // ignore if process already exited
       }
     }
+    return terminated;
   } catch (e) {
     // ignore errors to avoid breaking the startup flow if ps or execution fails
+    return 0;
   }
 }
 
@@ -571,11 +629,16 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       yield* Effect.logInfo(
         "[dev-runner] Terminating any existing dev instances to prevent conflicts...",
       );
-      terminateExistingDevInstances();
+      const terminated = terminateExistingDevInstances({
+        restrictToCurrentWorkingTree: true,
+      });
 
-      // Add a brief delay to allow the OS to fully reclaim memory from the killed processes.
-      // Without this, starting the massive turbo pipeline immediately can trigger the macOS OOM killer (SIGKILL).
-      yield* Effect.sleep("1500 millis");
+      // Give macOS a brief opportunity to reclaim resources only when stale
+      // processes were actually removed. A clean launch should not pay this
+      // delay on every invocation.
+      if (terminated > 0) {
+        yield* Effect.sleep("1500 millis");
+      }
     }
 
     const child = yield* ChildProcess.make(
@@ -606,6 +669,16 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
                 : "turbo was interrupted before it could report an exit code",
             cause,
           }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (input.mode === "dev:desktop" && process.platform !== "win32") {
+            terminateExistingDevInstances({
+              protectCurrentDescendants: false,
+              restrictToCurrentWorkingTree: true,
+            });
+          }
+        }),
       ),
     );
     if (exitCode !== 0) {

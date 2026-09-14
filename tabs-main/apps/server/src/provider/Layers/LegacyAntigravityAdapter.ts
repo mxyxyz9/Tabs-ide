@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
+import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
 
 import {
@@ -317,11 +318,15 @@ export const makeLegacyAntigravityAdapter = Effect.fn(function* (
               let result: AntigravityJsonResult | undefined;
               let errorMessage: string | undefined;
               if (!context.interrupted && code === 0 && cause === undefined) {
-                try {
-                  result = parseResult(stdout);
-                } catch (parseCause) {
-                  errorMessage =
-                    parseCause instanceof Error ? parseCause.message : String(parseCause);
+                const parsed = yield* Effect.try({
+                  try: () => parseResult(stdout),
+                  catch: (parseCause) =>
+                    parseCause instanceof Error ? parseCause.message : String(parseCause),
+                }).pipe(Effect.result);
+                if (Result.isSuccess(parsed)) {
+                  result = parsed.success;
+                } else {
+                  errorMessage = parsed.failure;
                 }
               } else {
                 errorMessage =

@@ -131,7 +131,7 @@ export const verifyDpopRequestFields = (input: {
                 "environment.dpop.failure_code": mapped.dpopFailureReason,
               });
             }
-            return yield* Effect.fail(mapped);
+            return yield* mapped;
           }),
         ),
       );

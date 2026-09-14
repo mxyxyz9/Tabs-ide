@@ -16,9 +16,8 @@ const watchedDirectories = [
   { directory: "dist-electron", files: new Set(["main.js", "preload.js"]) },
   { directory: "../server/dist", files: new Set(["index.mjs"]) },
 ];
-const forcedShutdownTimeoutMs = 1_500;
+const forcedShutdownTimeoutMs = 750;
 const restartDebounceMs = 120;
-const childTreeGracePeriodMs = 1_200;
 
 await waitOn({
   resources: [`tcp:${port}`, ...requiredFiles.map((filePath) => `file:${filePath}`)],
@@ -36,11 +35,72 @@ const expectedExits = new WeakSet();
 const watchers = [];
 
 function killChildTreeByPid(pid, signal) {
-  if (process.platform === "win32" || typeof pid !== "number") {
+  if (typeof pid !== "number") {
     return;
   }
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(pid), "/t", ...(signal === "KILL" ? ["/f"] : [])], {
+      stdio: "ignore",
+    });
+    return;
+  }
+  try {
+    // Each Electron app is launched as a process-group leader. Signaling the
+    // group remains reliable even after the main process exits and its backend
+    // has been reparented to launchd.
+    process.kill(-pid, signal === "KILL" ? "SIGKILL" : "SIGTERM");
+  } catch {
+    // Compatibility fallback for platforms that did not create the group.
+    spawnSync("pkill", [`-${signal}`, "-P", String(pid)], { stdio: "ignore" });
+  }
+}
 
-  spawnSync("pkill", [`-${signal}`, "-P", String(pid)], { stdio: "ignore" });
+function isProcessGroupAlive(pid) {
+  if (process.platform === "win32") return false;
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function discoverDescendantProcessGroups(rootPid) {
+  if (process.platform === "win32" || typeof rootPid !== "number") return new Set();
+  const result = spawnSync("ps", ["-ax", "-o", "pid=,ppid=,pgid="], { encoding: "utf8" });
+  const processes = [];
+  for (const line of (result.stdout ?? "").split("\n")) {
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)$/u);
+    if (!match) continue;
+    const pid = Number(match[1]);
+    const ppid = Number(match[2]);
+    const pgid = Number(match[3]);
+    if ([pid, ppid, pgid].every(Number.isSafeInteger)) processes.push({ pid, ppid, pgid });
+  }
+
+  const ownedPids = new Set([rootPid]);
+  const ownedGroups = new Set([rootPid]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const processInfo of processes) {
+      if (ownedPids.has(processInfo.pid) || !ownedPids.has(processInfo.ppid)) continue;
+      ownedPids.add(processInfo.pid);
+      ownedGroups.add(processInfo.pgid);
+      changed = true;
+    }
+  }
+  return ownedGroups;
+}
+
+function signalProcessGroups(groups, signal) {
+  for (const pgid of groups) {
+    try {
+      process.kill(-pgid, signal);
+    } catch {
+      // The process group may already have exited.
+    }
+  }
 }
 
 function cleanupStaleDevApps() {
@@ -49,24 +109,22 @@ function cleanupStaleDevApps() {
   }
 
   const pgrepArgs = ["-f", "--", `[eE]lectron.*--tabs-dev-root=${desktopDir}`];
-  if (spawnSync("pgrep", pgrepArgs, { stdio: "ignore" }).status !== 0) {
+  const result = spawnSync("pgrep", pgrepArgs, { encoding: "utf8" });
+  if (result.status !== 0) {
     return;
   }
 
-  spawnSync("pkill", ["-f", "--", `[eE]lectron.*--tabs-dev-root=${desktopDir}`], {
-    stdio: "ignore",
-  });
+  const appPids = (result.stdout ?? "")
+    .split(/\s+/u)
+    .map(Number)
+    .filter((pid) => Number.isSafeInteger(pid) && pid > 1);
+  for (const pid of appPids) killChildTreeByPid(pid, "TERM");
 
   const start = Date.now();
-  while (spawnSync("pgrep", pgrepArgs, { stdio: "ignore" }).status === 0) {
-    if (Date.now() - start > 5000) {
-      spawnSync("pkill", ["-9", "-f", "--", `[eE]lectron.*--tabs-dev-root=${desktopDir}`], {
-        stdio: "ignore",
-      });
-      break;
-    }
+  while (appPids.some(isProcessGroupAlive) && Date.now() - start <= 5000) {
     spawnSync("sleep", ["0.1"]);
   }
+  for (const pid of appPids.filter(isProcessGroupAlive)) killChildTreeByPid(pid, "KILL");
 }
 
 function startApp() {
@@ -85,6 +143,7 @@ function startApp() {
         VITE_DEV_SERVER_URL: devServerUrl,
       },
       stdio: "inherit",
+      detached: process.platform !== "win32",
     },
   );
 
@@ -126,9 +185,15 @@ async function stopApp() {
 
   currentApp = null;
   expectedExits.add(app);
+  // Provider servers intentionally create their own process groups. Capture
+  // those groups before terminating Electron: after the backend exits they
+  // are reparented to launchd and can no longer be discovered from app.pid.
+  const ownedGroups = discoverDescendantProcessGroups(app.pid);
 
   await new Promise((resolve) => {
     let settled = false;
+    let pollTimer = null;
+    let forceTimer = null;
 
     const finish = () => {
       if (settled) {
@@ -136,22 +201,29 @@ async function stopApp() {
       }
 
       settled = true;
+      if (pollTimer) clearInterval(pollTimer);
+      if (forceTimer) clearTimeout(forceTimer);
       resolve();
     };
 
-    app.once("exit", finish);
+    app.once("exit", () => {
+      if (process.platform === "win32" || !Array.from(ownedGroups).some(isProcessGroupAlive))
+        finish();
+    });
     app.kill("SIGTERM");
-    killChildTreeByPid(app.pid, "TERM");
+    if (process.platform === "win32") killChildTreeByPid(app.pid, "TERM");
+    else signalProcessGroups(ownedGroups, "SIGTERM");
 
-    setTimeout(() => {
-      if (settled) {
-        return;
-      }
-
+    pollTimer = setInterval(() => {
+      if (!Array.from(ownedGroups).some(isProcessGroupAlive)) finish();
+    }, 50);
+    forceTimer = setTimeout(() => {
+      if (settled) return;
       app.kill("SIGKILL");
-      killChildTreeByPid(app.pid, "KILL");
+      if (process.platform === "win32") killChildTreeByPid(app.pid, "KILL");
+      else signalProcessGroups(ownedGroups, "SIGKILL");
       finish();
-    }, forcedShutdownTimeoutMs).unref();
+    }, forcedShutdownTimeoutMs);
   });
 }
 
@@ -219,9 +291,6 @@ async function shutdown(exitCode) {
 
   await stopApp();
   killChildTree("TERM");
-  await new Promise((resolve) => {
-    setTimeout(resolve, childTreeGracePeriodMs);
-  });
   killChildTree("KILL");
 
   process.exit(exitCode);

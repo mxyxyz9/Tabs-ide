@@ -115,6 +115,43 @@ describe("derivePendingApprovals", () => {
     ]);
   });
 
+  it("preserves provider-specific approval choices and warnings", () => {
+    const activities = [
+      makeActivity({
+        kind: "approval.requested",
+        tone: "approval",
+        payload: {
+          requestId: "req-provider-options",
+          requestKind: "command",
+          appName: "Antigravity",
+          options: [
+            { decision: "accept", label: "Allow once" },
+            {
+              decision: "acceptForSession",
+              label: "Allow for this thread",
+              warning: "Review possible prompt injection before allowing repeatedly.",
+            },
+          ],
+        },
+      }),
+    ];
+
+    expect(derivePendingApprovals(activities)).toMatchObject([
+      {
+        requestId: "req-provider-options",
+        appName: "Antigravity",
+        options: [
+          { decision: "accept", label: "Allow once" },
+          {
+            decision: "acceptForSession",
+            label: "Allow for this thread",
+            warning: "Review possible prompt injection before allowing repeatedly.",
+          },
+        ],
+      },
+    ]);
+  });
+
   it("clears stale pending approvals when provider reports unknown pending request", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
@@ -254,6 +291,41 @@ describe("derivePendingUserInputs", () => {
                 description: "Allow workspace writes only",
               },
             ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("preserves provider option values and custom-answer policy", () => {
+    const activities = [
+      makeActivity({
+        kind: "user-input.requested",
+        tone: "info",
+        payload: {
+          requestId: "req-native-choice",
+          questions: [
+            {
+              id: "interaction_package_manager",
+              header: "Question",
+              question: "Which package manager?",
+              allowCustomAnswer: false,
+              multiSelect: false,
+              options: [{ label: "Bun", description: "Use Bun", value: "bun-option-id" }],
+            },
+          ],
+        },
+      }),
+    ];
+
+    expect(derivePendingUserInputs(activities)).toMatchObject([
+      {
+        requestId: "req-native-choice",
+        questions: [
+          {
+            allowCustomAnswer: false,
+            multiSelect: false,
+            options: [{ label: "Bun", value: "bun-option-id" }],
           },
         ],
       },
