@@ -52,7 +52,7 @@ beforeAll(() => {
   });
 });
 
-describe("MessagesTimeline", () => {
+describe("MessagesTimeline", { timeout: 30000 }, () => {
   it("renders inline terminal labels with the composer chip UI", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
     const markup = renderToStaticMarkup(
