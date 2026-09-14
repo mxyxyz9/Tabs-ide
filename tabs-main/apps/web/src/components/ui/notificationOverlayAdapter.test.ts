@@ -82,12 +82,8 @@ describe("notificationOverlayAdapter", () => {
 
   describe("syncNotificationOverlayToBridge", () => {
     it("safely resolves if bridge is undefined or does not support overlay", async () => {
-      await expect(
-        syncNotificationOverlayToBridge(undefined, []),
-      ).resolves.toBeUndefined();
-      await expect(
-        syncNotificationOverlayToBridge({} as any, []),
-      ).resolves.toBeUndefined();
+      await expect(syncNotificationOverlayToBridge(undefined, [])).resolves.toBeUndefined();
+      await expect(syncNotificationOverlayToBridge({} as any, [])).resolves.toBeUndefined();
     });
 
     it("syncs serialized payloads to the desktop bridge", async () => {
@@ -160,11 +156,7 @@ describe("notificationOverlayAdapter", () => {
         },
       ];
 
-      const handled = handleNotificationOverlayDismiss(
-        toasts,
-        { toastId: "toast-1" },
-        manager,
-      );
+      const handled = handleNotificationOverlayDismiss(toasts, { toastId: "toast-1" }, manager);
 
       expect(handled).toBe(true);
       expect(onClose).toHaveBeenCalledTimes(1);

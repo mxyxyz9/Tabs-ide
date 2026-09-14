@@ -1,10 +1,6 @@
 import * as FS from "node:fs";
 import * as Path from "node:path";
-import {
-  WebContentsView,
-  type BrowserWindow,
-  type Rectangle,
-} from "electron";
+import { WebContentsView, type BrowserWindow, type Rectangle } from "electron";
 import type {
   NotificationOverlayBounds,
   NotificationOverlayTheme,
@@ -15,9 +11,9 @@ import type { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
 export interface NotificationOverlayManagerOptions {
   getWindow: () => BrowserWindow | null;
   stackCoordinator: NativeViewStackCoordinator;
-  onAction?: (toastId: string, actionId: string) => void;
-  onDismiss?: (toastId: string) => void;
-  restoreActiveFocus?: () => void;
+  onAction?: ((toastId: string, actionId: string) => void) | undefined;
+  onDismiss?: ((toastId: string) => void) | undefined;
+  restoreActiveFocus?: (() => void) | undefined;
 }
 
 function resolveNotificationOverlayHtmlPath(): string {
@@ -57,9 +53,9 @@ function resolveNotificationOverlayHtmlPath(): string {
 export class NotificationOverlayManager {
   private readonly getWindow: () => BrowserWindow | null;
   private readonly stackCoordinator: NativeViewStackCoordinator;
-  private readonly onAction?: (toastId: string, actionId: string) => void;
-  private readonly onDismiss?: (toastId: string) => void;
-  private readonly restoreActiveFocus?: () => void;
+  private readonly onAction?: ((toastId: string, actionId: string) => void) | undefined;
+  private readonly onDismiss?: ((toastId: string) => void) | undefined;
+  private readonly restoreActiveFocus?: (() => void) | undefined;
 
   private overlayView: WebContentsView | null = null;
   private toasts: readonly NotificationToastPayload[] = [];
@@ -217,7 +213,7 @@ export class NotificationOverlayManager {
       return;
     }
 
-    const [windowWidth, windowHeight] = window.getContentSize();
+    const [windowWidth = 0, windowHeight = 0] = window.getContentSize();
     const HEADER_OFFSET = 56;
     const MARGIN_RIGHT = 16;
     const MARGIN_BOTTOM = 16;

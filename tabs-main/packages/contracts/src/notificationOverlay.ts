@@ -45,8 +45,7 @@ export const NotificationOverlayActionDispatchSchema = Schema.Struct({
   toastId: Schema.String,
   actionId: Schema.String,
 });
-export type NotificationOverlayActionDispatch =
-  typeof NotificationOverlayActionDispatchSchema.Type;
+export type NotificationOverlayActionDispatch = typeof NotificationOverlayActionDispatchSchema.Type;
 
 export const NotificationOverlayDismissDispatchSchema = Schema.Struct({
   toastId: Schema.String,

@@ -1,308 +1,336 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tabs Notifications</title>
-  <style>
-    :root {
-      --bg: #18181b;
-      --fg: #f4f4f5;
-      --border: rgba(255, 255, 255, 0.1);
-      --popover: #18181b;
-      --popover-fg: #f4f4f5;
-      --muted: #a1a1aa;
-      --accent: #27272a;
-      --accent-fg: #fafafa;
-      --destructive: #ef4444;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --info: #3b82f6;
-      --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
-      --radius: 8px;
-      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    html.theme-light {
-      --bg: #ffffff;
-      --fg: #09090b;
-      --border: rgba(0, 0, 0, 0.1);
-      --popover: #ffffff;
-      --popover-fg: #09090b;
-      --muted: #71717a;
-      --accent: #f4f4f5;
-      --accent-fg: #18181b;
-      --destructive: #dc2626;
-      --success: #16a34a;
-      --warning: #d97706;
-      --info: #2563eb;
-      --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      background: transparent !important;
-      color: var(--fg);
-      font-family: var(--font-family);
-      overflow: hidden;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-
-    #toast-container {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 8px;
-      width: 100%;
-      padding: 2px;
-    }
-
-    .toast-card {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      max-width: 380px;
-      background: var(--popover);
-      color: var(--popover-fg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 12px 14px;
-      pointer-events: auto;
-      transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, max-height 0.2s ease;
-      animation: toast-enter 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    }
-
-    @keyframes toast-enter {
-      from {
-        opacity: 0;
-        transform: translateY(-8px) scale(0.96);
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tabs Notifications</title>
+    <style>
+      :root {
+        --bg: #18181b;
+        --fg: #f4f4f5;
+        --border: rgba(255, 255, 255, 0.1);
+        --popover: #18181b;
+        --popover-fg: #f4f4f5;
+        --muted: #a1a1aa;
+        --accent: #27272a;
+        --accent-fg: #fafafa;
+        --destructive: #ef4444;
+        --success: #22c55e;
+        --warning: #f59e0b;
+        --info: #3b82f6;
+        --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+        --radius: 8px;
+        --font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
 
-    @media (prefers-reduced-motion: reduce) {
+      html.theme-light {
+        --bg: #ffffff;
+        --fg: #09090b;
+        --border: rgba(0, 0, 0, 0.1);
+        --popover: #ffffff;
+        --popover-fg: #09090b;
+        --muted: #71717a;
+        --accent: #f4f4f5;
+        --accent-fg: #18181b;
+        --destructive: #dc2626;
+        --success: #16a34a;
+        --warning: #d97706;
+        --info: #2563eb;
+        --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: transparent !important;
+        color: var(--fg);
+        font-family: var(--font-family);
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      #toast-container {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        width: 100%;
+        padding: 2px;
+      }
+
       .toast-card {
-        animation: none !important;
-        transition: none !important;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 380px;
+        background: var(--popover);
+        color: var(--popover-fg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 14px;
+        pointer-events: auto;
+        transition:
+          transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 0.2s ease,
+          max-height 0.2s ease;
+        animation: toast-enter 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
+
+      @keyframes toast-enter {
+        from {
+          opacity: 0;
+          transform: translateY(-8px) scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .toast-card {
+          animation: none !important;
+          transition: none !important;
+        }
+        .spin-icon {
+          animation: none !important;
+        }
+      }
+
+      .toast-body {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        width: 100%;
+      }
+
+      .toast-icon-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+      }
+
+      .toast-content {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+        gap: 3px;
+      }
+
+      .toast-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+      }
+
+      .toast-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        line-height: 1.35;
+        word-break: break-word;
+      }
+
+      .toast-description {
+        font-size: 12.5px;
+        line-height: 1.4;
+        color: var(--muted);
+        word-break: break-word;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+
+      .toast-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--accent);
+        color: var(--accent-fg);
+        cursor: pointer;
+        outline: none;
+        transition:
+          background 0.15s ease,
+          opacity 0.15s ease;
+      }
+
+      .btn:hover {
+        opacity: 0.9;
+      }
+
+      .btn:focus-visible {
+        box-shadow: 0 0 0 2px var(--info);
+      }
+
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        border-radius: 4px;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+
+      .icon-btn:hover {
+        color: var(--fg);
+        background: var(--accent);
+      }
+
+      .icon-btn:focus-visible {
+        outline: 2px solid var(--info);
+      }
+
       .spin-icon {
-        animation: none !important;
-      }
-    }
-
-    .toast-body {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      width: 100%;
-    }
-
-    .toast-icon-wrapper {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      width: 18px;
-      height: 18px;
-      margin-top: 1px;
-    }
-
-    .toast-content {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-width: 0;
-      gap: 3px;
-    }
-
-    .toast-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-    }
-
-    .toast-title {
-      font-size: 13.5px;
-      font-weight: 600;
-      line-height: 1.35;
-      word-break: break-word;
-    }
-
-    .toast-description {
-      font-size: 12.5px;
-      line-height: 1.4;
-      color: var(--muted);
-      word-break: break-word;
-      user-select: text;
-      -webkit-user-select: text;
-    }
-
-    .toast-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 8px;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: 500;
-      padding: 4px 10px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--accent);
-      color: var(--accent-fg);
-      cursor: pointer;
-      outline: none;
-      transition: background 0.15s ease, opacity 0.15s ease;
-    }
-
-    .btn:hover {
-      opacity: 0.9;
-    }
-
-    .btn:focus-visible {
-      box-shadow: 0 0 0 2px var(--info);
-    }
-
-    .icon-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      padding: 0;
-      border: none;
-      background: transparent;
-      color: var(--muted);
-      border-radius: 4px;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: color 0.15s ease, background 0.15s ease;
-    }
-
-    .icon-btn:hover {
-      color: var(--fg);
-      background: var(--accent);
-    }
-
-    .icon-btn:focus-visible {
-      outline: 2px solid var(--info);
-    }
-
-    .spin-icon {
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-
-    /* Type-specific colors */
-    .icon-error { color: var(--destructive); }
-    .icon-success { color: var(--success); }
-    .icon-warning { color: var(--warning); }
-    .icon-info { color: var(--info); }
-    .icon-loading { color: var(--info); opacity: 0.85; }
-  </style>
-</head>
-<body>
-  <div id="toast-container" role="region" aria-label="Notifications" aria-live="polite"></div>
-
-  <script>
-    (function () {
-      const container = document.getElementById("toast-container");
-      let activeToasts = [];
-      let currentTheme = { themeId: "tabs-dark", isDark: true };
-
-      const ICONS = {
-        error: '<svg class="icon-error" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
-        success: '<svg class="icon-success" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-        warning: '<svg class="icon-warning" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-        info: '<svg class="icon-info" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
-        loading: '<svg class="icon-loading spin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
-        close: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
-        copy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
-        check: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)"><polyline points="20 6 9 17 4 12"/></svg>'
-      };
-
-      function escapeHtml(str) {
-        if (!str) return "";
-        return String(str)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#039;");
+        animation: spin 1s linear infinite;
       }
 
-      function applyTheme(theme) {
-        currentTheme = theme;
-        if (theme.isDark) {
-          document.documentElement.classList.remove("theme-light");
-          document.documentElement.classList.add("theme-dark");
-        } else {
-          document.documentElement.classList.remove("theme-dark");
-          document.documentElement.classList.add("theme-light");
+      @keyframes spin {
+        100% {
+          transform: rotate(360deg);
         }
       }
 
-      function renderToasts(toasts) {
-        activeToasts = toasts;
-        container.innerHTML = "";
+      /* Type-specific colors */
+      .icon-error {
+        color: var(--destructive);
+      }
+      .icon-success {
+        color: var(--success);
+      }
+      .icon-warning {
+        color: var(--warning);
+      }
+      .icon-info {
+        color: var(--info);
+      }
+      .icon-loading {
+        color: var(--info);
+        opacity: 0.85;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toast-container" role="region" aria-label="Notifications" aria-live="polite"></div>
 
-        if (!toasts || toasts.length === 0) {
-          reportMeasuredBounds();
-          return;
+    <script>
+      (function () {
+        const container = document.getElementById("toast-container");
+        let activeToasts = [];
+        let currentTheme = { themeId: "tabs-dark", isDark: true };
+
+        const ICONS = {
+          error:
+            '<svg class="icon-error" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+          success:
+            '<svg class="icon-success" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+          warning:
+            '<svg class="icon-warning" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+          info: '<svg class="icon-info" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+          loading:
+            '<svg class="icon-loading spin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
+          close:
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+          copy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
+          check:
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)"><polyline points="20 6 9 17 4 12"/></svg>',
+        };
+
+        function escapeHtml(str) {
+          if (!str) return "";
+          return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
         }
 
-        for (const toast of toasts) {
-          const card = document.createElement("div");
-          card.className = "toast-card";
-          card.setAttribute("role", toast.type === "error" || toast.type === "warning" ? "alert" : "status");
-          card.dataset.toastId = toast.id;
+        function applyTheme(theme) {
+          currentTheme = theme;
+          if (theme.isDark) {
+            document.documentElement.classList.remove("theme-light");
+            document.documentElement.classList.add("theme-dark");
+          } else {
+            document.documentElement.classList.remove("theme-dark");
+            document.documentElement.classList.add("theme-light");
+          }
+        }
 
-          const type = toast.type || "info";
-          const iconSvg = ICONS[type] || ICONS.info;
+        function renderToasts(toasts) {
+          activeToasts = toasts;
+          container.innerHTML = "";
 
-          let actionsHtml = "";
-          if (toast.action) {
-            actionsHtml += `
+          if (!toasts || toasts.length === 0) {
+            reportMeasuredBounds();
+            return;
+          }
+
+          for (const toast of toasts) {
+            const card = document.createElement("div");
+            card.className = "toast-card";
+            card.setAttribute(
+              "role",
+              toast.type === "error" || toast.type === "warning" ? "alert" : "status",
+            );
+            card.dataset.toastId = toast.id;
+
+            const type = toast.type || "info";
+            const iconSvg = ICONS[type] || ICONS.info;
+
+            let actionsHtml = "";
+            if (toast.action) {
+              actionsHtml += `
               <div class="toast-actions">
                 <button type="button" class="btn" data-action-id="${escapeHtml(toast.action.actionId)}">
                   ${escapeHtml(toast.action.label)}
                 </button>
               </div>
             `;
-          }
+            }
 
-          let copyBtnHtml = "";
-          if (toast.type === "error" && toast.description) {
-            copyBtnHtml = `
+            let copyBtnHtml = "";
+            if (toast.type === "error" && toast.description) {
+              copyBtnHtml = `
               <button type="button" class="icon-btn copy-btn" title="Copy error" aria-label="Copy error">
                 ${ICONS.copy}
               </button>
             `;
-          }
+            }
 
-          card.innerHTML = `
+            card.innerHTML = `
             <div class="toast-body">
               <div class="toast-icon-wrapper">
                 ${iconSvg}
@@ -321,85 +349,85 @@
             </div>
           `;
 
-          // Event listeners
-          const dismissBtn = card.querySelector(".dismiss-btn");
-          if (dismissBtn) {
-            dismissBtn.addEventListener("click", () => {
-              window.notificationOverlayBridge?.dismissToast(toast.id);
-            });
+            // Event listeners
+            const dismissBtn = card.querySelector(".dismiss-btn");
+            if (dismissBtn) {
+              dismissBtn.addEventListener("click", () => {
+                window.notificationOverlayBridge?.dismissToast(toast.id);
+              });
+            }
+
+            const actionBtn = card.querySelector(".btn[data-action-id]");
+            if (actionBtn) {
+              actionBtn.addEventListener("click", () => {
+                const actionId = actionBtn.getAttribute("data-action-id");
+                if (actionId) {
+                  window.notificationOverlayBridge?.triggerAction(toast.id, actionId);
+                }
+              });
+            }
+
+            const copyBtn = card.querySelector(".copy-btn");
+            if (copyBtn && toast.description) {
+              copyBtn.addEventListener("click", () => {
+                window.notificationOverlayBridge?.copyText(toast.description);
+                copyBtn.innerHTML = ICONS.check;
+                setTimeout(() => {
+                  copyBtn.innerHTML = ICONS.copy;
+                }, 1500);
+              });
+            }
+
+            container.appendChild(card);
           }
 
-          const actionBtn = card.querySelector(".btn[data-action-id]");
-          if (actionBtn) {
-            actionBtn.addEventListener("click", () => {
-              const actionId = actionBtn.getAttribute("data-action-id");
-              if (actionId) {
-                window.notificationOverlayBridge?.triggerAction(toast.id, actionId);
-              }
-            });
-          }
-
-          const copyBtn = card.querySelector(".copy-btn");
-          if (copyBtn && toast.description) {
-            copyBtn.addEventListener("click", () => {
-              window.notificationOverlayBridge?.copyText(toast.description);
-              copyBtn.innerHTML = ICONS.check;
-              setTimeout(() => {
-                copyBtn.innerHTML = ICONS.copy;
-              }, 1500);
-            });
-          }
-
-          container.appendChild(card);
+          reportMeasuredBounds();
         }
 
-        reportMeasuredBounds();
-      }
+        let reportRafId = null;
+        function reportMeasuredBounds() {
+          if (reportRafId) cancelAnimationFrame(reportRafId);
+          reportRafId = requestAnimationFrame(() => {
+            reportRafId = null;
+            if (!activeToasts || activeToasts.length === 0) {
+              window.notificationOverlayBridge?.reportBounds({ width: 0, height: 0 });
+              return;
+            }
 
-      let reportRafId = null;
-      function reportMeasuredBounds() {
-        if (reportRafId) cancelAnimationFrame(reportRafId);
-        reportRafId = requestAnimationFrame(() => {
-          reportRafId = null;
-          if (!activeToasts || activeToasts.length === 0) {
-            window.notificationOverlayBridge?.reportBounds({ width: 0, height: 0 });
-            return;
-          }
-
-          const rect = container.getBoundingClientRect();
-          const width = Math.ceil(rect.width) || 360;
-          const height = Math.ceil(rect.height) || 60;
-          window.notificationOverlayBridge?.reportBounds({ width, height });
-        });
-      }
-
-      // ResizeObserver to watch for dynamic DOM size changes (e.g. multi-line wrap or expand)
-      const observer = new ResizeObserver(() => {
-        reportMeasuredBounds();
-      });
-      observer.observe(container);
-
-      // Keyboard navigation: Escape dismisses top-most toast
-      window.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && activeToasts.length > 0) {
-          const topmost = activeToasts[0];
-          if (topmost) {
-            window.notificationOverlayBridge?.dismissToast(topmost.id);
-          }
+            const rect = container.getBoundingClientRect();
+            const width = Math.ceil(rect.width) || 360;
+            const height = Math.ceil(rect.height) || 60;
+            window.notificationOverlayBridge?.reportBounds({ width, height });
+          });
         }
-      });
 
-      // Hook up preload listeners
-      if (window.notificationOverlayBridge) {
-        window.notificationOverlayBridge.onSyncToasts((toasts) => {
-          renderToasts(toasts);
+        // ResizeObserver to watch for dynamic DOM size changes (e.g. multi-line wrap or expand)
+        const observer = new ResizeObserver(() => {
+          reportMeasuredBounds();
+        });
+        observer.observe(container);
+
+        // Keyboard navigation: Escape dismisses top-most toast
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && activeToasts.length > 0) {
+            const topmost = activeToasts[0];
+            if (topmost) {
+              window.notificationOverlayBridge?.dismissToast(topmost.id);
+            }
+          }
         });
 
-        window.notificationOverlayBridge.onSyncTheme((theme) => {
-          applyTheme(theme);
-        });
-      }
-    })();
-  </script>
-</body>
+        // Hook up preload listeners
+        if (window.notificationOverlayBridge) {
+          window.notificationOverlayBridge.onSyncToasts((toasts) => {
+            renderToasts(toasts);
+          });
+
+          window.notificationOverlayBridge.onSyncTheme((theme) => {
+            applyTheme(theme);
+          });
+        }
+      })();
+    </script>
+  </body>
 </html>

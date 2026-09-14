@@ -69,25 +69,18 @@ const VALID_TOAST_TYPES = new Set<NotificationToastType>([
   "warning",
 ]);
 
-export function serializeToastToPayload(
-  toast: MinimalToastItem,
-): NotificationToastPayload {
+export function serializeToastToPayload(toast: MinimalToastItem): NotificationToastPayload {
   const toastId = String(toast.id);
-  const type: NotificationToastType = VALID_TOAST_TYPES.has(
-    toast.type as NotificationToastType,
-  )
+  const type: NotificationToastType = VALID_TOAST_TYPES.has(toast.type as NotificationToastType)
     ? (toast.type as NotificationToastType)
     : "info";
 
   const title = extractTextContent(toast.title);
-  const description = toast.description
-    ? extractTextContent(toast.description)
-    : undefined;
+  const description = toast.description ? extractTextContent(toast.description) : undefined;
 
   let action: NotificationToastAction | undefined = undefined;
   if (toast.actionProps) {
-    const actionLabel =
-      extractTextContent(toast.actionProps.children) || "Action";
+    const actionLabel = extractTextContent(toast.actionProps.children) || "Action";
     action = {
       actionId: "primary",
       label: actionLabel,
@@ -96,9 +89,7 @@ export function serializeToastToPayload(
 
   const duration =
     toast.data?.dismissAfterVisibleMs ??
-    (typeof toast.timeout === "number" && toast.timeout > 0
-      ? toast.timeout
-      : 5000);
+    (typeof toast.timeout === "number" && toast.timeout > 0 ? toast.timeout : 5000);
 
   const payload: NotificationToastPayload = {
     id: toastId,
@@ -114,9 +105,7 @@ export function serializeToastToPayload(
     ...(typeof toast.data?.interactive === "boolean"
       ? { interactive: toast.data.interactive }
       : {}),
-    ...(toast.data?.threadId !== undefined
-      ? { threadId: toast.data.threadId }
-      : {}),
+    ...(toast.data?.threadId !== undefined ? { threadId: toast.data.threadId } : {}),
   };
 
   return payload;
@@ -140,11 +129,7 @@ export function handleNotificationOverlayAction(
   action: { toastId: string; actionId: string },
 ): boolean {
   const matchingToast = toasts.find((t) => String(t.id) === action.toastId);
-  if (
-    matchingToast &&
-    action.actionId === "primary" &&
-    matchingToast.actionProps?.onClick
-  ) {
+  if (matchingToast && action.actionId === "primary" && matchingToast.actionProps?.onClick) {
     matchingToast.actionProps.onClick();
     return true;
   }
@@ -196,11 +181,7 @@ export function useNotificationOverlayAdapter(
     });
 
     const unsubDismiss = bridge.onNotificationOverlayDismiss(({ toastId }) => {
-      handleNotificationOverlayDismiss(
-        toastsRef.current,
-        { toastId },
-        managerRef.current,
-      );
+      handleNotificationOverlayDismiss(toastsRef.current, { toastId }, managerRef.current);
     });
 
     return () => {

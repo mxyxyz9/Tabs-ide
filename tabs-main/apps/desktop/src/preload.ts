@@ -419,11 +419,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       _event: Electron.IpcRendererEvent,
       action: { toastId: string; actionId: string },
     ) => {
-      if (
-        action &&
-        typeof action.toastId === "string" &&
-        typeof action.actionId === "string"
-      ) {
+      if (action && typeof action.toastId === "string" && typeof action.actionId === "string") {
         listener(action);
       }
     };
@@ -433,10 +429,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     };
   },
   onNotificationOverlayDismiss: (listener) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      dismiss: { toastId: string },
-    ) => {
+    const handler = (_event: Electron.IpcRendererEvent, dismiss: { toastId: string }) => {
       if (dismiss && typeof dismiss.toastId === "string") {
         listener(dismiss);
       }

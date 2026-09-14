@@ -38,6 +38,8 @@ vi.mock("electron", () => ({
   WebContentsView: MockWebContentsView,
 }));
 
+type MockWebContentsViewInstance = InstanceType<typeof MockWebContentsView>;
+
 function createMockWindow() {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
   const children: unknown[] = [];
@@ -92,7 +94,7 @@ describe("NotificationOverlayManager", () => {
       stackCoordinator: coordinator,
     });
 
-    const view = manager.ensureOverlay() as unknown as MockWebContentsView;
+    const view = manager.ensureOverlay() as unknown as MockWebContentsViewInstance;
     expect(view).toBeTruthy();
     expect(view.setBackgroundColor).toHaveBeenCalledWith("#00000000");
     expect(view.setBounds).toHaveBeenCalledWith({ x: 0, y: 0, width: 0, height: 0 });
@@ -120,7 +122,7 @@ describe("NotificationOverlayManager", () => {
       },
     ]);
 
-    const view = manager.getOverlayView() as unknown as MockWebContentsView;
+    const view = manager.getOverlayView() as unknown as MockWebContentsViewInstance;
     expect(view.webContents.focus).not.toHaveBeenCalled();
   });
 
@@ -133,7 +135,7 @@ describe("NotificationOverlayManager", () => {
     });
 
     manager.setToasts([]);
-    const view = manager.getOverlayView() as unknown as MockWebContentsView;
+    const view = manager.getOverlayView() as unknown as MockWebContentsViewInstance;
     expect(view.bounds).toEqual({ x: 0, y: 0, width: 0, height: 0 });
     expect(view.visible).toBe(false);
   });
@@ -159,7 +161,7 @@ describe("NotificationOverlayManager", () => {
     // Simulate overlay DOM reporting its measured size
     manager.handleReportBounds({ width: 360, height: 120 });
 
-    const view = manager.getOverlayView() as unknown as MockWebContentsView;
+    const view = manager.getOverlayView() as unknown as MockWebContentsViewInstance;
     // Window width is 1200, margin-right is 16 => x = 1200 - 360 - 16 = 824. y = 56
     expect(view.bounds).toEqual({
       x: 824,
@@ -193,7 +195,7 @@ describe("NotificationOverlayManager", () => {
     (mockWindow.getContentSize as ReturnType<typeof vi.fn>).mockReturnValue([1600, 900]);
     mockWindow.emit("resize");
 
-    const view = manager.getOverlayView() as unknown as MockWebContentsView;
+    const view = manager.getOverlayView() as unknown as MockWebContentsViewInstance;
     // x = 1600 - 300 - 16 = 1284
     expect(view.bounds.x).toBe(1284);
     expect(view.webContents.setZoomFactor).toHaveBeenCalledWith(1.25);
@@ -246,7 +248,7 @@ describe("NotificationOverlayManager", () => {
     });
 
     manager.ensureOverlay();
-    const view = manager.getOverlayView() as unknown as MockWebContentsView;
+    const view = manager.getOverlayView() as unknown as MockWebContentsViewInstance;
     expect(view).toBeTruthy();
 
     // Trigger window close event

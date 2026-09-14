@@ -43,11 +43,7 @@ contextBridge.exposeInMainWorld("notificationOverlayBridge", {
     };
   },
   reportBounds: (bounds: NotificationOverlayBounds) => {
-    if (
-      bounds &&
-      typeof bounds.width === "number" &&
-      typeof bounds.height === "number"
-    ) {
+    if (bounds && typeof bounds.width === "number" && typeof bounds.height === "number") {
       ipcRenderer.send(NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL, bounds);
     }
   },

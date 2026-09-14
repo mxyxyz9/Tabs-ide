@@ -26,7 +26,8 @@ export const TOTAL_TAGS_COUNT = 148;
 export const changelogData: ChangelogRelease[] = [
   {
     tag: "v1.3.5",
-    title: "Antigravity protocol, collaborative browser engine, PR stacks, and streaming performance",
+    title:
+      "Antigravity protocol, collaborative browser engine, PR stacks, and streaming performance",
     date: "September 14, 2026",
     shortDate: "Sep 14",
     isLatest: true,

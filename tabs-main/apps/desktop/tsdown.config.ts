@@ -8,7 +8,6 @@ const shared = {
   dts: false,
 };
 
-
 export default defineConfig([
   {
     ...shared,

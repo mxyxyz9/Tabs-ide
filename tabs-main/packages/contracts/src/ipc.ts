@@ -1370,9 +1370,7 @@ export interface DesktopBridge {
   onNotificationOverlayAction?: (
     listener: (action: { toastId: string; actionId: string }) => void,
   ) => () => void;
-  onNotificationOverlayDismiss?: (
-    listener: (dismiss: { toastId: string }) => void,
-  ) => () => void;
+  onNotificationOverlayDismiss?: (listener: (dismiss: { toastId: string }) => void) => () => void;
 }
 
 export interface DesktopPreviewBridge {
