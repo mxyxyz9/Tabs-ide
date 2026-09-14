@@ -5,7 +5,9 @@ const shared = {
   outDir: "dist-electron",
   sourcemap: true,
   outExtensions: () => ({ js: ".js" }),
+  dts: false,
 };
+
 
 export default defineConfig([
   {
@@ -21,5 +23,9 @@ export default defineConfig([
     // Keep Clerk's small preload bridge inside our generated preload bundle so
     // a navigation or Vite full reload cannot lose every contextBridge API.
     noExternal: (id) => id.startsWith("@clerk/electron"),
+  },
+  {
+    ...shared,
+    entry: ["src/notificationPreload.ts"],
   },
 ]);

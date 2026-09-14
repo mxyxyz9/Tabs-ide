@@ -123,6 +123,11 @@ const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
 const SET_PERSISTED_ITEM_CHANNEL = "desktop:set-persisted-item";
 const REMOVE_PERSISTED_ITEM_CHANNEL = "desktop:remove-persisted-item";
 
+// Notification overlay channels
+const NOTIFICATION_OVERLAY_SYNC_CHANNEL = "desktop:notification-overlay:sync";
+const NOTIFICATION_OVERLAY_ACTION_CHANNEL = "desktop:notification-overlay:action";
+const NOTIFICATION_OVERLAY_DISMISS_CHANNEL = "desktop:notification-overlay:dismiss";
+
 contextBridge.exposeInMainWorld("desktopBridge", {
   writeClipboardText: (text) => ipcRenderer.invoke(WRITE_CLIPBOARD_TEXT_CHANNEL, text),
   readClipboardText: (type) => ipcRenderer.invoke(READ_CLIPBOARD_TEXT_CHANNEL, type),
@@ -405,5 +410,40 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   notifyReadyToExit: () => {
     ipcRenderer.send(APP_READY_TO_EXIT_CHANNEL);
     return Promise.resolve();
+  },
+  syncNotificationOverlay: (toasts) => {
+    return ipcRenderer.invoke(NOTIFICATION_OVERLAY_SYNC_CHANNEL, toasts);
+  },
+  onNotificationOverlayAction: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      action: { toastId: string; actionId: string },
+    ) => {
+      if (
+        action &&
+        typeof action.toastId === "string" &&
+        typeof action.actionId === "string"
+      ) {
+        listener(action);
+      }
+    };
+    ipcRenderer.on(NOTIFICATION_OVERLAY_ACTION_CHANNEL, handler);
+    return () => {
+      ipcRenderer.removeListener(NOTIFICATION_OVERLAY_ACTION_CHANNEL, handler);
+    };
+  },
+  onNotificationOverlayDismiss: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      dismiss: { toastId: string },
+    ) => {
+      if (dismiss && typeof dismiss.toastId === "string") {
+        listener(dismiss);
+      }
+    };
+    ipcRenderer.on(NOTIFICATION_OVERLAY_DISMISS_CHANNEL, handler);
+    return () => {
+      ipcRenderer.removeListener(NOTIFICATION_OVERLAY_DISMISS_CHANNEL, handler);
+    };
   },
 } satisfies DesktopBridge);
