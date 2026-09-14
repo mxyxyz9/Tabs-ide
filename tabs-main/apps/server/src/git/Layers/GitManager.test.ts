@@ -2364,6 +2364,8 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
 
       const otherDir = yield* makeTempDir("tabs-git-autopull-other-");
       yield* runGit(otherDir, ["clone", remoteDir, "."]);
+      yield* runGit(otherDir, ["config", "user.email", "test@example.com"]);
+      yield* runGit(otherDir, ["config", "user.name", "Test User"]);
       const fileSystem = yield* FileSystem.FileSystem;
       yield* fileSystem.writeFileString(path.join(otherDir, "remote.txt"), "remote-content\n");
       yield* runGit(otherDir, ["add", "remote.txt"]);
