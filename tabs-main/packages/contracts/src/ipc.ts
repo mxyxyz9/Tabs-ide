@@ -1,5 +1,7 @@
 import type { BrowserReadinessResult } from "./browserReadiness.ts";
 import type { BrowserComparisonInput } from "./browserComparison.ts";
+import type { NotificationToastPayload } from "./notificationOverlay.ts";
+export * from "./notificationOverlay.ts";
 import type {
   VcsCreateRefInput,
   VcsCreateRefResult,
@@ -1364,6 +1366,13 @@ export interface DesktopBridge {
   setConfirmBeforeQuit: (value: boolean) => Promise<void>;
   onQuitConfirmationRequested: (listener: () => void) => () => void;
   respondToQuitConfirmation: (choice: "save-and-quit" | "cancel") => void;
+  syncNotificationOverlay?: (toasts: readonly NotificationToastPayload[]) => Promise<void>;
+  onNotificationOverlayAction?: (
+    listener: (action: { toastId: string; actionId: string }) => void,
+  ) => () => void;
+  onNotificationOverlayDismiss?: (
+    listener: (dismiss: { toastId: string }) => void,
+  ) => () => void;
 }
 
 export interface DesktopPreviewBridge {

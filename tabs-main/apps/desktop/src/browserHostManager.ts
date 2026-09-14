@@ -55,6 +55,7 @@ import {
   type Rectangle,
   type Session,
 } from "electron";
+import type { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
 import type {
   DesktopBrowserHostActivateSessionInput,
   DesktopBrowserHostControlInput,
@@ -394,7 +395,10 @@ export class BrowserHostManager {
   readonly diagnostics = new BrowserAuthDiagnostics();
   readonly comparisons: BrowserComparisonController;
 
-  constructor(private readonly getWindow: () => BrowserWindow | null) {
+  constructor(
+    private readonly getWindow: () => BrowserWindow | null,
+    private readonly stackCoordinator?: NativeViewStackCoordinator,
+  ) {
     activeBrowserHostManager = this;
     this.comparisons = new BrowserComparisonController({
       configure: async (projectId, sessionId, pane, sourceSessionId) => {
@@ -1904,7 +1908,11 @@ export class BrowserHostManager {
     const attached =
       window && !window.isDestroyed() && !window.contentView.children.includes(session.view);
     if (attached) {
-      window.contentView.addChildView(session.view, 0);
+      if (this.stackCoordinator) {
+        this.stackCoordinator.attachAutomationView(session.view, 0);
+      } else {
+        window.contentView.addChildView(session.view, 0);
+      }
       session.view.setBounds(session.bounds ?? { x: 0, y: 0, width: 1024, height: 768 });
     }
     try {
@@ -2297,9 +2305,13 @@ export class BrowserHostManager {
     }
     const window = this.getWindow();
     if (!window) return;
-    const currentViews = window.contentView.children;
-    if (!currentViews.includes(session.view)) {
-      window.contentView.addChildView(session.view);
+    if (this.stackCoordinator) {
+      this.stackCoordinator.attachToolView(session.view);
+    } else {
+      const currentViews = window.contentView.children;
+      if (!currentViews.includes(session.view)) {
+        window.contentView.addChildView(session.view);
+      }
     }
     if (!session.sessionId.startsWith("comparison-")) session.view.webContents.focus?.();
   }
@@ -2307,9 +2319,13 @@ export class BrowserHostManager {
   private detachSession(session: BrowserSession): void {
     const window = this.getWindow();
     if (!window) return;
-    const currentViews = window.contentView.children;
-    if (currentViews.includes(session.view)) {
-      window.contentView.removeChildView(session.view);
+    if (this.stackCoordinator) {
+      this.stackCoordinator.detachToolView(session.view);
+    } else {
+      const currentViews = window.contentView.children;
+      if (currentViews.includes(session.view)) {
+        window.contentView.removeChildView(session.view);
+      }
     }
   }
 

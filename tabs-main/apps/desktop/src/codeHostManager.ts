@@ -25,6 +25,7 @@ import type {
 import { RotatingFileSink } from "@tabs/shared/logging";
 
 import type { CodeControlChannel } from "./codeControlChannel";
+import type { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
 
 export const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 
@@ -1182,6 +1183,7 @@ export class CodeHostManager {
     private readonly getWindow: () => BrowserWindow | null,
     private readonly config: CodeHostConfig,
     private readonly controlChannel?: CodeControlChannel,
+    private readonly stackCoordinator?: NativeViewStackCoordinator,
   ) {
     this.controlChannel?.onChromeState((projectId, state) => {
       this.handleChromeStateForTabs(projectId, state);
@@ -2009,7 +2011,9 @@ export class CodeHostManager {
   private attachSession(session: CodeSession): void {
     const window = this.getWindow();
     if (!window || !session.view) return;
-    if (!window.contentView.children.includes(session.view)) {
+    if (this.stackCoordinator) {
+      this.stackCoordinator.attachToolView(session.view);
+    } else if (!window.contentView.children.includes(session.view)) {
       window.contentView.addChildView(session.view);
     }
     session.view.webContents.focus?.();
@@ -2018,7 +2022,9 @@ export class CodeHostManager {
   private detachSession(session: CodeSession): void {
     const window = this.getWindow();
     if (!window || !session.view) return;
-    if (window.contentView.children.includes(session.view)) {
+    if (this.stackCoordinator) {
+      this.stackCoordinator.detachToolView(session.view);
+    } else if (window.contentView.children.includes(session.view)) {
       window.contentView.removeChildView(session.view);
     }
     // Keep background throttling enabled. Foreground contents are unaffected,

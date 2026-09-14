@@ -67,6 +67,8 @@ import {
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
 import { CodeHostManager, resolveCodeHostConfig } from "./codeHostManager";
 import { BrowserHostManager } from "./browserHostManager";
+import { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
+import { NotificationOverlayManager } from "./notificationOverlayManager";
 import {
   ensureRuntimeInstalled,
   isRuntimeInstalled,
@@ -199,6 +201,10 @@ const BROWSER_HOST_CLEANUP_AGENT_TABS_CHANNEL = "desktop:browser-host:cleanup-ag
 const BROWSER_HOST_DESTROY_SESSION_CHANNEL = "desktop:browser-host:destroy-session";
 const BROWSER_HOST_GET_RECENTLY_CLOSED_CHANNEL = "desktop:browser-host:get-recently-closed";
 const BROWSER_HOST_RESTORE_RECENTLY_CLOSED_CHANNEL = "desktop:browser-host:restore-recently-closed";
+const NOTIFICATION_OVERLAY_SYNC_CHANNEL = "desktop:notification-overlay:sync";
+const NOTIFICATION_OVERLAY_ACTION_CHANNEL = "desktop:notification-overlay:action";
+const NOTIFICATION_OVERLAY_DISMISS_CHANNEL = "desktop:notification-overlay:dismiss";
+const NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL = "desktop:notification-overlay:report-bounds";
 
 function readBrowserSessionId(input: unknown): string | undefined {
   const value = (input as { sessionId?: unknown }).sessionId;
@@ -370,8 +376,35 @@ const codeHostConfig = resolveCodeHostConfig({
   rootDir: ROOT_DIR,
   env: process.env,
 });
+const nativeViewCoordinator = new NativeViewStackCoordinator({ getWindow: () => mainWindow });
+const notificationOverlayManager = new NotificationOverlayManager({
+  getWindow: () => mainWindow,
+  stackCoordinator: nativeViewCoordinator,
+  onAction: (toastId, actionId) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(NOTIFICATION_OVERLAY_ACTION_CHANNEL, { toastId, actionId });
+    }
+  },
+  onDismiss: (toastId) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(NOTIFICATION_OVERLAY_DISMISS_CHANNEL, { toastId });
+    }
+  },
+  restoreActiveFocus: () => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.focus();
+      }
+    } catch {}
+  },
+});
 const codeControlChannel = new CodeControlChannel();
-const codeHostManager = new CodeHostManager(() => mainWindow, codeHostConfig, codeControlChannel);
+const codeHostManager = new CodeHostManager(
+  () => mainWindow,
+  codeHostConfig,
+  codeControlChannel,
+  nativeViewCoordinator,
+);
 const persistedDesktopTheme = loadPersistedDesktopTheme();
 if (persistedDesktopTheme) {
   nativeTheme.themeSource =
@@ -381,8 +414,12 @@ if (persistedDesktopTheme) {
         ? "light"
         : "dark";
   codeHostManager.setTheme(persistedDesktopTheme.themeId, persistedDesktopTheme.customConfig);
+  notificationOverlayManager.setTheme({
+    themeId: persistedDesktopTheme.themeId,
+    isDark: !isLightDesktopTheme(persistedDesktopTheme.themeId, persistedDesktopTheme.customConfig),
+  });
 }
-const browserHostManager = new BrowserHostManager(() => mainWindow);
+const browserHostManager = new BrowserHostManager(() => mainWindow, nativeViewCoordinator);
 const desktopCaptureCoordinator = new DesktopCaptureCoordinator();
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
 
@@ -2019,6 +2056,10 @@ function registerIpcHandlers(): void {
     });
     codeControlChannel.setTheme(themeId, customConfig);
     codeHostManager.setTheme(themeId, customConfig);
+    notificationOverlayManager.setTheme({
+      themeId,
+      isDark: !isLightDesktopTheme(themeId, customConfig),
+    });
   });
 
   ipcMain.removeHandler(SET_ICON_THEME_CHANNEL);
@@ -2340,6 +2381,54 @@ function registerIpcHandlers(): void {
     return (clipboard as unknown as { readText: (type?: string) => string }).readText(
       clipboardType,
     );
+  });
+
+  ipcMain.removeHandler(NOTIFICATION_OVERLAY_SYNC_CHANNEL);
+  ipcMain.handle(NOTIFICATION_OVERLAY_SYNC_CHANNEL, async (_event, rawToasts: unknown) => {
+    if (Array.isArray(rawToasts)) {
+      notificationOverlayManager.setToasts(rawToasts);
+    }
+  });
+
+  ipcMain.removeAllListeners(NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL);
+  ipcMain.on(NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL, (_event, bounds: unknown) => {
+    if (
+      bounds &&
+      typeof bounds === "object" &&
+      typeof (bounds as { width?: unknown }).width === "number" &&
+      typeof (bounds as { height?: unknown }).height === "number"
+    ) {
+      notificationOverlayManager.handleReportBounds({
+        width: (bounds as { width: number }).width,
+        height: (bounds as { height: number }).height,
+      });
+    }
+  });
+
+  ipcMain.removeAllListeners(NOTIFICATION_OVERLAY_ACTION_CHANNEL);
+  ipcMain.on(NOTIFICATION_OVERLAY_ACTION_CHANNEL, (_event, payload: unknown) => {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as { toastId?: unknown }).toastId === "string" &&
+      typeof (payload as { actionId?: unknown }).actionId === "string"
+    ) {
+      notificationOverlayManager.handleAction(
+        (payload as { toastId: string }).toastId,
+        (payload as { actionId: string }).actionId,
+      );
+    }
+  });
+
+  ipcMain.removeAllListeners(NOTIFICATION_OVERLAY_DISMISS_CHANNEL);
+  ipcMain.on(NOTIFICATION_OVERLAY_DISMISS_CHANNEL, (_event, payload: unknown) => {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as { toastId?: unknown }).toastId === "string"
+    ) {
+      notificationOverlayManager.handleDismiss((payload as { toastId: string }).toastId);
+    }
   });
 
   ipcMain.removeHandler(DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL);
@@ -3280,6 +3369,7 @@ function createTabsWindow(): BrowserWindow {
   window.on("closed", () => {
     if (mainWindow === window) {
       mainWindow = null;
+      notificationOverlayManager.destroy();
       for (const popout of popoutWindows) {
         if (!popout.isDestroyed()) {
           popout.close();
