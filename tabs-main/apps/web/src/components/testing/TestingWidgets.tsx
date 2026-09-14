@@ -17,6 +17,7 @@ import { clipTestingPreviewBounds } from "~/lib/testingPreviewBounds";
 import {
   NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR,
   shouldSuspendNativeSurfaceForOverlay,
+  useNativeSurfaceOverlaySuspension,
 } from "~/nativeSurfaceOverlay";
 
 export const CODE_HOST_OVERLAY_SELECTOR = NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR;
@@ -413,37 +414,18 @@ export function TestingApplicationPreview(props: {
     };
   }, [bridge, props.projectId, props.sessionId, props.viewport]);
 
-  useEffect(() => {
-    if (!bridge) return;
-    let hiddenForOverlay = false;
-    let frame = 0;
-    const sync = () => {
-      frame = 0;
-      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
-        true,
-        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
-      );
-      if (overlayOpen === hiddenForOverlay) return;
-      hiddenForOverlay = overlayOpen;
-      if (overlayOpen) {
-        void bridge.hideBrowserSession().catch(() => undefined);
-      } else {
-        void bridge
-          .activateBrowserSession({ projectId: props.projectId, sessionId: props.sessionId })
-          .catch(() => undefined);
-      }
-    };
-    const schedule = () => {
-      if (frame === 0) frame = window.requestAnimationFrame(sync);
-    };
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true });
-    schedule();
-    return () => {
-      observer.disconnect();
-      if (frame !== 0) window.cancelAnimationFrame(frame);
-    };
-  }, [bridge, props.projectId, props.sessionId]);
+  useNativeSurfaceOverlaySuspension({
+    enabled: Boolean(bridge),
+    surfaceReady: true,
+    onSuspend: () => {
+      void bridge?.hideBrowserSession().catch(() => undefined);
+    },
+    onResume: () => {
+      void bridge
+        ?.activateBrowserSession({ projectId: props.projectId, sessionId: props.sessionId })
+        .catch(() => undefined);
+    },
+  });
 
   const viewportClass =
     props.viewport === "mobile"

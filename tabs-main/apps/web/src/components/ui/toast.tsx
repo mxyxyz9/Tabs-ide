@@ -20,6 +20,7 @@ import { Button } from "~/components/ui/button";
 import { buttonVariants } from "~/components/ui/button";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { buildVisibleToastLayout, shouldHideCollapsedToastContent } from "./toast.logic";
+import { useNotificationOverlayAdapter } from "./notificationOverlayAdapter";
 
 type ThreadToastData = {
   threadId?: ThreadId | null;
@@ -231,7 +232,7 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
   const visibleToasts = toasts.filter((toast) =>
     shouldRenderForActiveThread(toast.data, activeThreadId),
   );
-  const visibleToastLayout = buildVisibleToastLayout(visibleToasts);
+  const isDesktopOverlayActive = useNotificationOverlayAdapter(visibleToasts, toastManager);
 
   useEffect(() => {
     const activeToastIds = new Set(toasts.map((toast) => toast.id));
@@ -241,6 +242,12 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
       }
     }
   }, [toasts]);
+
+  if (isDesktopOverlayActive) {
+    return null;
+  }
+
+  const visibleToastLayout = buildVisibleToastLayout(visibleToasts);
 
   return (
     <Toast.Portal data-slot="toast-portal">

@@ -132,6 +132,7 @@ import { BrowserViewportResizeFrame } from "./browser/BrowserViewportResizeFrame
 import {
   NATIVE_SURFACE_BLOCKING_OVERLAY_SELECTOR,
   shouldSuspendNativeSurfaceForOverlay,
+  useNativeSurfaceOverlaySuspension,
 } from "../nativeSurfaceOverlay";
 import {
   PREVIEW_ANNOTATION_PICKED_EVENT,
@@ -3181,69 +3182,20 @@ function DesktopCodeTool(props: { project: Project }) {
     };
   }, [codeHostState?.available, props.project.id]);
 
-  useEffect(() => {
-    const bridge = window.desktopBridge;
-    if (!bridge || !codeHostState?.available) {
-      return;
-    }
-
-    let suspendedForOverlay = false;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const syncOverlayVisibility = () => {
-      debounceTimer = null;
-      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
-        hostReady,
-        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
-      );
-      // Guard: only act when the overlay-open state actually changed, so a burst
-      // of unrelated DOM mutations during layout settling can't thrash the view
-      // by detaching/reattaching it.
-      if (overlayOpen === suspendedForOverlay) {
-        return;
-      }
-
-      suspendedForOverlay = overlayOpen;
-      if (overlayOpen) {
-        void bridge.hideCodeSession().catch(() => undefined);
-        return;
-      }
-
-      void bridge
-        .activateCodeSession({
+  useNativeSurfaceOverlaySuspension({
+    enabled: Boolean(window.desktopBridge && codeHostState?.available),
+    surfaceReady: hostReady,
+    onSuspend: () => {
+      void window.desktopBridge?.hideCodeSession().catch(() => undefined);
+    },
+    onResume: () => {
+      void window.desktopBridge
+        ?.activateCodeSession({
           projectId: props.project.id,
         })
         .catch(() => undefined);
-    };
-
-    // Debounce 50ms: the MutationObserver fires rapidly while the layout settles;
-    // coalesce bursts into a single trailing check (the state-diff guard above
-    // then drops no-op transitions).
-    const scheduleSync = () => {
-      if (debounceTimer !== null) {
-        return;
-      }
-      debounceTimer = setTimeout(syncOverlayVisibility, 50);
-    };
-
-    const observer = new MutationObserver(() => {
-      scheduleSync();
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["data-open", "data-closed", "hidden", "style", "class"],
-    });
-    scheduleSync();
-
-    return () => {
-      observer.disconnect();
-      if (debounceTimer !== null) {
-        clearTimeout(debounceTimer);
-      }
-    };
-  }, [codeHostState?.available, hostReady, props.project.id]);
+    },
+  });
 
   if (shouldUseFallbackTool) {
     return (
@@ -8421,64 +8373,20 @@ function DesktopBrowserTool(props: {
     sessionStateRef.current = sessionState;
   });
 
-  useEffect(() => {
-    if (!bridge || !hostState.available) {
-      return;
-    }
-
-    let suspendedForOverlay = false;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const syncOverlayVisibility = () => {
-      debounceTimer = null;
-      const s = sessionStateRef.current;
-      const surfaceReady = !s.loading && !s.lastError;
-      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
-        surfaceReady,
-        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
-      );
-      if (overlayOpen === suspendedForOverlay) {
-        return;
-      }
-
-      suspendedForOverlay = overlayOpen;
-      if (overlayOpen) {
-        void bridge.hideBrowserSession().catch(() => undefined);
-        return;
-      }
-
+  useNativeSurfaceOverlaySuspension({
+    enabled: Boolean(bridge && hostState.available),
+    surfaceReady: !sessionState.loading && !sessionState.lastError,
+    onSuspend: () => {
+      void bridge?.hideBrowserSession().catch(() => undefined);
+    },
+    onResume: () => {
       void bridge
-        .activateBrowserSession({
+        ?.activateBrowserSession({
           projectId: props.project.id,
         })
         .catch(() => undefined);
-    };
-
-    const scheduleSync = () => {
-      if (debounceTimer !== null) {
-        return;
-      }
-      debounceTimer = setTimeout(syncOverlayVisibility, 50);
-    };
-
-    const observer = new MutationObserver(() => {
-      scheduleSync();
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["data-open", "data-closed", "hidden", "style", "class"],
-    });
-    scheduleSync();
-
-    return () => {
-      observer.disconnect();
-      if (debounceTimer !== null) {
-        clearTimeout(debounceTimer);
-      }
-    };
-  }, [bridge, hostState.available, props.project.id]);
+    },
+  });
 
   const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null);
 
@@ -9351,72 +9259,21 @@ function DesktopCustomEmbedTool(props: {
     }
   }, [bridge, hostState.available, viewportSelectorOpen, props.project.id]);
 
-  // Keep a ref so the overlay-detection closure below always reads the current
-  // loading/error state without needing to re-register the MutationObserver.
-  const sessionStateRef = useRef(sessionState);
-  useEffect(() => {
-    sessionStateRef.current = sessionState;
-  });
-
-  useEffect(() => {
-    if (!bridge || !hostState.available) {
-      return;
-    }
-
-    let suspendedForOverlay = false;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const syncOverlayVisibility = () => {
-      debounceTimer = null;
-      const s = sessionStateRef.current;
-      const surfaceReady = !s.loading && !s.lastError;
-      const overlayOpen = shouldSuspendNativeSurfaceForOverlay(
-        surfaceReady,
-        document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null,
-      );
-      if (overlayOpen === suspendedForOverlay) {
-        return;
-      }
-
-      suspendedForOverlay = overlayOpen;
-      if (overlayOpen) {
-        void bridge.hideBrowserSession().catch(() => undefined);
-        return;
-      }
-
+  useNativeSurfaceOverlaySuspension({
+    enabled: Boolean(bridge && hostState.available),
+    surfaceReady: !sessionState.loading && !sessionState.lastError,
+    onSuspend: () => {
+      void bridge?.hideBrowserSession().catch(() => undefined);
+    },
+    onResume: () => {
       void bridge
-        .activateBrowserSession({
+        ?.activateBrowserSession({
           projectId: props.project.id,
           sessionId: props.sessionId,
         })
         .catch(() => undefined);
-    };
-
-    const scheduleSync = () => {
-      if (debounceTimer !== null) {
-        return;
-      }
-      debounceTimer = setTimeout(syncOverlayVisibility, 50);
-    };
-
-    const observer = new MutationObserver(() => {
-      scheduleSync();
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["data-open", "data-closed", "hidden", "style", "class"],
-    });
-    scheduleSync();
-
-    return () => {
-      observer.disconnect();
-      if (debounceTimer !== null) {
-        clearTimeout(debounceTimer);
-      }
-    };
-  }, [bridge, hostState.available, props.project.id]);
+    },
+  });
 
   const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null);
 
