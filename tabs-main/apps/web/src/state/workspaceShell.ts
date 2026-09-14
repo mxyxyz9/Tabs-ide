@@ -74,6 +74,9 @@ export const workspaceShellActions = {
   openProject: (
     ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["openProject"]>
   ) => useWorkspaceShellStore.getState().openProject(...args),
+  openProjectSurface: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["openProjectSurface"]>
+  ) => useWorkspaceShellStore.getState().openProjectSurface(...args),
   closeProject: (
     ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["closeProject"]>
   ) => useWorkspaceShellStore.getState().closeProject(...args),

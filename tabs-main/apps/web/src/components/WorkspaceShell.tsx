@@ -43,7 +43,11 @@ import {
   projectUiStateKey,
 } from "~/state/scopedStateStore";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { useLocation, useNavigate, useParams, useRouterState } from "@tanstack/react-router";
+import {
+  activateProjectSurface,
+  getInFlightSurfaceActivation,
+} from "../lib/projectSurfaceCoordinator";
 import { markStartupStage } from "../lib/startupReadiness";
 
 import {
@@ -10728,6 +10732,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const {
     syncProjects,
     openProject,
+    openProjectSurface,
     closeProject,
     setActiveProject,
     setActiveTool,
@@ -10855,21 +10860,53 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     : null;
   const routeProjectId = activeThread?.projectId ?? workspaceState.session.activeProjectId ?? null;
 
+  const routerState = useRouterState({
+    select: (s) => ({
+      status: s.status,
+      location: s.location,
+      resolvedLocation: s.resolvedLocation,
+    }),
+  });
+
   useEffect(() => {
     if (!routeThreadId || !routeProjectId || activePendingTabId) {
       return;
     }
+    // If the router is pending navigation, or if requested location does not match resolved location,
+    // foreground navigation is in flight (e.g. project switch). Do not let stale route params overwrite store!
+    if (routerState.status === "pending") {
+      return;
+    }
+    const requestedPathname = routerState.location.pathname;
+    const resolvedPathname = routerState.resolvedLocation?.pathname ?? requestedPathname;
+    if (requestedPathname !== resolvedPathname) {
+      return;
+    }
+    // If the requested location pathname does not contain the current routeThreadId,
+    // this routeThreadId is stale leftover from an ongoing navigation to "/" or another route.
+    if (!requestedPathname.includes(routeThreadId)) {
+      return;
+    }
+    const inFlight = getInFlightSurfaceActivation();
+    if (inFlight && inFlight.projectId !== routeProjectId && Date.now() - inFlight.timestamp < 3000) {
+      return;
+    }
+
     rememberThread(routeProjectId, routeThreadId);
     if (workspaceState.session.activeProjectId !== routeProjectId) {
-      setActiveProject(routeProjectId);
+      openProjectSurface(routeProjectId, "agents", routeThreadId);
+    } else {
+      setActiveTool(routeProjectId, "agents");
     }
-    setActiveTool(routeProjectId, "agents");
   }, [
     activePendingTabId,
+    openProjectSurface,
     rememberThread,
     routeProjectId,
     routeThreadId,
-    setActiveProject,
+    routerState.location.pathname,
+    routerState.resolvedLocation?.pathname,
+    routerState.status,
     setActiveTool,
     workspaceState.session.activeProjectId,
   ]);
@@ -11030,44 +11067,21 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       const exists = await verifyProjectExists(projectId);
       if (!exists) return;
 
-      openProject(projectId);
-      if (location.pathname === "/settings") {
-        return;
-      }
-      const targetToolId = workspaceState.session.activeToolIdByProjectId[projectId] ?? "agents";
-      const targetToolKind =
-        workspaceState.projectSettingsByProjectId[projectId]?.tools.find(
-          (tool) => tool.id === targetToolId,
-        )?.kind ?? (targetToolId === "agents" ? "agents" : null);
-      if (targetToolKind === "agents") {
-        const rememberedThreadId = resolveProjectAgentThreadId(
-          projectId,
-          threads,
-          workspaceState.session.rememberedThreadIdByProjectId[projectId] ?? null,
-        );
-        const targetProject = projects.find((project) => project.id === projectId);
-        if (rememberedThreadId && targetProject?.environmentId) {
-          await navigate({
-            to: "/$environmentId/$threadId",
-            params: {
-              environmentId: targetProject.environmentId,
-              threadId: rememberedThreadId,
-            },
-          });
-          return;
-        }
-      }
-      await navigate({ to: "/" });
+      await activateProjectSurface({
+        projectId,
+        projects,
+        threads,
+        navigate,
+        currentPathname: location.pathname,
+        stayOnSettings: location.pathname === "/settings",
+      });
     },
     [
       location.pathname,
       navigate,
-      openProject,
       projects,
       threads,
-      workspaceState.projectSettingsByProjectId,
-      workspaceState.session.activeToolIdByProjectId,
-      workspaceState.session.rememberedThreadIdByProjectId,
+      verifyProjectExists,
     ],
   );
 
@@ -11210,7 +11224,20 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           if (activePendingTabId) {
             closePendingTab(activePendingTabId);
           } else if (activeProjectId) {
-            void requestCloseProject(activeProjectId);
+            const closingId = activeProjectId;
+            void requestCloseProject(closingId).then((closed) => {
+              if (!closed) return;
+              const remainingProjectIds = tabShortcutStateRef.current.openProjectIds.filter(
+                (id) => id !== closingId,
+              );
+              const fallbackProjectId =
+                remainingProjectIds[remainingProjectIds.length - 1] ?? null;
+              if (fallbackProjectId) {
+                void focusProject(fallbackProjectId);
+              } else {
+                void navigate({ to: "/" });
+              }
+            });
           }
           return;
         case "tab-next":
@@ -12736,8 +12763,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
             const wasActive = workspaceState.session.activeProjectId === projectId;
             void requestCloseProject(projectId).then((closed) => {
               if (!closed || !wasActive) return;
+              const remainingProjectIds = workspaceState.session.openProjectIds.filter(
+                (id) => id !== projectId,
+              );
               const fallbackProjectId =
-                workspaceState.session.openProjectIds.find((id) => id !== projectId) ?? null;
+                remainingProjectIds[remainingProjectIds.length - 1] ?? null;
               if (fallbackProjectId) {
                 void focusProject(fallbackProjectId);
               } else {

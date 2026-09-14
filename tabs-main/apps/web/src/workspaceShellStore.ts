@@ -92,6 +92,11 @@ export interface WorkspaceShellPersistedState {
 export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
   syncProjects: (projects: ReadonlyArray<Project>, threads: ReadonlyArray<Thread>) => void;
   openProject: (projectId: ProjectId) => void;
+  openProjectSurface: (
+    projectId: ProjectId,
+    toolId?: string | undefined,
+    threadId?: ThreadId | null | undefined,
+  ) => void;
   closeProject: (projectId: ProjectId) => void;
   setActiveProject: (projectId: ProjectId | null) => void;
   setActiveTool: (projectId: ProjectId, toolId: string) => void;
@@ -305,7 +310,7 @@ function resolveVisibleTools(settings: ProjectWorkspaceSettingsType): ProjectToo
   return visible.length > 0 ? visible : [...createDefaultProjectWorkspaceSettings().tools];
 }
 
-function resolveActiveToolId(
+export function resolveActiveToolId(
   settings: ProjectWorkspaceSettingsType,
   requestedToolId: string | undefined,
 ): string {
@@ -520,6 +525,37 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
                     state.session.activeToolIdByProjectId[projectId],
                   ),
                 },
+              },
+            },
+            projectId,
+          );
+        }),
+      openProjectSurface: (projectId, toolId, threadId) =>
+        set((state) => {
+          const projectSettings =
+            state.projectSettingsByProjectId[projectId] ?? createDefaultProjectWorkspaceSettings();
+          const openProjectIds = state.session.openProjectIds.includes(projectId)
+            ? state.session.openProjectIds
+            : [...state.session.openProjectIds, projectId];
+          const candidateToolId = toolId ?? state.session.activeToolIdByProjectId[projectId];
+          const effectiveToolId = resolveActiveToolId(projectSettings, candidateToolId);
+          const rememberedThreads = { ...state.session.rememberedThreadIdByProjectId };
+          if (threadId) {
+            rememberedThreads[projectId] = threadId;
+          }
+          return ensureProjectDefaults(
+            {
+              ...state,
+              session: {
+                ...state.session,
+                openProjectIds,
+                activeProjectId: projectId,
+                activePendingTabId: null,
+                activeToolIdByProjectId: {
+                  ...state.session.activeToolIdByProjectId,
+                  [projectId]: effectiveToolId,
+                },
+                rememberedThreadIdByProjectId: rememberedThreads,
               },
             },
             projectId,
