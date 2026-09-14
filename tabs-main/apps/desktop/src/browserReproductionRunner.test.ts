@@ -1,14 +1,23 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "playwright";
 import type { BrowserReproductionStep } from "@tabs/contracts";
 import { runBrowserReproduction, type ReproductionDriver } from "./browserReproductionRunner";
 
-let browser: Browser;
+let browser: Browser | undefined;
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (error) {
+    console.warn("Chromium is not installed; skipping reproduction runner tests:", error);
+  }
 });
 afterAll(async () => {
   await browser?.close();
+});
+beforeEach((context) => {
+  if (!browser) {
+    context.skip();
+  }
 });
 const fixture = `<input id="name"><input id="password" type="password"><select id="choice"><option value="a">A</option><option value="b">B</option></select><input id="check" type="checkbox"><button id="button" onclick="document.querySelector('#result').textContent='Done'">Go</button><div id="result">Waiting</div><div id="hidden" style="display:none">Done</div>`;
 function driver(page: Page): ReproductionDriver {
