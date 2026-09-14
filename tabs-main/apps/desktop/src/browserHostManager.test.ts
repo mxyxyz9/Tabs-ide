@@ -161,6 +161,171 @@ describe("BrowserHostManager profile storage", () => {
     ]);
   });
 
+  it("inspects profile truthfulness: returns partition, persistent state, cookie counts, and no secrets", async () => {
+    electronMocks.fromPartition.mockReturnValue({
+      isPersistent: () => true,
+      getStoragePath: () => "/tmp/tabs-storage-work",
+      cookies: {
+        on: vi.fn(),
+        get: vi.fn().mockResolvedValue([
+          { domain: ".github.com", name: "user_session", value: "super-secret-token-12345" },
+          { domain: ".github.com", name: "__Host-csrf", value: "secret-csrf-token" },
+          { domain: "docs.github.com", name: "theme", value: "dark" },
+        ]),
+      },
+    });
+    const manager = new BrowserHostManager(() => null);
+    const inspection = await manager.inspectProfile("work");
+
+    expect(inspection.profileId).toBe("work");
+    expect(inspection.partition).toBe("persist:tabs-browser:profile:work");
+    expect(inspection.isPersistent).toBe(true);
+    expect(inspection.storagePath).toBe("/tmp/tabs-storage-work");
+    expect(inspection.totalCookies).toBe(3);
+    expect(inspection.totalDomains).toBe(2);
+    expect(inspection.inspectedAt).toBeGreaterThan(0);
+
+    // Verify domains are accurately summarized
+    expect(inspection.domains).toEqual([
+      { domain: "github.com", cookieCount: 2, hasSessionHint: true },
+      { domain: "docs.github.com", cookieCount: 1, hasSessionHint: false },
+    ]);
+
+    // Critical security constraint: NEVER expose cookie values or secrets
+    const serialized = JSON.stringify(inspection);
+    expect(serialized).not.toContain("super-secret-token-12345");
+    expect(serialized).not.toContain("secret-csrf-token");
+    for (const d of inspection.domains) {
+      expect((d as any).value).toBeUndefined();
+      expect((d as any).name).toBeUndefined();
+    }
+  });
+
+  it("handles empty profile correctly", async () => {
+    electronMocks.fromPartition.mockReturnValue({
+      isPersistent: () => true,
+      getStoragePath: () => "/tmp/tabs-storage-personal",
+      cookies: {
+        on: vi.fn(),
+        get: vi.fn().mockResolvedValue([]),
+      },
+    });
+    const manager = new BrowserHostManager(() => null);
+    const inspection = await manager.inspectProfile("personal");
+
+    expect(inspection.profileId).toBe("personal");
+    expect(inspection.partition).toBe("persist:tabs-browser:profile:personal");
+    expect(inspection.isPersistent).toBe(true);
+    expect(inspection.totalCookies).toBe(0);
+    expect(inspection.totalDomains).toBe(0);
+    expect(inspection.domains).toEqual([]);
+  });
+
+  it("fails truthfully when cookie inspection rejects and does not swallow into empty array", async () => {
+    electronMocks.fromPartition.mockReturnValue({
+      isPersistent: () => true,
+      getStoragePath: () => "/tmp/tabs-storage-broken",
+      cookies: {
+        on: vi.fn(),
+        get: vi.fn().mockRejectedValue(new Error("Chromium cookie database locked")),
+      },
+    });
+    const manager = new BrowserHostManager(() => null);
+
+    await expect(manager.inspectProfile("broken")).rejects.toThrow(
+      "Chromium cookie database locked",
+    );
+  });
+
+  it("allows retrying inspection after failure", async () => {
+    const mockCookiesGet = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Temporary disk I/O failure"))
+      .mockResolvedValueOnce([
+        { domain: ".example.com", name: "sid", value: "recovered-session-id" },
+      ]);
+
+    electronMocks.fromPartition.mockReturnValue({
+      isPersistent: () => true,
+      getStoragePath: () => "/tmp/tabs-storage-retry",
+      cookies: {
+        on: vi.fn(),
+        get: mockCookiesGet,
+      },
+    });
+    const manager = new BrowserHostManager(() => null);
+
+    // 1st attempt fails
+    await expect(manager.inspectProfile("retry-profile")).rejects.toThrow(
+      "Temporary disk I/O failure",
+    );
+
+    // 2nd attempt succeeds
+    const recovered = await manager.inspectProfile("retry-profile");
+    expect(recovered.totalDomains).toBe(1);
+    expect(recovered.domains[0]?.domain).toBe("example.com");
+  });
+
+  it("keeps multiple profile partitions completely isolated", async () => {
+    const manager = new BrowserHostManager(() => null);
+
+    electronMocks.fromPartition.mockImplementation((partition: string) => ({
+      isPersistent: () => true,
+      getStoragePath: () => `/tmp/${partition}`,
+      cookies: {
+        on: vi.fn(),
+        get: vi.fn().mockResolvedValue(
+          partition.includes("personal")
+            ? [{ domain: "personal.org", name: "p_token", value: "tok1" }]
+            : [{ domain: "work.org", name: "w_token", value: "tok2" }],
+        ),
+      },
+    }));
+
+    const personal = await manager.inspectProfile("personal");
+    const work = await manager.inspectProfile("work");
+
+    expect(personal.partition).toBe("persist:tabs-browser:profile:personal");
+    expect(work.partition).toBe("persist:tabs-browser:profile:work");
+    expect(personal.domains.map((d) => d.domain)).toEqual(["personal.org"]);
+    expect(work.domains.map((d) => d.domain)).toEqual(["work.org"]);
+  });
+
+  it("clears a single domain and closes connections", async () => {
+    const profileSession = {
+      cookies: {
+        on: vi.fn(),
+        get: vi.fn().mockResolvedValue([
+          { domain: ".github.com", name: "user_session", path: "/", secure: true },
+          { domain: ".google.com", name: "sid", path: "/", secure: true },
+        ]),
+        remove: vi.fn().mockResolvedValue(undefined),
+      },
+      closeAllConnections: vi.fn().mockResolvedValue(undefined),
+      clearData: vi.fn().mockResolvedValue(undefined),
+      flushStorageData: vi.fn(),
+    };
+    electronMocks.fromPartition.mockReturnValue(profileSession);
+    const manager = new BrowserHostManager(() => null);
+
+    await manager.clearProfileDomain("work", "github.com");
+
+    expect(profileSession.cookies.remove).toHaveBeenCalledWith(
+      "https://github.com/",
+      "user_session",
+    );
+    expect(profileSession.cookies.remove).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "sid",
+    );
+    expect(profileSession.closeAllConnections).toHaveBeenCalledOnce();
+    expect(profileSession.clearData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origins: ["https://github.com", "http://github.com"],
+      }),
+    );
+  });
+
   it("uses comprehensive Chromium data clearing for a profile", async () => {
     const profileSession = {
       cookies: { on: vi.fn() },

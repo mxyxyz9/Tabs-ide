@@ -64,6 +64,7 @@ import type {
   DesktopBrowserHostState,
   DesktopBrowserSessionState,
   BrowserProfileDomainInfo,
+  BrowserProfileInspection,
   BrowserImportInput,
   BrowserImportResult,
   BrowserImportSource,
@@ -732,70 +733,93 @@ export class BrowserHostManager {
     }
   }
 
-  async getProfileDomains(profileId: string): Promise<BrowserProfileDomainInfo[]> {
+  async inspectProfile(profileId: string): Promise<BrowserProfileInspection> {
     const trimmed = normalizeBrowserProfileId(profileId);
     const partition = deriveBrowserPartition({ profileId: trimmed });
     const s = electronSession.fromPartition(partition);
     this.observeProfileSession(partition, s);
-    try {
-      const cookies = await s.cookies.get({});
-      const map = new Map<string, { count: number; hasSessionHint: boolean }>();
 
-      const AUTH_COOKIE_NAMES = [
-        "sid",
-        "hsid",
-        "ssid",
-        "apisid",
-        "sapisid",
-        "osid",
-        "user_session",
-        "logged_in",
-        "dotcom_user",
-        "__secure-next-auth.session-token",
-        "auth_token",
-        "figma.session",
-        "figma.login",
-        "linear_session",
-        "token_v2",
-        "jwt",
-        "sessionid",
-      ];
+    const isPersistent =
+      typeof (s as any).isPersistent === "function"
+        ? Boolean((s as any).isPersistent())
+        : partition.startsWith("persist:");
+    const storagePath =
+      typeof (s as any).getStoragePath === "function"
+        ? (s as any).getStoragePath()
+        : null;
 
-      for (const cookie of cookies) {
-        let domain = cookie.domain || "";
-        if (domain.startsWith(".")) domain = domain.slice(1);
-        if (!domain) continue;
+    const cookies = await s.cookies.get({});
+    const map = new Map<string, { count: number; hasSessionHint: boolean }>();
 
-        const existing = map.get(domain) ?? { count: 0, hasSessionHint: false };
-        existing.count += 1;
+    const AUTH_COOKIE_NAMES = [
+      "sid",
+      "hsid",
+      "ssid",
+      "apisid",
+      "sapisid",
+      "osid",
+      "user_session",
+      "logged_in",
+      "dotcom_user",
+      "__secure-next-auth.session-token",
+      "auth_token",
+      "figma.session",
+      "figma.login",
+      "linear_session",
+      "token_v2",
+      "jwt",
+      "sessionid",
+    ];
 
-        const cName = cookie.name.toLowerCase();
-        const hasSessionHint =
-          AUTH_COOKIE_NAMES.some((name) => cName === name || cName.includes(name)) ||
-          ((cName.includes("session") || cName.includes("token") || cName.includes("auth")) &&
-            Boolean(cookie.value && cookie.value.length > 10));
+    let totalCookies = 0;
+    for (const cookie of cookies) {
+      totalCookies += 1;
+      let domain = cookie.domain || "";
+      if (domain.startsWith(".")) domain = domain.slice(1);
+      if (!domain) continue;
 
-        if (hasSessionHint) {
-          existing.hasSessionHint = true;
-        }
-        map.set(domain, existing);
+      const existing = map.get(domain) ?? { count: 0, hasSessionHint: false };
+      existing.count += 1;
+
+      const cName = cookie.name.toLowerCase();
+      const hasSessionHint =
+        AUTH_COOKIE_NAMES.some((name) => cName === name || cName.includes(name)) ||
+        ((cName.includes("session") || cName.includes("token") || cName.includes("auth")) &&
+          Boolean(cookie.value && cookie.value.length > 10));
+
+      if (hasSessionHint) {
+        existing.hasSessionHint = true;
       }
-
-      return Array.from(map.entries())
-        .map(([domain, data]) => ({
-          domain,
-          cookieCount: data.count,
-          hasSessionHint: data.hasSessionHint,
-        }))
-        .toSorted((a, b) => {
-          if (a.hasSessionHint && !b.hasSessionHint) return -1;
-          if (!a.hasSessionHint && b.hasSessionHint) return 1;
-          return a.domain.localeCompare(b.domain);
-        });
-    } catch (err) {
-      console.error("[browserHostManager] Failed to get profile domains:", err);
-      return [];
+      map.set(domain, existing);
     }
+
+    const domains = Array.from(map.entries())
+      .map(([domain, data]) => ({
+        domain,
+        cookieCount: data.count,
+        hasSessionHint: data.hasSessionHint,
+      }))
+      .toSorted((a, b) => {
+        if (a.hasSessionHint && !b.hasSessionHint) return -1;
+        if (!a.hasSessionHint && b.hasSessionHint) return 1;
+        return a.domain.localeCompare(b.domain);
+      });
+
+    return {
+      profileId: trimmed,
+      partition,
+      isPersistent,
+      storagePath,
+      totalDomains: domains.length,
+      totalCookies,
+      domains,
+      inspectedAt: Date.now(),
+    };
+  }
+
+  async getProfileDomains(profileId: string): Promise<BrowserProfileDomainInfo[]> {
+    const inspection = await this.inspectProfile(profileId);
+    return inspection.domains;
   }
 
   async clearProfileDomain(profileId: string, domainToClear: string): Promise<void> {

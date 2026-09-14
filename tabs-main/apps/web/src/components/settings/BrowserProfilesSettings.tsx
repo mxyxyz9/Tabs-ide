@@ -3,7 +3,11 @@ import {
   type BrowserLinkTarget,
   type BrowserProfileDefinition,
 } from "@tabs/contracts/settings";
-import { type BrowserProfileDomainInfo, type BrowserProfilePermissionInfo } from "@tabs/contracts";
+import {
+  type BrowserProfileDomainInfo,
+  type BrowserProfileInspection,
+  type BrowserProfilePermissionInfo,
+} from "@tabs/contracts";
 import {
   FingerprintIcon,
   PlusIcon,
@@ -59,6 +63,14 @@ const DEFAULT_PORTALS: QuickPortal[] = [
   { name: "GitHub", url: "https://github.com/login" },
   { name: "Linear", url: "https://linear.app/login" },
 ];
+
+export type ProfileInspectionStatus = "idle" | "loading" | "loaded" | "failed";
+
+export interface ProfileInspectionState {
+  status: ProfileInspectionStatus;
+  data: BrowserProfileInspection | null;
+  error: string | null;
+}
 
 function slugifyProfileId(input: string): string {
   return input
@@ -124,22 +136,77 @@ export function BrowserProfilesSettings() {
   );
 
   // Live domain & auth inspection per profile
-  const [profileDomains, setProfileDomains] = useState<Record<string, BrowserProfileDomainInfo[]>>(
-    {},
-  );
-  const refreshDomains = useCallback(async () => {
-    if (!window.desktopBridge?.getBrowserProfileDomains) return;
-    const res: Record<string, BrowserProfileDomainInfo[]> = {};
-    for (const p of profiles) {
-      try {
-        const domains = await window.desktopBridge.getBrowserProfileDomains({ profileId: p.id });
-        res[p.id] = domains;
-      } catch {
-        res[p.id] = [];
-      }
+  const [profileInspections, setProfileInspections] = useState<
+    Record<string, ProfileInspectionState>
+  >({});
+
+  const inspectSingleProfile = useCallback(async (profileId: string) => {
+    if (
+      !window.desktopBridge?.inspectBrowserProfile &&
+      !window.desktopBridge?.getBrowserProfileDomains
+    ) {
+      return;
     }
-    setProfileDomains(res);
-  }, [profiles]);
+    setProfileInspections((prev) => ({
+      ...prev,
+      [profileId]: {
+        status: "loading",
+        data: prev[profileId]?.data ?? null,
+        error: null,
+      },
+    }));
+    try {
+      let inspection: BrowserProfileInspection;
+      if (window.desktopBridge.inspectBrowserProfile) {
+        inspection = await window.desktopBridge.inspectBrowserProfile({ profileId });
+      } else {
+        const domains = await window.desktopBridge.getBrowserProfileDomains({ profileId });
+        inspection = {
+          profileId,
+          partition: `persist:tabs-browser:profile:${profileId}`,
+          isPersistent: true,
+          storagePath: null,
+          totalDomains: domains.length,
+          totalCookies: domains.reduce((sum, d) => sum + d.cookieCount, 0),
+          domains,
+          inspectedAt: Date.now(),
+        };
+      }
+      setProfileInspections((prev) => ({
+        ...prev,
+        [profileId]: {
+          status: "loaded",
+          data: inspection,
+          error: null,
+        },
+      }));
+    } catch (err) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to inspect profile cookie domains";
+      setProfileInspections((prev) => ({
+        ...prev,
+        [profileId]: {
+          status: "failed",
+          data: null,
+          error: errorMsg,
+        },
+      }));
+    }
+  }, []);
+
+  const refreshDomains = useCallback(async () => {
+    for (const p of profiles) {
+      await inspectSingleProfile(p.id);
+    }
+  }, [profiles, inspectSingleProfile]);
+
+  const profileDomains = useMemo(() => {
+    const res: Record<string, BrowserProfileDomainInfo[]> = {};
+    for (const [id, state] of Object.entries(profileInspections)) {
+      if (state.data) res[id] = state.data.domains;
+    }
+    return res;
+  }, [profileInspections]);
 
   const [profilePermissions, setProfilePermissions] = useState<
     Record<string, BrowserProfilePermissionInfo[]>
@@ -327,11 +394,8 @@ export function BrowserProfilesSettings() {
         description: `Imported ${result.imported} cookies; skipped ${result.skipped}. ${result.warnings?.join(" ") ?? ""}`,
       });
       setImportModalOpen(false);
-      if (window.desktopBridge?.getBrowserProfileDomains) {
-        const domains = await window.desktopBridge.getBrowserProfileDomains({
-          profileId: importTargetProfileId,
-        });
-        setProfileDomains((prev) => ({ ...prev, [importTargetProfileId]: domains }));
+      if (window.desktopBridge) {
+        await inspectSingleProfile(importTargetProfileId);
       }
     } catch (err: any) {
       toastManager.add({
@@ -473,7 +537,7 @@ export function BrowserProfilesSettings() {
           title: `Logged out of ${domain}`,
           description: `Session cleared for ${domain} in "${profile.label}".`,
         });
-        await refreshDomains();
+        await inspectSingleProfile(profile.id);
       }
     } catch {
       toastManager.add({
@@ -601,7 +665,13 @@ export function BrowserProfilesSettings() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {profiles.map((profile) => {
           const usage = usageByProfileId.get(profile.id) ?? [];
-          const domains = profileDomains[profile.id] ?? [];
+          const inspectionState = profileInspections[profile.id] ?? {
+            status: "idle",
+            data: null,
+            error: null,
+          };
+          const inspection = inspectionState.data;
+          const domains = inspection?.domains ?? profileDomains[profile.id] ?? [];
           const permissions = profilePermissions[profile.id] ?? [];
           const sessionHintDomains = domains.filter((d) => d.hasSessionHint);
           const otherDomains = domains.filter((d) => !d.hasSessionHint);
@@ -689,68 +759,133 @@ export function BrowserProfilesSettings() {
                   )}
                 </div>
 
-                {/* Logged-In Sessions & Stored Site Data */}
+                {/* Cookie Domains & Heuristic Sessions */}
                 <div className="rounded-lg bg-muted/30 border border-border/50 p-2.5 text-xs space-y-2">
                   <div className="font-medium text-foreground flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <ShieldCheckIcon className="size-3.5 text-primary" />
-                      Stored Sites in This Profile
+                      Cookie Domains in This Profile
                     </span>
-                    <span className="font-mono text-[11px]">
-                      {domains.length} {domains.length === 1 ? "site" : "sites"}
-                    </span>
+                    {inspection && (
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        {inspection.totalDomains} {inspection.totalDomains === 1 ? "domain" : "domains"} ({inspection.totalCookies} {inspection.totalCookies === 1 ? "cookie" : "cookies"})
+                      </span>
+                    )}
                   </div>
-                  {sessionHintDomains.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {sessionHintDomains.map((item) => (
-                        <span
-                          key={item.domain}
-                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground group"
-                        >
-                          <span
-                            className="size-1.5 rounded-full bg-amber-500 shrink-0"
-                            aria-hidden="true"
-                          />
-                          <span className="font-medium">{item.domain}</span>
-                          <span className="text-[10px] text-muted-foreground">session data</span>
-                          <button
-                            type="button"
-                            onClick={() => handleClearSingleDomain(profile, item.domain)}
-                            title={`Log out of ${item.domain}`}
-                            className="text-muted-foreground hover:text-destructive cursor-pointer opacity-70 hover:opacity-100"
-                          >
-                            <XIcon className="size-3" />
-                          </button>
-                        </span>
-                      ))}
+
+                  {/* Partition Metadata */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
+                    <span className="bg-background/80 px-1.5 py-0.5 rounded border border-border/60">
+                      Partition: {inspection?.partition ?? `persist:tabs-browser:profile:${profile.id}`}
+                    </span>
+                    {inspection && (
+                      <span className="bg-background/80 px-1.5 py-0.5 rounded border border-border/60">
+                        {inspection.isPersistent ? "Persistent partition" : "In-memory partition"}
+                      </span>
+                    )}
+                    {inspection?.inspectedAt && (
+                      <span className="text-[10px] text-muted-foreground/70 not-italic font-sans">
+                        Refreshed: {new Date(inspection.inspectedAt).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* State: Loading */}
+                  {inspectionState.status === "loading" && (
+                    <div className="py-2 text-center text-xs text-muted-foreground">
+                      Inspecting cookie domains...
                     </div>
-                  ) : otherDomains.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {otherDomains.map((item) => (
-                        <span
-                          key={item.domain}
-                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/90 border border-border/70 text-[11px] text-muted-foreground group"
-                        >
-                          <span>{item.domain}</span>
-                          <span className="text-[10px] opacity-60 font-mono">
-                            ({item.cookieCount})
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleClearSingleDomain(profile, item.domain)}
-                            title={`Clear ${item.domain}`}
-                            className="text-muted-foreground hover:text-destructive cursor-pointer opacity-70 hover:opacity-100"
-                          >
-                            <XIcon className="size-3" />
-                          </button>
-                        </span>
-                      ))}
+                  )}
+
+                  {/* State: Failed */}
+                  {inspectionState.status === "failed" && (
+                    <div className="flex items-center justify-between p-2 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-xs">
+                      <span>Inspection failed: {inspectionState.error ?? "Unknown error"}</span>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        className="h-6 px-2 text-xs border-destructive/40 hover:bg-destructive/20 text-foreground"
+                        onClick={() => inspectSingleProfile(profile.id)}
+                      >
+                        Retry
+                      </Button>
                     </div>
-                  ) : (
-                    <div className="text-[11px] text-muted-foreground/70">
-                      No site data in this named profile. Existing per-project logins are stored
-                      separately.
-                    </div>
+                  )}
+
+                  {/* State: Loaded */}
+                  {(inspectionState.status === "loaded" || (inspectionState.status === "idle" && domains.length > 0)) && (
+                    <>
+                      {domains.length === 0 ? (
+                        <div className="text-[11px] text-muted-foreground/70">
+                          No cookie domains detected. Existing per-project logins and unpartitioned web data are stored separately. Authentication cannot be inferred without cookies.
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {sessionHintDomains.length > 0 && (
+                            <div className="space-y-1">
+                              <div className="text-[10px] uppercase font-semibold text-muted-foreground/80 tracking-wider">
+                                Possible session cookies (heuristic only):
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {sessionHintDomains.map((item) => (
+                                  <span
+                                    key={item.domain}
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground group"
+                                    title="A session cookie was detected, but this is a heuristic and does not guarantee that an account is active or signed in."
+                                  >
+                                    <span
+                                      className="size-1.5 rounded-full bg-amber-500 shrink-0"
+                                      aria-hidden="true"
+                                    />
+                                    <span className="font-medium">{item.domain}</span>
+                                    <span className="text-[10px] text-muted-foreground">({item.cookieCount})</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClearSingleDomain(profile, item.domain)}
+                                      title={`Clear cookies for ${item.domain}`}
+                                      className="text-muted-foreground hover:text-destructive cursor-pointer opacity-70 hover:opacity-100"
+                                    >
+                                      <XIcon className="size-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {otherDomains.length > 0 && (
+                            <div className="space-y-1">
+                              {sessionHintDomains.length > 0 && (
+                                <div className="text-[10px] uppercase font-semibold text-muted-foreground/80 tracking-wider pt-1">
+                                  Other cookie domains:
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-1.5">
+                                {otherDomains.map((item) => (
+                                  <span
+                                    key={item.domain}
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/90 border border-border/70 text-[11px] text-muted-foreground group"
+                                  >
+                                    <span>{item.domain}</span>
+                                    <span className="text-[10px] opacity-60 font-mono">
+                                      ({item.cookieCount})
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClearSingleDomain(profile, item.domain)}
+                                      title={`Clear cookies for ${item.domain}`}
+                                      className="text-muted-foreground hover:text-destructive cursor-pointer opacity-70 hover:opacity-100"
+                                    >
+                                      <XIcon className="size-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -982,7 +1117,7 @@ export function BrowserProfilesSettings() {
 
           <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-foreground">Stored sites</span>
+              <span className="font-medium text-foreground">Cookie domains</span>
               <span className="text-[11px] text-muted-foreground" aria-live="polite">
                 {loginWindowOpen ? "Watching for session changes…" : "Up to date"}
               </span>
@@ -1010,8 +1145,8 @@ export function BrowserProfilesSettings() {
                     <button
                       type="button"
                       onClick={() => handleClearSingleDomain(testingProfile, item.domain)}
-                      title={`Clear stored data for ${item.domain}`}
-                      aria-label={`Clear stored data for ${item.domain}`}
+                      title={`Clear cookies for ${item.domain}`}
+                      aria-label={`Clear cookies for ${item.domain}`}
                       className="text-muted-foreground hover:text-destructive cursor-pointer"
                     >
                       <XIcon className="size-3" />
@@ -1021,7 +1156,7 @@ export function BrowserProfilesSettings() {
               </div>
             ) : (
               <p className="text-[11px] text-muted-foreground">
-                No cookies or stored sites have been detected for this profile.
+                No cookie domains detected for this profile.
               </p>
             )}
           </div>

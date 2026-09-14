@@ -1383,7 +1383,7 @@ export const ProjectCustomEmbedDefinition = Schema.Struct({
   id: ProjectSettingId,
   label: TrimmedNonEmptyString,
   url: TrimmedString,
-  resumeLastVisitedPage: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  resumeLastVisitedPage: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   lastVisitedUrl: Schema.optionalKey(TrimmedString),
   partitionMode: BrowserPartitionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_PARTITION_MODE)),

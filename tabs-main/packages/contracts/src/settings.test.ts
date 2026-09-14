@@ -448,3 +448,43 @@ describe("ClientSettings onboardingCompletedAt", () => {
     expect(resetPatch.onboardingCompletedAt).toBeNull();
   });
 });
+
+describe("Browser resumeLastVisitedPage defaults and migrations", () => {
+  const decodeBrowser = Schema.decodeSync(ProjectBrowserSettings);
+  const decodeEmbed = Schema.decodeSync(ProjectCustomEmbedDefinition);
+
+  it("defaults resumeLastVisitedPage to true for standard project browser", () => {
+    const browser = decodeBrowser({});
+    expect(browser.resumeLastVisitedPage).toBe(true);
+  });
+
+  it("defaults resumeLastVisitedPage to true for newly created or legacy custom embeds without the field", () => {
+    const legacyEmbed = decodeEmbed({
+      id: "embed-legacy",
+      label: "Legacy Tab",
+      url: "https://example.com",
+    });
+    expect(legacyEmbed.resumeLastVisitedPage).toBe(true);
+  });
+
+  it("preserves explicit false for custom embeds", () => {
+    const optOutEmbed = decodeEmbed({
+      id: "embed-opt-out",
+      label: "Opt Out Tab",
+      url: "https://example.com",
+      resumeLastVisitedPage: false,
+    });
+    expect(optOutEmbed.resumeLastVisitedPage).toBe(false);
+  });
+
+  it("preserves explicit true for custom embeds", () => {
+    const optInEmbed = decodeEmbed({
+      id: "embed-opt-in",
+      label: "Opt In Tab",
+      url: "https://example.com",
+      resumeLastVisitedPage: true,
+    });
+    expect(optInEmbed.resumeLastVisitedPage).toBe(true);
+  });
+});
+

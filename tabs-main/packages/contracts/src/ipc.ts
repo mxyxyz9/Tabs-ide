@@ -1121,6 +1121,17 @@ export interface BrowserProfileDomainInfo {
   hasSessionHint: boolean;
 }
 
+export interface BrowserProfileInspection {
+  readonly profileId: string;
+  readonly partition: string;
+  readonly isPersistent: boolean;
+  readonly storagePath: string | null;
+  readonly totalDomains: number;
+  readonly totalCookies: number;
+  readonly domains: BrowserProfileDomainInfo[];
+  readonly inspectedAt: number;
+}
+
 export interface BrowserPermissionRequest {
   readonly requestId: string;
   readonly profileId: string;
@@ -1285,6 +1296,7 @@ export interface DesktopBridge {
   clearBrowserProfileData: (input: { profileId: string }) => Promise<void>;
   openBrowserProfileLoginWindow: (input: { profileId: string; url?: string }) => Promise<void>;
   getBrowserProfileDomains: (input: { profileId: string }) => Promise<BrowserProfileDomainInfo[]>;
+  inspectBrowserProfile?: (input: { profileId: string }) => Promise<BrowserProfileInspection>;
   clearBrowserProfileDomain: (input: { profileId: string; domain: string }) => Promise<void>;
   listBrowserImportSources?: () => Promise<BrowserImportSource[]>;
   cancelBrowserImport?: (requestId: string) => Promise<void>;

@@ -183,6 +183,7 @@ const BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL = "desktop:browser-host:clear-prof
 const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL =
   "desktop:browser-host:open-profile-login-window";
 const BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL = "desktop:browser-host:get-profile-domains";
+const BROWSER_HOST_INSPECT_PROFILE_CHANNEL = "desktop:browser-host:inspect-profile";
 const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-profile-domain";
 const BROWSER_HOST_LIST_IMPORT_SOURCES_CHANNEL = "desktop:browser-host:list-import-sources";
 const BROWSER_HOST_IMPORT_COOKIES_CHANNEL = "desktop:browser-host:import-cookies";
@@ -2836,9 +2837,21 @@ function registerIpcHandlers(): void {
       input === null ||
       typeof (input as { profileId?: unknown }).profileId !== "string"
     ) {
-      return [];
+      throw new Error("Invalid input: profileId is required");
     }
     return await browserHostManager.getProfileDomains((input as { profileId: string }).profileId);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_INSPECT_PROFILE_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_INSPECT_PROFILE_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { profileId?: unknown }).profileId !== "string"
+    ) {
+      throw new Error("Invalid input: profileId is required");
+    }
+    return await browserHostManager.inspectProfile((input as { profileId: string }).profileId);
   });
 
   ipcMain.removeHandler(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL);

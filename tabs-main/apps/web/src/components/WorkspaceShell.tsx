@@ -9101,9 +9101,18 @@ function DesktopCustomEmbedTool(props: {
   useEffect(() => {
     if (prevConfiguredUrlRef.current !== configuredUrl) {
       prevConfiguredUrlRef.current = configuredUrl;
-      setBrowserSessionUrl(props.project.id, props.sessionId, configuredUrl);
+      if (!props.resumeLastVisitedPage || !storedUrl) {
+        setBrowserSessionUrl(props.project.id, props.sessionId, configuredUrl);
+      }
     }
-  }, [configuredUrl, props.project.id, props.sessionId, setBrowserSessionUrl]);
+  }, [
+    configuredUrl,
+    props.project.id,
+    props.sessionId,
+    props.resumeLastVisitedPage,
+    storedUrl,
+    setBrowserSessionUrl,
+  ]);
   const { isClosing } = useAppClosing();
   const [debouncedCurrentUrl, currentUrlDebouncer] = useDebouncedValue(sessionState.currentUrl, {
     wait: 2000,
