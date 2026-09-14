@@ -33,6 +33,7 @@ function driver(page: Page): ReproductionDriver {
   };
 }
 async function withPage(run: (page: Page) => Promise<void>) {
+  if (!browser) throw new Error("Chromium browser is not available");
   const page = await browser.newPage();
   await page.route("http://reproduction.test/**", (route) =>
     route.fulfill({ contentType: "text/html", body: fixture }),
