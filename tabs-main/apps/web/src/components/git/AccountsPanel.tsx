@@ -3,7 +3,7 @@ import { KeyRound, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "../ui/button";
-import { Banner, Card, PanelToolbar, SectionLabel } from "./gitPrimitives";
+import { Banner, Card, PanelToolbar, SectionLabel, Select } from "./gitPrimitives";
 
 function AccountRow({
   account: a,
@@ -157,17 +157,17 @@ export function AccountsPanel({
       <div className="flex items-center gap-2.5 bg-muted/50 border border-border rounded-lg px-3 py-2.5">
         <KeyRound size={13} className="text-muted-foreground/70 shrink-0" />
         <span className="text-xs text-muted-foreground/80">Push and open PRs as</span>
-        <select
+        <Select
           value={activeAccountLogin || ""}
           onChange={(e) => void handleSwitch(e.target.value)}
-          className="border border-border rounded-md text-xs font-mono text-foreground/90 bg-background px-2 py-1 outline-none"
+          className="h-8 border-border rounded-md text-xs font-mono text-foreground/90 bg-background px-2 py-1 outline-none"
         >
           {accounts.map((a) => (
             <option key={a.login} value={a.login}>
               {a.login}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import {
   ArrowUpDown,
+  Bot,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -13,7 +14,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Sparkles,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
@@ -670,7 +670,7 @@ export function PRsPanel({
                           }
                         }}
                       >
-                        <Sparkles className="size-3 text-primary" />
+                        <Bot className="size-3.5 shrink-0" />
                         <span className="truncate max-w-32">
                           {linkedThreads.length === 1
                             ? linkedThreads[0]!.title
@@ -1092,7 +1092,7 @@ export function PRsPanel({
                                   {/* Filter & Sort Bar */}
                                   <div className="border-b border-border/60 bg-muted/20 p-2 space-y-1.5">
                                     <div className="relative">
-                                      <Search className="pointer-events-none absolute left-2 top-2 size-3 text-muted-foreground" />
+                                      <Search className="pointer-events-none absolute left-2 top-2 size-3 text-muted-foreground z-10" />
                                       <input
                                         type="text"
                                         value={fileSearchQuery}
@@ -1107,17 +1107,16 @@ export function PRsPanel({
                                         <ArrowUpDown className="size-3" />
                                         <span>Sort:</span>
                                       </div>
-                                      <select
+                                      <Select
                                         value={fileSortMode}
                                         onChange={(e) => setFileSortMode(e.target.value as any)}
-                                        aria-label="Sort changed files"
-                                        className="rounded border border-border/60 bg-background px-1 py-0.5 text-[10px]"
+                                        className="h-6 rounded border-border/60 bg-background px-2 text-[10px]"
                                       >
                                         <option value="path">Path (A-Z)</option>
                                         <option value="additions">Most additions</option>
                                         <option value="deletions">Most deletions</option>
                                         <option value="status">Status</option>
-                                      </select>
+                                      </Select>
                                     </div>
                                   </div>
 

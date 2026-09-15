@@ -433,7 +433,7 @@ export function SearchableBranchSelect({
             <div className="relative">
               <Search
                 size={13}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground shrink-0 z-10"
               />
               <input
                 type="text"
@@ -1002,7 +1002,7 @@ function SearchableTagSelect({
             <div className="relative">
               <Search
                 size={13}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground shrink-0 z-10"
               />
               <input
                 type="text"

@@ -3515,7 +3515,7 @@ export default function ChatView({
           activeProviderSnapshot.auth.billingLabel ??
           activeProviderSnapshot.auth.label ??
           "usage-based credentials";
-        const confirmed = window.confirm(
+        const confirmed = await confirm(
           `${activeProviderSnapshot.displayName} is configured to use ${billingLabel}. ` +
             "Requests may be billed separately from your existing subscription. " +
             "Continue and remember this choice for this provider?",

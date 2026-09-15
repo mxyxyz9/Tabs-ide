@@ -21,7 +21,6 @@ import {
   PlayIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
-  SparklesIcon,
   TestTubeIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -310,8 +309,8 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
       {/* Top Header with Progress & Skip */}
       <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6 sm:px-8">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/25 text-primary shadow-sm shadow-primary/10">
-            <SparklesIcon className="size-5" />
+          <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/25 text-primary shadow-sm shadow-primary/10 font-bold text-sm">
+            T
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-tight">Tabs IDE</h1>
@@ -934,7 +933,7 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
             {/* Quick tips */}
             <div className="rounded-xl border border-border/60 bg-muted/20 p-5 space-y-3">
               <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <SparklesIcon className="size-3.5 text-primary" /> Keyboard Shortcuts & Quick Tips
+                Keyboard Shortcuts & Quick Tips
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">

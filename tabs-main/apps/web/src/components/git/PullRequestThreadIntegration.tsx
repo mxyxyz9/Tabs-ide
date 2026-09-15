@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import type { EnvironmentId, GitPullRequestReviewThread, ThreadId } from "@tabs/contracts";
 import type { Thread } from "../../types";
-import { Sparkles, Link2, Unlink, ExternalLink } from "lucide-react";
+import { Bot, ExternalLink, Link2, Unlink, Wrench } from "lucide-react";
 import { Button } from "../ui/button";
+import { Select } from "./gitPrimitives";
 import { findThreadsForPullRequest } from "@tabs/shared/threadPullRequests";
 
 export function formatReviewFixPrompt(
@@ -103,7 +104,7 @@ export function PullRequestThreadIntegration({
       {/* Header with counts and shortcut action */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 font-semibold text-foreground text-xs">
-          <Sparkles size={14} className="text-primary" />
+          <Bot className="size-3.5 text-primary" />
           <span>Linked Agent Threads ({linkedThreads.length})</span>
         </div>
 
@@ -117,7 +118,7 @@ export function PullRequestThreadIntegration({
               onCreateFixThread(prompt);
             }}
           >
-            <Sparkles className="size-3" />
+            <Wrench className="size-3.5" />
             <span>Fix {unresolvedReviewCount} comments with Agent</span>
           </Button>
         ) : null}
@@ -171,20 +172,21 @@ export function PullRequestThreadIntegration({
       {/* Link Thread form */}
       {unlinkedThreads.length > 0 ? (
         <form onSubmit={handleLinkSubmit} className="flex items-center gap-1.5 pt-1">
-          <select
-            value={selectedThreadToLink}
-            onChange={(e) => setSelectedThreadToLink(e.target.value)}
-            disabled={isLinking}
-            aria-label="Select thread to link"
-            className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="">Link another agent thread…</option>
-            {unlinkedThreads.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title} {t.branch ? `(#${t.branch})` : ""}
-              </option>
-            ))}
-          </select>
+          <div className="min-w-0 flex-1">
+            <Select
+              value={selectedThreadToLink}
+              onChange={(e) => setSelectedThreadToLink(e.target.value)}
+              disabled={isLinking}
+              className="h-7 w-full rounded-md border-border bg-background px-2.5 py-1 text-xs text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">Link another agent thread…</option>
+              {unlinkedThreads.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title} {t.branch ? `(#${t.branch})` : ""}
+                </option>
+              ))}
+            </Select>
+          </div>
           <Button
             type="submit"
             size="sm"

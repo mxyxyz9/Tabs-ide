@@ -30,7 +30,6 @@ import {
   InfoIcon,
   MemoryStickIcon,
   RefreshCwIcon,
-  SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -1348,7 +1347,7 @@ export function DiagnosticsSettings() {
                 disabled={isDiagnosing}
                 className="h-6.5 px-2 text-[11px] cursor-pointer border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary transition-all font-medium"
               >
-                <SparklesIcon className={cn("mr-1 size-3", isDiagnosing && "animate-spin")} />
+                <ActivityIcon className={cn("mr-1 size-3", isDiagnosing && "animate-spin")} />
                 {isDiagnosing ? "Diagnosing…" : "AI Diagnose"}
               </Button>
               <Button
@@ -1431,7 +1430,7 @@ export function DiagnosticsSettings() {
                   disabled={isDiagnosing}
                   className="cursor-pointer border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary transition-all font-medium"
                 >
-                  <SparklesIcon className={cn("mr-1.5 size-3.5", isDiagnosing && "animate-spin")} />
+                  <ActivityIcon className={cn("mr-1.5 size-3.5", isDiagnosing && "animate-spin")} />
                   {isDiagnosing ? "Diagnosing…" : "AI Diagnose"}
                 </Button>
                 <Tooltip>
@@ -1513,7 +1512,7 @@ export function DiagnosticsSettings() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-2.5">
-                <SparklesIcon
+                <ActivityIcon
                   className={cn(
                     "size-4 shrink-0 mt-0.5",
                     aiDiagnoseResult.status === "healthy" ? "text-emerald-500" : "text-amber-500",

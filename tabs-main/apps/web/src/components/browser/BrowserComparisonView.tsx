@@ -29,6 +29,13 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { toastManager } from "~/components/ui/toast";
 
 export type ComparisonMode = "responsive" | "profiles" | "routes";
@@ -428,34 +435,43 @@ export function BrowserComparisonView({
                   Pane A
                 </Badge>
                 {mode === "responsive" && (
-                  <select
-                    className="h-6 rounded border bg-background px-1.5 text-[11px]"
+                  <Select
                     value={viewportA.id}
-                    onChange={(e) => {
-                      const v = COMPARISON_VIEWPORTS.find((vp) => vp.id === e.target.value);
+                    onValueChange={(val) => {
+                      const v = COMPARISON_VIEWPORTS.find((vp) => vp.id === val);
                       if (v) setViewportA(v);
                     }}
                   >
-                    {COMPARISON_VIEWPORTS.map((vp) => (
-                      <option key={vp.id} value={vp.id}>
-                        {vp.name} ({vp.width}x{vp.height})
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-6 rounded border bg-background px-2 text-[11px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {COMPARISON_VIEWPORTS.map((vp) => (
+                        <SelectItem key={vp.id} value={vp.id}>
+                          {vp.name} ({vp.width}x{vp.height})
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
                 )}
                 {mode === "profiles" && (
-                  <select
-                    aria-label="Profile for Pane A"
+                  <Select
                     value={profileA}
-                    onChange={(event) => setProfileA(event.target.value)}
-                    className="h-6 rounded border bg-background text-xs"
+                    onValueChange={(val) => {
+                      if (val) setProfileA(val);
+                    }}
                   >
-                    {profiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Profile for Pane A" className="h-6 rounded border bg-background text-xs px-2">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {profiles.map((profile) => (
+                        <SelectItem key={profile.id} value={profile.id}>
+                          {profile.label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
                 )}
               </div>
 
@@ -518,34 +534,43 @@ export function BrowserComparisonView({
                   Pane B
                 </Badge>
                 {mode === "responsive" && (
-                  <select
-                    className="h-6 rounded border bg-background px-1.5 text-[11px]"
+                  <Select
                     value={viewportB.id}
-                    onChange={(e) => {
-                      const v = COMPARISON_VIEWPORTS.find((vp) => vp.id === e.target.value);
+                    onValueChange={(val) => {
+                      const v = COMPARISON_VIEWPORTS.find((vp) => vp.id === val);
                       if (v) setViewportB(v);
                     }}
                   >
-                    {COMPARISON_VIEWPORTS.map((vp) => (
-                      <option key={vp.id} value={vp.id}>
-                        {vp.name} ({vp.width}x{vp.height})
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-6 rounded border bg-background px-2 text-[11px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {COMPARISON_VIEWPORTS.map((vp) => (
+                        <SelectItem key={vp.id} value={vp.id}>
+                          {vp.name} ({vp.width}x{vp.height})
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
                 )}
                 {mode === "profiles" && (
-                  <select
-                    aria-label="Profile for Pane B"
+                  <Select
                     value={profileB}
-                    onChange={(event) => setProfileB(event.target.value)}
-                    className="h-6 rounded border bg-background text-xs"
+                    onValueChange={(val) => {
+                      if (val) setProfileB(val);
+                    }}
                   >
-                    {profiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Profile for Pane B" className="h-6 rounded border bg-background text-xs px-2">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {profiles.map((profile) => (
+                        <SelectItem key={profile.id} value={profile.id}>
+                          {profile.label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
                 )}
               </div>
 

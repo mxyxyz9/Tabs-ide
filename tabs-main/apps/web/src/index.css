@@ -119,6 +119,14 @@ svg[class*="lucide-loader"].animate-spin {
   }
 }
 
+/* Ensure absolutely-positioned decorative icons and buttons in relative input wrappers
+   always render above the input control/background across all light and dark themes */
+.relative > svg[class*="absolute"],
+.relative > [class*="absolute"] > svg,
+.relative > button[class*="absolute"] {
+  z-index: 10;
+}
+
 [data-slot="sidebar-wrapper"] {
   --workspace-titlebar-content-left: calc(
     var(--workspace-controls-left) + var(--workspace-titlebar-control-size) +

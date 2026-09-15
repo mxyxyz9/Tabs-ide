@@ -21,7 +21,6 @@ import {
   ExternalLinkIcon,
   XIcon,
   ShieldCheckIcon,
-  SparklesIcon,
 } from "lucide-react";
 import type { BrowserImportSourceId, BrowserImportSource } from "@tabs/contracts";
 import { BROWSER_IMPORT_FAILURE_COPY } from "@tabs/contracts";
@@ -34,7 +33,16 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogTitle,
+} from "../ui/dialog";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { useConfirm } from "../../hooks/useConfirm";
 import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
@@ -640,17 +648,22 @@ export function BrowserProfilesSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <select
-            aria-label="Open chat links in"
-            className="h-9 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm"
+          <Select
             value={settings.browserLinkTarget ?? DEFAULT_BROWSER_LINK_TARGET}
-            onChange={(event) =>
-              updateSettings({ browserLinkTarget: event.target.value as BrowserLinkTarget })
-            }
+            onValueChange={(value) => {
+              if (value) {
+                updateSettings({ browserLinkTarget: value as BrowserLinkTarget });
+              }
+            }}
           >
-            <option value="system">Default system browser</option>
-            <option value="app">Tabs integrated browser</option>
-          </select>
+            <SelectTrigger aria-label="Open chat links in" className="h-9 w-full max-w-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="system">Default system browser</SelectItem>
+              <SelectItem value="app">Tabs integrated browser</SelectItem>
+            </SelectPopup>
+          </Select>
         </CardContent>
       </Card>
 
@@ -1038,10 +1051,7 @@ export function BrowserProfilesSettings() {
           {/* Quick Login Portals Bar */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              <span className="flex items-center gap-1.5">
-                <SparklesIcon className="size-3.5 text-primary" />
-                Quick Login Portals
-              </span>
+              <span>Quick Login Portals</span>
               {!isAddingPortal && (
                 <button
                   type="button"
@@ -1318,28 +1328,17 @@ export function BrowserProfilesSettings() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-sm font-semibold flex items-center gap-2">
-                <DownloadIcon className="size-4 text-primary" />
-                Import Browser Session
-              </DialogTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 text-muted-foreground hover:text-foreground"
-                onClick={closeImport}
-                title="Close"
-              >
-                <XIcon className="size-4" />
-              </Button>
-            </div>
+            <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+              <DownloadIcon className="size-4 text-primary" />
+              Import Browser Session
+            </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Import existing login cookies from an installed browser directly into an isolated Tabs
               profile. Passwords and browsing history are never read.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 text-xs">
+          <DialogPanel className="space-y-4 px-6 py-2 text-xs">
             {importSources.length === 0 ? (
               <div className="p-4 border rounded-md border-dashed text-center text-muted-foreground">
                 No supported desktop browsers detected on this system.
@@ -1350,11 +1349,10 @@ export function BrowserProfilesSettings() {
                   <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
                     Source Browser
                   </label>
-                  <select
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  <Select
                     value={selectedSourceId}
-                    onChange={(e) => {
-                      const nextId = e.target.value;
+                    onValueChange={(nextId) => {
+                      if (!nextId) return;
                       const s = importSources.find((src) => src.id === nextId);
                       if (!s) return;
                       setSelectedSourceId(s.id);
@@ -1363,15 +1361,20 @@ export function BrowserProfilesSettings() {
                       }
                     }}
                   >
-                    {importSources.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}{" "}
-                        {s.unavailable
-                          ? `(${s.unavailable === "browserRunning" ? "Running" : "Locked"})`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {importSources.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}{" "}
+                          {s.unavailable
+                            ? `(${s.unavailable === "browserRunning" ? "Running" : "Locked"})`
+                            : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
                 </div>
 
                 {(() => {
@@ -1399,17 +1402,23 @@ export function BrowserProfilesSettings() {
                           <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
                             Browser Profile
                           </label>
-                          <select
-                            className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          <Select
                             value={selectedProfileDir}
-                            onChange={(e) => setSelectedProfileDir(e.target.value)}
+                            onValueChange={(val) => {
+                              if (val) setSelectedProfileDir(val);
+                            }}
                           >
-                            {s.profiles.map((p) => (
-                              <option key={p.directory} value={p.directory}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger className="w-full h-9 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectPopup>
+                              {s.profiles.map((p) => (
+                                <SelectItem key={p.directory} value={p.directory}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
                         </div>
                       )}
 
@@ -1417,17 +1426,23 @@ export function BrowserProfilesSettings() {
                         <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
                           Target Tabs Profile
                         </label>
-                        <select
-                          className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        <Select
                           value={importTargetProfileId}
-                          onChange={(e) => setImportTargetProfileId(e.target.value)}
+                          onValueChange={(val) => {
+                            if (val) setImportTargetProfileId(val);
+                          }}
                         >
-                          {profiles.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.label} ({p.id})
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="w-full h-9 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            {profiles.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.label} ({p.id})
+                              </SelectItem>
+                            ))}
+                          </SelectPopup>
+                        </Select>
                         <span className="text-[11px] text-muted-foreground mt-1.5 block">
                           Cookies will be imported into partition:{" "}
                           <code className="font-mono text-foreground font-medium">
@@ -1440,14 +1455,15 @@ export function BrowserProfilesSettings() {
                 })()}
               </>
             )}
-          </div>
 
-          <p className="text-xs text-muted-foreground">
-            Import copies supported cookies only; passkeys, passwords, and local storage are not
-            transferred. Linux Secret Service requires secret-tool and an unlocked keyring. Windows
-            App-Bound (v20) cookies are unsupported and will be reported as skipped.
-          </p>
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40">
+            <p className="text-xs text-muted-foreground pt-1 leading-relaxed">
+              Import copies supported cookies only; passkeys, passwords, and local storage are not
+              transferred. Linux Secret Service requires secret-tool and an unlocked keyring. Windows
+              App-Bound (v20) cookies are unsupported and will be reported as skipped.
+            </p>
+          </DialogPanel>
+
+          <DialogFooter>
             <Button variant="ghost" size="sm" onClick={closeImport}>
               Cancel
             </Button>
@@ -1462,7 +1478,7 @@ export function BrowserProfilesSettings() {
             >
               {importing ? "Importing..." : "Import Cookies"}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

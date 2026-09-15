@@ -1540,7 +1540,7 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <SearchIcon
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground z-10"
                 />
                 <Input
                   value={caseSearch}
@@ -1553,7 +1553,7 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                   <button
                     type="button"
                     onClick={() => setCaseSearch("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
                     aria-label="Clear search"
                   >
                     <XIcon className="size-3" />

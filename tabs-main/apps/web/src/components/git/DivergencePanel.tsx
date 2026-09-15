@@ -343,7 +343,7 @@ export function DivergencePanel({
         <div className="relative flex-1 max-w-sm">
           <Search
             size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground z-10"
           />
           <input
             type="text"

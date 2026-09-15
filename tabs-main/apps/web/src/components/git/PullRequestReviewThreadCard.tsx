@@ -6,8 +6,8 @@ import {
   CornerDownRight,
   MessageSquare,
   Smile,
-  Sparkles,
   Undo2,
+  Wrench,
 } from "lucide-react";
 import { useState, useRef, type KeyboardEvent } from "react";
 import type { GitPullRequestAction, GitPullRequestReviewThread } from "@tabs/contracts";
@@ -150,8 +150,8 @@ export function PullRequestReviewThreadCard({
               disabled={isPending}
               onClick={() => onFixInThread(thread)}
             >
-              <Sparkles className="size-3" />
-              Fix in thread
+              <Wrench className="size-3 shrink-0" />
+              <span>Fix in thread</span>
             </Button>
           ) : null}
 

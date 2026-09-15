@@ -27,6 +27,13 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { readNativeApi } from "~/nativeApi";
 import type { BrowserVerificationResult } from "@tabs/contracts";
@@ -811,18 +818,22 @@ export function RecordIssueDialog({
                   <div className="space-y-1.5 pt-1">
                     <label className="text-xs font-medium">Assign to Coding Task</label>
                     {availableTasks.length > 0 ? (
-                      <select
-                        className="h-8 w-full rounded-md border bg-background px-2 text-xs"
-                        value={selectedTaskId}
-                        onChange={(e) => setSelectedTaskId(e.target.value)}
+                      <Select
+                        value={selectedTaskId || "unassigned"}
+                        onValueChange={(val) => setSelectedTaskId(val === "unassigned" ? "" : (val ?? ""))}
                       >
-                        <option value="">No task selected (unassigned)</option>
-                        {availableTasks.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.title || t.id}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-8 w-full rounded-md border bg-background px-2 text-xs">
+                          <SelectValue placeholder="No task selected (unassigned)" />
+                        </SelectTrigger>
+                        <SelectPopup>
+                          <SelectItem value="unassigned">No task selected (unassigned)</SelectItem>
+                          {availableTasks.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.title || t.id}
+                            </SelectItem>
+                          ))}
+                        </SelectPopup>
+                      </Select>
                     ) : (
                       <p className="text-xs text-muted-foreground">
                         Create a coding task in this project, then reopen this review to select it.

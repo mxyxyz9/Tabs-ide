@@ -257,7 +257,7 @@ export function TagsPanel({
         <div className="relative flex-1 min-w-0">
           <Search
             size={13}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground shrink-0 z-10"
           />
           <input
             type="text"

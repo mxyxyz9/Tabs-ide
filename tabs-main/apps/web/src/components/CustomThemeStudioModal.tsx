@@ -35,6 +35,7 @@ import { CustomColorPicker } from "./ui/CustomColorPicker";
 import { WorkbenchMiniPreview } from "./WorkbenchMiniPreview";
 import { ThemeImportExportModal } from "./ThemeImportExportModal";
 import { Button } from "./ui/button";
+import { Dialog, DialogPopup } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 
@@ -181,9 +182,14 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
     setTimeout(() => setAutoTuneFeedback(null), 2500);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-150">
-      <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border/80 bg-card text-card-foreground shadow-2xl animate-in zoom-in-95 duration-150">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogPopup
+        showCloseButton={false}
+        className="max-h-[92vh] w-full max-w-5xl flex-col p-0 overflow-hidden rounded-3xl border border-border/80 bg-card text-card-foreground shadow-2xl"
+      >
         {/* Clean Neutral Header Bar */}
         <div className="flex items-center justify-between border-b border-border/70 px-6 py-4 bg-background/60 shrink-0">
           <div className="flex items-center gap-3">
@@ -491,37 +497,38 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             </Button>
           </div>
         </div>
-      </div>
+      </DialogPopup>
 
       {/* Dedicated Full-Width Live Preview Modal Overlay */}
-      {isPreviewModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-xl p-6 animate-in fade-in duration-200">
-          <div className="relative flex flex-col h-full max-h-[90vh] w-full max-w-5xl rounded-3xl border border-border/80 bg-card p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-border/60 pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">
-                  Full-Width Live Preview Showcase
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  High-definition inspection of custom theme colors across IDE, App Shell, and Token
-                  surfaces.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPreviewModalOpen(false)}
-                className="rounded-xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
-              >
-                <X className="size-5" />
-              </button>
+      <Dialog open={isPreviewModalOpen} onOpenChange={setIsPreviewModalOpen}>
+        <DialogPopup
+          showCloseButton={false}
+          className="flex flex-col h-full max-h-[90vh] w-full max-w-5xl rounded-3xl border border-border/80 bg-card p-6 shadow-2xl space-y-4"
+        >
+          <div className="flex items-center justify-between border-b border-border/60 pb-4">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">
+                Full-Width Live Preview Showcase
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                High-definition inspection of custom theme colors across IDE, App Shell, and Token
+                surfaces.
+              </p>
             </div>
-
-            <div className="flex-1 overflow-y-auto pt-2">
-              <WorkbenchMiniPreview config={config} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsPreviewModalOpen(false)}
+              className="rounded-xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+            >
+              <X className="size-5" />
+            </button>
           </div>
-        </div>
-      )}
+
+          <div className="flex-1 overflow-y-auto pt-2">
+            <WorkbenchMiniPreview config={config} />
+          </div>
+        </DialogPopup>
+      </Dialog>
 
       {isImportExportOpen && (
         <ThemeImportExportModal
@@ -537,6 +544,6 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
           }}
         />
       )}
-    </div>
+    </Dialog>
   );
 };

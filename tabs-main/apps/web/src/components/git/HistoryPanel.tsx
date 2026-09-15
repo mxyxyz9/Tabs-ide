@@ -468,7 +468,7 @@ export function HistoryPanel({
       <div className="relative mb-4">
         <Search
           size={12}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"
         />
         <TextInput
           value={query}

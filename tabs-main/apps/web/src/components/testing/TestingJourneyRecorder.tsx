@@ -13,6 +13,13 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { ensureNativeApi } from "~/nativeApi";
 import type { TestingLocatorEntry } from "@tabs/contracts";
@@ -529,28 +536,35 @@ export function TestingJourneyRecorder() {
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
                       {index + 1}
                     </span>
-                    {/* Action Selector */}
-                    <select
-                      aria-label={`Action for step ${index + 1}`}
+                    <Select
                       value={step.action}
-                      onChange={(e) =>
-                        updateStep(step.id, {
-                          action: e.target.value as JourneyAction,
-                        })
-                      }
-                      className="h-7 rounded border border-border bg-background px-2 text-xs font-medium focus:outline-hidden focus:ring-1 focus:ring-ring"
+                      onValueChange={(val) => {
+                        if (val) {
+                          updateStep(step.id, {
+                            action: val as JourneyAction,
+                          });
+                        }
+                      }}
                     >
-                      <option value="goto">goto</option>
-                      <option value="click">click</option>
-                      <option value="fill">fill</option>
-                      <option value="selectOption">selectOption</option>
-                      <option value="check">check</option>
-                      <option value="uncheck">uncheck</option>
-                      <option value="press">press</option>
-                      <option value="assertVisible">assertVisible</option>
-                      <option value="assertText">assertText</option>
-                      <option value="assertValue">assertValue</option>
-                    </select>
+                      <SelectTrigger
+                        aria-label={`Action for step ${index + 1}`}
+                        className="h-7 rounded border border-border bg-background px-2 text-xs font-medium focus:outline-hidden focus:ring-1 focus:ring-ring w-32"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectPopup>
+                        <SelectItem value="goto">goto</SelectItem>
+                        <SelectItem value="click">click</SelectItem>
+                        <SelectItem value="fill">fill</SelectItem>
+                        <SelectItem value="selectOption">selectOption</SelectItem>
+                        <SelectItem value="check">check</SelectItem>
+                        <SelectItem value="uncheck">uncheck</SelectItem>
+                        <SelectItem value="press">press</SelectItem>
+                        <SelectItem value="assertVisible">assertVisible</SelectItem>
+                        <SelectItem value="assertText">assertText</SelectItem>
+                        <SelectItem value="assertValue">assertValue</SelectItem>
+                      </SelectPopup>
+                    </Select>
 
                     {/* Fragile warning & review */}
                     {step.isFragile && (
@@ -624,14 +638,11 @@ export function TestingJourneyRecorder() {
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] text-muted-foreground">Selector</label>
                           {savedLocators.length > 0 && (
-                            <select
-                              aria-label={`Saved locator for step ${index + 1}`}
-                              className="h-5 text-[10px] text-muted-foreground border rounded bg-transparent px-1"
-                              onChange={(e) => {
-                                if (!e.target.value) return;
-                                const loc = savedLocators.find(
-                                  (l) => l.entry.id === e.target.value,
-                                );
+                            <Select
+                              value={step.locatorEntryId || ""}
+                              onValueChange={(val) => {
+                                if (!val) return;
+                                const loc = savedLocators.find((l) => l.entry.id === val);
                                 if (loc) {
                                   updateStep(step.id, {
                                     selector: loc.selector,
@@ -643,15 +654,21 @@ export function TestingJourneyRecorder() {
                                   });
                                 }
                               }}
-                              value={step.locatorEntryId || ""}
                             >
-                              <option value="">Link saved locator...</option>
-                              {savedLocators.map((l) => (
-                                <option key={l.entry.id} value={l.entry.id}>
-                                  [{l.pageName}] {l.entry.locatorKey}
-                                </option>
-                              ))}
-                            </select>
+                              <SelectTrigger
+                                aria-label={`Saved locator for step ${index + 1}`}
+                                className="h-5 text-[10px] text-muted-foreground border rounded bg-transparent px-1.5 min-w-[140px]"
+                              >
+                                <SelectValue placeholder="Link saved locator..." />
+                              </SelectTrigger>
+                              <SelectPopup>
+                                {savedLocators.map((l) => (
+                                  <SelectItem key={l.entry.id} value={l.entry.id}>
+                                    [{l.pageName}] {l.entry.locatorKey}
+                                  </SelectItem>
+                                ))}
+                              </SelectPopup>
+                            </Select>
                           )}
                         </div>
                         <Input

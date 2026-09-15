@@ -64,6 +64,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogTitle,
 } from "./ui/dialog";
 import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuSeparator } from "./ui/menu";
@@ -263,7 +264,7 @@ function BrowserProfileSelector({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <DialogPanel className="space-y-4 py-2">
             <div>
               <label className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
                 Profile Name
@@ -300,7 +301,7 @@ function BrowserProfileSelector({
                 ))}
               </div>
             </div>
-          </div>
+          </DialogPanel>
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>

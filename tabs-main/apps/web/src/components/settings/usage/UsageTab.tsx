@@ -32,8 +32,8 @@ import {
   CpuIcon,
   DatabaseIcon,
   LayersIcon,
+  PercentIcon,
   SlidersHorizontalIcon,
-  SparklesIcon,
   ZapIcon,
 } from "lucide-react";
 import { PageLoadingState } from "../../PageLoadingState";
@@ -449,7 +449,7 @@ export function UsageTab() {
               <div className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card/30 p-4 shadow-xs backdrop-blur-sm bg-gradient-to-br from-emerald-500/5 to-transparent">
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="text-xs font-medium">Cache Savings</span>
-                  <SparklesIcon className="size-4 text-emerald-500" />
+                  <PercentIcon className="size-4 text-emerald-500" />
                 </div>
                 <span className="text-xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums">
                   {formatUsd(merged.costQuality.cacheSavingsUsd)}

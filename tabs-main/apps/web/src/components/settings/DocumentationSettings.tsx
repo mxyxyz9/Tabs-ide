@@ -16,10 +16,10 @@ import {
   KeyboardIcon,
   LayersIcon,
   LightbulbIcon,
+  ListChecksIcon,
   NetworkIcon,
   SearchIcon,
   ShieldIcon,
-  SparklesIcon,
   TerminalIcon,
   TriangleAlertIcon,
   XIcon,
@@ -848,7 +848,7 @@ export function DocumentationSettings() {
           {/* Search bar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground z-10" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -859,15 +859,14 @@ export function DocumentationSettings() {
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded-md transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 text-muted-foreground hover:text-foreground p-1 rounded-md transition-colors"
                   aria-label="Clear search"
                 >
                   <XIcon className="size-3.5" />
                 </button>
               ) : null}
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
-              <SparklesIcon className="size-3.5 text-muted-foreground" />
+            <div className="text-xs text-muted-foreground shrink-0">
               <span>
                 Showing{" "}
                 <span className="font-mono font-medium text-foreground">
@@ -1010,7 +1009,7 @@ export function DocumentationSettings() {
                         {/* Key Capabilities */}
                         <div className="space-y-2.5">
                           <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400">
-                            <SparklesIcon className="size-3" />
+                            <ListChecksIcon className="size-3" />
                             Key Capabilities
                           </div>
                           <ul className="grid gap-1.5">

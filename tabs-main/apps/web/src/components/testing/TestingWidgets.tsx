@@ -227,7 +227,7 @@ export const TestingCaseLocatorPicker = memo(function TestingCaseLocatorPicker(p
           <div className="relative">
             <SearchIcon
               aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground z-10"
             />
             <Input
               value={query}

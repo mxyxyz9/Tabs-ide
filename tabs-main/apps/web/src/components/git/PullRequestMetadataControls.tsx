@@ -124,7 +124,7 @@ export function PullRequestReviewersSection({
       {isOpen && supportsAction("add_reviewer") ? (
         <form onSubmit={handleSubmit} className="flex gap-1.5 pt-1">
           <div className="relative flex-1 min-w-0">
-            <User className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <User className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground z-10" />
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -230,7 +230,7 @@ export function PullRequestLabelsSection({
       {isOpen && supportsAction("add_label") ? (
         <form onSubmit={handleSubmit} className="flex gap-1.5 pt-1">
           <div className="relative flex-1 min-w-0">
-            <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground z-10" />
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}

@@ -1862,7 +1862,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                     {/* Search Filter if provider has > 6 models or actively searching */}
                                     {providerCard.models.length > 6 || isFiltering ? (
                                       <div className="relative">
-                                        <SearchIcon className="size-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                                        <SearchIcon className="size-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none z-10" />
                                         <Input
                                           value={filterValue}
                                           onChange={(e) =>

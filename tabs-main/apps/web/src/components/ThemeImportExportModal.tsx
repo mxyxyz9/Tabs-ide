@@ -16,6 +16,7 @@ import {
 } from "@tabs/shared/themeImportExport";
 import { runThemeWcagCheck } from "@tabs/shared/themeDerivation";
 import { Button } from "./ui/button";
+import { Dialog, DialogPopup } from "./ui/dialog";
 
 interface ThemeImportExportModalProps {
   isOpen: boolean;
@@ -119,9 +120,14 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
     onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-150">
-      <div className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border/80 bg-card text-card-foreground shadow-2xl animate-in zoom-in-95 duration-150">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogPopup
+        showCloseButton={false}
+        className="max-h-[85vh] w-full max-w-2xl flex-col p-0 overflow-hidden rounded-3xl border border-border/80 bg-card text-card-foreground shadow-2xl"
+      >
         {/* Header Bar */}
         <div className="flex items-center justify-between border-b border-border/70 px-6 py-4 bg-background/60 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -346,10 +352,10 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
                 <Download className="size-3.5" />
                 <span>Download .json</span>
               </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+              </div>
+            )}
+          </div>
+        </DialogPopup>
+      </Dialog>
   );
 };

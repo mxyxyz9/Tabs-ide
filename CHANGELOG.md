@@ -2,6 +2,15 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.6] - 2026-09-15
+
+### Native view notification overlay, persistent editor views, and accessible modal dialogs
+
+- **Topmost native notification overlay**: Embedded Code-OSS, browser preview, and testing web contents views no longer detach or flicker when toasts appear. A dedicated Electron `WebContentsView` overlay managed by the new `NativeViewStackCoordinator` renders notifications seamlessly above native surfaces.
+- **Typed notification IPC & focus restoration**: Added typed IPC channels for notification syncing and action dispatching. User interactions with toasts now restore focus to the previously active native editor or web view.
+- **Accessible modal dialogs**: Replaced native browser popups with theme-consistent, accessible custom `<Dialog>` modals and `useConfirm` prompts across Git PR reviews, Theme Studio, Browser Profiles, Testing Journey Recorder, and Workspace settings.
+- **UI & styling polish**: Fixed input decoration and icon z-indexing across dark and light themes, modernized select dropdowns in testing journey recorders, and tightened review thread actions.
+
 ## [v1.3.5] - 2026-09-14
 
 ### Antigravity protocol, collaborative browser engine, PR stacks, and streaming performance

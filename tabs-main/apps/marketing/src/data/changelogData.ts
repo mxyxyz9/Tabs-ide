@@ -21,16 +21,57 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 148;
+export const TOTAL_TAGS_COUNT = 149;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.6",
+    title:
+      "Native view notification overlay, persistent editor views, and accessible modal dialogs",
+    date: "September 15, 2026",
+    shortDate: "Sep 15",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Topmost native notification overlay above Code-OSS and browser views without detaching or flashing, typed notification IPC with focus restoration, and accessible custom dialogs throughout the UI.",
+    highlights: [
+      "Topmost native notification overlay rendering toasts above embedded Code-OSS and browser surfaces.",
+      "Typed notification IPC and focus restoration returning keyboard focus to the active native editor or web view.",
+      "Accessible modal dialogs replacing raw browser popups across Git, Testing, Settings, and Theme Studio.",
+      "Input styling refinements ensuring decoration icons layer properly above background controls across all themes.",
+    ],
+    categories: [
+      {
+        title: "Desktop & Notification Overlay",
+        items: [
+          "Native WebContentsView notification overlay managed by NativeViewStackCoordinator.",
+          "Persistent editor views: eliminated canvas detaching and blank states when notifications appear.",
+          "Typed notification IPC channels with robust focus tracking and restoration.",
+        ],
+      },
+      {
+        title: "Accessibility & Modal Dialogs",
+        items: [
+          "Replaced native browser confirm/alert dialogs with custom accessible Dialog components.",
+          "Standardized useConfirm hook for billing, unstaged changes, and destructive actions.",
+          "Modernized custom select dropdowns across Testing Journey Recorder and PR review cards.",
+        ],
+      },
+      {
+        title: "UI & Theme Styling",
+        items: [
+          "Fixed absolute input icon z-indexes across light and dark themes.",
+          "Streamlined review thread action buttons and locator pickers.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.5",
     title:
       "Antigravity protocol, collaborative browser engine, PR stacks, and streaming performance",
     date: "September 14, 2026",
     shortDate: "Sep 14",
-    isLatest: true,
     type: "feature",
     summary:
       "Native Antigravity protocol support, real-browser cookie and session import with isolated profiles, GitHub pull request stacks, and major streaming timeline optimizations.",

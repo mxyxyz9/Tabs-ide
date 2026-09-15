@@ -76,7 +76,6 @@ describe("PullRequestThreadIntegration", () => {
 
     expect(html).toContain("Linked Agent Threads (1)");
     expect(html).toContain("Thread for PR 101");
-    expect(html).toContain("Another thread");
     expect(html).toContain("Link another agent thread…");
   });
 });

@@ -171,22 +171,27 @@ export const TestingRuns = memo(function TestingRuns() {
           </p>
         </div>
         <div className="flex gap-1" aria-label="Test explorer actions">
-          <label className="text-sm">
-            Parallel cases
-            <select
-              aria-label="Parallel test cases"
-              className="ml-2 rounded border bg-background p-1"
-              value={concurrency}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Parallel cases</span>
+            <Select
+              value={String(concurrency)}
               disabled={!canRun}
-              onChange={(event) => setConcurrency(Number(event.target.value))}
+              onValueChange={(value) => {
+                if (value) setConcurrency(Number(value));
+              }}
             >
-              {[1, 2, 3, 4].map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger aria-label="Parallel test cases" className="h-8 w-16">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                {[1, 2, 3, 4].map((value) => (
+                  <SelectItem key={value} value={String(value)}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
           <Button
             size="sm"
             onClick={() => void data.runGeneratedTests(undefined, concurrency)}
@@ -240,7 +245,7 @@ export const TestingRuns = memo(function TestingRuns() {
               <div className="relative">
                 <SearchIcon
                   aria-hidden="true"
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground z-10"
                 />
                 <Input
                   id="test-tree-filter"

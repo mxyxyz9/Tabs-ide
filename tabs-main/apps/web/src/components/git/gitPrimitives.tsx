@@ -853,7 +853,7 @@ export function GitModelPicker({
           <div className="relative">
             <Search
               size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground z-10"
             />
             <TextInput
               value={searchQuery}
