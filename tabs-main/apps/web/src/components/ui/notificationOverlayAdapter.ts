@@ -28,6 +28,7 @@ export function extractTextContent(node: ReactNode | unknown): string {
 export function isDesktopNotificationOverlayAvailable(): boolean {
   return (
     typeof window !== "undefined" &&
+    window.desktopBridge?.isPopout !== true &&
     typeof window.desktopBridge?.syncNotificationOverlay === "function"
   );
 }
@@ -68,9 +69,12 @@ const VALID_TOAST_TYPES = new Set<NotificationToastType>([
   "success",
   "warning",
 ]);
+const toastCreatedAtById = new Map<string, number>();
 
 export function serializeToastToPayload(toast: MinimalToastItem): NotificationToastPayload {
   const toastId = String(toast.id);
+  const createdAt = toastCreatedAtById.get(toastId) ?? Date.now();
+  toastCreatedAtById.set(toastId, createdAt);
   const type: NotificationToastType = VALID_TOAST_TYPES.has(toast.type as NotificationToastType)
     ? (toast.type as NotificationToastType)
     : "info";
@@ -95,7 +99,7 @@ export function serializeToastToPayload(toast: MinimalToastItem): NotificationTo
     id: toastId,
     type,
     title,
-    createdAt: Date.now(),
+    createdAt,
     duration,
     ...(description ? { description } : {}),
     ...(action ? { action } : {}),
@@ -191,17 +195,26 @@ export function useNotificationOverlayAdapter(
   }, [isAvailable]);
 
   // Sync toasts to the overlay whenever the toast list changes
+  const serializedToasts = toasts.map(serializeToastToPayload);
+  const serializedSignature = JSON.stringify(serializedToasts);
+
   useEffect(() => {
     if (!isAvailable) return;
 
     const bridge = window.desktopBridge;
-    void syncNotificationOverlayToBridge(bridge, toasts).catch(() => undefined);
+    void bridge?.syncNotificationOverlay?.(serializedToasts).catch(() => undefined);
+  }, [serializedSignature, isAvailable]);
 
+  // Clear the native overlay only when the adapter itself is removed. Keeping
+  // this separate from the update effect avoids an empty sync (and visible
+  // collapse/flicker) before every ordinary toast-list update.
+  useEffect(() => {
+    if (!isAvailable) return;
+    const bridge = window.desktopBridge;
     return () => {
-      // If the component unmounts, sync empty list to hide the overlay
       void bridge?.syncNotificationOverlay?.([]).catch(() => undefined);
     };
-  }, [toasts, isAvailable]);
+  }, [isAvailable]);
 
   return isAvailable;
 }

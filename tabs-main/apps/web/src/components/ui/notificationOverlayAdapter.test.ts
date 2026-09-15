@@ -78,6 +78,12 @@ describe("notificationOverlayAdapter", () => {
       });
       expect(payload.type).toBe("info");
     });
+
+    it("keeps creation time stable when an existing toast is synchronized again", () => {
+      const first = serializeToastToPayload({ id: "stable-toast", title: "Working" });
+      const second = serializeToastToPayload({ id: "stable-toast", title: "Working" });
+      expect(second.createdAt).toBe(first.createdAt);
+    });
   });
 
   describe("syncNotificationOverlayToBridge", () => {
@@ -167,6 +173,26 @@ describe("notificationOverlayAdapter", () => {
   describe("isDesktopNotificationOverlayAvailable", () => {
     it("returns false in node or browser without desktopBridge", () => {
       expect(isDesktopNotificationOverlayAvailable()).toBe(false);
+    });
+
+    it("keeps DOM notifications enabled in popout windows", () => {
+      const previousWindow = globalThis.window;
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+          desktopBridge: {
+            isPopout: true,
+            syncNotificationOverlay: vi.fn(),
+          },
+        },
+      });
+
+      expect(isDesktopNotificationOverlayAvailable()).toBe(false);
+
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: previousWindow,
+      });
     });
   });
 });

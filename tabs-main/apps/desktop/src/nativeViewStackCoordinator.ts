@@ -1,4 +1,4 @@
-import type { BrowserWindow, WebContentsView } from "electron";
+import type { BrowserWindow, WebContents, WebContentsView } from "electron";
 
 export interface NativeViewStackCoordinatorOptions {
   getWindow: () => BrowserWindow | null;
@@ -22,6 +22,9 @@ export class NativeViewStackCoordinator {
   private notificationOverlayView: WebContentsView | null = null;
   private readonly toolViews = new Set<WebContentsView>();
   private readonly automationViews = new Set<WebContentsView>();
+  private readonly focusHandlers = new Map<WebContents, () => void>();
+  private lastFocusedWebContents: WebContents | null = null;
+  private trackedWindow: BrowserWindow | null = null;
 
   constructor(options: NativeViewStackCoordinatorOptions) {
     this.getWindow = options.getWindow;
@@ -35,6 +38,8 @@ export class NativeViewStackCoordinator {
     const window = this.getWindow();
     if (!window || window.isDestroyed()) return;
 
+    this.trackWindowFocus(window);
+    this.trackViewFocus(view);
     this.toolViews.add(view);
 
     const children = window.contentView.children;
@@ -58,6 +63,7 @@ export class NativeViewStackCoordinator {
    */
   public detachToolView(view: WebContentsView): void {
     this.toolViews.delete(view);
+    this.untrackViewFocus(view);
     const window = this.getWindow();
     if (!window || window.isDestroyed()) return;
 
@@ -74,6 +80,8 @@ export class NativeViewStackCoordinator {
     const window = this.getWindow();
     if (!window || window.isDestroyed()) return;
 
+    this.trackWindowFocus(window);
+    this.trackViewFocus(view);
     this.automationViews.add(view);
     const children = window.contentView.children;
     const overlay = this.notificationOverlayView;
@@ -97,6 +105,7 @@ export class NativeViewStackCoordinator {
    */
   public detachAutomationView(view: WebContentsView): void {
     this.automationViews.delete(view);
+    this.untrackViewFocus(view);
     const window = this.getWindow();
     if (!window || window.isDestroyed()) return;
 
@@ -171,11 +180,80 @@ export class NativeViewStackCoordinator {
     return children.length > 0 && children[children.length - 1] === view;
   }
 
+  /** Restore focus to the renderer or native surface that owned it before the overlay was used. */
+  public restoreLastFocusedWebContents(): boolean {
+    const window = this.getWindow();
+    if (!window || window.isDestroyed()) return false;
+    this.trackWindowFocus(window);
+
+    const target = this.lastFocusedWebContents;
+    if (target && !target.isDestroyed()) {
+      target.focus();
+      return true;
+    }
+
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.focus();
+      return true;
+    }
+    return false;
+  }
+
+  private trackWindowFocus(window: BrowserWindow): void {
+    if (this.trackedWindow === window) return;
+    if (this.trackedWindow) {
+      this.untrackWebContents(this.trackedWindow.webContents);
+    }
+    this.trackedWindow = window;
+    this.trackWebContents(window.webContents);
+    if (window.webContents.isFocused()) {
+      this.lastFocusedWebContents = window.webContents;
+    }
+  }
+
+  private trackViewFocus(view: WebContentsView): void {
+    this.trackWebContents(view.webContents);
+    if (view.webContents.isFocused()) {
+      this.lastFocusedWebContents = view.webContents;
+    }
+  }
+
+  private trackWebContents(contents: WebContents): void {
+    if (this.focusHandlers.has(contents)) return;
+    const handler = () => {
+      this.lastFocusedWebContents = contents;
+    };
+    this.focusHandlers.set(contents, handler);
+    contents.on("focus", handler);
+  }
+
+  private untrackViewFocus(view: WebContentsView): void {
+    this.untrackWebContents(view.webContents);
+  }
+
+  private untrackWebContents(contents: WebContents): void {
+    const handler = this.focusHandlers.get(contents);
+    if (!handler) return;
+    contents.removeListener("focus", handler);
+    this.focusHandlers.delete(contents);
+    if (this.lastFocusedWebContents === contents) {
+      this.lastFocusedWebContents = null;
+    }
+  }
+
   /**
    * Clean up all references.
    */
   public destroy(): void {
     this.removeNotificationOverlayView();
+    for (const [contents, handler] of this.focusHandlers) {
+      if (!contents.isDestroyed()) {
+        contents.removeListener("focus", handler);
+      }
+    }
+    this.focusHandlers.clear();
+    this.lastFocusedWebContents = null;
+    this.trackedWindow = null;
     this.toolViews.clear();
     this.automationViews.clear();
   }

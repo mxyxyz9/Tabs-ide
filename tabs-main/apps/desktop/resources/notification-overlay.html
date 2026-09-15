@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:"
+    />
     <title>Tabs Notifications</title>
     <style>
       :root {
@@ -78,20 +82,32 @@
         padding: 12px 14px;
         pointer-events: auto;
         transition:
-          transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-          opacity 0.2s ease,
+          transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 0.3s ease,
           max-height 0.2s ease;
-        animation: toast-enter 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        animation: toast-enter 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
 
       @keyframes toast-enter {
         from {
           opacity: 0;
-          transform: translateY(-8px) scale(0.96);
+          transform: translateX(calc(100% + 16px));
         }
         to {
           opacity: 1;
           transform: translateY(0) scale(1);
+        }
+      }
+
+      .toast-card.toast-exit {
+        pointer-events: none;
+        animation: toast-exit 0.3s cubic-bezier(0.4, 0, 1, 1) forwards;
+      }
+
+      @keyframes toast-exit {
+        to {
+          opacity: 0;
+          transform: translateX(calc(100% + 16px));
         }
       }
 
@@ -289,14 +305,43 @@
           }
         }
 
-        function renderToasts(toasts) {
-          activeToasts = toasts;
-          container.innerHTML = "";
-
-          if (!toasts || toasts.length === 0) {
+        function dismissToastOptimistically(toastId) {
+          const card = Array.from(container.querySelectorAll(".toast-card")).find(
+            (candidate) => candidate.dataset.toastId === String(toastId),
+          );
+          activeToasts = activeToasts.filter((toast) => String(toast.id) !== String(toastId));
+          if (!card) {
             reportMeasuredBounds();
             return;
           }
+          card.classList.add("toast-exit");
+          setTimeout(() => {
+            card.remove();
+            reportMeasuredBounds();
+          }, 300);
+        }
+
+        function renderToasts(toasts) {
+          if (JSON.stringify(activeToasts) === JSON.stringify(toasts)) {
+            return;
+          }
+          activeToasts = toasts;
+
+          if (!toasts || toasts.length === 0) {
+            const cards = container.querySelectorAll(".toast-card");
+            if (cards.length === 0) {
+              reportMeasuredBounds();
+              return;
+            }
+            cards.forEach((card) => card.classList.add("toast-exit"));
+            setTimeout(() => {
+              container.innerHTML = "";
+              reportMeasuredBounds();
+            }, 300);
+            return;
+          }
+
+          container.innerHTML = "";
 
           for (const toast of toasts) {
             const card = document.createElement("div");
@@ -353,6 +398,7 @@
             const dismissBtn = card.querySelector(".dismiss-btn");
             if (dismissBtn) {
               dismissBtn.addEventListener("click", () => {
+                dismissToastOptimistically(toast.id);
                 window.notificationOverlayBridge?.dismissToast(toast.id);
               });
             }
@@ -412,6 +458,7 @@
           if (e.key === "Escape" && activeToasts.length > 0) {
             const topmost = activeToasts[0];
             if (topmost) {
+              dismissToastOptimistically(topmost.id);
               window.notificationOverlayBridge?.dismissToast(topmost.id);
             }
           }

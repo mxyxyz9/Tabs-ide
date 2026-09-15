@@ -10,6 +10,7 @@ const NOTIFICATION_OVERLAY_SYNC_THEME_EVENT = "notification-overlay:sync-theme";
 const NOTIFICATION_OVERLAY_ACTION_CHANNEL = "desktop:notification-overlay:action";
 const NOTIFICATION_OVERLAY_DISMISS_CHANNEL = "desktop:notification-overlay:dismiss";
 const NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL = "desktop:notification-overlay:report-bounds";
+const NOTIFICATION_OVERLAY_RESTORE_FOCUS_CHANNEL = "desktop:notification-overlay:restore-focus";
 const WRITE_CLIPBOARD_TEXT_CHANNEL = "desktop:clipboard:write-text";
 
 export interface NotificationOverlayBridge {
@@ -43,23 +44,37 @@ contextBridge.exposeInMainWorld("notificationOverlayBridge", {
     };
   },
   reportBounds: (bounds: NotificationOverlayBounds) => {
-    if (bounds && typeof bounds.width === "number" && typeof bounds.height === "number") {
+    if (
+      bounds &&
+      Number.isFinite(bounds.width) &&
+      Number.isFinite(bounds.height) &&
+      bounds.width >= 0 &&
+      bounds.height >= 0
+    ) {
       ipcRenderer.send(NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL, bounds);
     }
   },
   triggerAction: (toastId: string, actionId: string) => {
-    if (typeof toastId === "string" && typeof actionId === "string") {
+    if (
+      typeof toastId === "string" &&
+      toastId.length <= 256 &&
+      typeof actionId === "string" &&
+      actionId.length <= 256
+    ) {
       ipcRenderer.send(NOTIFICATION_OVERLAY_ACTION_CHANNEL, { toastId, actionId });
     }
   },
   dismissToast: (toastId: string) => {
-    if (typeof toastId === "string") {
+    if (typeof toastId === "string" && toastId.length <= 256) {
       ipcRenderer.send(NOTIFICATION_OVERLAY_DISMISS_CHANNEL, { toastId });
     }
   },
   copyText: (text: string) => {
-    if (typeof text === "string") {
-      void ipcRenderer.invoke(WRITE_CLIPBOARD_TEXT_CHANNEL, text);
+    if (typeof text === "string" && text.length <= 4_096) {
+      void ipcRenderer
+        .invoke(WRITE_CLIPBOARD_TEXT_CHANNEL, text)
+        .catch(() => undefined)
+        .finally(() => ipcRenderer.send(NOTIFICATION_OVERLAY_RESTORE_FOCUS_CHANNEL));
     }
   },
 });

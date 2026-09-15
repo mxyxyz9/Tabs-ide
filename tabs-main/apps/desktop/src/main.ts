@@ -68,7 +68,10 @@ import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runti
 import { CodeHostManager, resolveCodeHostConfig } from "./codeHostManager";
 import { BrowserHostManager } from "./browserHostManager";
 import { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
-import { NotificationOverlayManager } from "./notificationOverlayManager";
+import {
+  normalizeNotificationToasts,
+  NotificationOverlayManager,
+} from "./notificationOverlayManager";
 import {
   ensureRuntimeInstalled,
   isRuntimeInstalled,
@@ -205,6 +208,7 @@ const NOTIFICATION_OVERLAY_SYNC_CHANNEL = "desktop:notification-overlay:sync";
 const NOTIFICATION_OVERLAY_ACTION_CHANNEL = "desktop:notification-overlay:action";
 const NOTIFICATION_OVERLAY_DISMISS_CHANNEL = "desktop:notification-overlay:dismiss";
 const NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL = "desktop:notification-overlay:report-bounds";
+const NOTIFICATION_OVERLAY_RESTORE_FOCUS_CHANNEL = "desktop:notification-overlay:restore-focus";
 
 function readBrowserSessionId(input: unknown): string | undefined {
   const value = (input as { sessionId?: unknown }).sessionId;
@@ -392,9 +396,7 @@ const notificationOverlayManager = new NotificationOverlayManager({
   },
   restoreActiveFocus: () => {
     try {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.focus();
-      }
+      nativeViewCoordinator.restoreLastFocusedWebContents();
     } catch {}
   },
 });
@@ -2384,19 +2386,21 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.removeHandler(NOTIFICATION_OVERLAY_SYNC_CHANNEL);
-  ipcMain.handle(NOTIFICATION_OVERLAY_SYNC_CHANNEL, async (_event, rawToasts: unknown) => {
-    if (Array.isArray(rawToasts)) {
-      notificationOverlayManager.setToasts(rawToasts);
-    }
+  ipcMain.handle(NOTIFICATION_OVERLAY_SYNC_CHANNEL, async (event, rawToasts: unknown) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+    notificationOverlayManager.setToasts(normalizeNotificationToasts(rawToasts));
   });
 
   ipcMain.removeAllListeners(NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL);
-  ipcMain.on(NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL, (_event, bounds: unknown) => {
+  ipcMain.on(NOTIFICATION_OVERLAY_REPORT_BOUNDS_CHANNEL, (event, bounds: unknown) => {
+    if (!notificationOverlayManager.ownsWebContents(event.sender)) return;
     if (
       bounds &&
       typeof bounds === "object" &&
       typeof (bounds as { width?: unknown }).width === "number" &&
-      typeof (bounds as { height?: unknown }).height === "number"
+      typeof (bounds as { height?: unknown }).height === "number" &&
+      Number.isFinite((bounds as { width: number }).width) &&
+      Number.isFinite((bounds as { height: number }).height)
     ) {
       notificationOverlayManager.handleReportBounds({
         width: (bounds as { width: number }).width,
@@ -2406,7 +2410,8 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.removeAllListeners(NOTIFICATION_OVERLAY_ACTION_CHANNEL);
-  ipcMain.on(NOTIFICATION_OVERLAY_ACTION_CHANNEL, (_event, payload: unknown) => {
+  ipcMain.on(NOTIFICATION_OVERLAY_ACTION_CHANNEL, (event, payload: unknown) => {
+    if (!notificationOverlayManager.ownsWebContents(event.sender)) return;
     if (
       payload &&
       typeof payload === "object" &&
@@ -2421,7 +2426,8 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.removeAllListeners(NOTIFICATION_OVERLAY_DISMISS_CHANNEL);
-  ipcMain.on(NOTIFICATION_OVERLAY_DISMISS_CHANNEL, (_event, payload: unknown) => {
+  ipcMain.on(NOTIFICATION_OVERLAY_DISMISS_CHANNEL, (event, payload: unknown) => {
+    if (!notificationOverlayManager.ownsWebContents(event.sender)) return;
     if (
       payload &&
       typeof payload === "object" &&
@@ -2429,6 +2435,12 @@ function registerIpcHandlers(): void {
     ) {
       notificationOverlayManager.handleDismiss((payload as { toastId: string }).toastId);
     }
+  });
+
+  ipcMain.removeAllListeners(NOTIFICATION_OVERLAY_RESTORE_FOCUS_CHANNEL);
+  ipcMain.on(NOTIFICATION_OVERLAY_RESTORE_FOCUS_CHANNEL, (event) => {
+    if (!notificationOverlayManager.ownsWebContents(event.sender)) return;
+    notificationOverlayManager.restoreFocus();
   });
 
   ipcMain.removeHandler(DESKTOP_CAPTURE_GET_PERMISSION_CHANNEL);
@@ -3370,6 +3382,7 @@ function createTabsWindow(): BrowserWindow {
     if (mainWindow === window) {
       mainWindow = null;
       notificationOverlayManager.destroy();
+      nativeViewCoordinator.destroy();
       for (const popout of popoutWindows) {
         if (!popout.isDestroyed()) {
           popout.close();

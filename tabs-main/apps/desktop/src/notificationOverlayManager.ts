@@ -1,6 +1,6 @@
 import * as FS from "node:fs";
 import * as Path from "node:path";
-import { WebContentsView, type BrowserWindow, type Rectangle } from "electron";
+import { WebContentsView, type BrowserWindow, type Rectangle, type WebContents } from "electron";
 import type {
   NotificationOverlayBounds,
   NotificationOverlayTheme,
@@ -14,6 +14,81 @@ export interface NotificationOverlayManagerOptions {
   onAction?: ((toastId: string, actionId: string) => void) | undefined;
   onDismiss?: ((toastId: string) => void) | undefined;
   restoreActiveFocus?: (() => void) | undefined;
+}
+
+const MAX_VISIBLE_TOASTS = 8;
+const MAX_ID_LENGTH = 256;
+const MAX_TITLE_LENGTH = 512;
+const MAX_DESCRIPTION_LENGTH = 4_096;
+const MAX_ACTION_LABEL_LENGTH = 128;
+
+function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= maxLength &&
+    (allowEmpty || value.trim().length > 0)
+  );
+}
+
+/** Validate and bound renderer-owned data before it reaches the privileged overlay process. */
+export function normalizeNotificationToasts(input: unknown): NotificationToastPayload[] {
+  if (!Array.isArray(input)) return [];
+
+  const normalized: NotificationToastPayload[] = [];
+  for (const value of input.slice(0, MAX_VISIBLE_TOASTS * 4)) {
+    if (normalized.length >= MAX_VISIBLE_TOASTS) break;
+    if (!value || typeof value !== "object") continue;
+    const toast = value as Record<string, unknown>;
+    if (
+      !isBoundedString(toast.id, MAX_ID_LENGTH) ||
+      !isBoundedString(toast.title, MAX_TITLE_LENGTH) ||
+      !["loading", "success", "error", "warning", "info"].includes(String(toast.type)) ||
+      !Number.isFinite(toast.createdAt)
+    ) {
+      continue;
+    }
+    if (
+      toast.description !== undefined &&
+      !isBoundedString(toast.description, MAX_DESCRIPTION_LENGTH, true)
+    ) {
+      continue;
+    }
+    if (
+      toast.duration !== undefined &&
+      (!Number.isFinite(toast.duration) || Number(toast.duration) < 0)
+    ) {
+      continue;
+    }
+
+    let action: NotificationToastPayload["action"];
+    if (toast.action !== undefined) {
+      if (!toast.action || typeof toast.action !== "object") continue;
+      const rawAction = toast.action as Record<string, unknown>;
+      if (
+        !isBoundedString(rawAction.actionId, MAX_ID_LENGTH) ||
+        !isBoundedString(rawAction.label, MAX_ACTION_LABEL_LENGTH)
+      ) {
+        continue;
+      }
+      action = { actionId: rawAction.actionId, label: rawAction.label };
+    }
+
+    normalized.push({
+      id: toast.id,
+      type: toast.type as NotificationToastPayload["type"],
+      title: toast.title,
+      createdAt: Number(toast.createdAt),
+      ...(toast.description !== undefined ? { description: toast.description as string } : {}),
+      ...(toast.duration !== undefined ? { duration: Number(toast.duration) } : {}),
+      ...(action ? { action } : {}),
+      ...(typeof toast.tooltipStyle === "boolean" ? { tooltipStyle: toast.tooltipStyle } : {}),
+      ...(typeof toast.interactive === "boolean" ? { interactive: toast.interactive } : {}),
+      ...(toast.threadId === null || typeof toast.threadId === "string"
+        ? { threadId: toast.threadId }
+        : {}),
+    });
+  }
+  return normalized;
 }
 
 function resolveNotificationOverlayHtmlPath(): string {
@@ -64,6 +139,7 @@ export class NotificationOverlayManager {
   private boundWindow: BrowserWindow | null = null;
   private windowResizeHandler: (() => void) | null = null;
   private windowCloseHandler: (() => void) | null = null;
+  private emptyHideTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: NotificationOverlayManagerOptions) {
     this.getWindow = options.getWindow;
@@ -153,13 +229,31 @@ export class NotificationOverlayManager {
    */
   public setToasts(toasts: readonly NotificationToastPayload[]): void {
     this.toasts = toasts;
+    if (toasts.length === 0 && !this.overlayView) {
+      return;
+    }
     this.ensureOverlay();
-    this.syncToastsToOverlay();
+    this.clearEmptyHideTimer();
 
     if (toasts.length === 0) {
-      this.lastReportedSize = { width: 0, height: 0 };
+      this.syncToastsToOverlay();
+      // Let the overlay renderer play its exit transition. The bounds report
+      // normally collapses the view first; this timer is a fail-safe if the
+      // renderer is unavailable or throttled.
+      this.emptyHideTimer = setTimeout(() => {
+        this.emptyHideTimer = null;
+        this.lastReportedSize = { width: 0, height: 0 };
+        this.updateBounds();
+      }, 450);
+      return;
+    } else if (this.lastReportedSize.width <= 0 || this.lastReportedSize.height <= 0) {
+      // A zero-sized hidden WebContentsView is not guaranteed to receive an animation
+      // frame promptly. Show a tight provisional region so its ResizeObserver can
+      // report the final wrapped height without a hidden-view/rAF deadlock.
+      this.lastReportedSize = { width: 380, height: 60 };
       this.updateBounds();
     }
+    this.syncToastsToOverlay();
   }
 
   /**
@@ -174,6 +268,10 @@ export class NotificationOverlayManager {
    * Called by IPC when the overlay DOM measures its content size.
    */
   public handleReportBounds(bounds: NotificationOverlayBounds): void {
+    if (!Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) return;
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      this.clearEmptyHideTimer();
+    }
     this.lastReportedSize = bounds;
     this.updateBounds();
   }
@@ -182,6 +280,8 @@ export class NotificationOverlayManager {
    * Called by IPC when user clicks an action inside the overlay.
    */
   public handleAction(toastId: string, actionId: string): void {
+    const toast = this.toasts.find((candidate) => candidate.id === toastId);
+    if (!toast?.action || toast.action.actionId !== actionId) return;
     this.onAction?.(toastId, actionId);
     this.restoreActiveFocus?.();
   }
@@ -190,7 +290,12 @@ export class NotificationOverlayManager {
    * Called by IPC when user dismisses a toast from the overlay.
    */
   public handleDismiss(toastId: string): void {
+    if (!this.toasts.some((toast) => toast.id === toastId)) return;
     this.onDismiss?.(toastId);
+    this.restoreActiveFocus?.();
+  }
+
+  public restoreFocus(): void {
     this.restoreActiveFocus?.();
   }
 
@@ -276,10 +381,15 @@ export class NotificationOverlayManager {
     return this.toasts;
   }
 
+  public ownsWebContents(contents: WebContents): boolean {
+    return this.overlayView?.webContents === contents;
+  }
+
   /**
    * Clean destruction of the overlay view and listeners.
    */
   public destroy(): void {
+    this.clearEmptyHideTimer();
     if (this.boundWindow && !this.boundWindow.isDestroyed()) {
       if (this.windowResizeHandler) {
         this.boundWindow.removeListener("resize", this.windowResizeHandler);
@@ -303,5 +413,11 @@ export class NotificationOverlayManager {
       } catch {}
       this.overlayView = null;
     }
+  }
+
+  private clearEmptyHideTimer(): void {
+    if (this.emptyHideTimer === null) return;
+    clearTimeout(this.emptyHideTimer);
+    this.emptyHideTimer = null;
   }
 }

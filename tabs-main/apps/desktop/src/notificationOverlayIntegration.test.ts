@@ -7,15 +7,21 @@ import type { NotificationToastPayload } from "@tabs/contracts";
 
 const { MockWebContentsView } = vi.hoisted(() => {
   class MockWebContentsView {
+    private readonly listeners = new Map<string, (...args: unknown[]) => void>();
     public webContents = {
       loadFile: vi.fn(async () => {}),
-      on: vi.fn(),
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+        this.listeners.set(event, handler);
+      }),
+      removeListener: vi.fn((event: string) => this.listeners.delete(event)),
       send: vi.fn(),
       getZoomFactor: vi.fn(() => 1.0),
       setZoomFactor: vi.fn(),
       isDestroyed: vi.fn(() => false),
       close: vi.fn(),
       focus: vi.fn(),
+      isFocused: vi.fn(() => false),
+      emit: (event: string, ...args: unknown[]) => this.listeners.get(event)?.(...args),
     };
     public bounds = { x: 0, y: 0, width: 0, height: 0 };
     public visible = false;
@@ -63,6 +69,10 @@ function createMockWindow() {
       getZoomFactor: vi.fn(() => 1.0),
       send: vi.fn(),
       focus: vi.fn(),
+      isFocused: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn(),
+      removeListener: vi.fn(),
     },
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       if (!listeners.has(event)) listeners.set(event, []);
@@ -110,7 +120,7 @@ describe("Notification Overlay Integration & Behavior Suite", () => {
       stackCoordinator: coordinator,
       onAction: actionSpy,
       onDismiss: dismissSpy,
-      restoreActiveFocus: () => mockWindow.webContents.focus(),
+      restoreActiveFocus: () => coordinator.restoreLastFocusedWebContents(),
     });
   });
 
@@ -224,6 +234,7 @@ describe("Notification Overlay Integration & Behavior Suite", () => {
 
     // Sync empty list after dismissal
     overlayManager.setToasts([]);
+    overlayManager.handleReportBounds({ width: 0, height: 0 });
     expect(view.setVisible).toHaveBeenLastCalledWith(false);
   });
 
@@ -304,7 +315,7 @@ describe("Notification Overlay Integration & Behavior Suite", () => {
 
   // 10. No pointer interception outside the toast region
   it("10. keeps bounds strictly clamped to toast stack with no full-window interception", () => {
-    // When no toasts exist, overlay bounds are empty (0,0,0,0) and invisible
+    // Once allocated, an empty overlay has empty bounds and is invisible.
     overlayManager.ensureOverlay();
     const view = getMockOverlayView()!;
     expect(view.bounds).toEqual({ x: 0, y: 0, width: 0, height: 0 });
@@ -337,12 +348,23 @@ describe("Notification Overlay Integration & Behavior Suite", () => {
 
   // 12. Interactive action restores appropriate focus
   it("12. preserves owner surface focus after interactive action handling", () => {
-    mockWindow.webContents.focus.mockClear();
+    const codeView = new MockWebContentsView();
+    coordinator.attachToolView(codeView as any);
+    codeView.webContents.emit("focus");
+    overlayManager.setToasts([
+      {
+        id: "toast-1",
+        type: "error",
+        title: "Retry operation",
+        action: { actionId: "primary", label: "Retry" },
+        createdAt: Date.now(),
+      },
+    ]);
 
     overlayManager.handleAction("toast-1", "primary");
 
-    // Main window webContents retains/restores focus
-    expect(mockWindow.webContents.focus).toHaveBeenCalled();
+    expect(codeView.webContents.focus).toHaveBeenCalled();
+    expect(mockWindow.webContents.focus).not.toHaveBeenCalled();
   });
 
   // 13. Toast during initial Code navigation does not cancel the load
@@ -449,5 +471,7 @@ describe("Notification Overlay Integration & Behavior Suite", () => {
 
     // Reduced motion CSS
     expect(html).toContain("prefers-reduced-motion");
+    expect(html).toContain("dismissToastOptimistically(toast.id)");
+    expect(html).toContain("toast-exit");
   });
 });

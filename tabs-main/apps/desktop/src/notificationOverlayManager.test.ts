@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { NotificationOverlayManager } from "./notificationOverlayManager";
+import {
+  normalizeNotificationToasts,
+  NotificationOverlayManager,
+} from "./notificationOverlayManager";
 import { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
 
 const { MockWebContentsView } = vi.hoisted(() => {
@@ -12,6 +15,8 @@ const { MockWebContentsView } = vi.hoisted(() => {
     isDestroyed: vi.fn(() => false),
     close: vi.fn(),
     focus: vi.fn(),
+    isFocused: vi.fn(() => false),
+    removeListener: vi.fn(),
   };
 
   class MockWebContentsView {
@@ -62,6 +67,11 @@ function createMockWindow() {
     },
     webContents: {
       getZoomFactor: vi.fn(() => 1.25),
+      focus: vi.fn(),
+      isFocused: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn(),
+      removeListener: vi.fn(),
     },
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       if (!listeners.has(event)) listeners.set(event, []);
@@ -86,6 +96,23 @@ function createMockWindow() {
 }
 
 describe("NotificationOverlayManager", () => {
+  it("bounds and validates renderer-provided toast payloads", () => {
+    const valid = Array.from({ length: 10 }, (_, index) => ({
+      id: `toast-${index}`,
+      type: "info",
+      title: "Notice",
+      createdAt: Date.now(),
+    }));
+    const result = normalizeNotificationToasts([
+      { id: "bad", type: "info", title: "Bad bounds", createdAt: Number.NaN },
+      ...valid,
+    ]);
+
+    expect(result).toHaveLength(8);
+    expect(result[0]?.id).toBe("toast-0");
+    expect(normalizeNotificationToasts([{ ...valid[0], title: "x".repeat(513) }])).toEqual([]);
+  });
+
   it("creates a single WebContentsView with transparent background and isolated sandbox", () => {
     const mockWindow = createMockWindow();
     const coordinator = new NativeViewStackCoordinator({ getWindow: () => mockWindow });
@@ -126,7 +153,7 @@ describe("NotificationOverlayManager", () => {
     expect(view.webContents.focus).not.toHaveBeenCalled();
   });
 
-  it("sets empty bounds and hides view when toast count is zero", () => {
+  it("does not create a renderer process until the first toast is shown", () => {
     const mockWindow = createMockWindow();
     const coordinator = new NativeViewStackCoordinator({ getWindow: () => mockWindow });
     const manager = new NotificationOverlayManager({
@@ -135,9 +162,24 @@ describe("NotificationOverlayManager", () => {
     });
 
     manager.setToasts([]);
+    expect(manager.getOverlayView()).toBeNull();
+  });
+
+  it("shows provisional bounds before the hidden overlay can report its measured size", () => {
+    const mockWindow = createMockWindow();
+    const coordinator = new NativeViewStackCoordinator({ getWindow: () => mockWindow });
+    const manager = new NotificationOverlayManager({
+      getWindow: () => mockWindow,
+      stackCoordinator: coordinator,
+    });
+
+    manager.setToasts([
+      { id: "toast-1", type: "info", title: "Visible promptly", createdAt: Date.now() },
+    ]);
+
     const view = manager.getOverlayView() as unknown as MockWebContentsViewInstance;
-    expect(view.bounds).toEqual({ x: 0, y: 0, width: 0, height: 0 });
-    expect(view.visible).toBe(false);
+    expect(view.bounds).toEqual({ x: 804, y: 56, width: 380, height: 60 });
+    expect(view.visible).toBe(true);
   });
 
   it("updates and clamps bounds to the window top-right corner when toasts are reported", () => {
@@ -214,6 +256,16 @@ describe("NotificationOverlayManager", () => {
       restoreActiveFocus: restoreFocusSpy,
     });
 
+    manager.setToasts([
+      {
+        id: "toast-1",
+        type: "error",
+        title: "Connection failed",
+        action: { actionId: "action-retry", label: "Retry" },
+        createdAt: Date.now(),
+      },
+    ]);
+
     manager.handleAction("toast-1", "action-retry");
 
     expect(actionSpy).toHaveBeenCalledWith("toast-1", "action-retry");
@@ -232,6 +284,10 @@ describe("NotificationOverlayManager", () => {
       onDismiss: dismissSpy,
       restoreActiveFocus: restoreFocusSpy,
     });
+
+    manager.setToasts([
+      { id: "toast-1", type: "info", title: "Dismiss me", createdAt: Date.now() },
+    ]);
 
     manager.handleDismiss("toast-1");
 

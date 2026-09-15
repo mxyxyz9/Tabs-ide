@@ -244,7 +244,17 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
   }, [toasts]);
 
   if (isDesktopOverlayActive) {
-    return null;
+    return (
+      <>
+        {visibleToasts.map((toast) => (
+          <ThreadToastVisibleAutoDismiss
+            dismissAfterVisibleMs={toast.data?.dismissAfterVisibleMs}
+            key={toast.id}
+            toastId={toast.id}
+          />
+        ))}
+      </>
+    );
   }
 
   const visibleToastLayout = buildVisibleToastLayout(visibleToasts);

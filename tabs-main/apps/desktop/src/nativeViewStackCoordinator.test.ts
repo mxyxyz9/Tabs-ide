@@ -2,12 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
 
 function createMockView(id: string) {
+  const listeners = new Map<string, () => void>();
   return {
     id,
     setBounds: vi.fn(),
     setVisible: vi.fn(),
     webContents: {
       focus: vi.fn(),
+      isFocused: vi.fn(() => false),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn((event: string, handler: () => void) => listeners.set(event, handler)),
+      removeListener: vi.fn((event: string) => listeners.delete(event)),
+      emit: (event: string) => listeners.get(event)?.(),
     },
   } as unknown as Electron.WebContentsView;
 }
@@ -38,6 +44,7 @@ function createMockWindow() {
   return {
     isDestroyed: vi.fn(() => false),
     contentView,
+    webContents: createMockView("main").webContents,
   } as unknown as Electron.BrowserWindow;
 }
 
@@ -152,5 +159,17 @@ describe("NativeViewStackCoordinator", () => {
     coordinator.destroy();
     expect(mockWindow.contentView.children).not.toContain(overlayView);
     expect(coordinator.getNotificationOverlayView()).toBeNull();
+  });
+
+  it("restores focus to the native surface that most recently owned it", () => {
+    const mockWindow = createMockWindow();
+    const coordinator = new NativeViewStackCoordinator({ getWindow: () => mockWindow });
+    const codeView = createMockView("code");
+    coordinator.attachToolView(codeView);
+
+    (codeView.webContents as unknown as { emit: (event: string) => void }).emit("focus");
+    expect(coordinator.restoreLastFocusedWebContents()).toBe(true);
+    expect(codeView.webContents.focus).toHaveBeenCalledOnce();
+    expect(mockWindow.webContents.focus).not.toHaveBeenCalled();
   });
 });
