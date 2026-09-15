@@ -284,6 +284,9 @@ export function parseNativeTheme(
           uiFont: typeof value.fonts.uiFont === "string" ? value.fonts.uiFont : "system-ui",
           editorFont:
             typeof value.fonts.editorFont === "string" ? value.fonts.editorFont : "monospace",
+          ...(typeof value.fonts.headingFont === "string" && value.fonts.headingFont.trim()
+            ? { headingFont: value.fonts.headingFont.trim() }
+            : {}),
         }
       : fallback.fonts;
 
@@ -398,13 +401,20 @@ export function validateAndParseThemeString(
  * Exports a Tabs CustomThemeConfig to formatted JSON
  */
 export function exportCustomThemeAsJson(config: CustomThemeConfig, name: string): string {
+  const fonts: Record<string, string> = {
+    uiFont: config.fonts.uiFont,
+    editorFont: config.fonts.editorFont,
+  };
+  if (config.fonts.headingFont) {
+    fonts.headingFont = config.fonts.headingFont;
+  }
   const payload = {
     schema: "tabs:custom-theme:v1",
     version: 1,
     name: name.trim() || "Custom Theme",
     baseVariant: config.baseVariant,
     colors: config.colors,
-    fonts: config.fonts,
+    fonts,
     ...(config.tokenOverrides && Object.keys(config.tokenOverrides).length > 0
       ? { tokenOverrides: config.tokenOverrides }
       : {}),
@@ -459,6 +469,9 @@ export function safeRecoverTheme(
         typeof fonts.editorFont === "string" && fonts.editorFont.trim().length > 0
           ? fonts.editorFont
           : fallback.fonts.editorFont,
+      ...(typeof fonts.headingFont === "string" && fonts.headingFont.trim().length > 0
+        ? { headingFont: fonts.headingFont.trim() }
+        : {}),
     },
     ...(tokenOverrides ? { tokenOverrides } : {}),
     ...(diffColorScheme ? { diffColorScheme } : {}),

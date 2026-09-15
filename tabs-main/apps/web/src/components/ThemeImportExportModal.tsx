@@ -289,6 +289,19 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
                         Ready to import
                       </span>
                     </div>
+
+                    {/* VS Code tokenColors notice */}
+                    {jsonInput.includes("tokenColors") && (
+                      <div className="flex items-start gap-2 pt-1 border-t border-emerald-500/20">
+                        <AlertCircle className="size-3.5 text-amber-500 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          <span className="font-semibold text-amber-500">Note:</span>{" "}
+                          <code className="font-mono text-primary">tokenColors</code> (syntax
+                          highlighting rules) are not imported — only UI workbench colors are
+                          mapped. The editor will use Tabs' default syntax theme.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-3.5 flex items-start gap-2.5">

@@ -23,7 +23,7 @@ import {
   MIN_PROMPT_FONT_SIZE,
 } from "@tabs/contracts/settings";
 import { useConfirm } from "../../hooks/useConfirm";
-import { useTheme } from "../../hooks/useTheme";
+import { useTheme, buildFontPreferencesFromThemeConfig } from "../../hooks/useTheme";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useServerConfig } from "../../state/settings";
 import { cn } from "../../lib/utils";
@@ -800,6 +800,9 @@ export function ThemesSettings() {
       });
       setCustomThemeConfig(config);
       setTheme("custom");
+      // Sync imported fonts into the FontPreferences store so the DOM updates
+      const nextFontPrefs = buildFontPreferencesFromThemeConfig(config);
+      setFontPreferences(nextFontPrefs);
       setIsImportExportOpen(false);
       toastManager.add({
         type: "success",
@@ -807,7 +810,7 @@ export function ThemesSettings() {
         description: `Imported "${name}" successfully.`,
       });
     },
-    [setCustomThemeConfig, setTheme],
+    [setCustomThemeConfig, setTheme, setFontPreferences],
   );
 
   const handleSavePreset = useCallback(
@@ -1583,16 +1586,56 @@ export function ThemesSettings() {
           }
         }}
         onSavePreset={handleSavePreset}
+        onFontsImported={(fonts) => setFontPreferences(fonts)}
       />
 
-      <ThemeImportExportModal
-        isOpen={isImportExportOpen}
-        onClose={() => setIsImportExportOpen(false)}
-        currentConfig={customThemeConfig}
-        currentName={editingStudioPresetName || "Custom Theme"}
-        initialTab={importExportTab}
-        onImportTheme={handleImportTheme}
-      />
+      {(() => {
+        // Derive the correct config and name for export based on the *active* theme
+        // (not always the custom slot — e.g. when Dracula or Abyss is selected).
+        let exportConfig: CustomThemeConfig = {
+          ...customThemeConfig,
+          fonts: {
+            ...customThemeConfig.fonts,
+            uiFont: fontPreferences.uiFont,
+            editorFont: fontPreferences.editorFont,
+            headingFont: fontPreferences.headingFont || fontPreferences.uiFont,
+          },
+        };
+        let exportName = editingStudioPresetName || "Custom Theme";
+
+        if (theme !== "custom" && theme !== "system" && !theme.startsWith("environment:")) {
+          const def = THEME_DEFINITIONS[theme as import("../../lib/themes").ThemeId];
+          if (def) {
+            exportConfig = {
+              baseVariant: def.baseVariant,
+              colors: {
+                background: def.colors.background,
+                foreground: def.colors.foreground,
+                card: def.colors.card,
+                border: def.colors.border,
+                primary: def.colors.primary,
+              },
+              fonts: {
+                uiFont: fontPreferences.uiFont,
+                editorFont: fontPreferences.editorFont,
+                headingFont: fontPreferences.headingFont || fontPreferences.uiFont,
+              },
+            };
+            exportName = def.name;
+          }
+        }
+
+        return (
+          <ThemeImportExportModal
+            isOpen={isImportExportOpen}
+            onClose={() => setIsImportExportOpen(false)}
+            currentConfig={exportConfig}
+            currentName={exportName}
+            initialTab={importExportTab}
+            onImportTheme={handleImportTheme}
+          />
+        );
+      })()}
     </div>
   );
 }

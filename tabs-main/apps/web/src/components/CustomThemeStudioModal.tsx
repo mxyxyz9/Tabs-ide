@@ -28,9 +28,11 @@ import {
   generateHarmonizedPalette,
   RANDOM_STYLE_OPTIONS,
   THEME_DEFINITIONS,
+  type FontPreferences,
   type RandomStyleMode,
   type ThemeId,
 } from "../lib/themes";
+import { buildFontPreferencesFromThemeConfig } from "../hooks/useTheme";
 import { CustomColorPicker } from "./ui/CustomColorPicker";
 import { WorkbenchMiniPreview } from "./WorkbenchMiniPreview";
 import { ThemeImportExportModal } from "./ThemeImportExportModal";
@@ -46,6 +48,8 @@ interface CustomThemeStudioModalProps {
   onChange: (next: CustomThemeConfig) => void;
   onSavePreset: (name: string, config: CustomThemeConfig) => void;
   initialPresetName?: string;
+  /** Called when a theme is imported inside the Studio, passing the resolved font preferences. */
+  onFontsImported?: (fonts: FontPreferences) => void;
 }
 
 export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
@@ -55,6 +59,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
   onChange,
   onSavePreset,
   initialPresetName = "",
+  onFontsImported,
 }) => {
   const [presetNameInput, setPresetNameInput] = useState(initialPresetName);
   const [randomStyle, setRandomStyle] = useState<RandomStyleMode>("pastel");
@@ -541,6 +546,10 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             onChange(importedConfig);
             setPresetNameInput(name);
             onSavePreset(name, importedConfig);
+            // Propagate imported fonts back to the parent theme settings
+            if (onFontsImported) {
+              onFontsImported(buildFontPreferencesFromThemeConfig(importedConfig));
+            }
           }}
         />
       )}

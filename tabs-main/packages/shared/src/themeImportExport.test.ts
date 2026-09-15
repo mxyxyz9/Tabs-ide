@@ -24,6 +24,7 @@ describe("themeImportExport", () => {
     fonts: {
       uiFont: "Inter",
       editorFont: "Fira Code",
+      headingFont: "Instrument Serif",
     },
     tokenOverrides: {
       "editor.selectionBackground": "#3b82f640",
@@ -155,8 +156,34 @@ describe("themeImportExport", () => {
       expect(result.config.colors.background).toBe("#121212");
       expect(result.config.colors.primary).toBe("#3b82f6");
       expect(result.config.fonts.uiFont).toBe("Inter");
+      expect(result.config.fonts.headingFont).toBe("Instrument Serif");
       expect(result.config.tokenOverrides?.["editor.selectionBackground"]).toBe("#3b82f640");
     }
+  });
+
+  it("parseNativeTheme correctly reads headingFont from the fonts block", () => {
+    const nativeJson = {
+      schema: "tabs:custom-theme:v1",
+      name: "Syne Dropped",
+      baseVariant: "dark",
+      colors: {
+        background: "#090d16",
+        card: "#111827",
+        foreground: "#f9fafb",
+        border: "#1f2937",
+        primary: "#6366f1",
+      },
+      fonts: {
+        uiFont: "'Syne', sans-serif",
+        editorFont: "Menlo",
+        headingFont: "'Newsreader', serif",
+      },
+    };
+    const { name, config } = parseNativeTheme(nativeJson);
+    expect(name).toBe("Syne Dropped");
+    expect(config.fonts.uiFont).toBe("'Syne', sans-serif");
+    expect(config.fonts.headingFont).toBe("'Newsreader', serif");
+    expect(config.fonts.editorFont).toBe("Menlo");
   });
 
   it("rejects empty or whitespace-only inputs", () => {

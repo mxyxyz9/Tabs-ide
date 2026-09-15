@@ -441,6 +441,25 @@ if (typeof window !== "undefined") {
   applyTheme(getStoredPreference());
 }
 
+/**
+ * Builds a FontPreferences object from a CustomThemeConfig's font block,
+ * merging with the current stored preferences to preserve size settings.
+ * Call this after importing a theme to sync the font state into localStorage.
+ */
+export function buildFontPreferencesFromThemeConfig(
+  config: CustomThemeConfig,
+): FontPreferences {
+  const current = getStoredFontPreferences();
+  return {
+    uiFont: config.fonts.uiFont || current.uiFont,
+    headingFont: config.fonts.headingFont || config.fonts.uiFont || current.headingFont,
+    editorFont: config.fonts.editorFont || current.editorFont,
+    fontSizeInterface: current.fontSizeInterface,
+    fontSizeCode: current.fontSizeCode,
+    fontSizePrompt: current.fontSizePrompt,
+  };
+}
+
 function getSnapshot(): ThemeSnapshot {
   const theme = getStoredPreference();
   const systemDark = theme === "system" ? getSystemDark() : false;
