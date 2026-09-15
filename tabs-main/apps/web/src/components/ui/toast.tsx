@@ -21,6 +21,7 @@ import { buttonVariants } from "~/components/ui/button";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { buildVisibleToastLayout, shouldHideCollapsedToastContent } from "./toast.logic";
 import { useNotificationOverlayAdapter } from "./notificationOverlayAdapter";
+import { recordNotification, maybeFireOsNotification } from "~/stores/notificationStore";
 
 type ThreadToastData = {
   threadId?: ThreadId | null;
@@ -44,7 +45,12 @@ toastManager.add = (options: Parameters<typeof originalToastAdd>[0]): ToastId =>
   // identical. Returning an older toast id would silently discard the newer
   // callback (for example Retry, Approve, or Copy image).
   if (options.actionProps || options.data?.onClose) {
-    return originalToastAdd(options);
+    const id = originalToastAdd(options);
+    const title = typeof options.title === "string" ? options.title : "";
+    const description = typeof options.description === "string" ? options.description : undefined;
+    recordNotification(String(id), options.type ?? "info", title, description);
+    maybeFireOsNotification(options.type ?? "info", title, description);
+    return id;
   }
   const titleStr = typeof options.title === "string" ? options.title : "";
   const descStr = typeof options.description === "string" ? options.description : "";
@@ -55,7 +61,21 @@ toastManager.add = (options: Parameters<typeof originalToastAdd>[0]): ToastId =>
   if (recent && now - recent.timestamp < RECENT_TOAST_DEDUPE_WINDOW_MS) {
     return recent.id;
   }
-  const id = originalToastAdd(options);
+
+  // Apply default auto-dismiss for success/info toasts (7s) unless explicitly set.
+  const type = options.type ?? "info";
+  const shouldAutoDismiss = type === "success" || type === "info";
+  const hasExplicitTimeout =
+    typeof options.timeout === "number" || typeof options.data?.dismissAfterVisibleMs === "number";
+  const patchedOptions =
+    shouldAutoDismiss && !hasExplicitTimeout
+      ? {
+          ...options,
+          data: { ...options.data, dismissAfterVisibleMs: 7_000 },
+        }
+      : options;
+
+  const id = originalToastAdd(patchedOptions);
   recentToastTimestamps.set(key, { id, timestamp: now });
   if (recentToastTimestamps.size > 50) {
     for (const [k, v] of recentToastTimestamps.entries()) {
@@ -64,6 +84,9 @@ toastManager.add = (options: Parameters<typeof originalToastAdd>[0]): ToastId =>
       }
     }
   }
+  // Record in notification history store.
+  recordNotification(String(id), type, titleStr, descStr || undefined);
+  maybeFireOsNotification(type, titleStr, descStr || undefined);
   return id;
 };
 

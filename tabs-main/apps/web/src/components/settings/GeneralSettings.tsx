@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { MinusIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
 import {
   DEFAULT_DESKTOP_ICON_THEME,
@@ -39,6 +39,11 @@ import {
   SettingsSection,
   SettingsSectionHeader,
 } from "./SettingsLayout";
+import {
+  getOsNotificationsEnabled,
+  requestOsNotificationPermission,
+  setOsNotificationsEnabled,
+} from "../../stores/notificationStore";
 
 const DESKTOP_ICON_OPTIONS = [
   {
@@ -70,6 +75,55 @@ const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
 };
 
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
+
+function OsNotificationsToggle() {
+  const [enabled, setEnabled] = useState(() => getOsNotificationsEnabled());
+  const [permissionState, setPermissionState] = useState<NotificationPermission | "unsupported">(
+    () => (typeof Notification === "undefined" ? "unsupported" : Notification.permission),
+  );
+
+  const handleToggle = useCallback(async (checked: boolean) => {
+    if (!checked) {
+      setOsNotificationsEnabled(false);
+      setEnabled(false);
+      return;
+    }
+    if (permissionState === "unsupported") return;
+    if (permissionState === "denied") {
+      toastManager.add({
+        type: "warning",
+        title: "Notifications blocked",
+        description:
+          "System notifications are blocked in your OS settings. Enable them for Tabs in your browser/system notification preferences.",
+      });
+      return;
+    }
+    const granted = await requestOsNotificationPermission();
+    const next = Notification.permission as NotificationPermission;
+    setPermissionState(next);
+    setEnabled(granted);
+  }, [permissionState]);
+
+  if (permissionState === "unsupported") {
+    return (
+      <span className="text-xs text-muted-foreground">Not supported in this environment</span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {permissionState === "denied" && (
+        <span className="text-[11px] text-warning">Blocked by OS</span>
+      )}
+      <Switch
+        checked={enabled && permissionState === "granted"}
+        onCheckedChange={handleToggle}
+        aria-label="Enable system notifications"
+        disabled={permissionState === "denied"}
+      />
+    </div>
+  );
+}
 
 export function GeneralSettings() {
   const resetOnboarding = useResetOnboarding();
@@ -779,6 +833,13 @@ export function GeneralSettings() {
               }}
               aria-label="Confirm before quitting"
             />
+          }
+        />
+        <SettingsRow
+          title="System notifications"
+          description="Show OS-level notifications for errors and warnings, so you're alerted even when Tabs is in the background. Excludes transient watchdog alerts."
+          control={
+            <OsNotificationsToggle />
           }
         />
       </SettingsSection>

@@ -44,8 +44,28 @@ type ThreadStatusInput = Pick<
   "interactionMode" | "latestTurn" | "lastVisitedAt" | "proposedPlans" | "session"
 >;
 
+export function isThreadWorking(
+  thread: Pick<Thread, "session" | "latestTurn">,
+): boolean {
+  if (thread.session?.status === "running" || thread.session?.status === "connecting") {
+    return true;
+  }
+  if (thread.session?.orchestrationStatus === "running") {
+    return true;
+  }
+  if (thread.latestTurn?.state === "running") {
+    return true;
+  }
+  if (thread.latestTurn && !isLatestTurnSettled(thread.latestTurn, thread.session)) {
+    return true;
+  }
+  return false;
+}
+
 export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
+  if (isThreadWorking(thread)) return false;
   if (!thread.latestTurn?.completedAt) return false;
+  if (thread.latestTurn.state && thread.latestTurn.state !== "completed") return false;
   const completedAt = Date.parse(thread.latestTurn.completedAt);
   if (Number.isNaN(completedAt)) return false;
   if (!thread.lastVisitedAt) return true;

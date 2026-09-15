@@ -61,6 +61,7 @@ import {
   ArchiveIcon,
   CheckIcon,
   ArchiveRestoreIcon,
+  BellIcon,
   BugIcon,
   CameraIcon,
   Columns2Icon,
@@ -141,6 +142,7 @@ import {
 import { useAutoRefreshModelsOnStartup } from "../hooks/useAutoRefreshModelsOnStartup";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { composerDraftActions } from "../state/composerDrafts";
+import { useUnreadNotificationCount } from "../stores/notificationStore";
 import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { useAppClosing } from "../hooks/useAppClosing";
@@ -291,6 +293,8 @@ import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
 import { MercuryChromeLoader } from "./MercuryChromeLoader";
 import { Spinner } from "./ui/spinner";
+import { NotificationHistoryPanel } from "./NotificationHistoryPanel";
+import { resolveTabActivityIndicator } from "../lib/tabActivityIndicator";
 import { isSnoozed, isSettled } from "../state/threadLifecycle";
 import { resolveSnoozePresets } from "../state/snoozePresets";
 import { planPinnedMove, planPinnedReorder, sortPinnedThreads } from "../state/pinnedThreadOrder";
@@ -911,12 +915,22 @@ function resolveProjectAgentThreadId(
   return resolved?.id ?? null;
 }
 
+function TitlebarNotificationBell({ onOpenSettings }: { onOpenSettings?: () => void }) {
+  return (
+    <NotificationHistoryPanel
+      variant="titlebar"
+      {...(onOpenSettings ? { onOpenSettings } : {})}
+    />
+  );
+}
+
 function ProjectTabs(props: {
   projects: ReadonlyArray<Project>;
   openProjects: ReadonlyArray<Project>;
   activeProjectId: ProjectId | null;
   pendingTabIds: ReadonlyArray<string>;
   activePendingTabId: string | null;
+  threads?: ReadonlyArray<Thread>;
   onActivateProject: (projectId: ProjectId) => void;
   onCloseProject: (projectId: ProjectId) => void;
   onNewTab: () => void;
@@ -959,6 +973,8 @@ function ProjectTabs(props: {
           if (entry.kind === "project") {
             const { project } = entry;
             const active = project.id === props.activeProjectId && !props.activePendingTabId;
+            const projectThreads = (props.threads ?? []).filter((t) => t.projectId === project.id);
+            const activityIndicator = !active ? resolveTabActivityIndicator(projectThreads) : null;
             return (
               <div
                 key={project.id}
@@ -982,6 +998,17 @@ function ProjectTabs(props: {
                 >
                   {project.name}
                 </button>
+                {activityIndicator && (
+                  <span
+                    className={cn(
+                      "size-2 shrink-0 rounded-full transition-all",
+                      activityIndicator.dotClass,
+                      activityIndicator.pulse && "animate-pulse",
+                    )}
+                    title={activityIndicator.label}
+                    aria-label={activityIndicator.label}
+                  />
+                )}
                 <button
                   type="button"
                   className={cn(
@@ -1058,8 +1085,9 @@ function ProjectTabs(props: {
       </div>
 
       {props.showSettings ? (
-        <div className="no-drag mb-1 flex shrink-0 items-center gap-2">
+        <div className="no-drag mb-1 flex shrink-0 items-center gap-1">
           <div id="project-toolbar-extra-controls" className="flex items-center empty:hidden" />
+          <TitlebarNotificationBell {...(props.onOpenSettings ? { onOpenSettings: props.onOpenSettings } : {})} />
           <Button
             type="button"
             variant="ghost"
@@ -1083,6 +1111,8 @@ function ProjectToolBar(props: {
     kind: ProjectToolKind;
     label: string;
   }>;
+  threads?: ReadonlyArray<Thread>;
+  activeProjectId?: ProjectId | null;
   onSelectTool: (toolId: string) => void;
   onOpenSettings: () => void;
 }) {
@@ -1140,6 +1170,15 @@ function ProjectToolBar(props: {
         <div ref={pillRef} className="active-pill" />
         {props.availableTools.map((tool) => {
           const active = tool.id === props.activeToolId;
+          const isAgentsTool = tool.kind === "agents";
+          const activeProjectThreads =
+            isAgentsTool && !active && props.activeProjectId
+              ? (props.threads ?? []).filter((t) => t.projectId === props.activeProjectId)
+              : [];
+          const toolActivityIndicator =
+            isAgentsTool && !active
+              ? resolveTabActivityIndicator(activeProjectThreads)
+              : null;
           return (
             <button
               key={tool.id}
@@ -1152,6 +1191,17 @@ function ProjectToolBar(props: {
             >
               {toolIcon(tool.kind)}
               <span>{tool.label}</span>
+              {toolActivityIndicator && (
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full ml-1",
+                    toolActivityIndicator.dotClass,
+                    toolActivityIndicator.pulse && "animate-pulse",
+                  )}
+                  title={toolActivityIndicator.label}
+                  aria-label={toolActivityIndicator.label}
+                />
+              )}
             </button>
           );
         })}
@@ -12620,6 +12670,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           activeProjectId={activeProject?.id ?? null}
           pendingTabIds={pendingTabIds}
           activePendingTabId={activePendingTabId}
+          threads={threads}
           onActivateProject={(projectId) => void focusProject(projectId)}
           onCloseProject={(projectId) => {
             const wasActive = workspaceState.session.activeProjectId === projectId;
@@ -12662,6 +12713,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         <ProjectToolBar
           activeToolId={activeTool?.id ?? ""}
           availableTools={availableTools}
+          threads={threads}
+          activeProjectId={activeProject?.id ?? null}
           onSelectTool={(toolId) => void handleSelectTool(toolId)}
           onOpenSettings={openSettings}
         />

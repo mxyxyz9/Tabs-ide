@@ -5,6 +5,7 @@ import {
   ActivityIcon,
   ArrowLeftIcon,
   ArrowUpCircleIcon,
+  BellIcon,
   BookOpenIcon,
   BotIcon,
   DownloadIcon,
@@ -28,6 +29,7 @@ import { SidebarTrigger } from "~/components/ui/sidebar";
 import { toastManager } from "~/components/ui/toast";
 import { SettingsPersistenceStatus } from "~/components/settings/SettingsPersistenceStatus";
 import { SettingsLoadingState } from "~/components/settings/SettingsLoadingState";
+import { useUnreadNotificationCount } from "~/stores/notificationStore";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { refreshServerConfig, useServerConfig } from "~/state/settings";
 import { useSettingsViewState } from "~/state/scopedStateStore";
@@ -58,6 +60,40 @@ export {
   SettingsHeaderPortal,
   SettingsSectionHeader,
 } from "~/components/settings/SettingsLayout";
+
+const NotificationsSettings = lazy(() =>
+  import("~/components/settings/NotificationsSettings").then((m) => ({
+    default: m.NotificationsSettings,
+  })),
+);
+
+import { NotificationHistoryPanel } from "~/components/NotificationHistoryPanel";
+
+function NotificationBellButton({
+  active,
+  onOpenSettings,
+}: {
+  active: boolean;
+  onOpenSettings: () => void;
+}) {
+  return (
+    <NotificationHistoryPanel
+      variant="settings-header"
+      active={active}
+      onOpenSettings={onOpenSettings}
+    />
+  );
+}
+
+function NotificationsBadge() {
+  const unreadCount = useUnreadNotificationCount();
+  if (unreadCount === 0) return null;
+  return (
+    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground tabular-nums">
+      {unreadCount > 99 ? "99+" : unreadCount}
+    </span>
+  );
+}
 
 const GeneralSettings = lazy(() => import("~/components/settings/GeneralSettings"));
 const ThemesSettings = lazy(() => import("~/components/settings/ThemesSettings"));
@@ -107,6 +143,7 @@ const SourceControlSettingsPanel = lazy(() =>
 
 export type SettingsSectionId =
   | "general"
+  | "notifications"
   | "themes"
   | "workspace"
   | "profiles"
@@ -126,6 +163,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   icon: typeof SlidersHorizontalIcon;
 }> = [
   { id: "general", label: "General", icon: SlidersHorizontalIcon },
+  { id: "notifications", label: "Notifications", icon: BellIcon },
   { id: "themes", label: "Themes", icon: PaletteIcon },
   { id: "startup-animation", label: "Animations", icon: MonitorPlayIcon },
   { id: "providers", label: "Providers", icon: BotIcon },
@@ -421,6 +459,10 @@ function SettingsRouteView() {
               </Button>
               <span className="text-sm font-medium text-foreground">Settings</span>
               <div id="settings-header-actions" className="ms-auto flex items-center gap-2">
+                <NotificationBellButton
+                  active={activeSettingsSection === "notifications"}
+                  onOpenSettings={() => setActiveSettingsSection("notifications")}
+                />
                 <SettingsPersistenceStatus />
               </div>
             </div>
@@ -442,6 +484,10 @@ function SettingsRouteView() {
               Settings
             </span>
             <div id="settings-header-actions" className="ms-auto flex items-center gap-2">
+              <NotificationBellButton
+                active={activeSettingsSection === "notifications"}
+                onOpenSettings={() => setActiveSettingsSection("notifications")}
+              />
               <SettingsPersistenceStatus />
             </div>
           </div>
@@ -466,7 +512,10 @@ function SettingsRouteView() {
                     )}
                   >
                     <NavIcon className="size-3.5 shrink-0" />
-                    <span className="capitalize">{item.label}</span>
+                    <span className="capitalize flex-1">{item.label}</span>
+                    {item.id === "notifications" && !active && (
+                      <NotificationsBadge />
+                    )}
                   </button>
                 );
               })}
@@ -482,6 +531,7 @@ function SettingsRouteView() {
                 >
                   <div key={activeSettingsSection} className="tabs-surface-enter">
                     {activeSettingsSection === "general" ? <GeneralSettings /> : null}
+                    {activeSettingsSection === "notifications" ? <NotificationsSettings /> : null}
                     {activeSettingsSection === "themes" ? <ThemesSettings /> : null}
                     {activeSettingsSection === "startup-animation" ? <AnimationsSettings /> : null}
                     {activeSettingsSection === "workspace" ? (
