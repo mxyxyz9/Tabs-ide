@@ -28,7 +28,11 @@ interface MessageQueueState {
   peekNextMessage: (threadId: ThreadId) => QueuedMessage | null;
   peekNextReadyMessage: (threadId: ThreadId, now?: number) => QueuedMessage | null;
   dequeueNextReadyMessage: (threadId: ThreadId, now?: number) => QueuedMessage | null;
-  updateMessageSchedule: (threadId: ThreadId, messageId: string, scheduledFor: string | null) => void;
+  updateMessageSchedule: (
+    threadId: ThreadId,
+    messageId: string,
+    scheduledFor: string | null,
+  ) => void;
   removeQueuedMessage: (threadId: ThreadId, messageId: string) => void;
   clearQueue: (threadId: ThreadId) => void;
   reorderQueue: (threadId: ThreadId, fromIndex: number, toIndex: number) => void;
@@ -100,9 +104,7 @@ export const useMessageQueueStore = create<MessageQueueState>()(
           return {
             queueByThread: {
               ...state.queueByThread,
-              [threadId]: current.map((m) =>
-                m.id === messageId ? { ...m, scheduledFor } : m,
-              ),
+              [threadId]: current.map((m) => (m.id === messageId ? { ...m, scheduledFor } : m)),
             },
           };
         });

@@ -60,7 +60,11 @@ export function recordNotification(
   description?: string,
 ): void {
   const severity: NotificationSeverity =
-    type === "success" || type === "info" || type === "warning" || type === "error" || type === "loading"
+    type === "success" ||
+    type === "info" ||
+    type === "warning" ||
+    type === "error" ||
+    type === "loading"
       ? (type as NotificationSeverity)
       : "info";
 
@@ -320,12 +324,20 @@ export function fireSystemNotification(options: {
   const { title, description, category, recordInHistory = true } = options;
   if (recordInHistory) {
     const severity: NotificationSeverity =
-      category === "error" || category === "warning" || category === "success" || category === "info"
+      category === "error" ||
+      category === "warning" ||
+      category === "success" ||
+      category === "info"
         ? category
         : category === "agent-waiting-input"
           ? "warning"
           : "info";
-    recordNotification(`sys-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, severity, title, description);
+    recordNotification(
+      `sys-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      severity,
+      title,
+      description,
+    );
   }
   maybeFireOsNotification(category, title, description, category);
 }
