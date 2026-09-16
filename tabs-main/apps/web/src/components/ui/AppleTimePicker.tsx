@@ -292,34 +292,32 @@ export const AppleTimePicker = memo(function AppleTimePicker({
 
       // 1 or 2 digits
       const val = rawVal.slice(0, 2);
-      setHourTypingValue(val);
       const num = parseInt(val, 10);
 
       // If user typed 0 as first digit, hold it and wait for second digit (e.g. 01..09)
       if (val === "0") {
+        setHourTypingValue("0");
         return;
       }
 
       if (num >= 1 && num <= 12) {
         setHour(num);
+        setHourTypingValue(val);
         // If single digit 2..9 (cannot have a 2nd digit in 12h clock), or 2 digits typed,
         // automatically jump to minute input and select it
         if (num >= 2 || val.length >= 2) {
           minuteInputRef.current?.focus();
           minuteInputRef.current?.select();
         }
-      } else if (num > 12 && val.length === 2) {
-        // User typed e.g. 1 then 3 (13) -> in 12h clock, hour is 1 and 3 is start of minute!
-        const firstDigit = parseInt(val.charAt(0), 10);
-        const secondDigit = parseInt(val.charAt(1), 10);
-        if (firstDigit >= 1 && firstDigit <= 12) {
-          setHour(firstDigit);
-          setHourTypingValue(String(firstDigit));
-          if (secondDigit >= 0 && secondDigit <= 59) {
-            setMinute(secondDigit);
-            setMinuteTypingValue(String(secondDigit));
-          }
+      } else if (num > 12) {
+        // If user typed into an unselected field (e.g. was 1, typed 3 -> "13"),
+        // the last typed digit is the user's intended new hour!
+        const lastDigit = parseInt(val.charAt(val.length - 1), 10);
+        if (lastDigit >= 1 && lastDigit <= 12) {
+          setHour(lastDigit);
+          setHourTypingValue(String(lastDigit));
           minuteInputRef.current?.focus();
+          minuteInputRef.current?.select();
         }
       }
     },
@@ -334,8 +332,11 @@ export const AppleTimePicker = memo(function AppleTimePicker({
         return;
       }
 
-      // Allow up to 2 digits without premature reformatting
-      const val = rawVal.slice(0, 2);
+      // Handle typing into an unselected field: if length > 2, take the last 2 digits
+      let val = rawVal;
+      if (val.length > 2) {
+        val = val.slice(-2);
+      }
       setMinuteTypingValue(val);
 
       const num = parseInt(val, 10);
@@ -462,6 +463,7 @@ export const AppleTimePicker = memo(function AppleTimePicker({
             value={hourTypingValue}
             onChange={handleHourInputChange}
             onKeyDown={handleHourKeyDown}
+            onClick={(e) => (e.target as HTMLInputElement).select()}
             onFocus={(e) => {
               setIsHourFocused(true);
               e.target.select();
@@ -483,6 +485,7 @@ export const AppleTimePicker = memo(function AppleTimePicker({
             value={minuteTypingValue}
             onChange={handleMinuteInputChange}
             onKeyDown={handleMinuteKeyDown}
+            onClick={(e) => (e.target as HTMLInputElement).select()}
             onFocus={(e) => {
               setIsMinuteFocused(true);
               e.target.select();
@@ -686,33 +689,47 @@ function WheelColumn<T extends number>({
   format,
 }: WheelColumnProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const isUserScrollingRef = useRef(false);
+  const isUserInteractingRef = useRef(false);
+  const userInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedIndex = useMemo(() => {
     return items.indexOf(selectedValue);
   }, [items, selectedValue]);
 
-  // Center selected item smoothly in container
+  // Center selected item smoothly in container when NOT user scrolling
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || isUserScrollingRef.current) return;
+    if (!el || isUserInteractingRef.current) return;
     const targetScrollTop = selectedIndex * ITEM_HEIGHT;
-    el.scrollTo({ top: targetScrollTop, behavior: "smooth" });
+    if (Math.abs(el.scrollTop - targetScrollTop) > 1) {
+      el.scrollTo({ top: targetScrollTop, behavior: "smooth" });
+    }
   }, [selectedIndex]);
+
+  const markUserInteracting = useCallback(() => {
+    isUserInteractingRef.current = true;
+    if (userInteractionTimerRef.current) {
+      clearTimeout(userInteractionTimerRef.current);
+    }
+  }, []);
 
   // Handle scroll events with snapping detection
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    isUserScrollingRef.current = true;
+    // Only process scroll and call onSelect if the user actually initiated the scroll!
+    if (!isUserInteractingRef.current) {
+      return;
+    }
+
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
 
     scrollTimeoutRef.current = setTimeout(() => {
-      isUserScrollingRef.current = false;
+      isUserInteractingRef.current = false;
       const nearestIdx = Math.round(el.scrollTop / ITEM_HEIGHT);
       const clampedIdx = Math.max(0, Math.min(items.length - 1, nearestIdx));
       const nextVal = items[clampedIdx];
@@ -721,13 +738,16 @@ function WheelColumn<T extends number>({
       }
       // Snap exactly to target
       el.scrollTo({ top: clampedIdx * ITEM_HEIGHT, behavior: "smooth" });
-    }, 80);
+    }, 100);
   }, [items, onSelect, selectedValue]);
 
   return (
     <div
       ref={containerRef}
       onScroll={handleScroll}
+      onWheel={markUserInteracting}
+      onPointerDown={markUserInteracting}
+      onTouchStart={markUserInteracting}
       style={{
         paddingTop: `${PADDING_Y}px`,
         paddingBottom: `${PADDING_Y}px`,
