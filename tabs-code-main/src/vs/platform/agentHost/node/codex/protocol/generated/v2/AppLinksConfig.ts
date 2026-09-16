@@ -4,8 +4,12 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/AppToolsConfig.ts
+// Source file: v2/AppLinksConfig.ts
 
 import type { AppToolApproval } from "./AppToolApproval.js";
+import type { ApprovalsReviewer } from "./ApprovalsReviewer.js";
 
-export type AppToolsConfig = { [key in string]?: { enabled: boolean | null, approval_mode: AppToolApproval | null, } };
+/**
+ * Account settings for a single app.
+ */
+export type AppLinksConfig = { [key in string]?: { approvals_reviewer: ApprovalsReviewer | null, default_tools_approval_mode: AppToolApproval | null, } };

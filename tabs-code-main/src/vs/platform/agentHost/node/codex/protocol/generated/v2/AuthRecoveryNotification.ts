@@ -4,6 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/AdditionalNetworkPermissions.ts
+// Source file: v2/AuthRecoveryNotification.ts
 
-export type AdditionalNetworkPermissions = { enabled: boolean | null, };
+export type AuthRecoveryNotification = { threadId: string, turnId: string, provider: string, message: string, };
