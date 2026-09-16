@@ -17,6 +17,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PUPPETEER_SKIP_DOWNLOAD: "true"
 
 jobs:
   preflight:
@@ -180,6 +181,9 @@ jobs:
           # which exhausts 7GB RAM on CI runners and hangs indefinitely.
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
+
+          # Download electron.d.ts types required for workbench compilation (skipped by --ignore-scripts)
+          node --experimental-strip-types build/npm/electronTypes.ts
 
           # Remove cpu-features (optional dependency of ssh2) which fails to compile
           # against modern Electron/V8 due to nan pointer tagging deprecation.

@@ -18,6 +18,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PUPPETEER_SKIP_DOWNLOAD: "true"
 
 jobs:
   resolve:
@@ -101,6 +102,7 @@ jobs:
         run: |
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
+          node --experimental-strip-types build/npm/electronTypes.ts
           # Remove cpu-features (optional dependency of ssh2) which fails to compile
           # against modern Electron/V8 due to nan pointer tagging deprecation.
           rm -rf node_modules/cpu-features
