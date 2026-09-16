@@ -4,6 +4,12 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/SkillsConfigWriteResponse.ts
+// Source file: v2/StrictReviewRequiredNotification.ts
 
-export type SkillsConfigWriteResponse = { effectiveEnabled: boolean, };
+export type StrictReviewRequiredNotification = {
+	threadId: string, turnId: string,
+	/**
+	 * Unix timestamp (in milliseconds) when this review started.
+	 */
+	startedAtMs: number,
+};

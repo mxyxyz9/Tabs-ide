@@ -4,6 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/SkillsConfigWriteResponse.ts
+// Source file: v2/ServerDiagnosticsGauge.ts
 
-export type SkillsConfigWriteResponse = { effectiveEnabled: boolean, };
+export type ServerDiagnosticsGauge = { name: string, value: number, };
