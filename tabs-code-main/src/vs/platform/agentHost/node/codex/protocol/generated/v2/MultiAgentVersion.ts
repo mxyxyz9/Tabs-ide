@@ -4,6 +4,9 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/McpToolCallError.ts
+// Source file: v2/MultiAgentVersion.ts
 
-export type McpToolCallError = { message: string, };
+/**
+ * Multi-agent runtime supported by a model.
+ */
+export type MultiAgentVersion = "disabled" | "v1" | "v2";

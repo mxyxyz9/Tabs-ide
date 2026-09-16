@@ -4,6 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/McpToolCallError.ts
+// Source file: v2/McpServerOauthClientRegistration.ts
 
-export type McpToolCallError = { message: string, };
+export type McpServerOauthClientRegistration = "auto" | "cimd" | "dcr";
