@@ -21,16 +21,65 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 149;
+export const TOTAL_TAGS_COUNT = 150;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.7",
+    title:
+      "Notification history, schedule popover styling, time picker typing, and provider session lifecycle",
+    date: "September 16, 2026",
+    shortDate: "Sep 16",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Dedicated notification history drawer with desktop alert preferences, schedule popover backdrop blur with keyboard time picker typing overhaul, prompt staging panels, and scoped provider event loops.",
+    highlights: [
+      "Persistent notification history drawer with category filtering, sound/badge controls, and desktop overlay synchronization.",
+      "Overhauled schedule popover with backdrop blur and direct keyboard numeric entry for time and date pickers.",
+      "Prompt stash and message queue panels for organizing and sequencing agent commands without interrupting execution.",
+      "Session-scoped provider lifecycles ensuring clean teardown of adapter event loops and background fibers.",
+    ],
+    categories: [
+      {
+        title: "Notifications & Desktop Alerts",
+        items: [
+          "Notifications History drawer with category filters, sound toggles, and auto-dismiss duration controls.",
+          "Desktop native overlay synchronization for real-time alert updates and dismissals.",
+          "Integrated notification settings panel with granular toast and sound preferences.",
+        ],
+      },
+      {
+        title: "Prompt Stash & Scheduling",
+        items: [
+          "Overhauled time picker mechanics: eliminated drum wheel scroll fighting and hour input sticking.",
+          "Added modern backdrop blur styling to schedule dialog popovers.",
+          "Prompt stash and message queue panels for composing and batching agent actions.",
+        ],
+      },
+      {
+        title: "Providers & Session Runtime",
+        items: [
+          "Bound Antigravity, Codex, Copilot, Cursor, Droid, and Grok adapter loops to session scopes.",
+          "Prevented orphan notification fibers and leaked event loops upon session changes.",
+          "Dynamic Codex reasoning effort configuration and resilient Grok model fallback routing.",
+        ],
+      },
+      {
+        title: "Theme Studio & Typography",
+        items: [
+          "Added headingFont customization in Theme Studio with complete export/import sync.",
+          "Polished input decorations, popover backdrops, and active tab indicators.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.6",
     title:
       "Native view notification overlay, persistent editor views, and accessible modal dialogs",
     date: "September 15, 2026",
     shortDate: "Sep 15",
-    isLatest: true,
     type: "feature",
     summary:
       "Topmost native notification overlay above Code-OSS and browser views without detaching or flashing, typed notification IPC with focus restoration, and accessible custom dialogs throughout the UI.",

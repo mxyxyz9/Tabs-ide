@@ -2,6 +2,17 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.7] - 2026-09-16
+
+### Notification history, schedule popover styling, time picker typing, and provider session lifecycle
+
+- **Notification system & history panel**: Added a dedicated Notifications History drawer with category filtering, sound/badge settings, auto-dismiss duration controls, and full synchronization with the desktop native overlay.
+- **Schedule popover & time picker typing overhaul**: Added modern backdrop blur styling to schedule dialogs and completely overhauled time picker input mechanics—eliminating drum wheel scroll fighting and hour input sticking to provide seamless, intuitive keyboard numeric entry.
+- **Prompt stash & message queue panels**: Introduced prompt staging and queue management panels to organize and sequence agent commands without interrupting ongoing execution streams.
+- **Scoped provider session lifecycles**: Bound event loops and notification dispatchers in Antigravity, Codex, Copilot, Cursor, Droid, and Grok adapters directly to the session context scope (`ctx.scope`), preventing orphan fibers and background resource leakage upon session termination.
+- **Dynamic Codex reasoning effort & Grok fallback**: Enabled support for dynamic, server-reported reasoning effort levels across models and added resilient fallback routing for Grok model configurations.
+- **Theme heading font support**: Added custom `headingFont` selection in Theme Studio with full export/import and system font synchronization.
+
 ## [v1.3.6] - 2026-09-15
 
 ### Native view notification overlay, persistent editor views, and accessible modal dialogs
