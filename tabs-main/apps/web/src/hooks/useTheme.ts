@@ -446,9 +446,7 @@ if (typeof window !== "undefined") {
  * merging with the current stored preferences to preserve size settings.
  * Call this after importing a theme to sync the font state into localStorage.
  */
-export function buildFontPreferencesFromThemeConfig(
-  config: CustomThemeConfig,
-): FontPreferences {
+export function buildFontPreferencesFromThemeConfig(config: CustomThemeConfig): FontPreferences {
   const current = getStoredFontPreferences();
   return {
     uiFont: config.fonts.uiFont || current.uiFont,
