@@ -16,12 +16,15 @@ import {
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   clearNotificationHistory,
+  deleteNotifications,
   fireSystemNotification,
   getOsNotificationsEnabled,
   markAllNotificationsRead,
   markNotificationRead,
+  markNotificationsRead,
   requestOsNotificationPermission,
   setOsNotificationCategory,
   setOsNotificationsEnabled,
@@ -72,53 +75,53 @@ const SEVERITY_BG: Record<NotificationSeverity, string> = {
   info: "bg-info/10 border-info/20",
   warning: "bg-warning/10 border-warning/20",
   error: "bg-destructive/10 border-destructive/20",
-  loading: "bg-muted/40 border-border",
+  loading: "bg-muted border-border",
 };
 
-// ─── OS Notification Categories Configuration ─────────────────────────────────
+// ─── Category config items ───────────────────────────────────────────────────
 
-interface CategoryConfigItem {
+interface CategoryItem {
   key: OsNotificationCategory;
   title: string;
   description: string;
   icon: React.FC<{ className?: string }>;
 }
 
-const CATEGORY_ITEMS: CategoryConfigItem[] = [
+const CATEGORY_ITEMS: CategoryItem[] = [
   {
     key: "error",
     title: "Errors & Failures",
-    description: "Alerts for crashed processes, failed runs, and critical errors.",
+    description: "Fatal errors, command crashes, and connection dropped alerts",
     icon: CircleAlertIcon,
   },
   {
     key: "warning",
     title: "Warnings",
-    description: "Alerts for warnings, resource limits, and non-fatal issues.",
+    description: "Rate limit warnings, permission prompts, and recoverable issues",
     icon: TriangleAlertIcon,
   },
   {
     key: "agent-waiting-input",
-    title: "Agent Questions & Input Needed",
-    description: "Alerts when an agent needs user input, confirmation, or answers.",
+    title: "Agent Waiting for Input",
+    description: "When an agent asks you a question or requires approval to proceed",
     icon: HelpCircleIcon,
   },
   {
     key: "agent-turn-complete",
-    title: "Task Completed",
-    description: "Alerts when a background agent completes its turn or task.",
+    title: "Agent Turn Complete",
+    description: "When an agent finishes working on a task while Tabs is in background",
     icon: SparklesIcon,
   },
   {
     key: "info",
     title: "Informational",
-    description: "Alerts for routine background activity and general updates.",
+    description: "Status notices, server sync updates, and configuration applied",
     icon: InfoIcon,
   },
   {
     key: "success",
     title: "Success",
-    description: "Alerts for successful file writes and completed actions.",
+    description: "Task completions, repo sync successes, and saved changes",
     icon: CircleCheckIcon,
   },
 ];
@@ -126,27 +129,32 @@ const CATEGORY_ITEMS: CategoryConfigItem[] = [
 function OsNotificationsSection() {
   const enabled = useOsNotificationsEnabled();
   const categories = useOsNotificationCategories();
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(() =>
-    typeof Notification === "undefined" ? "unsupported" : Notification.permission,
-  );
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setPermission("unsupported");
+    } else {
+      setPermission(Notification.permission);
+    }
+  }, []);
 
   const handleToggleMaster = useCallback(
-    async (checked: boolean) => {
-      if (!checked) {
+    async (next: boolean) => {
+      if (!next) {
         setOsNotificationsEnabled(false);
         return;
       }
-      if (permission === "unsupported" || permission === "denied") {
-        toastManager.add({
-          type: "warning",
-          title: "Notifications blocked",
-          description:
-            "Enable notifications for Tabs in your OS/browser notification settings first.",
-        });
+      if (permission === "granted") {
+        setOsNotificationsEnabled(true);
         return;
       }
       const granted = await requestOsNotificationPermission();
-      setPermission(Notification.permission as NotificationPermission);
+      setPermission(
+        typeof window !== "undefined" && "Notification" in window
+          ? Notification.permission
+          : "unsupported",
+      );
       if (!granted) {
         toastManager.add({
           type: "warning",
@@ -272,6 +280,8 @@ const FILTER_OPTIONS: Array<{ value: FilterType; label: string }> = [
 export function NotificationsSettings() {
   const entries = useNotificationEntries();
   const [filter, setFilter] = useState<FilterType>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // Tick every 30s to refresh relative timestamps
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -279,8 +289,76 @@ export function NotificationsSettings() {
     return () => clearInterval(id);
   }, []);
 
+  // Prune any selectedIds that are no longer in entries
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const valid = new Set<string>();
+      for (const id of prev) {
+        if (entries.some((e) => e.id === id)) valid.add(id);
+      }
+      return valid.size === prev.size ? prev : valid;
+    });
+  }, [entries]);
+
   const filtered = filter === "all" ? entries : entries.filter((e) => e.type === filter);
   const unreadCount = entries.filter((e) => !e.read).length;
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
+  const someFilteredSelected =
+    filtered.some((e) => selectedIds.has(e.id)) && !allFilteredSelected;
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allFilteredSelected) {
+      // Unselect all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const e of filtered) next.delete(e.id);
+        return next;
+      });
+    } else {
+      // Select all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const e of filtered) next.add(e.id);
+        return next;
+      });
+    }
+  }, [allFilteredSelected, filtered]);
+
+  const handleToggleSelectItem = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectedUnreadCount = filtered.filter(
+    (e) => selectedIds.has(e.id) && !e.read,
+  ).length;
+
+  const handleBatchMarkRead = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    markNotificationsRead(selectedIds);
+    toastManager.add({
+      type: "success",
+      title: "Marked as read",
+      description: `Marked ${selectedIds.size} notification${selectedIds.size === 1 ? "" : "s"} as read.`,
+    });
+  }, [selectedIds]);
+
+  const handleBatchDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    deleteNotifications(selectedIds);
+    setSelectedIds(new Set());
+    toastManager.add({
+      type: "success",
+      title: "Notifications deleted",
+      description: `Removed selected notifications from history.`,
+    });
+  }, [selectedIds]);
 
   return (
     <div className="space-y-6">
@@ -307,49 +385,106 @@ export function NotificationsSettings() {
       <SettingsSection title="Notification History">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border/60">
-          {/* Filter chips */}
-          <div className="flex items-center gap-1 flex-wrap">
-            {FILTER_OPTIONS.map((opt) => {
-              const count =
-                opt.value === "all"
-                  ? entries.length
-                  : entries.filter((e) => e.type === opt.value).length;
-              if (opt.value !== "all" && count === 0) return null;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setFilter(opt.value)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer",
-                    filter === opt.value
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )}
+          {/* Filter chips & Select all */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {filtered.length > 0 && (
+              <div className="flex items-center gap-2 pr-2 border-r border-border/60">
+                <Checkbox
+                  checked={allFilteredSelected}
+                  indeterminate={someFilteredSelected}
+                  onCheckedChange={handleToggleSelectAll}
+                  aria-label="Select all visible notifications"
+                  className="cursor-pointer"
+                />
+                <span
+                  onClick={handleToggleSelectAll}
+                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer select-none font-medium"
                 >
-                  {opt.label}
-                  <span
+                  Select all
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1 flex-wrap">
+              {FILTER_OPTIONS.map((opt) => {
+                const count =
+                  opt.value === "all"
+                    ? entries.length
+                    : entries.filter((e) => e.type === opt.value).length;
+                if (opt.value !== "all" && count === 0) return null;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setFilter(opt.value)}
                     className={cn(
-                      "tabular-nums text-[10px]",
-                      filter === opt.value ? "opacity-80" : "opacity-60",
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer",
+                      filter === opt.value
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
                     )}
                   >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                    {opt.label}
+                    <span
+                      className={cn(
+                        "tabular-nums text-[10px]",
+                        filter === opt.value ? "opacity-80" : "opacity-60",
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Actions */}
-          {entries.length > 0 && (
+          {selectedIds.size > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-foreground mr-1 tabular-nums">
+                {selectedIds.size} selected
+              </span>
+              {selectedUnreadCount > 0 && (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={handleBatchMarkRead}
+                  className="gap-1.5 text-xs cursor-pointer"
+                  type="button"
+                >
+                  <CheckCheckIcon className="size-3" />
+                  Mark read ({selectedUnreadCount})
+                </Button>
+              )}
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={handleBatchDelete}
+                className="gap-1.5 text-xs text-muted-foreground hover:text-destructive cursor-pointer"
+                type="button"
+              >
+                <TrashIcon className="size-3" />
+                Delete ({selectedIds.size})
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                type="button"
+              >
+                Deselect
+              </Button>
+            </div>
+          ) : entries.length > 0 ? (
             <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <Button
                   size="xs"
                   variant="ghost"
                   onClick={() => markAllNotificationsRead()}
-                  className="text-muted-foreground hover:text-foreground gap-1.5"
+                  className="text-muted-foreground hover:text-foreground gap-1.5 cursor-pointer"
                   type="button"
                 >
                   <CheckCheckIcon className="size-3.5" />
@@ -360,14 +495,14 @@ export function NotificationsSettings() {
                 size="xs"
                 variant="ghost"
                 onClick={() => clearNotificationHistory()}
-                className="text-muted-foreground hover:text-destructive gap-1.5"
+                className="text-muted-foreground hover:text-destructive gap-1.5 cursor-pointer"
                 type="button"
               >
                 <TrashIcon className="size-3.5" />
                 Clear all
               </Button>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* List */}
@@ -399,20 +534,32 @@ export function NotificationsSettings() {
               const Icon = SEVERITY_ICONS[entry.type];
               const iconColor = SEVERITY_COLORS[entry.type];
               const bgClass = SEVERITY_BG[entry.type];
+              const isSelected = selectedIds.has(entry.id);
 
               return (
                 <div
                   key={entry.id}
+                  onClick={() => handleToggleSelectItem(entry.id)}
                   className={cn(
-                    "group relative flex items-start gap-3.5 px-4 py-3.5 transition-colors",
-                    !entry.read && "bg-primary/[0.02]",
+                    "group relative flex items-start gap-3.5 px-4 py-3.5 transition-colors cursor-pointer select-none",
+                    isSelected ? "bg-accent/60" : !entry.read ? "bg-primary/[0.02]" : "",
                     "hover:bg-accent/40",
                   )}
                 >
-                  {/* Unread indicator */}
+                  {/* Selection Checkbox */}
+                  <div className="mt-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => handleToggleSelectItem(entry.id)}
+                      aria-label={`Select notification ${entry.title}`}
+                      className="cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Unread indicator dot */}
                   {!entry.read && (
                     <span
-                      className="absolute left-1.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-primary"
+                      className="absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-primary"
                       title="Unread"
                     />
                   )}
@@ -457,7 +604,10 @@ export function NotificationsSettings() {
                   </div>
 
                   {/* Timestamp & actions */}
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div
+                    className="flex shrink-0 items-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <time
                       className="text-[11px] tabular-nums text-muted-foreground/60"
                       dateTime={new Date(entry.timestamp).toISOString()}
@@ -470,7 +620,7 @@ export function NotificationsSettings() {
                       <button
                         type="button"
                         onClick={() => markNotificationRead(entry.id)}
-                        className="opacity-0 group-hover:opacity-100 text-[11px] text-primary hover:underline transition-opacity cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 text-[11px] text-primary hover:underline transition-opacity cursor-pointer font-medium"
                       >
                         Mark read
                       </button>

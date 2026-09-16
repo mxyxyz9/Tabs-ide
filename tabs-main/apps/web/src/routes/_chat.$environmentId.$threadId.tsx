@@ -3,13 +3,7 @@ import { createFileRoute, retainSearchParams, useNavigate } from "@tanstack/reac
 import { Suspense, lazy, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import ChatView from "../components/ChatView";
-import { DiffWorkerPoolProvider } from "../components/DiffWorkerPoolProvider";
-import {
-  DiffPanelHeaderSkeleton,
-  DiffPanelLoadingState,
-  DiffPanelShell,
-  type DiffPanelMode,
-} from "../components/DiffPanelShell";
+import { RightPanelTabs } from "../components/RightPanelTabs";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { composerDraftsAtom, scopedComposerThreadId } from "../state/composerDrafts";
 import { threadsAtom, threadsHydratedAtom } from "../state/threads";
@@ -23,7 +17,6 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { Sheet, SheetPopup } from "../components/ui/sheet";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
-const DiffPanel = lazy(() => import("../components/DiffPanel"));
 const DIFF_INLINE_LAYOUT_MEDIA_QUERY = "(max-width: 1180px)";
 const DIFF_INLINE_SIDEBAR_WIDTH_STORAGE_KEY = "chat_diff_sidebar_width";
 const DIFF_INLINE_DEFAULT_WIDTH = "clamp(28rem,48vw,44rem)";
@@ -56,31 +49,17 @@ const DiffPanelSheet = (props: {
   );
 };
 
-const DiffLoadingFallback = (props: { mode: DiffPanelMode }) => {
-  return (
-    <DiffPanelShell mode={props.mode} header={<DiffPanelHeaderSkeleton />}>
-      <DiffPanelLoadingState label="Loading diff viewer..." />
-    </DiffPanelShell>
-  );
-};
 
-const LazyDiffPanel = (props: { mode: DiffPanelMode }) => {
-  return (
-    <DiffWorkerPoolProvider>
-      <Suspense fallback={<DiffLoadingFallback mode={props.mode} />}>
-        <DiffPanel mode={props.mode} />
-      </Suspense>
-    </DiffWorkerPoolProvider>
-  );
-};
 
 const DiffPanelInlineSidebar = (props: {
   diffOpen: boolean;
   onCloseDiff: () => void;
   onOpenDiff: () => void;
   renderDiffContent: boolean;
+  threadId?: ThreadId;
+  environmentId?: EnvironmentId;
 }) => {
-  const { diffOpen, onCloseDiff, onOpenDiff, renderDiffContent } = props;
+  const { diffOpen, onCloseDiff, onOpenDiff, renderDiffContent, threadId, environmentId } = props;
   const onOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
@@ -91,6 +70,18 @@ const DiffPanelInlineSidebar = (props: {
     },
     [onCloseDiff, onOpenDiff],
   );
+
+  useEffect(() => {
+    if (!diffOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onCloseDiff();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [diffOpen, onCloseDiff]);
+
   const shouldAcceptInlineSidebarWidth = useCallback(
     ({ nextWidth, wrapper }: { nextWidth: number; wrapper: HTMLElement }) => {
       const composerForm = document.querySelector<HTMLElement>("[data-chat-composer-form='true']");
@@ -126,39 +117,61 @@ const DiffPanelInlineSidebar = (props: {
       const overflowsViewport = formRect.width > viewportContentWidth + 0.5;
       const violatesMinimumComposerWidth = composerForm.clientWidth + 0.5 < minimumComposerWidth;
 
-      if (previousSidebarWidth.length > 0) {
+      const availableLeftControlsWidth =
+        formRect.width - composerRightActionsWidth - composerFooterGap;
+      const willFit =
+        viewportContentWidth >= 280 &&
+        availableLeftControlsWidth >= COMPOSER_COMPACT_MIN_LEFT_CONTROLS_WIDTH_PX;
+
+      if (!willFit) {
         wrapper.style.setProperty("--sidebar-width", previousSidebarWidth);
-      } else {
-        wrapper.style.removeProperty("--sidebar-width");
+        return false;
       }
 
-      return !hasComposerOverflow && !overflowsViewport && !violatesMinimumComposerWidth;
+      return true;
     },
     [],
   );
 
   return (
-    <SidebarProvider
-      defaultOpen={false}
-      open={diffOpen}
-      onOpenChange={onOpenChange}
-      className="w-auto min-h-0 flex-none bg-transparent"
-      style={{ "--sidebar-width": DIFF_INLINE_DEFAULT_WIDTH } as React.CSSProperties}
-    >
-      <Sidebar
-        side="right"
-        collapsible="offcanvas"
-        className="border-l border-border bg-card text-foreground"
-        resizable={{
-          minWidth: DIFF_INLINE_SIDEBAR_MIN_WIDTH,
-          shouldAcceptWidth: shouldAcceptInlineSidebarWidth,
-          storageKey: DIFF_INLINE_SIDEBAR_WIDTH_STORAGE_KEY,
-        }}
+    <>
+      {diffOpen && (
+        <div
+          role="presentation"
+          aria-hidden="true"
+          onClick={onCloseDiff}
+          className="fixed inset-0 z-20 bg-background/20 dark:bg-black/40 backdrop-blur-sm transition-opacity duration-200 animate-in fade-in cursor-pointer"
+        />
+      )}
+      <SidebarProvider
+        defaultOpen={false}
+        open={diffOpen}
+        onOpenChange={onOpenChange}
+        className="w-auto min-h-0 flex-none bg-transparent"
+        style={{ "--sidebar-width": DIFF_INLINE_DEFAULT_WIDTH } as React.CSSProperties}
       >
-        {renderDiffContent ? <LazyDiffPanel mode="sidebar" /> : null}
-        <SidebarRail />
-      </Sidebar>
-    </SidebarProvider>
+        <Sidebar
+          side="right"
+          collapsible="offcanvas"
+          className="border-l border-border bg-card text-foreground z-30 shadow-2xl"
+          resizable={{
+            minWidth: DIFF_INLINE_SIDEBAR_MIN_WIDTH,
+            shouldAcceptWidth: shouldAcceptInlineSidebarWidth,
+            storageKey: DIFF_INLINE_SIDEBAR_WIDTH_STORAGE_KEY,
+          }}
+        >
+          {renderDiffContent ? (
+            <RightPanelTabs
+              mode="sidebar"
+              threadId={threadId}
+              environmentId={environmentId}
+              onClose={onCloseDiff}
+            />
+          ) : null}
+          <SidebarRail />
+        </Sidebar>
+      </SidebarProvider>
+    </>
   );
 };
 
@@ -245,6 +258,8 @@ function ChatThreadRouteView() {
           onCloseDiff={closeDiff}
           onOpenDiff={openDiff}
           renderDiffContent={shouldRenderDiffContent}
+          threadId={threadId}
+          environmentId={environmentId}
         />
       </>
     );
@@ -260,7 +275,14 @@ function ChatThreadRouteView() {
         />
       </div>
       <DiffPanelSheet diffOpen={diffOpen} onCloseDiff={closeDiff}>
-        {shouldRenderDiffContent ? <LazyDiffPanel mode="sheet" /> : null}
+        {shouldRenderDiffContent ? (
+          <RightPanelTabs
+            mode="sheet"
+            threadId={threadId}
+            environmentId={environmentId}
+            onClose={closeDiff}
+          />
+        ) : null}
       </DiffPanelSheet>
     </>
   );

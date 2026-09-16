@@ -15,7 +15,7 @@ export interface NotificationEntry {
   readonly title: string;
   readonly description?: string;
   readonly timestamp: number;
-  read: boolean;
+  readonly read: boolean;
 }
 
 const MAX_HISTORY = 100;
@@ -69,7 +69,8 @@ export function recordNotification(
   if (existing !== -1) {
     const prev = entries[existing];
     if (!prev) return; // Narrow undefined (noUncheckedIndexedAccess guard)
-    entries[existing] = {
+    const updated = [...entries];
+    updated[existing] = {
       id: prev.id,
       type: severity,
       title,
@@ -77,6 +78,7 @@ export function recordNotification(
       timestamp: prev.timestamp,
       read: prev.read,
     };
+    entries = updated;
     persistToSession();
     emit();
     return;
@@ -96,24 +98,51 @@ export function recordNotification(
   emit();
 }
 
-/** Mark a single notification as read. */
+/** Mark a single notification as read immutably so useSyncExternalStore re-renders. */
 export function markNotificationRead(id: string): void {
-  const entry = entries.find((e) => e.id === id);
-  if (!entry || entry.read) return;
-  entry.read = true;
+  const target = entries.find((e) => e.id === id);
+  if (!target || target.read) return;
+  entries = entries.map((e) => (e.id === id ? { ...e, read: true } : e));
   persistToSession();
   emit();
 }
 
-/** Mark all notifications as read. */
+/** Mark multiple notifications as read immutably. */
+export function markNotificationsRead(ids: readonly string[] | ReadonlySet<string>): void {
+  const idSet = ids instanceof Set ? ids : new Set(ids);
+  let changed = false;
+  entries = entries.map((e) => {
+    if (idSet.has(e.id) && !e.read) {
+      changed = true;
+      return { ...e, read: true };
+    }
+    return e;
+  });
+  if (!changed) return;
+  persistToSession();
+  emit();
+}
+
+/** Delete specific notifications by IDs. */
+export function deleteNotifications(ids: readonly string[] | ReadonlySet<string>): void {
+  const idSet = ids instanceof Set ? ids : new Set(ids);
+  const beforeLen = entries.length;
+  entries = entries.filter((e) => !idSet.has(e.id));
+  if (entries.length === beforeLen) return;
+  persistToSession();
+  emit();
+}
+
+/** Mark all notifications as read immutably. */
 export function markAllNotificationsRead(): void {
   let changed = false;
-  for (const entry of entries) {
-    if (!entry.read) {
-      entry.read = true;
+  entries = entries.map((e) => {
+    if (!e.read) {
       changed = true;
+      return { ...e, read: true };
     }
-  }
+    return e;
+  });
   if (!changed) return;
   persistToSession();
   emit();

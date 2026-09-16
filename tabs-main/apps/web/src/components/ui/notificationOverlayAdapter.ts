@@ -5,6 +5,7 @@ import type {
   NotificationToastPayload,
   NotificationToastType,
 } from "@tabs/contracts";
+import { markNotificationRead } from "~/stores/notificationStore";
 
 /**
  * Extracts plain text safely from React nodes, strings, numbers, or arrays.
@@ -149,6 +150,7 @@ export function handleNotificationOverlayDismiss(
   if (matchingToast) {
     matchingToast.data?.onClose?.();
     manager.close(String(matchingToast.id));
+    markNotificationRead(String(matchingToast.id));
     return true;
   }
   return false;

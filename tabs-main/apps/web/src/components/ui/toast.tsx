@@ -62,7 +62,7 @@ toastManager.add = (options: Parameters<typeof originalToastAdd>[0]): ToastId =>
     return recent.id;
   }
 
-  // Apply default auto-dismiss for success/info toasts (7s) unless explicitly set.
+  // Apply default auto-dismiss for success/info toasts (5s) unless explicitly set.
   const type = options.type ?? "info";
   const shouldAutoDismiss = type === "success" || type === "info";
   const hasExplicitTimeout =
@@ -71,7 +71,8 @@ toastManager.add = (options: Parameters<typeof originalToastAdd>[0]): ToastId =>
     shouldAutoDismiss && !hasExplicitTimeout
       ? {
           ...options,
-          data: { ...options.data, dismissAfterVisibleMs: 7_000 },
+          timeout: 5_000,
+          data: { ...options.data, dismissAfterVisibleMs: 5_000 },
         }
       : options;
 
@@ -164,9 +165,21 @@ function useActiveThreadIdFromRoute(): ThreadId | null {
 function ThreadToastVisibleAutoDismiss({
   toastId,
   dismissAfterVisibleMs,
+  respectFocus = true,
 }: {
   toastId: ToastId;
   dismissAfterVisibleMs: number | undefined;
+  /**
+   * When true (default), the countdown pauses while the window doesn't have
+   * focus or the tab is hidden — correct for in-DOM toasts in a browser tab.
+   *
+   * Set to false in the Electron desktop-overlay path: the VS Code
+   * WebContentsView (Code-OSS) composites above the React renderer and
+   * permanently steals window focus, so `document.hasFocus()` is always false
+   * and the timer would never start. With respectFocus=false the countdown
+   * runs unconditionally.
+   */
+  respectFocus?: boolean;
 }) {
   useEffect(() => {
     if (!dismissAfterVisibleMs || dismissAfterVisibleMs <= 0) return;
@@ -213,6 +226,16 @@ function ThreadToastVisibleAutoDismiss({
       }, remainingMs);
     };
 
+    if (!respectFocus) {
+      // In the Electron overlay path, ignore focus/visibility entirely and
+      // let the countdown run unconditionally.
+      start();
+      return () => {
+        pause();
+        clearTimer();
+      };
+    }
+
     const syncTimer = () => {
       const shouldRun = document.visibilityState === "visible" && document.hasFocus();
       if (shouldRun) {
@@ -234,7 +257,7 @@ function ThreadToastVisibleAutoDismiss({
       pause();
       clearTimer();
     };
-  }, [dismissAfterVisibleMs, toastId]);
+  }, [dismissAfterVisibleMs, respectFocus, toastId]);
 
   return null;
 }
@@ -248,11 +271,27 @@ function ToastProvider({ children, position = "top-right", ...props }: ToastProv
   );
 }
 
+function resolveToastAutoDismissDuration(toast: {
+  data?: ThreadToastData | undefined;
+  timeout?: number | undefined;
+  type?: string | undefined;
+}): number | undefined {
+  if (toast.type === "loading") return undefined;
+  if (typeof toast.data?.dismissAfterVisibleMs === "number") {
+    return toast.data.dismissAfterVisibleMs;
+  }
+  if (typeof toast.timeout === "number" && toast.timeout > 0) {
+    return toast.timeout;
+  }
+  return 5_000;
+}
+
 function Toasts({ position = "top-right" }: { position: ToastPosition }) {
   const { toasts } = Toast.useToastManager<ThreadToastData>();
   const activeThreadId = useActiveThreadIdFromRoute();
   const isTop = position.startsWith("top");
   const visibleToasts = toasts.filter((toast) =>
+    (toast as { transitionStatus?: string }).transitionStatus !== "ending" &&
     shouldRenderForActiveThread(toast.data, activeThreadId),
   );
   const isDesktopOverlayActive = useNotificationOverlayAdapter(visibleToasts, toastManager);
@@ -271,9 +310,14 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
       <>
         {visibleToasts.map((toast) => (
           <ThreadToastVisibleAutoDismiss
-            dismissAfterVisibleMs={toast.data?.dismissAfterVisibleMs}
+            dismissAfterVisibleMs={resolveToastAutoDismissDuration(toast)}
             key={toast.id}
             toastId={toast.id}
+            // The Electron desktop overlay runs in a separate WebContentsView.
+            // Code-OSS composites above the main renderer and permanently
+            // holds focus → document.hasFocus() is always false → the normal
+            // focus-aware timer never starts. Bypass focus checks here.
+            respectFocus={false}
           />
         ))}
       </>
@@ -384,7 +428,7 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
               toast={toast}
             >
               <ThreadToastVisibleAutoDismiss
-                dismissAfterVisibleMs={toast.data?.dismissAfterVisibleMs}
+                dismissAfterVisibleMs={resolveToastAutoDismissDuration(toast)}
                 toastId={toast.id}
               />
               <Toast.Content

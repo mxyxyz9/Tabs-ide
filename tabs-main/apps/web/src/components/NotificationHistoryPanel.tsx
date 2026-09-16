@@ -110,11 +110,7 @@ export function NotificationHistoryPanel({
 
   const handleToggle = useCallback(() => {
     setOpen((v) => !v);
-    if (!open) {
-      // Mark all as read when opening popup
-      markAllNotificationsRead();
-    }
-  }, [open]);
+  }, []);
 
   const handleOpenSettings = useCallback(() => {
     setOpen(false);

@@ -1,12 +1,14 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   clearNotificationHistory,
+  deleteNotifications,
   getNotificationEntries,
   getOsNotificationCategories,
   getOsNotificationsEnabled,
   getUnreadNotificationCount,
   markAllNotificationsRead,
   markNotificationRead,
+  markNotificationsRead,
   recordNotification,
   setOsNotificationCategory,
   setOsNotificationsEnabled,
@@ -56,23 +58,51 @@ describe("notificationStore", () => {
     expect(entry?.read).toBe(false);
   });
 
-  it("marks notification as read", () => {
+  it("marks notification as read immutably with new array reference", () => {
     recordNotification("toast-1", "warning", "Disk full");
+    const beforeEntries = getNotificationEntries();
     expect(getUnreadNotificationCount()).toBe(1);
 
     markNotificationRead("toast-1");
+    const afterEntries = getNotificationEntries();
+    expect(afterEntries).not.toBe(beforeEntries); // Immutable reference change for useSyncExternalStore
     expect(getUnreadNotificationCount()).toBe(0);
-    expect(getNotificationEntries()[0]?.read).toBe(true);
+    expect(afterEntries[0]?.read).toBe(true);
   });
 
-  it("marks all notifications as read", () => {
+  it("marks all notifications as read immutably with new array reference", () => {
     recordNotification("toast-1", "error", "Error 1");
     recordNotification("toast-2", "warning", "Warning 2");
+    const beforeEntries = getNotificationEntries();
     expect(getUnreadNotificationCount()).toBe(2);
 
     markAllNotificationsRead();
+    const afterEntries = getNotificationEntries();
+    expect(afterEntries).not.toBe(beforeEntries);
     expect(getUnreadNotificationCount()).toBe(0);
-    expect(getNotificationEntries().every((e) => e.read)).toBe(true);
+    expect(afterEntries.every((e) => e.read)).toBe(true);
+  });
+
+  it("marks subset of notifications as read with markNotificationsRead", () => {
+    recordNotification("toast-1", "error", "Error 1");
+    recordNotification("toast-2", "warning", "Warning 2");
+    recordNotification("toast-3", "info", "Info 3");
+
+    markNotificationsRead(["toast-1", "toast-3"]);
+    expect(getUnreadNotificationCount()).toBe(1);
+    const entries = getNotificationEntries();
+    expect(entries.find((e) => e.id === "toast-1")?.read).toBe(true);
+    expect(entries.find((e) => e.id === "toast-2")?.read).toBe(false);
+    expect(entries.find((e) => e.id === "toast-3")?.read).toBe(true);
+  });
+
+  it("deletes notifications by ids with deleteNotifications", () => {
+    recordNotification("toast-1", "error", "Error 1");
+    recordNotification("toast-2", "warning", "Warning 2");
+
+    deleteNotifications(["toast-1"]);
+    expect(getNotificationEntries()).toHaveLength(1);
+    expect(getNotificationEntries()[0]?.id).toBe("toast-2");
   });
 
   it("deduplicates notifications by id", () => {

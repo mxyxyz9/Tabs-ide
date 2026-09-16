@@ -130,14 +130,17 @@ import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   ArchiveIcon,
   BookmarkIcon,
+  BookmarkPlusIcon,
   BotIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  ClockIcon,
   FileTextIcon,
   ImageIcon,
+  ListOrderedIcon,
   ListTodoIcon,
   LockIcon,
   LockOpenIcon,
@@ -147,9 +150,16 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
+import {
+  useMessageQueueStore,
+  getThreadQueuedMessages,
+} from "../stores/messageQueueStore";
+import { useRightPanelStore, type RightPanelTab } from "../stores/rightPanelStore";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
+import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
+import { AppleTimePicker } from "./ui/AppleTimePicker";
 import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { toastManager } from "./ui/toast";
@@ -715,13 +725,44 @@ export default function ChatView({
   const removeStashedPrompt = usePromptStashStore((state) => state.remove);
   const clearPromptStash = usePromptStashStore((state) => state.clear);
 
+  const queueByThread = useMessageQueueStore((state) => state.queueByThread);
+  const enqueueMessage = useMessageQueueStore((state) => state.enqueueMessage);
+  const dequeueMessage = useMessageQueueStore((state) => state.dequeueMessage);
+  const peekNextMessage = useMessageQueueStore((state) => state.peekNextMessage);
+  const peekNextReadyMessage = useMessageQueueStore((state) => state.peekNextReadyMessage);
+  const dequeueNextReadyMessage = useMessageQueueStore((state) => state.dequeueNextReadyMessage);
+  const clearThreadQueue = useMessageQueueStore((state) => state.clearQueue);
+  const threadQueuedMessages = getThreadQueuedMessages(queueByThread, threadId);
+  const [isSchedulePopoverOpen, setIsSchedulePopoverOpen] = useState(false);
+  const [isIdleSchedulePopoverOpen, setIsIdleSchedulePopoverOpen] = useState(false);
+  const [isStuck, setIsStuck] = useState(false);
+  const interruptAttemptedAtRef = useRef<number | null>(null);
+  const stuckTimerRef = useRef<number | null>(null);
+
+  const openRightPanelSurface = useCallback(
+    (surface: RightPanelTab) => {
+      if (compact || !environmentId) return;
+      useRightPanelStore.getState().setActiveTab(surface);
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: { environmentId, threadId },
+        replace: true,
+        search: (previous) => {
+          const rest = stripDiffSearchParams(previous);
+          return { ...rest, diff: "1" };
+        },
+      });
+    },
+    [compact, environmentId, navigate, threadId],
+  );
+
   const stashCurrentPrompt = useCallback(async () => {
     const trimmed = prompt.trim();
     if (!trimmed && composerImages.length === 0 && composerFiles.length === 0) {
       if (promptStashEntries.length === 1 && promptStashEntries[0]) {
         await restoreStashedPrompt(promptStashEntries[0].id);
       } else {
-        setIsStashMenuOpen((open) => !open);
+        openRightPanelSurface("stash");
       }
       return false;
     }
@@ -868,6 +909,63 @@ export default function ChatView({
       description: "All stashed prompts have been removed.",
     });
   }, [clearPromptStash, environmentId]);
+
+  const onQueueMessage = useCallback(
+    (scheduledFor?: string | null) => {
+      if (!threadId) return;
+      const promptForQueue = promptRef.current;
+      const {
+        trimmedPrompt: trimmed,
+        sendableTerminalContexts,
+        hasSendableContent,
+      } = deriveComposerSendState({
+        prompt: promptForQueue,
+        imageCount: composerImages.length,
+        fileCount: composerFiles.length,
+        contextCount: composerPreviewAnnotations.length,
+        terminalContexts: composerTerminalContexts,
+      });
+
+      if (!hasSendableContent) return;
+
+      enqueueMessage({
+        id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        threadId,
+        environmentId,
+        text: trimmed,
+        terminalContextIds: sendableTerminalContexts.map((c) => c.id),
+        createdAt: new Date().toISOString(),
+        scheduledFor: scheduledFor ?? undefined,
+      });
+
+      // Reset composer
+      promptRef.current = "";
+      setPrompt("");
+      clearComposerDraftContent(threadId);
+      setComposerHighlightedItemId(null);
+      setComposerCursor(0);
+      setComposerTrigger(null);
+
+      toastManager.add({
+        type: "info",
+        title: scheduledFor ? "Message scheduled" : "Message queued",
+        description: scheduledFor
+          ? `Will dispatch on ${new Date(scheduledFor).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
+          : "Will send automatically when the active turn completes.",
+      });
+    },
+    [
+      clearComposerDraftContent,
+      composerFiles.length,
+      composerImages.length,
+      composerPreviewAnnotations.length,
+      composerTerminalContexts,
+      enqueueMessage,
+      environmentId,
+      setPrompt,
+      threadId,
+    ],
+  );
   const addComposerImage = useCallback(
     (image: ComposerImageAttachment) => {
       addComposerDraftImage(threadId, image);
@@ -3838,9 +3936,149 @@ export default function ChatView({
     }
   };
 
+  const isAutoDispatchingRef = useRef(false);
+  const [scheduleTick, setScheduleTick] = useState(0);
+
+  // Periodic tick for scheduled messages in queue
+  useEffect(() => {
+    const hasScheduled = threadQueuedMessages.some((m) => Boolean(m.scheduledFor));
+    if (!hasScheduled) return;
+
+    const interval = window.setInterval(() => {
+      setScheduleTick((t) => t + 1);
+    }, 4000);
+
+    return () => window.clearInterval(interval);
+  }, [threadQueuedMessages]);
+
+  // Auto-dispatch queued messages when turn completes or scheduled time arrives
+  useEffect(() => {
+    if (!activeThread?.id) return;
+
+    // latestTurnSettled is false when there has never been a turn (activeLatestTurn
+    // is null). A fresh thread with no history is still eligible for dispatch, so
+    // allow it through when activeLatestTurn is null and the thread isn't running.
+    const canDispatch = latestTurnSettled || (!activeLatestTurn && phase !== "running");
+    if (!canDispatch) return;
+
+    if (
+      phase === "running" ||
+      isSendBusy ||
+      isConnecting ||
+      sendInFlightRef.current ||
+      isAutoDispatchingRef.current
+    ) {
+      return;
+    }
+    if (activePendingApproval || activePendingProgress) return;
+    if (activeThread.error) return;
+
+    const nextReady = peekNextReadyMessage(activeThread.id);
+    if (!nextReady) return;
+
+    // Mark as dispatching immediately (synchronously) to prevent a concurrent
+    // effect re-run from also dequeuing while we wait for the 80ms timeout.
+    isAutoDispatchingRef.current = true;
+
+    const threadIdForDispatch = activeThread.id;
+    const timer = window.setTimeout(() => {
+      // Re-check guards inside the timeout to handle the case where the
+      // component re-renders or a user-initiated send started in the gap.
+      if (sendInFlightRef.current) {
+        isAutoDispatchingRef.current = false;
+        return;
+      }
+
+      const dequeued = dequeueNextReadyMessage(threadIdForDispatch);
+      if (!dequeued) {
+        isAutoDispatchingRef.current = false;
+        return;
+      }
+
+      promptRef.current = dequeued.text;
+      setPrompt(dequeued.text);
+
+      toastManager.add({
+        type: "info",
+        title: dequeued.scheduledFor
+          ? "Dispatching scheduled message"
+          : "Dispatching queued message",
+        description:
+          dequeued.text.length > 50 ? `${dequeued.text.slice(0, 50)}...` : dequeued.text,
+      });
+
+      void onSend().finally(() => {
+        isAutoDispatchingRef.current = false;
+      });
+    }, 80);
+
+    return () => {
+      window.clearTimeout(timer);
+      isAutoDispatchingRef.current = false;
+    };
+  }, [
+    activePendingApproval,
+    activePendingProgress,
+    activeLatestTurn,
+    activeThread?.error,
+    activeThread?.id,
+    dequeueNextReadyMessage,
+    isConnecting,
+    isSendBusy,
+    latestTurnSettled,
+    onSend,
+    peekNextReadyMessage,
+    phase,
+    scheduleTick,
+    setPrompt,
+  ]);
+
   const onInterrupt = async () => {
     const api = threadApi;
     if (!api || !activeThread) return;
+
+    // Double-click escape hatch: if user clicks stop again within 15s while waiting,
+    // force stop the session immediately
+    if (
+      interruptAttemptedAtRef.current !== null &&
+      Date.now() - interruptAttemptedAtRef.current < 15_000
+    ) {
+      try {
+        await api.orchestration.dispatchCommand({
+          type: "thread.session.stop",
+          commandId: newCommandId(),
+          threadId: activeThread.id,
+          createdAt: new Date().toISOString(),
+        });
+        setIsStuck(false);
+        interruptAttemptedAtRef.current = null;
+        if (stuckTimerRef.current !== null) {
+          window.clearTimeout(stuckTimerRef.current);
+          stuckTimerRef.current = null;
+        }
+        toastManager.add({
+          type: "info",
+          title: "Session stopped",
+          description: "Generation was forcefully stopped.",
+        });
+        return;
+      } catch {
+        // fall through to turn interrupt
+      }
+    }
+
+    interruptAttemptedAtRef.current = Date.now();
+
+    // Start 5-second countdown to show the stuck escape hatch banner
+    if (stuckTimerRef.current !== null) {
+      window.clearTimeout(stuckTimerRef.current);
+    }
+    stuckTimerRef.current = window.setTimeout(() => {
+      if (interruptAttemptedAtRef.current !== null) {
+        setIsStuck(true);
+      }
+    }, 5_000);
+
     await api.orchestration.dispatchCommand({
       type: "thread.turn.interrupt",
       commandId: newCommandId(),
@@ -3849,6 +4087,27 @@ export default function ChatView({
       createdAt: new Date().toISOString(),
     });
   };
+
+  // Reset stuck state when phase leaves "running"
+  useEffect(() => {
+    if (phase !== "running") {
+      setIsStuck(false);
+      interruptAttemptedAtRef.current = null;
+      if (stuckTimerRef.current !== null) {
+        window.clearTimeout(stuckTimerRef.current);
+        stuckTimerRef.current = null;
+      }
+    }
+  }, [phase]);
+
+  // Clean up any pending timer on unmount
+  useEffect(() => {
+    return () => {
+      if (stuckTimerRef.current !== null) {
+        window.clearTimeout(stuckTimerRef.current);
+      }
+    };
+  }, []);
 
   const onRespondToApproval = useCallback(
     async (requestId: ApprovalRequestId, decision: ProviderApprovalDecision) => {
@@ -4695,6 +4954,10 @@ export default function ChatView({
     }
 
     if (key === "Enter" && !event.shiftKey) {
+      if (phase === "running" || isSendBusy) {
+        onQueueMessage();
+        return true;
+      }
       void onSend();
       return true;
     }
@@ -5027,14 +5290,16 @@ export default function ChatView({
                     compactDisabledReason={compactDisabledReason}
                   />
                 ) : null}
-                <div className="relative flex items-center">
+                <div className="relative flex items-center gap-1">
                   <ComposerStashBadge
                     count={promptStashEntries.length}
                     menuOpen={isStashMenuOpen}
                     pulsing={stashPulsing}
-                    onToggleMenu={() => setIsStashMenuOpen((open) => !open)}
+                    onToggleMenu={() => openRightPanelSurface("stash")}
                   />
-                  {promptStashEntries.length === 0 ? (
+                  {(prompt.trim().length > 0 ||
+                    composerImages.length > 0 ||
+                    composerFiles.length > 0) && (
                     <Tooltip>
                       <TooltipTrigger
                         render={
@@ -5042,28 +5307,23 @@ export default function ChatView({
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
-                            disabled={
-                              !prompt.trim() &&
-                              composerImages.length === 0 &&
-                              composerFiles.length === 0
-                            }
+                            className="shrink-0 size-7 p-0 text-muted-foreground hover:text-foreground hover:bg-accent/60 cursor-pointer"
                             onClick={() => void stashCurrentPrompt()}
-                            aria-label={`Stash current prompt (${typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"})`}
+                            aria-label={`Stash current draft (${typeof navigator !== "undefined" && isMacPlatform(navigator.platform) ? "⌘S" : "Ctrl+S"})`}
                           >
-                            <BookmarkIcon className="size-4" />
+                            <BookmarkPlusIcon className="size-3.5 text-primary" />
                           </Button>
                         }
                       />
                       <TooltipPopup side="top">
-                        Stash current prompt (
+                        Stash current draft (
                         {typeof navigator !== "undefined" && isMacPlatform(navigator.platform)
                           ? "⌘S"
                           : "Ctrl+S"}
                         )
                       </TooltipPopup>
                     </Tooltip>
-                  ) : null}
+                  )}
                   <ComposerStashMenu
                     entries={promptStashEntries}
                     isOpen={isStashMenuOpen}
@@ -5263,6 +5523,39 @@ export default function ChatView({
                   />
                 )}
 
+              {/* Queued Messages Bar */}
+              {threadQueuedMessages.length > 0 && (
+                <div className="mb-2 flex items-center justify-between rounded-lg border border-border/80 bg-muted/40 px-3 py-1.5 text-xs text-foreground/90 backdrop-blur-xs">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <ListOrderedIcon className="size-3.5 text-primary" />
+                    <span>
+                      {threadQueuedMessages.length} message
+                      {threadQueuedMessages.length === 1 ? "" : "s"} queued
+                      {threadQueuedMessages.some((m) => m.scheduledFor)
+                        ? " (with scheduled time)"
+                        : " — will send when turn finishes"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openRightPanelSurface("queue")}
+                      className="rounded px-2 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary/10 cursor-pointer"
+                    >
+                      View Queue
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => activeThread && clearThreadQueue(activeThread.id)}
+                      className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-destructive cursor-pointer"
+                      title="Clear queue"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex-1 pr-11">
                 <ComposerPromptEditor
                   ref={composerEditorRef}
@@ -5348,22 +5641,146 @@ export default function ChatView({
                     </Button>
                   </div>
                 ) : phase === "running" ? (
-                  <button
-                    type="button"
-                    className="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
-                    onClick={() => void onInterrupt()}
-                    aria-label="Stop generation"
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <rect x="2" y="2" width="8" height="8" rx="1.5" />
-                    </svg>
-                  </button>
+                  <div className="flex flex-col items-end gap-1.5">
+                    {isStuck && activeThread && threadApi && (
+                      <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-400 dark:border-amber-400/20 dark:bg-amber-400/10">
+                        <span>Agent may be stuck.</span>
+                        <button
+                          type="button"
+                          className="font-medium underline underline-offset-2 cursor-pointer hover:text-amber-300 transition-colors"
+                          onClick={async () => {
+                            try {
+                              await threadApi.orchestration.dispatchCommand({
+                                type: "thread.session.stop",
+                                commandId: newCommandId(),
+                                threadId: activeThread.id,
+                                createdAt: new Date().toISOString(),
+                              });
+                              setIsStuck(false);
+                              interruptAttemptedAtRef.current = null;
+                              toastManager.add({
+                                type: "info",
+                                title: "Thread unblocked",
+                                description: "The agent turn was stopped.",
+                              });
+                            } catch {
+                              toastManager.add({
+                                type: "error",
+                                title: "Could not stop session",
+                                description: "Failed to force-stop the session.",
+                              });
+                            }
+                          }}
+                        >
+                          Force stop
+                        </button>
+                        <span className="text-muted-foreground/50">|</span>
+                        <button
+                          type="button"
+                          className="font-medium underline underline-offset-2 cursor-pointer hover:text-amber-300 transition-colors"
+                          onClick={async () => {
+                            try {
+                              await threadApi.orchestration.dispatchCommand({
+                                type: "thread.session.stop",
+                                commandId: newCommandId(),
+                                threadId: activeThread.id,
+                                createdAt: new Date().toISOString(),
+                              });
+                              await threadApi.orchestration.dispatchCommand({
+                                type: "thread.settle",
+                                commandId: newCommandId(),
+                                threadId: activeThread.id,
+                              });
+                              setIsStuck(false);
+                              interruptAttemptedAtRef.current = null;
+                            } catch {
+                              toastManager.add({
+                                type: "error",
+                                title: "Could not settle thread",
+                                description: "Please try again from the thread menu.",
+                              });
+                            }
+                          }}
+                        >
+                          Force settle &rarr;
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      {composerSendState.hasSendableContent && (
+                        <div className="flex items-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onQueueMessage()}
+                            className="h-8 gap-1.5 rounded-l-lg rounded-r-none border border-r-0 border-border/80 bg-secondary/90 px-2.5 text-xs font-medium text-foreground hover:bg-secondary transition-all cursor-pointer shadow-2xs"
+                            title="Queue message for when agent finishes (Enter)"
+                          >
+                            <ListOrderedIcon className="size-3.5 text-primary" />
+                            <span>Queue</span>
+                          </Button>
+                          <Popover
+                            open={isSchedulePopoverOpen}
+                            onOpenChange={setIsSchedulePopoverOpen}
+                          >
+                            <PopoverTrigger
+                              render={
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-8 w-8 rounded-l-none rounded-r-lg border border-border/80 bg-secondary/90 p-0 text-muted-foreground hover:text-foreground hover:bg-secondary transition-all cursor-pointer shadow-2xs"
+                                  title="Schedule message for specific time..."
+                                  aria-label="Schedule message for specific time"
+                                >
+                                  <ClockIcon className="size-3.5" />
+                                </Button>
+                              }
+                            />
+                            <PopoverPopup
+                              align="end"
+                              side="top"
+                              className="p-0 border-none bg-transparent shadow-none"
+                            >
+                              <AppleTimePicker
+                                onConfirm={(scheduledDate) => {
+                                  onQueueMessage(scheduledDate.toISOString());
+                                  setIsSchedulePopoverOpen(false);
+                                }}
+                                onCancel={() => setIsSchedulePopoverOpen(false)}
+                              />
+                            </PopoverPopup>
+                          </Popover>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
+                        onClick={() => void onInterrupt()}
+                        aria-label={
+                          interruptAttemptedAtRef.current !== null
+                            ? "Force stop session"
+                            : "Stop generation"
+                        }
+                        title={
+                          interruptAttemptedAtRef.current !== null
+                            ? "Click again to force stop immediately"
+                            : "Stop generation"
+                        }
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 12 12"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <rect x="2" y="2" width="8" height="8" rx="1.5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 ) : pendingUserInputs.length === 0 ? (
                   showPlanFollowUpPrompt ? (
                     prompt.trim().length > 0 ? (
@@ -5415,64 +5832,105 @@ export default function ChatView({
                       </div>
                     )
                   ) : (
-                    <button
-                      type="submit"
-                      className="flex h-9 w-9 enabled:cursor-pointer items-center justify-center rounded-lg bg-foreground text-background transition-all duration-150 hover:bg-foreground/90 hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
-                      disabled={
-                        isSendBusy ||
-                        isConnecting ||
-                        threadDetailLoading ||
-                        !composerSendState.hasSendableContent ||
-                        Boolean(composerPromptLengthValidationMessage)
-                      }
-                      aria-label={
-                        threadDetailLoading
-                          ? "Messages loading"
-                          : isConnecting
-                            ? "Connecting"
-                            : isPreparingWorktree
-                              ? "Preparing worktree"
-                              : isSendBusy
-                                ? "Sending"
-                                : "Send message"
-                      }
-                    >
-                      {isConnecting || isSendBusy ? (
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 14 14"
-                          fill="none"
-                          className="animate-spin"
-                          aria-hidden="true"
-                        >
-                          <circle
-                            cx="7"
-                            cy="7"
-                            r="5.5"
+                    // Idle composer: split send button with schedule clock always visible
+                    <div className="flex items-center">
+                      <button
+                        type="submit"
+                        className="flex h-9 w-9 enabled:cursor-pointer items-center justify-center rounded-l-lg rounded-r-none bg-foreground text-background transition-all duration-150 hover:bg-foreground/90 hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+                        disabled={
+                          isSendBusy ||
+                          isConnecting ||
+                          threadDetailLoading ||
+                          !composerSendState.hasSendableContent ||
+                          Boolean(composerPromptLengthValidationMessage)
+                        }
+                        aria-label={
+                          threadDetailLoading
+                            ? "Messages loading"
+                            : isConnecting
+                              ? "Connecting"
+                              : isPreparingWorktree
+                                ? "Preparing worktree"
+                                : isSendBusy
+                                  ? "Sending"
+                                  : "Send message"
+                        }
+                      >
+                        {isConnecting || isSendBusy ? (
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                            className="animate-spin"
+                            aria-hidden="true"
+                          >
+                            <circle
+                              cx="7"
+                              cy="7"
+                              r="5.5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeDasharray="28"
+                              strokeDashoffset="10"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
                             stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeDasharray="28"
-                            strokeDashoffset="10"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 14 14"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M7 11.5V2.5" />
+                            <path d="M2.5 7L7 2.5L11.5 7" />
+                          </svg>
+                        )}
+                      </button>
+                      {/* Clock / schedule button — always visible even on idle/fresh threads */}
+                      <Popover
+                        open={isIdleSchedulePopoverOpen}
+                        onOpenChange={setIsIdleSchedulePopoverOpen}
+                      >
+                        <PopoverTrigger
+                          render={
+                            <button
+                              type="button"
+                              disabled={
+                                !composerSendState.hasSendableContent ||
+                                isSendBusy ||
+                                isConnecting ||
+                                threadDetailLoading ||
+                                Boolean(composerPromptLengthValidationMessage)
+                              }
+                              aria-label="Schedule message for a specific time"
+                              title="Schedule this message to send at a specific time"
+                              className="flex h-9 w-7 enabled:cursor-pointer items-center justify-center rounded-l-none rounded-r-lg border-l border-foreground/15 bg-foreground text-background/70 transition-all duration-150 hover:bg-foreground/90 hover:text-background hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8"
+                            />
+                          }
                         >
-                          <path d="M7 11.5V2.5" />
-                          <path d="M2.5 7L7 2.5L11.5 7" />
-                        </svg>
-                      )}
-                    </button>
+                          <ClockIcon className="size-3" />
+                        </PopoverTrigger>
+                        <PopoverPopup
+                          align="end"
+                          side="top"
+                          className="p-0 border-none bg-transparent shadow-none"
+                        >
+                          <AppleTimePicker
+                            onConfirm={(scheduledDate) => {
+                              onQueueMessage(scheduledDate.toISOString());
+                              setIsIdleSchedulePopoverOpen(false);
+                            }}
+                            onCancel={() => setIsIdleSchedulePopoverOpen(false)}
+                          />
+                        </PopoverPopup>
+                      </Popover>
+                    </div>
                   )
                 ) : null}
               </div>

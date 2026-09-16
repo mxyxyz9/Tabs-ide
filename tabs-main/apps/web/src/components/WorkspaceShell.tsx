@@ -1344,6 +1344,18 @@ function AgentsThreadList(props: {
             : { type: "thread.pin", commandId, threadId: thread.id },
         );
       } else if (action === "settle") {
+        if (!thread.settledAt && (thread.session?.status === "running" || thread.latestTurn?.state === "running")) {
+          try {
+            await api.orchestration.dispatchCommand({
+              type: "thread.session.stop",
+              commandId: newCommandId(),
+              threadId: thread.id,
+              createdAt: new Date().toISOString(),
+            });
+          } catch {
+            // best-effort session stop
+          }
+        }
         await api.orchestration.dispatchCommand(
           thread.settledAt
             ? {
@@ -2201,7 +2213,9 @@ function AgentsThreadList(props: {
                           </TooltipPopup>
                         </Tooltip>
                         {!isArchived && (
-                          <div className="pointer-events-none absolute right-7 top-1/2 z-10 flex h-7 -translate-y-1/2 items-center gap-0.5 rounded-l-xl border border-r-0 border-white/20 bg-background/60 px-1 opacity-0 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.55)] ring-1 ring-black/5 backdrop-blur-xl transition-[opacity,background-color] supports-[backdrop-filter]:bg-background/45 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 dark:border-white/10 dark:ring-white/5">
+                          <div className="pointer-events-none absolute right-7 top-1/2 z-10 flex h-7 -translate-y-1/2 items-center gap-0.5 rounded-l-xl border border-r-0 border-border/80 bg-card px-1 opacity-0 shadow-lg shadow-black/25 transition-[opacity,background-color] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 dark:border-zinc-700/80 dark:bg-zinc-800 dark:shadow-black/60">
+                            {/* Left subtle gradient fade so thread title blends out gracefully */}
+                            <div className="pointer-events-none absolute -left-5 top-0 bottom-0 w-5 bg-gradient-to-r from-transparent to-card dark:to-zinc-800" />
                             <Tooltip>
                               <TooltipTrigger
                                 render={
@@ -2212,9 +2226,9 @@ function AgentsThreadList(props: {
                                     }
                                     aria-pressed={lifecycleEntry.pinnedAt !== null}
                                     className={cn(
-                                      "flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                                      "flex size-6 items-center justify-center rounded-lg text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors",
                                       lifecycleEntry.pinnedAt &&
-                                        "bg-primary/10 text-primary hover:text-primary",
+                                        "bg-primary/15 text-primary hover:text-primary",
                                     )}
                                     onClick={() => void dispatchLifecycle(thread, "pin")}
                                   />
@@ -2236,12 +2250,13 @@ function AgentsThreadList(props: {
                                         ? "Return thread to active"
                                         : "Settle thread"
                                     }
-                                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    className="flex h-6 items-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold text-foreground/90 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
                                     onClick={() => void dispatchLifecycle(thread, "settle")}
                                   />
                                 }
                               >
-                                <CircleCheckIcon className="size-3.5" />
+                                <CircleCheckIcon className="size-3.5 shrink-0" />
+                                <span>{section === "settled" ? "Unsettle" : "Settle"}</span>
                               </TooltipTrigger>
                               <TooltipPopup side="top">
                                 {section === "settled" ? "Return to active" : "Settle thread"}
@@ -2255,7 +2270,7 @@ function AgentsThreadList(props: {
                                     aria-label={
                                       threadIsSnoozed ? "Wake thread now" : "Snooze thread"
                                     }
-                                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    className="flex size-6 items-center justify-center rounded-lg text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
                                     onClick={() => void dispatchLifecycle(thread, "snooze")}
                                   />
                                 }
@@ -2277,7 +2292,7 @@ function AgentsThreadList(props: {
                               <button
                                 type="button"
                                 aria-label={`Thread actions for ${thread.title}`}
-                                className="pointer-events-none absolute right-1 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-white/20 bg-background/60 text-muted-foreground/60 opacity-0 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.55)] ring-1 ring-black/5 backdrop-blur-xl transition-[opacity,background-color] supports-[backdrop-filter]:bg-background/45 hover:bg-accent/70 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:bg-accent/70 data-[popup-open]:text-foreground data-[popup-open]:opacity-100 dark:border-white/10 dark:ring-white/5"
+                                className="pointer-events-none absolute right-1 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-border/80 bg-card text-foreground/80 opacity-0 shadow-lg shadow-black/25 transition-[opacity,background-color] hover:bg-accent hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:bg-accent data-[popup-open]:text-foreground data-[popup-open]:opacity-100 dark:border-zinc-700/80 dark:bg-zinc-800 dark:shadow-black/60"
                               />
                             }
                           >
