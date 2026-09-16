@@ -4,6 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/DynamicToolCallStatus.ts
+// Source file: v2/DesktopOnboardingEntrypoint.ts
 
-export type DynamicToolCallStatus = "inProgress" | "completed" | "failed";
+export type DesktopOnboardingEntrypoint = "life_sciences";
