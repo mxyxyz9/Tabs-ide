@@ -32,6 +32,26 @@ suite('RequestStore', () => {
 		strictEqual(result.data, 'bar');
 	});
 
+	test('should not emit an unhandled rejection after resolving a request', async () => {
+		const requestStore: RequestStore<{ data: string }, { arg: string }> = store.add(instantiationService.createInstance(RequestStore<{ data: string }, { arg: string }>, undefined));
+		let requestId = 0;
+		store.add(requestStore.onCreateRequest(e => requestId = e.requestId));
+		let unhandledRejection: unknown;
+		const onUnhandledRejection = (reason: unknown) => unhandledRejection = reason;
+		process.on('unhandledRejection', onUnhandledRejection);
+
+		try {
+			const request = requestStore.createRequest({ arg: 'foo' });
+			strictEqual(requestId > 0, true);
+			requestStore.acceptReply(requestId, { data: 'bar' });
+			await request;
+			await new Promise<void>(resolve => setImmediate(resolve));
+			strictEqual(unhandledRejection, undefined);
+		} finally {
+			process.off('unhandledRejection', onUnhandledRejection);
+		}
+	});
+
 	test('should reject the promise when the request times out', async () => {
 		const requestStore: RequestStore<{ data: string }, { arg: string }> = store.add(instantiationService.createInstance(RequestStore<{ data: string }, { arg: string }>, 1));
 		const request = requestStore.createRequest({ arg: 'foo' });
