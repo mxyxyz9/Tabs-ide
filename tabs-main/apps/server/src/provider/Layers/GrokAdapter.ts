@@ -76,6 +76,14 @@ function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
   return Exit.isSuccess(result) ? result.value : undefined;
 }
 
+function isGrokModelRejectionError(error: unknown): error is ProviderAdapterRequestError {
+  if (error instanceof ProviderAdapterRequestError) {
+    const detail = error.detail.toLowerCase();
+    return detail.includes("unknown model id") || detail.includes("invalid params");
+  }
+  return false;
+}
+
 export interface GrokAdapterLiveOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
@@ -514,16 +522,31 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             ),
           );
 
+          const fallbackModelId = currentGrokModelIdFromSessionSetup(started.sessionSetupResult);
           const requestedStartModelId = grokModelSelection?.model
             ? resolveGrokAcpBaseModelId(grokModelSelection.model)
             : undefined;
           const boundModelId = yield* applyGrokAcpModelSelection({
             runtime: acp,
-            currentModelId: currentGrokModelIdFromSessionSetup(started.sessionSetupResult),
+            currentModelId: fallbackModelId,
             requestedModelId: requestedStartModelId,
             mapError: (cause) =>
               mapAcpToAdapterError(PROVIDER, input.threadId, "session/set_model", cause),
-          });
+          }).pipe(
+            Effect.catchIf(
+              isGrokModelRejectionError,
+              (error) =>
+                Effect.logWarning(
+                  "Requested Grok model rejected by CLI; falling back to session model",
+                  {
+                    threadId: input.threadId,
+                    requestedModelId: requestedStartModelId,
+                    fallbackModelId,
+                    error: error.detail,
+                  },
+                ).pipe(Effect.as(fallbackModelId)),
+            ),
+          );
 
           const now = yield* nowIso;
           const session: ProviderSession = {
@@ -672,13 +695,28 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             const requestedTurnModelId = turnModelSelection?.model
               ? resolveGrokAcpBaseModelId(turnModelSelection.model)
               : undefined;
+            const fallbackTurnModelId = ctx.currentModelId;
             const currentModelId = yield* applyGrokAcpModelSelection({
               runtime: ctx.acp,
-              currentModelId: ctx.currentModelId,
+              currentModelId: fallbackTurnModelId,
               requestedModelId: requestedTurnModelId,
               mapError: (cause) =>
                 mapAcpToAdapterError(PROVIDER, input.threadId, "session/set_model", cause),
-            });
+            }).pipe(
+              Effect.catchIf(
+                isGrokModelRejectionError,
+                (error) =>
+                  Effect.logWarning(
+                    "Requested Grok model rejected by CLI; falling back to active session model",
+                    {
+                      threadId: input.threadId,
+                      requestedModelId: requestedTurnModelId,
+                      fallbackTurnModelId,
+                      error: error.detail,
+                    },
+                  ).pipe(Effect.as(fallbackTurnModelId)),
+              ),
+            );
 
             const text = input.input?.trim();
             const imagePromptParts = yield* Effect.forEach(input.attachments ?? [], (attachment) =>

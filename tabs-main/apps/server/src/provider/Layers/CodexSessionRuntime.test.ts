@@ -79,6 +79,43 @@ describe("buildTurnStartParams", () => {
     });
   });
 
+  it("supports high-tier dynamic reasoning efforts like ultra and max", () => {
+    const params = Effect.runSync(
+      buildTurnStartParams({
+        threadId: "provider-thread-1",
+        runtimeMode: "full-access",
+        prompt: "Solve complex challenge",
+        model: "gpt-6-astra",
+        effort: "ultra",
+        interactionMode: "default",
+      }),
+    );
+
+    assert.deepStrictEqual(params, {
+      threadId: "provider-thread-1",
+      approvalPolicy: "never",
+      sandboxPolicy: {
+        type: "dangerFullAccess",
+      },
+      input: [
+        {
+          type: "text",
+          text: "Solve complex challenge",
+        },
+      ],
+      model: "gpt-6-astra",
+      effort: "ultra",
+      collaborationMode: {
+        mode: "default",
+        settings: {
+          model: "gpt-6-astra",
+          reasoning_effort: "ultra",
+          developer_instructions: CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
+        },
+      },
+    });
+  });
+
   it("includes default collaboration mode and image attachments", () => {
     const params = Effect.runSync(
       buildTurnStartParams({

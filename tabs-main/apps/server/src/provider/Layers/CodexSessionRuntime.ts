@@ -75,6 +75,7 @@ const isCodexUserInputAnswerObject = Schema.is(CodexUserInputAnswerObject);
 // `V2TurnStartParams` schema includes `collaborationMode` directly.
 const CodexTurnStartParamsWithCollaborationMode = EffectCodexSchema.V2TurnStartParams.pipe(
   Schema.fieldsAssign({
+    effort: Schema.optionalKey(Schema.Union([Schema.String, Schema.Null])),
     collaborationMode: Schema.optionalKey(EffectCodexSchema.V2TurnStartParams__CollaborationMode),
   }),
 );
