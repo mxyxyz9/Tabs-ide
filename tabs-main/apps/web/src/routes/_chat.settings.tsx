@@ -513,9 +513,7 @@ function SettingsRouteView() {
                   >
                     <NavIcon className="size-3.5 shrink-0" />
                     <span className="capitalize flex-1">{item.label}</span>
-                    {item.id === "notifications" && !active && (
-                      <NotificationsBadge />
-                    )}
+                    {item.id === "notifications" && !active && <NotificationsBadge />}
                   </button>
                 );
               })}

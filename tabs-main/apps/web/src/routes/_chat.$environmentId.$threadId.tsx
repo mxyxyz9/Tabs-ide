@@ -49,8 +49,6 @@ const DiffPanelSheet = (props: {
   );
 };
 
-
-
 const DiffPanelInlineSidebar = (props: {
   diffOpen: boolean;
   onCloseDiff: () => void;
