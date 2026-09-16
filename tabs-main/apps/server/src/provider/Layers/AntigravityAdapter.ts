@@ -649,131 +649,129 @@ export function makeAntigravityAdapter(
             stopped: false,
           };
 
-          ctx.notificationFiber = yield* Effect.forkChild(
-            Stream.runForEach(acp.getEvents(), (parsedEvent) =>
-              Effect.gen(function* () {
-                switch (parsedEvent._tag) {
-                  case "AssistantItemStarted":
-                  case "AssistantItemCompleted":
-                    yield* offerRuntimeEvent(
-                      makeAcpAssistantItemEvent({
-                        stamp: yield* makeEventStamp(),
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: ctx.activeTurnId,
-                        itemId: parsedEvent.itemId,
-                        lifecycle:
-                          parsedEvent._tag === "AssistantItemStarted"
-                            ? "item.started"
-                            : "item.completed",
-                      }),
-                    );
-                    break;
-                  case "ContentDelta":
-                    yield* offerRuntimeEvent(
-                      makeAcpContentDeltaEvent({
-                        stamp: yield* makeEventStamp(),
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: ctx.activeTurnId,
-                        ...(parsedEvent.itemId ? { itemId: parsedEvent.itemId } : {}),
-                        text: parsedEvent.text,
-                        rawPayload: parsedEvent.rawPayload,
-                      }),
-                    );
-                    break;
-                  case "PlanUpdated":
-                    yield* emitPlanUpdate(
-                      ctx,
-                      parsedEvent.payload,
+          ctx.notificationFiber = yield* Stream.runForEach(acp.getEvents(), (parsedEvent) =>
+            Effect.gen(function* () {
+              switch (parsedEvent._tag) {
+                case "AssistantItemStarted":
+                case "AssistantItemCompleted":
+                  yield* offerRuntimeEvent(
+                    makeAcpAssistantItemEvent({
+                      stamp: yield* makeEventStamp(),
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: ctx.activeTurnId,
+                      itemId: parsedEvent.itemId,
+                      lifecycle:
+                        parsedEvent._tag === "AssistantItemStarted"
+                          ? "item.started"
+                          : "item.completed",
+                    }),
+                  );
+                  break;
+                case "ContentDelta":
+                  yield* offerRuntimeEvent(
+                    makeAcpContentDeltaEvent({
+                      stamp: yield* makeEventStamp(),
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: ctx.activeTurnId,
+                      ...(parsedEvent.itemId ? { itemId: parsedEvent.itemId } : {}),
+                      text: parsedEvent.text,
+                      rawPayload: parsedEvent.rawPayload,
+                    }),
+                  );
+                  break;
+                case "PlanUpdated":
+                  yield* emitPlanUpdate(
+                    ctx,
+                    parsedEvent.payload,
+                    parsedEvent.rawPayload,
+                    "session/update",
+                  );
+                  break;
+                case "ToolCallUpdated":
+                  {
+                    const toolCall = normalizeAntigravityToolCall(parsedEvent.toolCall);
+                    const classification = classifyAntigravitySubagentToolCall(
+                      toolCall,
                       parsedEvent.rawPayload,
-                      "session/update",
                     );
-                    break;
-                  case "ToolCallUpdated":
-                    {
-                      const toolCall = normalizeAntigravityToolCall(parsedEvent.toolCall);
-                      const classification = classifyAntigravitySubagentToolCall(
-                        toolCall,
-                        parsedEvent.rawPayload,
+                    if (classification !== "subagent") {
+                      yield* offerRuntimeEvent(
+                        makeAcpToolCallEvent({
+                          stamp: yield* makeEventStamp(),
+                          provider: PROVIDER,
+                          threadId: ctx.threadId,
+                          turnId: ctx.activeTurnId,
+                          toolCall,
+                          rawPayload: parsedEvent.rawPayload,
+                        }),
                       );
-                      if (classification !== "subagent") {
-                        yield* offerRuntimeEvent(
-                          makeAcpToolCallEvent({
-                            stamp: yield* makeEventStamp(),
-                            provider: PROVIDER,
-                            threadId: ctx.threadId,
-                            turnId: ctx.activeTurnId,
-                            toolCall,
-                            rawPayload: parsedEvent.rawPayload,
-                          }),
-                        );
-                        break;
-                      }
-
-                      const previousState = ctx.subagentStates.get(toolCall.toolCallId);
-                      const lifecycle = planAntigravitySubagentUpdate({
-                        toolCall,
-                        rawPayload: parsedEvent.rawPayload,
-                        previousState,
-                      });
-                      if (!lifecycle) break;
-                      const taskId = RuntimeTaskId.makeUnsafe(toolCall.toolCallId);
-                      const description =
-                        toolCall.detail ?? toolCall.title ?? "Antigravity subagent";
-                      if (lifecycle.start) {
-                        yield* offerRuntimeEvent({
-                          type: "task.started",
-                          ...(yield* makeEventStamp()),
-                          provider: PROVIDER,
-                          threadId: ctx.threadId,
-                          turnId: ctx.activeTurnId,
-                          payload: {
-                            taskId,
-                            description,
-                            taskType: "antigravity-subagent",
-                          },
-                        });
-                      }
-                      if (lifecycle.completion === "failed") {
-                        yield* offerRuntimeEvent({
-                          type: "task.completed",
-                          ...(yield* makeEventStamp()),
-                          provider: PROVIDER,
-                          threadId: ctx.threadId,
-                          turnId: ctx.activeTurnId,
-                          payload: {
-                            taskId,
-                            status: "failed",
-                            ...(antigravitySubagentOutput(toolCall)
-                              ? { summary: antigravitySubagentOutput(toolCall) }
-                              : {}),
-                          },
-                        });
-                        ctx.subagentStates.set(toolCall.toolCallId, "finished");
-                        break;
-                      }
-                      const progress = antigravitySubagentOutput(toolCall) ?? description;
-                      if (lifecycle.progress) {
-                        yield* offerRuntimeEvent({
-                          type: "task.progress",
-                          ...(yield* makeEventStamp()),
-                          provider: PROVIDER,
-                          threadId: ctx.threadId,
-                          turnId: ctx.activeTurnId,
-                          payload: { taskId, description: progress, summary: progress },
-                        });
-                      }
-                      ctx.subagentStates.set(toolCall.toolCallId, lifecycle.nextState);
+                      break;
                     }
-                    break;
-                }
-              }),
-            ).pipe(
-              Effect.catch((cause) =>
-                Effect.logError("Failed to process Antigravity runtime notification.", { cause }),
-              ),
+
+                    const previousState = ctx.subagentStates.get(toolCall.toolCallId);
+                    const lifecycle = planAntigravitySubagentUpdate({
+                      toolCall,
+                      rawPayload: parsedEvent.rawPayload,
+                      previousState,
+                    });
+                    if (!lifecycle) break;
+                    const taskId = RuntimeTaskId.makeUnsafe(toolCall.toolCallId);
+                    const description = toolCall.detail ?? toolCall.title ?? "Antigravity subagent";
+                    if (lifecycle.start) {
+                      yield* offerRuntimeEvent({
+                        type: "task.started",
+                        ...(yield* makeEventStamp()),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: ctx.activeTurnId,
+                        payload: {
+                          taskId,
+                          description,
+                          taskType: "antigravity-subagent",
+                        },
+                      });
+                    }
+                    if (lifecycle.completion === "failed") {
+                      yield* offerRuntimeEvent({
+                        type: "task.completed",
+                        ...(yield* makeEventStamp()),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: ctx.activeTurnId,
+                        payload: {
+                          taskId,
+                          status: "failed",
+                          ...(antigravitySubagentOutput(toolCall)
+                            ? { summary: antigravitySubagentOutput(toolCall) }
+                            : {}),
+                        },
+                      });
+                      ctx.subagentStates.set(toolCall.toolCallId, "finished");
+                      break;
+                    }
+                    const progress = antigravitySubagentOutput(toolCall) ?? description;
+                    if (lifecycle.progress) {
+                      yield* offerRuntimeEvent({
+                        type: "task.progress",
+                        ...(yield* makeEventStamp()),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: ctx.activeTurnId,
+                        payload: { taskId, description: progress, summary: progress },
+                      });
+                    }
+                    ctx.subagentStates.set(toolCall.toolCallId, lifecycle.nextState);
+                  }
+                  break;
+              }
+            }),
+          ).pipe(
+            Effect.catch((cause) =>
+              Effect.logError("Failed to process Antigravity runtime notification.", { cause }),
             ),
+            Effect.forkIn(ctx.scope),
           );
 
           sessionScopeTransferred = true;

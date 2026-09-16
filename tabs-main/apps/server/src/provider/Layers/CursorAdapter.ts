@@ -853,7 +853,7 @@ export function makeCursorAdapter(
               Effect.logError("Failed to process Cursor runtime notification.", { cause }),
             ),
             Effect.ensuring(Effect.suspend(() => Effect.ignore(stopSessionInternal(ctx)))),
-            Effect.forkChild,
+            Effect.forkIn(ctx.scope),
           );
 
           ctx.notificationFiber = nf;

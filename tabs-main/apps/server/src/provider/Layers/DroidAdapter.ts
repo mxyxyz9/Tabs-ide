@@ -575,66 +575,65 @@ export function makeDroidAdapter(
             stopped: false,
           };
 
-          ctx.notificationFiber = yield* Effect.forkChild(
-            Stream.runForEach(acp.getEvents(), (parsedEvent) =>
-              Effect.gen(function* () {
-                switch (parsedEvent._tag) {
-                  case "AssistantItemStarted":
-                  case "AssistantItemCompleted":
-                    yield* offerRuntimeEvent(
-                      makeAcpAssistantItemEvent({
-                        stamp: yield* makeEventStamp(),
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: ctx.activeTurnId,
-                        itemId: parsedEvent.itemId,
-                        lifecycle:
-                          parsedEvent._tag === "AssistantItemStarted"
-                            ? "item.started"
-                            : "item.completed",
-                      }),
-                    );
-                    break;
-                  case "ContentDelta":
-                    yield* offerRuntimeEvent(
-                      makeAcpContentDeltaEvent({
-                        stamp: yield* makeEventStamp(),
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: ctx.activeTurnId,
-                        ...(parsedEvent.itemId ? { itemId: parsedEvent.itemId } : {}),
-                        text: parsedEvent.text,
-                        rawPayload: parsedEvent.rawPayload,
-                      }),
-                    );
-                    break;
-                  case "PlanUpdated":
-                    yield* emitPlanUpdate(
-                      ctx,
-                      parsedEvent.payload,
-                      parsedEvent.rawPayload,
-                      "session/update",
-                    );
-                    break;
-                  case "ToolCallUpdated":
-                    yield* offerRuntimeEvent(
-                      makeAcpToolCallEvent({
-                        stamp: yield* makeEventStamp(),
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: ctx.activeTurnId,
-                        toolCall: parsedEvent.toolCall,
-                        rawPayload: parsedEvent.rawPayload,
-                      }),
-                    );
-                    break;
-                }
-              }),
-            ).pipe(
-              Effect.catch((cause) =>
-                Effect.logError("Failed to process Droid runtime notification.", { cause }),
-              ),
+          ctx.notificationFiber = yield* Stream.runForEach(acp.getEvents(), (parsedEvent) =>
+            Effect.gen(function* () {
+              switch (parsedEvent._tag) {
+                case "AssistantItemStarted":
+                case "AssistantItemCompleted":
+                  yield* offerRuntimeEvent(
+                    makeAcpAssistantItemEvent({
+                      stamp: yield* makeEventStamp(),
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: ctx.activeTurnId,
+                      itemId: parsedEvent.itemId,
+                      lifecycle:
+                        parsedEvent._tag === "AssistantItemStarted"
+                          ? "item.started"
+                          : "item.completed",
+                    }),
+                  );
+                  break;
+                case "ContentDelta":
+                  yield* offerRuntimeEvent(
+                    makeAcpContentDeltaEvent({
+                      stamp: yield* makeEventStamp(),
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: ctx.activeTurnId,
+                      ...(parsedEvent.itemId ? { itemId: parsedEvent.itemId } : {}),
+                      text: parsedEvent.text,
+                      rawPayload: parsedEvent.rawPayload,
+                    }),
+                  );
+                  break;
+                case "PlanUpdated":
+                  yield* emitPlanUpdate(
+                    ctx,
+                    parsedEvent.payload,
+                    parsedEvent.rawPayload,
+                    "session/update",
+                  );
+                  break;
+                case "ToolCallUpdated":
+                  yield* offerRuntimeEvent(
+                    makeAcpToolCallEvent({
+                      stamp: yield* makeEventStamp(),
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: ctx.activeTurnId,
+                      toolCall: parsedEvent.toolCall,
+                      rawPayload: parsedEvent.rawPayload,
+                    }),
+                  );
+                  break;
+              }
+            }),
+          ).pipe(
+            Effect.catch((cause) =>
+              Effect.logError("Failed to process Droid runtime notification.", { cause }),
             ),
+            Effect.forkIn(ctx.scope),
           );
 
           sessionScopeTransferred = true;

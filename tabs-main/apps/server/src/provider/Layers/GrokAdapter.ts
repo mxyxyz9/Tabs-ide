@@ -533,18 +533,16 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             mapError: (cause) =>
               mapAcpToAdapterError(PROVIDER, input.threadId, "session/set_model", cause),
           }).pipe(
-            Effect.catchIf(
-              isGrokModelRejectionError,
-              (error) =>
-                Effect.logWarning(
-                  "Requested Grok model rejected by CLI; falling back to session model",
-                  {
-                    threadId: input.threadId,
-                    requestedModelId: requestedStartModelId,
-                    fallbackModelId,
-                    error: error.detail,
-                  },
-                ).pipe(Effect.as(fallbackModelId)),
+            Effect.catchIf(isGrokModelRejectionError, (error) =>
+              Effect.logWarning(
+                "Requested Grok model rejected by CLI; falling back to session model",
+                {
+                  threadId: input.threadId,
+                  requestedModelId: requestedStartModelId,
+                  fallbackModelId,
+                  error: error.detail,
+                },
+              ).pipe(Effect.as(fallbackModelId)),
             ),
           );
 
@@ -648,7 +646,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
               Effect.logError("Failed to process Grok runtime notification.", { cause }),
             ),
             Effect.ensuring(Effect.suspend(() => Effect.ignore(stopSessionInternal(ctx)))),
-            Effect.forkChild,
+            Effect.forkIn(ctx.scope),
           );
 
           ctx.notificationFiber = nf;
@@ -703,18 +701,16 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
               mapError: (cause) =>
                 mapAcpToAdapterError(PROVIDER, input.threadId, "session/set_model", cause),
             }).pipe(
-              Effect.catchIf(
-                isGrokModelRejectionError,
-                (error) =>
-                  Effect.logWarning(
-                    "Requested Grok model rejected by CLI; falling back to active session model",
-                    {
-                      threadId: input.threadId,
-                      requestedModelId: requestedTurnModelId,
-                      fallbackTurnModelId,
-                      error: error.detail,
-                    },
-                  ).pipe(Effect.as(fallbackTurnModelId)),
+              Effect.catchIf(isGrokModelRejectionError, (error) =>
+                Effect.logWarning(
+                  "Requested Grok model rejected by CLI; falling back to active session model",
+                  {
+                    threadId: input.threadId,
+                    requestedModelId: requestedTurnModelId,
+                    fallbackTurnModelId,
+                    error: error.detail,
+                  },
+                ).pipe(Effect.as(fallbackTurnModelId)),
               ),
             );
 
