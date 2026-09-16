@@ -18,6 +18,57 @@ const ITEM_HEIGHT = 36; // px height per drum wheel item
 const CONTAINER_HEIGHT = 180; // px height for drum wheel area
 const PADDING_Y = (CONTAINER_HEIGHT - ITEM_HEIGHT) / 2; // 72px to center active item in lens
 
+/**
+ * Parses continuous 3-digit or 4-digit time entry strings (e.g. "120" -> 1:20, "0120" -> 1:20, "1230" -> 12:30, "530" -> 5:30)
+ */
+export function parseTimeDigits(raw: string): { hour: number; minute: number } | null {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 4) {
+    const h = parseInt(digits.slice(0, 2), 10);
+    const m = parseInt(digits.slice(2, 4), 10);
+    if (h >= 1 && h <= 12 && m >= 0 && m <= 59) {
+      return { hour: h, minute: m };
+    }
+  } else if (digits.length === 3) {
+    const h = parseInt(digits.slice(0, 1), 10);
+    const m = parseInt(digits.slice(1, 3), 10);
+    if (h >= 1 && h <= 12 && m >= 0 && m <= 59) {
+      return { hour: h, minute: m };
+    }
+  }
+  return null;
+}
+
+/**
+ * Normalizes hour string on blur, falling back to current valid hour
+ */
+export function normalizeHourInput(val: string, fallbackHour: number): { hour: number; text: string } {
+  const digits = val.replace(/\D/g, "");
+  if (!digits) {
+    return { hour: fallbackHour, text: String(fallbackHour) };
+  }
+  const num = parseInt(digits, 10);
+  if (num >= 1 && num <= 12) {
+    return { hour: num, text: String(num) };
+  }
+  return { hour: fallbackHour, text: String(fallbackHour) };
+}
+
+/**
+ * Normalizes minute string on blur to 2-digit format, falling back to current valid minute
+ */
+export function normalizeMinuteInput(val: string, fallbackMinute: number): { minute: number; text: string } {
+  const digits = val.replace(/\D/g, "");
+  if (!digits) {
+    return { minute: fallbackMinute, text: fallbackMinute < 10 ? `0${fallbackMinute}` : String(fallbackMinute) };
+  }
+  const num = parseInt(digits, 10);
+  if (num >= 0 && num <= 59) {
+    return { minute: num, text: num < 10 ? `0${num}` : String(num) };
+  }
+  return { minute: fallbackMinute, text: fallbackMinute < 10 ? `0${fallbackMinute}` : String(fallbackMinute) };
+}
+
 export const AppleTimePicker = memo(function AppleTimePicker({
   value,
   onChange,
@@ -199,41 +250,93 @@ export const AppleTimePicker = memo(function AppleTimePicker({
   // ── Keyboard Direct Typing State ───────────────────────────────────────────
   const hourInputRef = useRef<HTMLInputElement>(null);
   const minuteInputRef = useRef<HTMLInputElement>(null);
+  const [isHourFocused, setIsHourFocused] = useState(false);
+  const [isMinuteFocused, setIsMinuteFocused] = useState(false);
   const [hourTypingValue, setHourTypingValue] = useState<string>(String(hours12));
   const [minuteTypingValue, setMinuteTypingValue] = useState<string>(
     minutes < 10 ? `0${minutes}` : String(minutes),
   );
 
-  // Keep typing values in sync when date changes from drum wheel
+  // Keep typing values in sync when date changes from drum wheel or presets,
+  // but never clobber the field the user is actively typing in.
   useEffect(() => {
-    setHourTypingValue(String(hours12));
-    setMinuteTypingValue(minutes < 10 ? `0${minutes}` : String(minutes));
-  }, [hours12, minutes]);
+    if (!isHourFocused) {
+      setHourTypingValue(String(hours12));
+    }
+    if (!isMinuteFocused) {
+      setMinuteTypingValue(minutes < 10 ? `0${minutes}` : String(minutes));
+    }
+  }, [hours12, minutes, isHourFocused, isMinuteFocused]);
 
   const handleHourInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value.replace(/\D/g, "");
-      setHourTypingValue(val);
-      if (!val) return;
+      const rawVal = e.target.value.replace(/\D/g, "");
+      if (!rawVal) {
+        setHourTypingValue("");
+        return;
+      }
 
+      // Check if user entered 3 or 4 digits continuously (e.g. 120 -> 1:20, 0120 -> 1:20, 1230 -> 12:30, 530 -> 5:30)
+      if (rawVal.length >= 3) {
+        const parsed = parseTimeDigits(rawVal);
+        if (parsed) {
+          setHour(parsed.hour);
+          setMinute(parsed.minute);
+          setHourTypingValue(String(parsed.hour));
+          setMinuteTypingValue(parsed.minute < 10 ? `0${parsed.minute}` : String(parsed.minute));
+          minuteInputRef.current?.focus();
+          minuteInputRef.current?.select();
+          return;
+        }
+      }
+
+      // 1 or 2 digits
+      const val = rawVal.slice(0, 2);
+      setHourTypingValue(val);
       const num = parseInt(val, 10);
+
+      // If user typed 0 as first digit, hold it and wait for second digit (e.g. 01..09)
+      if (val === "0") {
+        return;
+      }
+
       if (num >= 1 && num <= 12) {
         setHour(num);
-        // If single digit >= 2 or 2 digits typed, automatically jump to minute input
+        // If single digit 2..9 (cannot have a 2nd digit in 12h clock), or 2 digits typed,
+        // automatically jump to minute input and select it
         if (num >= 2 || val.length >= 2) {
           minuteInputRef.current?.focus();
           minuteInputRef.current?.select();
         }
+      } else if (num > 12 && val.length === 2) {
+        // User typed e.g. 1 then 3 (13) -> in 12h clock, hour is 1 and 3 is start of minute!
+        const firstDigit = parseInt(val.charAt(0), 10);
+        const secondDigit = parseInt(val.charAt(1), 10);
+        if (firstDigit >= 1 && firstDigit <= 12) {
+          setHour(firstDigit);
+          setHourTypingValue(String(firstDigit));
+          if (secondDigit >= 0 && secondDigit <= 59) {
+            setMinute(secondDigit);
+            setMinuteTypingValue(String(secondDigit));
+          }
+          minuteInputRef.current?.focus();
+        }
       }
     },
-    [setHour],
+    [setHour, setMinute],
   );
 
   const handleMinuteInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value.replace(/\D/g, "");
+      const rawVal = e.target.value.replace(/\D/g, "");
+      if (!rawVal) {
+        setMinuteTypingValue("");
+        return;
+      }
+
+      // Allow up to 2 digits without premature reformatting
+      const val = rawVal.slice(0, 2);
       setMinuteTypingValue(val);
-      if (!val) return;
 
       const num = parseInt(val, 10);
       if (num >= 0 && num <= 59) {
@@ -243,16 +346,32 @@ export const AppleTimePicker = memo(function AppleTimePicker({
     [setMinute],
   );
 
+  const handleHourBlur = useCallback(() => {
+    setIsHourFocused(false);
+    const { hour, text } = normalizeHourInput(hourTypingValue, hours12);
+    setHour(hour);
+    setHourTypingValue(text);
+  }, [hourTypingValue, hours12, setHour]);
+
+  const handleMinuteBlur = useCallback(() => {
+    setIsMinuteFocused(false);
+    const { minute, text } = normalizeMinuteInput(minuteTypingValue, minutes);
+    setMinute(minute);
+    setMinuteTypingValue(text);
+  }, [minuteTypingValue, minutes, setMinute]);
+
   const handleHourKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "ArrowUp") {
         e.preventDefault();
         const nextH = hours12 === 12 ? 1 : hours12 + 1;
         setHour(nextH);
+        setHourTypingValue(String(nextH));
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         const nextH = hours12 === 1 ? 12 : hours12 - 1;
         setHour(nextH);
+        setHourTypingValue(String(nextH));
       } else if (e.key === ":" || e.key === "ArrowRight" || e.key === "Tab") {
         e.preventDefault();
         minuteInputRef.current?.focus();
@@ -266,9 +385,12 @@ export const AppleTimePicker = memo(function AppleTimePicker({
       } else if (e.key === "Enter") {
         e.preventDefault();
         onConfirm?.(effectiveDate);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel?.();
       }
     },
-    [effectiveDate, hours12, onConfirm, setHour, setPeriod],
+    [effectiveDate, hours12, onCancel, onConfirm, setHour, setPeriod],
   );
 
   const handleMinuteKeyDown = useCallback(
@@ -277,10 +399,12 @@ export const AppleTimePicker = memo(function AppleTimePicker({
         e.preventDefault();
         const nextM = (minutes + (e.shiftKey ? 5 : 1)) % 60;
         setMinute(nextM);
+        setMinuteTypingValue(nextM < 10 ? `0${nextM}` : String(nextM));
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         const nextM = (minutes - (e.shiftKey ? 5 : 1) + 60) % 60;
         setMinute(nextM);
+        setMinuteTypingValue(nextM < 10 ? `0${nextM}` : String(nextM));
       } else if (e.key === "ArrowLeft" || (e.key === "Backspace" && !minuteTypingValue)) {
         e.preventDefault();
         hourInputRef.current?.focus();
@@ -294,9 +418,12 @@ export const AppleTimePicker = memo(function AppleTimePicker({
       } else if (e.key === "Enter") {
         e.preventDefault();
         onConfirm?.(effectiveDate);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel?.();
       }
     },
-    [effectiveDate, minuteTypingValue, minutes, onConfirm, setMinute, setPeriod],
+    [effectiveDate, minuteTypingValue, minutes, onCancel, onConfirm, setMinute, setPeriod],
   );
 
   return (
@@ -305,6 +432,12 @@ export const AppleTimePicker = memo(function AppleTimePicker({
         "flex w-[320px] flex-col rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl overflow-hidden select-none p-4",
         className,
       )}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel?.();
+        }
+      }}
     >
       {/* Top Header Bar matching Apple layout with interactive typing input */}
       <div className="flex items-center justify-between pb-3 border-b border-border/50">
@@ -325,12 +458,16 @@ export const AppleTimePicker = memo(function AppleTimePicker({
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
-            maxLength={2}
+            maxLength={4}
             value={hourTypingValue}
             onChange={handleHourInputChange}
             onKeyDown={handleHourKeyDown}
-            onFocus={(e) => e.target.select()}
-            className="w-5 bg-transparent text-center font-mono text-xs font-bold text-foreground outline-none select-all"
+            onFocus={(e) => {
+              setIsHourFocused(true);
+              e.target.select();
+            }}
+            onBlur={handleHourBlur}
+            className="w-6 bg-transparent text-center font-mono text-xs font-bold text-foreground outline-none select-all"
             aria-label="Hours"
           />
 
@@ -346,8 +483,12 @@ export const AppleTimePicker = memo(function AppleTimePicker({
             value={minuteTypingValue}
             onChange={handleMinuteInputChange}
             onKeyDown={handleMinuteKeyDown}
-            onFocus={(e) => e.target.select()}
-            className="w-5 bg-transparent text-center font-mono text-xs font-bold text-foreground outline-none select-all"
+            onFocus={(e) => {
+              setIsMinuteFocused(true);
+              e.target.select();
+            }}
+            onBlur={handleMinuteBlur}
+            className="w-6 bg-transparent text-center font-mono text-xs font-bold text-foreground outline-none select-all"
             aria-label="Minutes"
           />
 

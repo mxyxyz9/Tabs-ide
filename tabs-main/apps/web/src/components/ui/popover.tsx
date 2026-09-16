@@ -16,6 +16,19 @@ function PopoverTrigger({ className, children, ...props }: PopoverPrimitive.Trig
   );
 }
 
+function PopoverBackdrop({ className, ...props }: PopoverPrimitive.Backdrop.Props) {
+  return (
+    <PopoverPrimitive.Backdrop
+      className={cn(
+        "fixed inset-0 z-40 bg-black/50 backdrop-blur-[8px] transition-all duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        className,
+      )}
+      data-slot="popover-backdrop"
+      {...props}
+    />
+  );
+}
+
 function PopoverPopup({
   children,
   className,
@@ -26,6 +39,8 @@ function PopoverPopup({
   alignOffset = 0,
   tooltipStyle = false,
   anchor,
+  hasBackdrop = false,
+  backdropClassName,
   ...props
 }: PopoverPrimitive.Popup.Props & {
   viewportClassName?: string;
@@ -35,9 +50,12 @@ function PopoverPopup({
   alignOffset?: PopoverPrimitive.Positioner.Props["alignOffset"];
   tooltipStyle?: boolean;
   anchor?: PopoverPrimitive.Positioner.Props["anchor"];
+  hasBackdrop?: boolean;
+  backdropClassName?: string;
 }) {
   return (
     <PopoverPrimitive.Portal>
+      {hasBackdrop && <PopoverBackdrop className={backdropClassName} />}
       <PopoverPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
@@ -103,6 +121,7 @@ export {
   PopoverCreateHandle,
   Popover,
   PopoverTrigger,
+  PopoverBackdrop,
   PopoverPopup,
   PopoverPopup as PopoverContent,
   PopoverTitle,

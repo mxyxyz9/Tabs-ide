@@ -5723,6 +5723,7 @@ export default function ChatView({
                           <Popover
                             open={isSchedulePopoverOpen}
                             onOpenChange={setIsSchedulePopoverOpen}
+                            modal
                           >
                             <PopoverTrigger
                               render={
@@ -5741,6 +5742,7 @@ export default function ChatView({
                             <PopoverPopup
                               align="end"
                               side="top"
+                              hasBackdrop
                               className="p-0 border-none bg-transparent shadow-none"
                             >
                               <AppleTimePicker
@@ -5896,6 +5898,7 @@ export default function ChatView({
                       <Popover
                         open={isIdleSchedulePopoverOpen}
                         onOpenChange={setIsIdleSchedulePopoverOpen}
+                        modal
                       >
                         <PopoverTrigger
                           render={
@@ -5919,6 +5922,7 @@ export default function ChatView({
                         <PopoverPopup
                           align="end"
                           side="top"
+                          hasBackdrop
                           className="p-0 border-none bg-transparent shadow-none"
                         >
                           <AppleTimePicker

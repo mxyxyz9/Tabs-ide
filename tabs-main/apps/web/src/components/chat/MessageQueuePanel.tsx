@@ -229,6 +229,7 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
                       <Popover
                         open={schedulingMsgId === msg.id}
                         onOpenChange={(open) => setSchedulingMsgId(open ? msg.id : null)}
+                        modal
                       >
                         <PopoverTrigger
                           render={
@@ -266,6 +267,7 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
                         <PopoverPopup
                           align="start"
                           side="top"
+                          hasBackdrop
                           className="p-0 border-none bg-transparent shadow-none"
                         >
                           <AppleTimePicker
