@@ -4,9 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: InputModality.ts
+// Source file: ImageGenerationFailure.ts
 
-/**
- * Canonical user-input modality tags advertised by a model.
- */
-export type InputModality = "text" | "image" | "audio";
+export type ImageGenerationFailure = { "type": "usageLimitExceeded", limitId: string, resetsAt: number | null, };
