@@ -4,18 +4,11 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ProcessTerminalSize.ts
+// Source file: v2/PluginReconcileParams.ts
 
-/**
- * PTY size in character cells for `process/spawn` PTY sessions.
- */
-export type ProcessTerminalSize = {
+export type PluginReconcileParams = {
 	/**
-	 * Terminal height in character cells.
+	 * Optional client-provided reason recorded with the reconciliation attempt.
 	 */
-	rows: number,
-	/**
-	 * Terminal width in character cells.
-	 */
-	cols: number,
+	reason?: string | null,
 };

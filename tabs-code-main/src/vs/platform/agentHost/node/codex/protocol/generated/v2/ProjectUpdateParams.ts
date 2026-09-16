@@ -4,18 +4,8 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ProcessTerminalSize.ts
+// Source file: v2/ProjectUpdateParams.ts
 
-/**
- * PTY size in character cells for `process/spawn` PTY sessions.
- */
-export type ProcessTerminalSize = {
-	/**
-	 * Terminal height in character cells.
-	 */
-	rows: number,
-	/**
-	 * Terminal width in character cells.
-	 */
-	cols: number,
-};
+import type { ProjectRoot } from "./ProjectRoot.js";
+
+export type ProjectUpdateParams = { projectId: string, name?: string | null, roots?: Array<ProjectRoot> | null, metadata?: { [key in string]?: string } | null, };

@@ -4,18 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ProcessTerminalSize.ts
+// Source file: v2/ProjectDeleteResponse.ts
 
-/**
- * PTY size in character cells for `process/spawn` PTY sessions.
- */
-export type ProcessTerminalSize = {
-	/**
-	 * Terminal height in character cells.
-	 */
-	rows: number,
-	/**
-	 * Terminal width in character cells.
-	 */
-	cols: number,
-};
+export type ProjectDeleteResponse = Record<string, never>;
