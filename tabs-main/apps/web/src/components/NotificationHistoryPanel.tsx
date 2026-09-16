@@ -272,10 +272,7 @@ export function NotificationHistoryPanel({
 
                     <div className={cn("mt-0.5 shrink-0", iconColor)}>
                       <Icon
-                        className={cn(
-                          "size-3.5",
-                          entry.type === "loading" && "animate-spin",
-                        )}
+                        className={cn("size-3.5", entry.type === "loading" && "animate-spin")}
                       />
                     </div>
 

@@ -13,14 +13,8 @@ import {
 } from "lucide-react";
 import { memo, useMemo, useState, useCallback } from "react";
 import type { EnvironmentId, ThreadId } from "@tabs/contracts";
-import {
-  usePromptStashStore,
-  promptStashSnippet,
-  type PromptStashEntry,
-} from "~/promptStashStore";
-import {
-  hydrateImagesFromPersisted,
-} from "~/composerDraftStore";
+import { usePromptStashStore, promptStashSnippet, type PromptStashEntry } from "~/promptStashStore";
+import { hydrateImagesFromPersisted } from "~/composerDraftStore";
 import {
   useComposerDraft,
   createScopedComposerDraftActions,
@@ -58,8 +52,7 @@ export const PromptStashPanel = memo(function PromptStashPanel({
   const currentDraft = useComposerDraft(fallbackThreadId, currentEnvironmentId);
   const existingDraftPrompt = currentDraft?.prompt ?? "";
   const existingDraftImages = currentDraft?.images ?? [];
-  const hasStashableDraft =
-    existingDraftPrompt.trim().length > 0 || existingDraftImages.length > 0;
+  const hasStashableDraft = existingDraftPrompt.trim().length > 0 || existingDraftImages.length > 0;
 
   const draftActions = useMemo(
     () =>
@@ -140,13 +133,7 @@ export const PromptStashPanel = memo(function PromptStashPanel({
 
       onLoadedIntoComposer?.();
     },
-    [
-      activeThreadId,
-      draftActions,
-      existingDraftPrompt,
-      onLoadedIntoComposer,
-      takeStash,
-    ],
+    [activeThreadId, draftActions, existingDraftPrompt, onLoadedIntoComposer, takeStash],
   );
 
   const handleStashCurrentDraft = useCallback(async () => {
@@ -297,8 +284,10 @@ export const PromptStashPanel = memo(function PromptStashPanel({
           </div>
           <p className="font-medium text-foreground">No stashed prompts yet</p>
           <p className="mt-1 max-w-xs text-[11px] text-muted-foreground/80">
-            Press <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px]">⌘S</kbd> or click the{" "}
-            <span className="font-semibold text-foreground">Stash</span> button in the composer to stash drafts for later.
+            Press{" "}
+            <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px]">⌘S</kbd>{" "}
+            or click the <span className="font-semibold text-foreground">Stash</span> button in the
+            composer to stash drafts for later.
           </p>
           {hasStashableDraft && (
             <Button
@@ -354,7 +343,9 @@ export const PromptStashPanel = memo(function PromptStashPanel({
                           }}
                           disabled={!activeThreadId}
                           className="h-6 gap-1 px-2 text-[11px] font-semibold text-foreground hover:bg-background shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                          title={activeThreadId ? "Unstash prompt into composer" : "Open a thread first"}
+                          title={
+                            activeThreadId ? "Unstash prompt into composer" : "Open a thread first"
+                          }
                         >
                           <Undo2Icon className="size-3 text-primary" />
                           <span>Unstash</span>
@@ -383,7 +374,8 @@ export const PromptStashPanel = memo(function PromptStashPanel({
                       )}
                       {entry.attachments.length > 0 && (
                         <span className="flex items-center gap-0.5 text-primary font-medium">
-                          · {entry.attachments.length} image{entry.attachments.length === 1 ? "" : "s"}
+                          · {entry.attachments.length} image
+                          {entry.attachments.length === 1 ? "" : "s"}
                         </span>
                       )}
                       {(entry.files?.length ?? 0) > 0 && (
@@ -503,7 +495,11 @@ export const PromptStashPanel = memo(function PromptStashPanel({
                   onClick={() => handleRestore(activeEntry, "append")}
                   disabled={!activeThreadId}
                   className="gap-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                  title={activeThreadId ? "Append prompt and attachments to existing composer draft" : "Open a thread first"}
+                  title={
+                    activeThreadId
+                      ? "Append prompt and attachments to existing composer draft"
+                      : "Open a thread first"
+                  }
                 >
                   <PlusIcon className="size-3.5" />
                   Append

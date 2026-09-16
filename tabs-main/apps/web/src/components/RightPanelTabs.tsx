@@ -1,19 +1,10 @@
-import {
-  BookmarkIcon,
-  Columns2Icon,
-  FileDiffIcon,
-  ListOrderedIcon,
-  XIcon,
-} from "lucide-react";
+import { BookmarkIcon, Columns2Icon, FileDiffIcon, ListOrderedIcon, XIcon } from "lucide-react";
 import { memo, useCallback } from "react";
 import type { EnvironmentId, ThreadId } from "@tabs/contracts";
 import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
 import { usePromptStashStore } from "~/promptStashStore";
-import {
-  useMessageQueueStore,
-  getThreadQueuedMessages,
-} from "~/stores/messageQueueStore";
+import { useMessageQueueStore, getThreadQueuedMessages } from "~/stores/messageQueueStore";
 import { useRightPanelStore, type RightPanelTab } from "~/stores/rightPanelStore";
 import { PromptStashPanel } from "./chat/PromptStashPanel";
 import { MessageQueuePanel } from "./chat/MessageQueuePanel";

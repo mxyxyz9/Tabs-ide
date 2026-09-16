@@ -44,9 +44,7 @@ type ThreadStatusInput = Pick<
   "interactionMode" | "latestTurn" | "lastVisitedAt" | "proposedPlans" | "session"
 >;
 
-export function isThreadWorking(
-  thread: Pick<Thread, "session" | "latestTurn">,
-): boolean {
+export function isThreadWorking(thread: Pick<Thread, "session" | "latestTurn">): boolean {
   if (thread.session?.status === "running" || thread.session?.status === "connecting") {
     return true;
   }

@@ -82,32 +82,33 @@ function OsNotificationsToggle() {
     () => (typeof Notification === "undefined" ? "unsupported" : Notification.permission),
   );
 
-  const handleToggle = useCallback(async (checked: boolean) => {
-    if (!checked) {
-      setOsNotificationsEnabled(false);
-      setEnabled(false);
-      return;
-    }
-    if (permissionState === "unsupported") return;
-    if (permissionState === "denied") {
-      toastManager.add({
-        type: "warning",
-        title: "Notifications blocked",
-        description:
-          "System notifications are blocked in your OS settings. Enable them for Tabs in your browser/system notification preferences.",
-      });
-      return;
-    }
-    const granted = await requestOsNotificationPermission();
-    const next = Notification.permission as NotificationPermission;
-    setPermissionState(next);
-    setEnabled(granted);
-  }, [permissionState]);
+  const handleToggle = useCallback(
+    async (checked: boolean) => {
+      if (!checked) {
+        setOsNotificationsEnabled(false);
+        setEnabled(false);
+        return;
+      }
+      if (permissionState === "unsupported") return;
+      if (permissionState === "denied") {
+        toastManager.add({
+          type: "warning",
+          title: "Notifications blocked",
+          description:
+            "System notifications are blocked in your OS settings. Enable them for Tabs in your browser/system notification preferences.",
+        });
+        return;
+      }
+      const granted = await requestOsNotificationPermission();
+      const next = Notification.permission as NotificationPermission;
+      setPermissionState(next);
+      setEnabled(granted);
+    },
+    [permissionState],
+  );
 
   if (permissionState === "unsupported") {
-    return (
-      <span className="text-xs text-muted-foreground">Not supported in this environment</span>
-    );
+    return <span className="text-xs text-muted-foreground">Not supported in this environment</span>;
   }
 
   return (
@@ -838,9 +839,7 @@ export function GeneralSettings() {
         <SettingsRow
           title="System notifications"
           description="Show OS-level notifications for errors and warnings, so you're alerted even when Tabs is in the background. Excludes transient watchdog alerts."
-          control={
-            <OsNotificationsToggle />
-          }
+          control={<OsNotificationsToggle />}
         />
       </SettingsSection>
 

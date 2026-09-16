@@ -71,11 +71,7 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
   const handleUpdateSchedule = useCallback(
     (msgId: string, date: Date | null) => {
       if (!activeThreadId) return;
-      updateMessageSchedule(
-        activeThreadId,
-        msgId,
-        date ? date.toISOString() : null,
-      );
+      updateMessageSchedule(activeThreadId, msgId, date ? date.toISOString() : null);
       setSchedulingMsgId(null);
       toastManager.add({
         type: "success",
@@ -115,7 +111,8 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
 
       {/* Helper notice */}
       <div className="bg-muted/30 px-3 py-2 border-b border-border/40 text-[11px] text-muted-foreground leading-relaxed">
-        <span className="font-medium text-foreground">Auto-dispatch:</span> Messages queued here execute in order. Messages with a scheduled time wait until their scheduled time arrives.
+        <span className="font-medium text-foreground">Auto-dispatch:</span> Messages queued here
+        execute in order. Messages with a scheduled time wait until their scheduled time arrives.
       </div>
 
       {/* Main List Area */}
@@ -127,7 +124,8 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
           <p className="font-medium text-foreground">No messages in queue</p>
           <p className="mt-1 max-w-xs text-[11px] text-muted-foreground/80 leading-relaxed">
             While the agent is working, write your follow-up message in the composer and click{" "}
-            <span className="font-semibold text-foreground">Queue</span> or schedule it for a specific time.
+            <span className="font-semibold text-foreground">Queue</span> or schedule it for a
+            specific time.
           </p>
         </div>
       ) : (
@@ -140,8 +138,7 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
 
               const isScheduled = Boolean(msg.scheduledFor);
               const scheduledDate = msg.scheduledFor ? new Date(msg.scheduledFor) : null;
-              const isPastScheduled =
-                scheduledDate && scheduledDate.getTime() <= Date.now();
+              const isPastScheduled = scheduledDate && scheduledDate.getTime() <= Date.now();
 
               return (
                 <div
@@ -168,7 +165,9 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
                           variant="ghost"
                           size="icon"
                           disabled={isFirst || !activeThreadId}
-                          onClick={() => activeThreadId && reorderQueue(activeThreadId, index, index - 1)}
+                          onClick={() =>
+                            activeThreadId && reorderQueue(activeThreadId, index, index - 1)
+                          }
                           className="size-5 text-muted-foreground disabled:opacity-20 cursor-pointer"
                           title="Move up"
                         >
@@ -179,7 +178,9 @@ export const MessageQueuePanel = memo(function MessageQueuePanel({
                           variant="ghost"
                           size="icon"
                           disabled={isLast || !activeThreadId}
-                          onClick={() => activeThreadId && reorderQueue(activeThreadId, index, index + 1)}
+                          onClick={() =>
+                            activeThreadId && reorderQueue(activeThreadId, index, index + 1)
+                          }
                           className="size-5 text-muted-foreground disabled:opacity-20 cursor-pointer"
                           title="Move down"
                         >

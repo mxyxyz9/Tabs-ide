@@ -150,10 +150,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import {
-  useMessageQueueStore,
-  getThreadQueuedMessages,
-} from "../stores/messageQueueStore";
+import { useMessageQueueStore, getThreadQueuedMessages } from "../stores/messageQueueStore";
 import { useRightPanelStore, type RightPanelTab } from "../stores/rightPanelStore";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
@@ -4003,8 +4000,7 @@ export default function ChatView({
         title: dequeued.scheduledFor
           ? "Dispatching scheduled message"
           : "Dispatching queued message",
-        description:
-          dequeued.text.length > 50 ? `${dequeued.text.slice(0, 50)}...` : dequeued.text,
+        description: dequeued.text.length > 50 ? `${dequeued.text.slice(0, 50)}...` : dequeued.text,
       });
 
       void onSend().finally(() => {

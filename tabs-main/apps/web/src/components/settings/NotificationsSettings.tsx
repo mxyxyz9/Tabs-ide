@@ -303,10 +303,8 @@ export function NotificationsSettings() {
   const filtered = filter === "all" ? entries : entries.filter((e) => e.type === filter);
   const unreadCount = entries.filter((e) => !e.read).length;
 
-  const allFilteredSelected =
-    filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
-  const someFilteredSelected =
-    filtered.some((e) => selectedIds.has(e.id)) && !allFilteredSelected;
+  const allFilteredSelected = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
+  const someFilteredSelected = filtered.some((e) => selectedIds.has(e.id)) && !allFilteredSelected;
 
   const handleToggleSelectAll = useCallback(() => {
     if (allFilteredSelected) {
@@ -335,9 +333,7 @@ export function NotificationsSettings() {
     });
   }, []);
 
-  const selectedUnreadCount = filtered.filter(
-    (e) => selectedIds.has(e.id) && !e.read,
-  ).length;
+  const selectedUnreadCount = filtered.filter((e) => selectedIds.has(e.id) && !e.read).length;
 
   const handleBatchMarkRead = useCallback(() => {
     if (selectedIds.size === 0) return;
@@ -517,9 +513,7 @@ export function NotificationsSettings() {
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">
-                {entries.length === 0
-                  ? "No notification history"
-                  : `No ${filter} notifications`}
+                {entries.length === 0 ? "No notification history" : `No ${filter} notifications`}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {entries.length === 0

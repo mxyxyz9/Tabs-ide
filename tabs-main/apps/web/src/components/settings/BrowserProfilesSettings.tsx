@@ -1458,8 +1458,8 @@ export function BrowserProfilesSettings() {
 
             <p className="text-xs text-muted-foreground pt-1 leading-relaxed">
               Import copies supported cookies only; passkeys, passwords, and local storage are not
-              transferred. Linux Secret Service requires secret-tool and an unlocked keyring. Windows
-              App-Bound (v20) cookies are unsupported and will be reported as skipped.
+              transferred. Linux Secret Service requires secret-tool and an unlocked keyring.
+              Windows App-Bound (v20) cookies are unsupported and will be reported as skipped.
             </p>
           </DialogPanel>
 

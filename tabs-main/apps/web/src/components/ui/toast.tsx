@@ -290,9 +290,10 @@ function Toasts({ position = "top-right" }: { position: ToastPosition }) {
   const { toasts } = Toast.useToastManager<ThreadToastData>();
   const activeThreadId = useActiveThreadIdFromRoute();
   const isTop = position.startsWith("top");
-  const visibleToasts = toasts.filter((toast) =>
-    (toast as { transitionStatus?: string }).transitionStatus !== "ending" &&
-    shouldRenderForActiveThread(toast.data, activeThreadId),
+  const visibleToasts = toasts.filter(
+    (toast) =>
+      (toast as { transitionStatus?: string }).transitionStatus !== "ending" &&
+      shouldRenderForActiveThread(toast.data, activeThreadId),
   );
   const isDesktopOverlayActive = useNotificationOverlayAdapter(visibleToasts, toastManager);
 

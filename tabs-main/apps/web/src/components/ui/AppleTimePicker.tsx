@@ -42,7 +42,10 @@ export function parseTimeDigits(raw: string): { hour: number; minute: number } |
 /**
  * Normalizes hour string on blur, falling back to current valid hour
  */
-export function normalizeHourInput(val: string, fallbackHour: number): { hour: number; text: string } {
+export function normalizeHourInput(
+  val: string,
+  fallbackHour: number,
+): { hour: number; text: string } {
   const digits = val.replace(/\D/g, "");
   if (!digits) {
     return { hour: fallbackHour, text: String(fallbackHour) };
@@ -57,16 +60,25 @@ export function normalizeHourInput(val: string, fallbackHour: number): { hour: n
 /**
  * Normalizes minute string on blur to 2-digit format, falling back to current valid minute
  */
-export function normalizeMinuteInput(val: string, fallbackMinute: number): { minute: number; text: string } {
+export function normalizeMinuteInput(
+  val: string,
+  fallbackMinute: number,
+): { minute: number; text: string } {
   const digits = val.replace(/\D/g, "");
   if (!digits) {
-    return { minute: fallbackMinute, text: fallbackMinute < 10 ? `0${fallbackMinute}` : String(fallbackMinute) };
+    return {
+      minute: fallbackMinute,
+      text: fallbackMinute < 10 ? `0${fallbackMinute}` : String(fallbackMinute),
+    };
   }
   const num = parseInt(digits, 10);
   if (num >= 0 && num <= 59) {
     return { minute: num, text: num < 10 ? `0${num}` : String(num) };
   }
-  return { minute: fallbackMinute, text: fallbackMinute < 10 ? `0${fallbackMinute}` : String(fallbackMinute) };
+  return {
+    minute: fallbackMinute,
+    text: fallbackMinute < 10 ? `0${fallbackMinute}` : String(fallbackMinute),
+  };
 }
 
 export const AppleTimePicker = memo(function AppleTimePicker({
@@ -114,7 +126,15 @@ export const AppleTimePicker = memo(function AppleTimePicker({
   // Check if selected time on "today" is already in the past
   const isPastToday = useMemo(() => {
     const now = new Date();
-    const todayTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours24, minutes, 0, 0);
+    const todayTarget = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      hours24,
+      minutes,
+      0,
+      0,
+    );
     return todayTarget.getTime() <= now.getTime();
   }, [hours24, minutes]);
 

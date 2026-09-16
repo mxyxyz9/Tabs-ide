@@ -365,10 +365,10 @@ export const ThemeImportExportModal: React.FC<ThemeImportExportModalProps> = ({
                 <Download className="size-3.5" />
                 <span>Download .json</span>
               </Button>
-              </div>
-            )}
-          </div>
-        </DialogPopup>
-      </Dialog>
+            </div>
+          )}
+        </div>
+      </DialogPopup>
+    </Dialog>
   );
 };

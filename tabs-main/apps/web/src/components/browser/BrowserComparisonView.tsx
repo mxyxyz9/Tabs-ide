@@ -461,7 +461,10 @@ export function BrowserComparisonView({
                       if (val) setProfileA(val);
                     }}
                   >
-                    <SelectTrigger aria-label="Profile for Pane A" className="h-6 rounded border bg-background text-xs px-2">
+                    <SelectTrigger
+                      aria-label="Profile for Pane A"
+                      className="h-6 rounded border bg-background text-xs px-2"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectPopup>
@@ -560,7 +563,10 @@ export function BrowserComparisonView({
                       if (val) setProfileB(val);
                     }}
                   >
-                    <SelectTrigger aria-label="Profile for Pane B" className="h-6 rounded border bg-background text-xs px-2">
+                    <SelectTrigger
+                      aria-label="Profile for Pane B"
+                      className="h-6 rounded border bg-background text-xs px-2"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectPopup>

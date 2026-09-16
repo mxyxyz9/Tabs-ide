@@ -917,10 +917,7 @@ function resolveProjectAgentThreadId(
 
 function TitlebarNotificationBell({ onOpenSettings }: { onOpenSettings?: () => void }) {
   return (
-    <NotificationHistoryPanel
-      variant="titlebar"
-      {...(onOpenSettings ? { onOpenSettings } : {})}
-    />
+    <NotificationHistoryPanel variant="titlebar" {...(onOpenSettings ? { onOpenSettings } : {})} />
   );
 }
 
@@ -1087,7 +1084,9 @@ function ProjectTabs(props: {
       {props.showSettings ? (
         <div className="no-drag mb-1 flex shrink-0 items-center gap-1">
           <div id="project-toolbar-extra-controls" className="flex items-center empty:hidden" />
-          <TitlebarNotificationBell {...(props.onOpenSettings ? { onOpenSettings: props.onOpenSettings } : {})} />
+          <TitlebarNotificationBell
+            {...(props.onOpenSettings ? { onOpenSettings: props.onOpenSettings } : {})}
+          />
           <Button
             type="button"
             variant="ghost"
@@ -1176,9 +1175,7 @@ function ProjectToolBar(props: {
               ? (props.threads ?? []).filter((t) => t.projectId === props.activeProjectId)
               : [];
           const toolActivityIndicator =
-            isAgentsTool && !active
-              ? resolveTabActivityIndicator(activeProjectThreads)
-              : null;
+            isAgentsTool && !active ? resolveTabActivityIndicator(activeProjectThreads) : null;
           return (
             <button
               key={tool.id}
@@ -1344,7 +1341,10 @@ function AgentsThreadList(props: {
             : { type: "thread.pin", commandId, threadId: thread.id },
         );
       } else if (action === "settle") {
-        if (!thread.settledAt && (thread.session?.status === "running" || thread.latestTurn?.state === "running")) {
+        if (
+          !thread.settledAt &&
+          (thread.session?.status === "running" || thread.latestTurn?.state === "running")
+        ) {
           try {
             await api.orchestration.dispatchCommand({
               type: "thread.session.stop",

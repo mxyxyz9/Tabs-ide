@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  normalizeHourInput,
-  normalizeMinuteInput,
-  parseTimeDigits,
-} from "./AppleTimePicker";
+import { normalizeHourInput, normalizeMinuteInput, parseTimeDigits } from "./AppleTimePicker";
 
 describe("AppleTimePicker - parseTimeDigits", () => {
   it("parses 4-digit continuous time entries correctly", () => {

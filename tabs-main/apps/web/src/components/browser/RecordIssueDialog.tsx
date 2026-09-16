@@ -820,7 +820,9 @@ export function RecordIssueDialog({
                     {availableTasks.length > 0 ? (
                       <Select
                         value={selectedTaskId || "unassigned"}
-                        onValueChange={(val) => setSelectedTaskId(val === "unassigned" ? "" : (val ?? ""))}
+                        onValueChange={(val) =>
+                          setSelectedTaskId(val === "unassigned" ? "" : (val ?? ""))
+                        }
                       >
                         <SelectTrigger className="h-8 w-full rounded-md border bg-background px-2 text-xs">
                           <SelectValue placeholder="No task selected (unassigned)" />
