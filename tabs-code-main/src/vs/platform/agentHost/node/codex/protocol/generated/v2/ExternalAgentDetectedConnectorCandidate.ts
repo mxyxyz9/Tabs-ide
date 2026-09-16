@@ -4,8 +4,8 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ErrorNotification.ts
+// Source file: v2/ExternalAgentDetectedConnectorCandidate.ts
 
-import type { TurnError } from "./TurnError.js";
+import type { ExternalAgentDetectedConnectorSource } from "./ExternalAgentDetectedConnectorSource.js";
 
-export type ErrorNotification = { error: TurnError, willRetry: boolean, threadId: string, turnId: string, };
+export type ExternalAgentDetectedConnectorCandidate = { name: string, sessionCount: number, source: ExternalAgentDetectedConnectorSource, };

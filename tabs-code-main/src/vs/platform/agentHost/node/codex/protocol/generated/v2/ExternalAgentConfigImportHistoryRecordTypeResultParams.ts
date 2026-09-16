@@ -4,10 +4,10 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ExternalAgentConfigImportTypeResult.ts
+// Source file: v2/ExternalAgentConfigImportHistoryRecordTypeResultParams.ts
 
+import type { ExternalAgentConfigImportHistoryRecordSuccessParams } from "./ExternalAgentConfigImportHistoryRecordSuccessParams.js";
 import type { ExternalAgentConfigImportItemTypeFailure } from "./ExternalAgentConfigImportItemTypeFailure.js";
-import type { ExternalAgentConfigImportItemTypeSuccess } from "./ExternalAgentConfigImportItemTypeSuccess.js";
 import type { ExternalAgentConfigMigrationItemType } from "./ExternalAgentConfigMigrationItemType.js";
 
-export type ExternalAgentConfigImportTypeResult = { itemType: ExternalAgentConfigMigrationItemType, successes: Array<ExternalAgentConfigImportItemTypeSuccess>, failures: Array<ExternalAgentConfigImportItemTypeFailure>, };
+export type ExternalAgentConfigImportHistoryRecordTypeResultParams = { itemType: ExternalAgentConfigMigrationItemType, successes: Array<ExternalAgentConfigImportHistoryRecordSuccessParams>, failures: Array<ExternalAgentConfigImportItemTypeFailure>, };

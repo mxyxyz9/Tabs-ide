@@ -4,8 +4,14 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ExternalAgentConfigImportItemTypeFailure.ts
+// Source file: v2/ExternalAgentConfigImportHistoryRecordSuccessParams.ts
 
 import type { ExternalAgentConfigMigrationItemType } from "./ExternalAgentConfigMigrationItemType.js";
 
-export type ExternalAgentConfigImportItemTypeFailure = { itemType: ExternalAgentConfigMigrationItemType, errorType: string | null, subErrorType: string | null, failureStage: string, message: string, cwd: string | null, source: string | null, };
+export type ExternalAgentConfigImportHistoryRecordSuccessParams = {
+	itemType: ExternalAgentConfigMigrationItemType, cwd: string | null, source: string | null, target: string | null,
+	/**
+	 * Original title for an imported session, when available.
+	 */
+	title?: string | null,
+};
