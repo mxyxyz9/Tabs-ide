@@ -4,6 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ByteRange.ts
+// Source file: v2/BrowserUseAccessApprovalLifetime.ts
 
-export type ByteRange = { start: number, end: number, };
+export type BrowserUseAccessApprovalLifetime = "turn" | "thread";

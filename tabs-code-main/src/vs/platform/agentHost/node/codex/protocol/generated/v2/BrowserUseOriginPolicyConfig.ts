@@ -4,6 +4,8 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ByteRange.ts
+// Source file: v2/BrowserUseOriginPolicyConfig.ts
 
-export type ByteRange = { start: number, end: number, };
+import type { AllowDenyRequirement } from "./AllowDenyRequirement.js";
+
+export type BrowserUseOriginPolicyConfig = { access: AllowDenyRequirement | null, downloads: AllowDenyRequirement | null, uploads: AllowDenyRequirement | null, full_cdp_access: AllowDenyRequirement | null, };

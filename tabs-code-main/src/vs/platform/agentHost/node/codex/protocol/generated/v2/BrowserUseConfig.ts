@@ -4,6 +4,8 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ByteRange.ts
+// Source file: v2/BrowserUseConfig.ts
 
-export type ByteRange = { start: number, end: number, };
+import type { BrowserUseOriginPolicyConfig } from "./BrowserUseOriginPolicyConfig.js";
+
+export type BrowserUseConfig = { allow_history_access: boolean | null, default_origin_policy: BrowserUseOriginPolicyConfig | null, origins: { [key in string]?: BrowserUseOriginPolicyConfig } | null, };

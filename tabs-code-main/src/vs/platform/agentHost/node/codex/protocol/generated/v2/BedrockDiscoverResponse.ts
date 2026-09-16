@@ -4,6 +4,9 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ByteRange.ts
+// Source file: v2/BedrockDiscoverResponse.ts
 
-export type ByteRange = { start: number, end: number, };
+import type { BedrockAwsProfile } from "./BedrockAwsProfile.js";
+import type { BedrockEnvironmentCredential } from "./BedrockEnvironmentCredential.js";
+
+export type BedrockDiscoverResponse = { profiles: Array<BedrockAwsProfile>, environmentCredentials: Array<BedrockEnvironmentCredential>, };
