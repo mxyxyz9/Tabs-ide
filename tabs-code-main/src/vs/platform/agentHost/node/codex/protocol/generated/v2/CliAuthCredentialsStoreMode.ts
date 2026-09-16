@@ -4,6 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/CreditsSnapshot.ts
+// Source file: v2/CliAuthCredentialsStoreMode.ts
 
-export type CreditsSnapshot = { hasCredits: boolean, unlimited: boolean, balance: string | null, };
+export type CliAuthCredentialsStoreMode = "file" | "keyring" | "auto" | "ephemeral";

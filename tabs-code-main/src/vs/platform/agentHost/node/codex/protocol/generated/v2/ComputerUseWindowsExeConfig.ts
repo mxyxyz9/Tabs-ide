@@ -4,6 +4,8 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/CreditsSnapshot.ts
+// Source file: v2/ComputerUseWindowsExeConfig.ts
 
-export type CreditsSnapshot = { hasCredits: boolean, unlimited: boolean, balance: string | null, };
+import type { AllowDenyRequirement } from "./AllowDenyRequirement.js";
+
+export type ComputerUseWindowsExeConfig = { publisher_name: string, product_name: string, binary_name: string | null, access: AllowDenyRequirement, };

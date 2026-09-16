@@ -4,6 +4,9 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/CreditsSnapshot.ts
+// Source file: v2/CommandExecutionApprovalKind.ts
 
-export type CreditsSnapshot = { hasCredits: boolean, unlimited: boolean, balance: string | null, };
+/**
+ * Distinguishes a command approval from input sent to an existing terminal.
+ */
+export type CommandExecutionApprovalKind = "command" | "writeStdin";

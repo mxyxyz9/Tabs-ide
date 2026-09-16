@@ -4,6 +4,10 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/CreditsSnapshot.ts
+// Source file: v2/CyberAccessProgram.ts
 
-export type CreditsSnapshot = { hasCredits: boolean, unlimited: boolean, balance: string | null, };
+/**
+ * Requested cyber treatment for a ChatGPT-authenticated Codex turn.
+ * Authorization and model-tier restrictions remain server-owned.
+ */
+export type CyberAccessProgram = "standard" | "daybreakBlue" | "daybreakRed";
