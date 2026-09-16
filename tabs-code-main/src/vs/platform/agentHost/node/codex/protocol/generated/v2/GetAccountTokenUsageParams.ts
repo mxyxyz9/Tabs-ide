@@ -4,6 +4,11 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: GitSha.ts
+// Source file: v2/GetAccountTokenUsageParams.ts
 
-export type GitSha = string;
+export type GetAccountTokenUsageParams = {
+	/**
+	 * When present, read estimated usage for this thread instead of account-wide token activity.
+	 */
+	threadId?: string | null,
+};
