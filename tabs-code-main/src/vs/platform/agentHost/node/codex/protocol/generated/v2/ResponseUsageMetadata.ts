@@ -4,6 +4,11 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ResidencyRequirement.ts
+// Source file: v2/ResponseUsageMetadata.ts
 
-export type ResidencyRequirement = "us";
+import type { JsonValue } from "../serde_json/JsonValue.js";
+
+/**
+ * Usage metadata reported for one upstream response.
+ */
+export type ResponseUsageMetadata = { amount: string | null, metadata: JsonValue | null, };
