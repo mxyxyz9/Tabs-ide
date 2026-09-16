@@ -21,16 +21,66 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 150;
+export const TOTAL_TAGS_COUNT = 151;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.8",
+    title:
+      "Code-OSS 1.138 upstream runtime sync, native code host contracts, and UI refinements",
+    date: "September 16, 2026",
+    shortDate: "Sep 16",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Full synchronization with upstream VS Code 1.138 across the vendored Code-OSS runtime, updated AgentHost services and generated Codex protocol schemas, typed native code host IPC contracts with automated testing, and workspace UI polish.",
+    highlights: [
+      "Synchronized vendored Code-OSS runtime with upstream VS Code 1.138.0, updating workbench parts, chat widgets, and extensions.",
+      "Upstream-aligned AgentHost turn lifecycle coordination and refreshed Codex JSON-RPC protocol schemas.",
+      "Typed Electron desktop-to-native code host IPC contracts backed by automated contract tests.",
+      "Refined workspace shell layout, prompt stash and message queue panels, time picker input mechanics, and notification settings.",
+    ],
+    categories: [
+      {
+        title: "Code-OSS & Upstream Sync",
+        items: [
+          "Synchronized vendored Code-OSS runtime and dependencies with VS Code 1.138.0.",
+          "Updated workbench chat contributions, terminal contributions, and built-in extensions.",
+          "Refreshed Code-OSS bootstrap configuration, product settings, and build pipelines.",
+        ],
+      },
+      {
+        title: "AgentHost & Protocol Schemas",
+        items: [
+          "Upstream-aligned AgentHost session coordination, changeset handlers, and turn starter lifecycle.",
+          "Regenerated and synced Codex JSON-RPC protocol schemas across all domain types.",
+          "Updated Copilot and Claude provider adapters for the synchronized runtime.",
+        ],
+      },
+      {
+        title: "Native Code Host & Testing",
+        items: [
+          "Implemented strongly-typed native code host IPC contracts for desktop integration.",
+          "Added automated contract testing suite for native code host bridge stability.",
+          "Polished desktop smoke tests and resource initialization.",
+        ],
+      },
+      {
+        title: "UI & Settings Polish",
+        items: [
+          "Refined workspace shell layout, right panel tabs, and sidebar logic.",
+          "Improved prompt stash and message queue panel user experience.",
+          "Enhanced keyboard numeric entry and styling for time picker and settings controls.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.7",
     title:
       "Notification history, schedule popover styling, time picker typing, and provider session lifecycle",
     date: "September 16, 2026",
     shortDate: "Sep 16",
-    isLatest: true,
     type: "feature",
     summary:
       "Dedicated notification history drawer with desktop alert preferences, schedule popover backdrop blur with keyboard time picker typing overhaul, prompt staging panels, and scoped provider event loops.",

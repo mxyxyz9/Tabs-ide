@@ -2,6 +2,15 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.8] - 2026-09-16
+
+### Code-OSS 1.138 upstream runtime sync, native code host contracts, and UI refinements
+
+- **Code-OSS 1.138.0 upstream sync**: Synchronized the vendored Code-OSS runtime to VS Code 1.138.0, refreshing core workbench services, chat integrations, editor capabilities, and extensions.
+- **AgentHost & Codex protocol schemas**: Aligned AgentHost services, session coordination, and turn lifecycle handlers, updating generated Codex protocol types.
+- **Native code host contracts & testing**: Added strongly-typed IPC contracts and automated tests for desktop-to-editor bridge communication.
+- **Workspace UI & settings polish**: Refined workspace shell layout, prompt stash and message queue panels, time picker input stability, and notification preferences.
+
 ## [v1.3.7] - 2026-09-16
 
 ### Notification history, schedule popover styling, time picker typing, and provider session lifecycle
