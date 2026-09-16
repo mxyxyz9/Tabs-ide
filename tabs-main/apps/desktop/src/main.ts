@@ -3372,8 +3372,8 @@ function createTabsWindow(): BrowserWindow {
     }
   });
 
-  if (isDevelopment) {
-    void window.loadURL(process.env.VITE_DEV_SERVER_URL as string);
+  if (isDevelopment && process.env.VITE_DEV_SERVER_URL) {
+    void window.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     void window.loadURL(`${DESKTOP_SCHEME}://app/index.html`);
   }

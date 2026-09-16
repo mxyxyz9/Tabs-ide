@@ -35,6 +35,8 @@ child.on("exit", () => {
   clearTimeout(timeout);
 
   const fatalPatterns = [
+    "fatal startup error",
+    "conversion failure from undefined",
     "Cannot find module",
     "MODULE_NOT_FOUND",
     "Refused to execute",

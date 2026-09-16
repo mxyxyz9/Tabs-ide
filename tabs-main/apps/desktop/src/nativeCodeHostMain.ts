@@ -4,6 +4,7 @@ import {
   clipboard,
   contentTracing,
   dialog,
+  nativeImage,
   nativeTheme,
   Notification,
   net,
@@ -141,6 +142,7 @@ type NativeCodeHostModules = {
   IApplicationStorageMainService: unknown;
   ILogService: unknown;
   IProductService: unknown;
+  IAgentNetworkFilterService: unknown;
 };
 
 type ServerChannel = {
@@ -236,6 +238,7 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     nativeHostMainContract,
     storageMainContract,
     productContract,
+    networkFilterContract,
     buffer,
     ports,
     zip,
@@ -294,6 +297,7 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     import(moduleUrl(vscodeRoot, "vs/platform/native/electron-main/nativeHostMainService.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/storage/electron-main/storageMainService.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/product/common/productService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/networkFilter/common/networkFilterService.js")),
     import(moduleUrl(vscodeRoot, "vs/base/common/buffer.js")),
     import(moduleUrl(vscodeRoot, "vs/base/node/ports.js")),
     import(moduleUrl(vscodeRoot, "vs/base/node/zip.js")),
@@ -350,6 +354,7 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     IApplicationStorageMainService: storageMainContract.IApplicationStorageMainService,
     ILogService: log.ILogService,
     IProductService: productContract.IProductService,
+    IAgentNetworkFilterService: networkFilterContract.IAgentNetworkFilterService,
     VSBuffer: buffer.VSBuffer,
     isPortFree: ports.isPortFree,
     findFreePort: ports.findFreePort,
@@ -419,9 +424,15 @@ export async function createNativeCodeHostMainBackend(
     string,
     {
       notification: Notification;
-      finish(result: { supported: boolean; clicked: boolean; actionIndex?: number }): void;
+      finish(result: {
+        supported: boolean;
+        clicked: boolean;
+        actionIndex?: number;
+        suppressed?: boolean;
+      }): void;
     }
   >();
+  const activeToastDedupeKeys = new Map<string, string>();
   const clearToast = (id: string) => {
     const active = activeToasts.get(id);
     if (!active) return;
@@ -675,6 +686,13 @@ export async function createNativeCodeHostMainBackend(
     version: process.env.npm_package_version ?? "0.0.0",
     commit: "",
     urlProtocol: "tabs",
+  });
+  browserServices.set(modules.IAgentNetworkFilterService, {
+    _serviceBrand: undefined,
+    isUriAllowed: () => true,
+    isEnabled: () => false,
+    formatError: (uri: unknown) => `Blocked: ${uri}`,
+    onDidChange: modules.EventNone as (...args: unknown[]) => { dispose(): void },
   });
   const browserInstantiationService = new modules.InstantiationService(browserServices, true);
   const browserViewMainService = browserInstantiationService.createInstance(
@@ -1168,6 +1186,27 @@ export async function createNativeCodeHostMainBackend(
         embeddedWindow?.win.setDocumentEdited(Boolean(args[1]));
         return undefined;
       }
+      if (command === "setApplicationBadge") {
+        const badge = args[1] as
+          | { count?: number; description?: string; iconDataURL?: string }
+          | undefined;
+        const count = badge && typeof badge.count === "number" && badge.count > 0 ? badge.count : 0;
+        if (process.platform === "win32") {
+          if (count === 0 || !badge?.iconDataURL) {
+            embeddedWindow?.win.setOverlayIcon(null, "");
+          } else {
+            embeddedWindow?.win.setOverlayIcon(
+              nativeImage.createFromDataURL(badge.iconDataURL),
+              badge.description ?? "",
+            );
+          }
+        } else if (process.platform === "darwin") {
+          app.dock?.setBadge(count > 0 ? String(count) : "");
+        } else if (typeof app.setBadgeCount === "function") {
+          app.setBadgeCount(count);
+        }
+        return undefined;
+      }
       if (command === "hasClipboard") {
         return typeof args[1] === "string" ? clipboard.has(args[1]) : false;
       }
@@ -1319,10 +1358,20 @@ export async function createNativeCodeHostMainBackend(
       }
       if (command === "showToast") {
         const options = args[1] as
-          | { id?: string; title?: string; body?: string; actions?: string[]; silent?: boolean }
+          | {
+              id?: string;
+              dedupeKey?: string;
+              title?: string;
+              body?: string;
+              actions?: string[];
+              silent?: boolean;
+            }
           | undefined;
         if (!Notification.isSupported() || !options?.id || !options.title) {
           return { supported: false, clicked: false };
+        }
+        if (options.dedupeKey && activeToastDedupeKeys.has(options.dedupeKey)) {
+          return { supported: true, suppressed: true, clicked: false };
         }
         clearToast(options.id);
         const notification = new Notification({
@@ -1339,15 +1388,22 @@ export async function createNativeCodeHostMainBackend(
             supported: boolean;
             clicked: boolean;
             actionIndex?: number;
+            suppressed?: boolean;
           }) => {
             if (finished) return;
             finished = true;
             activeToasts.delete(options.id!);
+            if (options.dedupeKey && activeToastDedupeKeys.get(options.dedupeKey) === options.id) {
+              activeToastDedupeKeys.delete(options.dedupeKey);
+            }
             notification.removeAllListeners();
             notification.close();
             resolve(result);
           };
           activeToasts.set(options.id!, { notification, finish });
+          if (options.dedupeKey) {
+            activeToastDedupeKeys.set(options.dedupeKey, options.id!);
+          }
           notification.on("click", () => finish({ supported: true, clicked: true }));
           notification.on("action", (_event, actionIndex) =>
             finish({ supported: true, clicked: true, actionIndex }),

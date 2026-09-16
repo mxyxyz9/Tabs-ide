@@ -143,7 +143,10 @@
         padding: 3px 8px;
         cursor: pointer;
         outline: none;
-        transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease,
+          border-color 0.15s ease;
       }
 
       .toolbar-btn:hover {
@@ -234,7 +237,10 @@
         filter: brightness(0.86);
       }
 
-      #toast-container.is-stacked:not(.is-expanded) .toast-card[data-stack-index]:not([data-stack-index="0"]):not([data-stack-index="1"]):not([data-stack-index="2"]) {
+      #toast-container.is-stacked:not(.is-expanded)
+        .toast-card[data-stack-index]:not([data-stack-index="0"]):not([data-stack-index="1"]):not(
+          [data-stack-index="2"]
+        ) {
         z-index: 7;
         transform: translateY(28px) scale(0.88);
         opacity: 0;
