@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderOptionDescriptor } from "@tabs/contracts";
+import { applyClaudePromptEffortPrefix } from "@tabs/shared/model";
 import {
   collectReasoningChoices,
   formatThinkingHeaderWords,
@@ -188,9 +189,7 @@ describe("reasoningOrdering", () => {
   });
 
   describe("Ultrathink scoping & prompt/frame behavior", () => {
-    it("applyClaudePromptEffortPrefix adds prefix for ultrathink and strips it for other efforts", async () => {
-      const { applyClaudePromptEffortPrefix } = await import("@tabs/shared/model");
-
+    it("applyClaudePromptEffortPrefix adds prefix for ultrathink and strips it for other efforts", () => {
       const baseText = "Help me optimize this algorithm";
       const withPrefix = applyClaudePromptEffortPrefix(baseText, "ultrathink");
       expect(withPrefix).toBe("Ultrathink:\nHelp me optimize this algorithm");

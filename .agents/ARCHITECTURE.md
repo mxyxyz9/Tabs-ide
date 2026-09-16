@@ -90,6 +90,14 @@ hides that view while preserving its project session.
   `localFilesystem` channel. They do not pass through the Tabs WebSocket backend.
 - `TABS_CODE_OSS_BUILD_DIR` can override runtime discovery with a compiled `tabs-code-main` root.
   Runtime selection does not support HTTP entries or a web-server fallback.
+- **Packaged App Runtime Packaging**: Production desktop installers (`.dmg`, `.exe`, `.AppImage`) are
+  self-contained fat bundles containing `tabs-code-main` inside `Resources/tabs-code-main` (macOS) or
+  `resources/tabs-code-main` (Linux/Windows). Standard releases never ship as thin installers requiring
+  on-demand downloads.
+- **Development Resolution**: In local development (`bun run dev:desktop`), the Code-OSS runtime always
+  resolves from the sibling `tabs-code-main` checkout (or `TABS_CODE_OSS_BUILD_DIR`). It never triggers
+  on-demand downloads from GitHub release assets. Required compiled assets are `preload.js`,
+  `workbench-dev.html`, `nls.messages.json`, and `product.json`.
 
 ## Testing Workspace Architecture
 

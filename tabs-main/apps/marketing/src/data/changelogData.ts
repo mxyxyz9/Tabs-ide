@@ -21,16 +21,56 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 151;
+export const TOTAL_TAGS_COUNT = 152;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.9",
+    title:
+      "Bundled self-contained desktop installers, dev runtime isolation, and runtime stability",
+    date: "September 17, 2026",
+    shortDate: "Sep 17",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Self-contained bundled desktop installers embedding the Code-OSS runtime directly inside application packages, isolated dev runtime resolution preventing unnecessary remote downloads, and pinned platform runtime dependencies fixing startup crashes.",
+    highlights: [
+      "Packaged desktop releases (.dmg, .exe, .AppImage) now bundle the complete Code-OSS runtime directly inside the application package.",
+      "Isolated dev runtime resolution ensuring development builds load the local checkout rather than attempting GitHub release downloads.",
+      "Pinned @effect/platform-node-shared dependency to eliminate transitive version mismatch crashes.",
+      "Enforced strict runtime staging validations to guarantee zero silent thin-installer regressions.",
+    ],
+    categories: [
+      {
+        title: "Desktop Packaging & Distribution",
+        items: [
+          "Bundled Code-OSS runtime directly into Resources/tabs-code-main for macOS and resources/tabs-code-main for Linux and Windows.",
+          "Eliminated post-installation download latency and remote 404 runtime zip dependencies.",
+          "Added strict build assertions verifying runtime integrity before producing release artifacts.",
+        ],
+      },
+      {
+        title: "Development Runtime & Isolation",
+        items: [
+          "Short-circuited remote runtime download checks during local development execution.",
+          "Ensured bun run dev:desktop consistently resolves editor assets from the local checkout.",
+        ],
+      },
+      {
+        title: "Platform Runtime Stability",
+        items: [
+          "Pinned @effect/platform-node-shared to 4.0.0-beta.78 to align with @effect/platform-node.",
+          "Prevented runtime ByteSize module import failures on packaged desktop launches.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.8",
     title:
       "Code-OSS 1.138 upstream runtime sync, native code host contracts, and UI refinements",
     date: "September 16, 2026",
     shortDate: "Sep 16",
-    isLatest: true,
     type: "feature",
     summary:
       "Full synchronization with upstream VS Code 1.138 across the vendored Code-OSS runtime, updated AgentHost services and generated Codex protocol schemas, typed native code host IPC contracts with automated testing, and workspace UI polish.",

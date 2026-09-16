@@ -45,6 +45,13 @@ The application logic is heavily segmented. You must never mix backend logic int
   - `shared`: Used by both the server and client applications (e.g., pure parsing functions, constants). Uses explicit subpath exports (`@t3tools/shared/git`) instead of a barrel index.
   - `client-runtime`: Shared runtime package for sharing client code across web and mobile.
 
+### 6. `tabs-code-main` (The Embedded Code-OSS Runtime)
+- **Role:** Patched VS Code runtime powering the in-app editor.
+- **Rules:**
+  - **Self-Contained Fat Installers:** Production desktop installers (`.dmg`, `.exe`, `.AppImage`) MUST bundle `tabs-code-main` directly inside (`Resources/tabs-code-main` on macOS, `resources/tabs-code-main` on Linux/Windows). Never publish thin installers that require on-demand downloads for production releases.
+  - **No Silent Fallback:** Packaging scripts (`build-desktop-artifact.ts`) must never silently fall back to thin mode if `tabs-code-main` is uncompiled or missing.
+  - **Development Mode Isolation:** `bun run dev:desktop` must always resolve from the local checkout (`../tabs-code-main`) and never attempt to download release zips from GitHub.
+
 ## Implementation Philosophy
 - **Performance & Reliability First:** Keep behavior predictable under load (e.g., partial streams, reconnects).
 - **Maintainability:** Do not duplicate logic. Extract shared functions to appropriate packages if used across apps. 

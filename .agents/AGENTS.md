@@ -95,6 +95,18 @@
 - **Maintain Test Suite Correctness:** Whenever you implement a new feature, fix a bug, or modify any existing codebase, you MUST identify and run the relevant unit/integration tests to ensure no regressions are introduced. If existing tests are broken by your intentional changes, you MUST update the tests to reflect the new behavior. Always verify the full test suite passes using the workspace test commands (e.g. `bun run test` or package-specific test runner) before completing the task. Never leave failing or outdated tests.
 - **No Native UI allowed**: The user explicitly requires that NO native UI (e.g. `window.confirm`, `window.alert`, `window.prompt`) should be used anywhere in the application. Always use the provided custom UI components (like the `useConfirm` hook) instead of native browser popups/dialogs.
 
+## Bundled (Fat) Desktop Installers and Development Runtime Protocol
+
+1. **Self-contained desktop installers only:** All desktop installers (`.dmg`, `.exe`, `.AppImage`) MUST bundle the Code-OSS runtime (`tabs-code-main`) directly inside the package (`Resources/tabs-code-main` on macOS, `resources/tabs-code-main` on Linux/Windows), matching standard IDE distributions like Cursor, Antigravity, and VS Code. Desktop releases must NEVER rely on on-demand downloads or external runtime zips.
+2. **No silent thin fallback:** The desktop packaging script (`scripts/build-desktop-artifact.ts`) must never silently fall back to thin mode if `tabs-code-main` is missing or uncompiled. Any desktop artifact build command without explicit `--thin` must fail loudly if the runtime cannot be staged.
+3. **Development mode isolation:** In dev mode (`bun run dev:desktop`), Tabs must ALWAYS resolve the editor runtime from the local checkout (`../tabs-code-main` or `TABS_CODE_OSS_BUILD_DIR`). It must NEVER attempt to download release zips from GitHub releases.
+4. **Required Code-OSS compiled assets:** For `bun run dev:desktop` or desktop builds to succeed, `tabs-code-main` must have its core build assets present:
+   - `out/vs/base/parts/sandbox/electron-browser/preload.js`
+   - `out/vs/code/electron-browser/workbench/workbench-dev.html`
+   - `out-build/nls.messages.json`
+   - `product.json`
+   If any are missing, run `cd ../tabs-code-main && npm install && npm run compile`.
+
 ## Task Completion Requirements
 
 - `vp check` and `vp run typecheck` must pass before considering tasks completed.

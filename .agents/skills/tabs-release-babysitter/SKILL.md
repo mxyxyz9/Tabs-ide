@@ -41,7 +41,7 @@ Before declaring success, verify all of the following:
 - Release workflow conclusion is `success` and its head SHA is the intended pushed commit.
 - The expected version tag and GitHub release exist and point to the intended commit.
 - macOS arm64 and x64, Linux x64, and Windows x64 application artifacts are present.
-- Every thin desktop build has its matching `tabs-code-runtime-<version>-<platform>-<arch>.zip` and checksum asset; no runtime URL can produce an HTTP 404 failure.
+- All desktop installers (.dmg, .exe, .AppImage) must be self-contained bundled ("fat") installers that include `tabs-code-main` directly inside (`Resources/tabs-code-main` on macOS, `resources/tabs-code-main` on Linux/Windows). Standard releases must NEVER ship thin installers that rely on on-demand downloads or external runtime zips.
 - Update manifests and blockmaps required by the workflow are present.
 - The release is marked latest/prerelease consistently with its semantic version.
 - The `Deploy Tabs website` workflow conclusion is `success`.

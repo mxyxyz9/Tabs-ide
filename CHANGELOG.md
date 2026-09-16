@@ -2,6 +2,15 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.9] - 2026-09-17
+
+### Bundled self-contained desktop installers, dev runtime isolation, and runtime stability
+
+- **Bundled self-contained desktop installers**: Packaged desktop releases (.dmg, .exe, .AppImage) now bundle the complete Code-OSS runtime directly inside the application package (`Resources/tabs-code-main`), eliminating post-install download latency, 404 errors, and network dependencies.
+- **Development runtime isolation**: Prevented development builds (`bun run dev:desktop`) from attempting GitHub release zip downloads, ensuring the editor runtime is always resolved directly from the local development checkout.
+- **Runtime dependency pinning**: Pinned `@effect/platform-node-shared` to prevent transitive semver drift against `@effect/platform-node`, eliminating missing module runtime crashes (`ByteSize.js`).
+- **Strict packaging assertions**: Added fail-loud build validations and preflight runtime structure checks preventing silent thin installer regressions.
+
 ## [v1.3.8] - 2026-09-16
 
 ### Code-OSS 1.138 upstream runtime sync, native code host contracts, and UI refinements

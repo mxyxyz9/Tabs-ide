@@ -184,6 +184,7 @@ interface StagePackageJson {
   readonly devDependencies: {
     readonly electron: string;
   };
+  readonly overrides?: Record<string, unknown>;
 }
 
 const AzureTrustedSigningOptionsConfig = Config.all({
@@ -869,6 +870,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
 const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   repoRoot: string,
   stageResourcesDir: string,
+  thinRequested = false,
 ) {
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
@@ -883,11 +885,17 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   const packagedExtensionsDir = path.join(vsCodeSourceDir, ".build", "extensions");
 
   if (!(yield* fs.exists(vsCodeSourceDir))) {
+    if (!thinRequested) {
+      return yield* new BuildScriptError({
+        message:
+          `VS Code runtime source not found at ${vsCodeSourceDir}. ` +
+          "Cannot create bundled desktop installer without tabs-code-main. " +
+          "Set TABS_CODE_OSS_BUILD_DIR to override the source path, or pass --thin if you intentionally want to build a thin installer.",
+      });
+    }
     yield* Effect.log(
       `[desktop-artifact] VS Code runtime source not found at ${vsCodeSourceDir}. ` +
-        "Set TABS_CODE_OSS_BUILD_DIR to override the source path. " +
-        "The build will automatically use thin mode — the runtime will be downloaded " +
-        "from the GitHub release on first launch.",
+        "Thin mode was requested — building thin installer without bundled runtime.",
     );
     return false;
   }
@@ -1262,22 +1270,17 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
   yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
 
-  const runtimeStaged = yield* stageVsCodeRuntime(repoRoot, stageResourcesDir);
+  const runtimeStaged = yield* stageVsCodeRuntime(repoRoot, stageResourcesDir, options.thin);
   yield* assertPlatformBuildResources(options.platform, stageResourcesDir, options.verbose);
 
-  // When the VS Code runtime source was not found, auto-switch to thin mode.
-  // A non-thin build with no staged runtime would leave the electron-builder
-  // `extraFiles` entry pointing at a path that doesn't exist, producing a
-  // broken or incomplete installer. Thin mode drops the extraFiles entry and
-  // lets the app download the runtime from the GitHub release on first launch.
-  const effectiveThin = options.thin || !runtimeStaged;
   if (!options.thin && !runtimeStaged) {
-    yield* Effect.log(
-      "[desktop-artifact] Runtime not staged — automatically enabling thin mode. " +
-        "Publish a tabs-code-runtime-*.zip to the GitHub release so the app can " +
-        "download it on first launch (run: bun run dist:desktop:artifact -- --thin).",
-    );
+    return yield* new BuildScriptError({
+      message:
+        "VS Code runtime could not be staged for bundled desktop artifact. " +
+        "Ensure tabs-code-main is present and compiled, or pass --thin for a thin installer.",
+    });
   }
+  const effectiveThin = options.thin;
 
   // Thin build: emit the staged runtime as a downloadable release asset, then
   // let it be excluded from the app bundle below (createBuildConfig drops the
@@ -1361,6 +1364,17 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     devDependencies: {
       electron: electronVersion,
     },
+    overrides: {
+      "@effect/platform-node-shared":
+        (rootPackageJson.workspaces?.catalog as Record<string, string> | undefined)?.[
+          "@effect/platform-node-shared"
+        ] ??
+        (rootPackageJson.workspaces?.catalog as Record<string, string> | undefined)?.effect ??
+        "4.0.0-beta.78",
+      effect:
+        (rootPackageJson.workspaces?.catalog as Record<string, string> | undefined)?.effect ??
+        "4.0.0-beta.78",
+    },
   };
 
   const stagePackageJsonString = yield* encodeJsonString(stagePackageJson);
@@ -1375,6 +1389,21 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       shell: process.platform === "win32",
     })`bun install --production`,
   );
+
+  // Validate Effect transitive dependencies to prevent version mismatch crashes (e.g. ByteSize import)
+  const sharedPkgPath = path.join(stageAppDir, "node_modules/@effect/platform-node-shared/package.json");
+  if (yield* fs.exists(sharedPkgPath)) {
+    const sharedPkg = JSON.parse(yield* fs.readFileString(sharedPkgPath)) as { version?: string };
+    const expectedEffect =
+      (rootPackageJson.workspaces?.catalog as Record<string, string> | undefined)?.[
+        "@effect/platform-node-shared"
+      ] ?? (rootPackageJson.workspaces?.catalog as Record<string, string> | undefined)?.effect;
+    if (expectedEffect && sharedPkg.version !== expectedEffect) {
+      return yield* new BuildScriptError({
+        message: `Version mismatch in staged runtime: @effect/platform-node-shared is ${sharedPkg.version}, expected ${expectedEffect}.`,
+      });
+    }
+  }
 
   // Clerk loads electron-store dynamically from its CommonJS storage entry.
   // Validate the isolated release tree before electron-builder packs it so a

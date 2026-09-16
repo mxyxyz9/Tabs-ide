@@ -370,10 +370,15 @@ let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
 let backendLogSink: RotatingFileSink | null = null;
 let restoreStdIoCapture: (() => void) | null = null;
-// Level B (thin installer): when the runtime isn't bundled, resolve a
-// previously-downloaded one for this app version so the editor "just works"
-// after the one-time download.
-if (!process.env.TABS_CODE_OSS_BUILD_DIR?.trim() && isRuntimeInstalled(app.getVersion())) {
+// Level B (thin installer): when the app is packaged without a bundled runtime,
+// resolve a previously-downloaded one for this app version. Never override in dev
+// or when a fat runtime is bundled in resourcesPath.
+if (
+  !isDevelopment &&
+  (!process.resourcesPath || !FS.existsSync(Path.join(process.resourcesPath, "tabs-code-main"))) &&
+  !process.env.TABS_CODE_OSS_BUILD_DIR?.trim() &&
+  isRuntimeInstalled(app.getVersion())
+) {
   process.env.TABS_CODE_OSS_BUILD_DIR = resolveInstalledRuntimeDir(app.getVersion());
 }
 const codeHostConfig = resolveCodeHostConfig({
@@ -3490,6 +3495,16 @@ let codeOssRuntimeDownloadStarted = false;
  * builds where a runtime is already resolvable.
  */
 function ensureDownloadedCodeOssRuntime(): void {
+  // In development, the editor runtime must come from the local checkout (../tabs-code-main
+  // or TABS_CODE_OSS_BUILD_DIR). Never attempt to download release zips from GitHub in dev.
+  if (isDevelopment) {
+    return;
+  }
+  // If the app was built as a bundled (fat) desktop app, tabs-code-main is in resourcesPath.
+  // On-demand download is only for thin installers where tabs-code-main was deliberately excluded.
+  if (process.resourcesPath && FS.existsSync(Path.join(process.resourcesPath, "tabs-code-main"))) {
+    return;
+  }
   if (codeOssRuntimeDownloadStarted || codeHostConfig.state.available) {
     return;
   }

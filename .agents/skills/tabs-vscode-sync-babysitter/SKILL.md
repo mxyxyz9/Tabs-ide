@@ -50,11 +50,11 @@ New or changed Code-OSS native-host methods are a compatibility event: compare u
 
 Run the narrowest checks after each conflict cluster, then all required gates:
 
-1. In `tabs-code-main/`, use its checked-in Node/npm toolchain as required by upstream: install from the lockfile, compile, run client typecheck, and run focused tests for every preserved or changed fork patch. Build production extensions (`compile-extensions-build` and the Copilot extension build) before packaging.
+1. In `tabs-code-main/`, use its checked-in Node/npm toolchain as required by upstream: install from the lockfile, compile core assets (`out/vs/base/parts/sandbox/electron-browser/preload.js`, `out/vs/code/electron-browser/workbench/workbench-dev.html`, `out-build/nls.messages.json`, `product.json`), run client typecheck, and run focused tests for every preserved or changed fork patch. Build production extensions (`compile-extensions-build` and the Copilot extension build) before packaging.
 2. In `tabs-main/`, use Bun/Vite+ only: focused regression tests, `vp check`, `vp run typecheck`, `vp test`, and `bun run test:desktop-smoke`.
-3. Launch only with `bun run dev:desktop`. Before launch, verify no existing Tabs instance with the repository's prescribed narrow process check. Never launch the plain web dev server as a substitute.
+3. Launch only with `bun run dev:desktop`. Before launch, verify no existing Tabs instance with the repository's prescribed narrow process check. Never launch the plain web dev server as a substitute. Verify that the local Code-OSS desktop renderer resolves cleanly from `../tabs-code-main` without triggering runtime errors or remote download attempts.
 4. Exercise the full checklist in `docs/code-oss-parity.md`, with special attention to project switching, Explorer writes, Git/terminal/search/debug, extension install and activation, notifications over Code/Browser/Testing, assistant rail/secondary-sidebar placement, authentication callbacks, and native menus/dialogs.
-5. Run one platform-appropriate desktop artifact build when the update affects packaging or runtime files. Inspect the packaged runtime and perform a cold-start smoke test.
+5. Run one platform-appropriate desktop artifact build when the update affects packaging or runtime files. Inspect the packaged runtime inside `Resources/tabs-code-main` (verifying it is a self-contained fat build, not thin) and perform a cold-start smoke test.
 
 ## Failure handling and stopping conditions
 
