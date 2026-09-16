@@ -626,7 +626,7 @@ function readCookie(name: string): string | undefined {
 			? undefined /* with a remote without embedder-preferred storage, store on the remote */
 			: new LocalStorageSecretStorageProvider(secretStorageCrypto),
 	});
-	(mainWindow as unknown as Record<string, unknown>)['__tabs_codehost_shutdown'] = async () => {
+	(mainWindow as typeof mainWindow & { __tabs_codehost_shutdown?: () => Promise<void> }).__tabs_codehost_shutdown = async () => {
 		workbench.dispose();
 	};
 })();
