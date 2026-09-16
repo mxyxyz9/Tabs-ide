@@ -4,8 +4,6 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ThreadUnsubscribeResponse.ts
+// Source file: v2/ThreadQueueReorderResponse.ts
 
-import type { ThreadUnsubscribeStatus } from "./ThreadUnsubscribeStatus.js";
-
-export type ThreadUnsubscribeResponse = { status: ThreadUnsubscribeStatus, };
+export type ThreadQueueReorderResponse = Record<string, never>;

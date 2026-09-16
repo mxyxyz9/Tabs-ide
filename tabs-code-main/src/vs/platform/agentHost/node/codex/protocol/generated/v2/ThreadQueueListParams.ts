@@ -4,8 +4,16 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ThreadUnsubscribeResponse.ts
+// Source file: v2/ThreadQueueListParams.ts
 
-import type { ThreadUnsubscribeStatus } from "./ThreadUnsubscribeStatus.js";
-
-export type ThreadUnsubscribeResponse = { status: ThreadUnsubscribeStatus, };
+export type ThreadQueueListParams = {
+	threadId: string,
+	/**
+	 * Opaque pagination cursor returned by a previous call.
+	 */
+	cursor?: string | null,
+	/**
+	 * Optional page size; defaults to the standard thread-list page size.
+	 */
+	limit?: number | null,
+};

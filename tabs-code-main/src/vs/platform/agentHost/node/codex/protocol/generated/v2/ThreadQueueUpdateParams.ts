@@ -4,8 +4,8 @@
 // Modified by VS Code to rewrite imports and apply repository formatting.
 // See README.md in this directory for provenance and licensing notes.
 // Regenerate: npm run codex:gen-protocol
-// Source file: v2/ThreadUnsubscribeResponse.ts
+// Source file: v2/ThreadQueueUpdateParams.ts
 
-import type { ThreadUnsubscribeStatus } from "./ThreadUnsubscribeStatus.js";
+import type { UserInput } from "./UserInput.js";
 
-export type ThreadUnsubscribeResponse = { status: ThreadUnsubscribeStatus, };
+export type ThreadQueueUpdateParams = { threadId: string, queuedSubmissionId: string, input: Array<UserInput>, };
