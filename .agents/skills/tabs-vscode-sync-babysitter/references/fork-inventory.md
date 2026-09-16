@@ -1,6 +1,6 @@
 # Tabs Code-OSS fork inventory
 
-This is the minimum known patch surface after the 1.135.0 refresh. Re-derive the actual delta from Git at every update; add or remove entries only after reviewing their history and current upstream equivalent.
+This is the minimum known patch surface after the 1.138.0 refresh. Re-derive the actual delta from Git at every update; add or remove entries only after reviewing their history and current upstream equivalent.
 
 ## Tabs-owned Code-OSS additions
 
