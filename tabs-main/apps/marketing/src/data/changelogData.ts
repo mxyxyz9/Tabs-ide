@@ -21,16 +21,51 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 152;
+export const TOTAL_TAGS_COUNT = 153;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.10",
+    title:
+      "AppleTimePicker numeric accumulation, drum wheel sync, and bundled desktop distribution",
+    date: "September 18, 2026",
+    shortDate: "Sep 18",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Stabilized keyboard time entry with a two-digit accumulation buffer and timer for hours and minutes, resolved drum wheel scroll synchronization race conditions, and continued bundled self-contained desktop installer distribution.",
+    highlights: [
+      "Added 800ms numeric accumulation buffer allowing smooth typing of two-digit hours without premature auto-advance sticking at '1'.",
+      "Fixed drum wheel scroll synchronization race conditions by referencing live selected state in debounced scroll handlers.",
+      "Maintained self-contained desktop installers (.dmg, .exe, .AppImage) bundling the complete Code-OSS runtime.",
+      "Verified development runtime isolation preventing remote downloads during local development runs.",
+      "Aligned relay discovery error propagation with Effect yieldable error contracts.",
+    ],
+    categories: [
+      {
+        title: "User Interface & Input Polish",
+        items: [
+          "Added two-digit digit accumulation buffer and 800ms timer to AppleTimePicker hour and minute inputs.",
+          "Prevented keyboard focus jumps and digit sticking when typing two-digit hours.",
+          "Synchronized WheelColumn drum wheel scroll position with live selected values via mutable ref caching.",
+        ],
+      },
+      {
+        title: "Desktop Distribution & Stability",
+        items: [
+          "Bundled Code-OSS runtime directly within production application resources on all supported platforms.",
+          "Prevented remote runtime download dependencies on application startup.",
+          "Aligned relay discovery error propagation with Effect yieldable error contracts.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.9",
     title:
       "Bundled self-contained desktop installers, dev runtime isolation, and runtime stability",
     date: "September 17, 2026",
     shortDate: "Sep 17",
-    isLatest: true,
     type: "patch",
     summary:
       "Self-contained bundled desktop installers embedding the Code-OSS runtime directly inside application packages, isolated dev runtime resolution preventing unnecessary remote downloads, and pinned platform runtime dependencies fixing startup crashes.",

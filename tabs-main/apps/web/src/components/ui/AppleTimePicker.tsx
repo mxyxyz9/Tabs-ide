@@ -270,12 +270,52 @@ export const AppleTimePicker = memo(function AppleTimePicker({
   // ── Keyboard Direct Typing State ───────────────────────────────────────────
   const hourInputRef = useRef<HTMLInputElement>(null);
   const minuteInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Digit accumulation buffers (onKeyDown-based, NOT onChange-based) ────────
+  //
+  // WHY: React controlled inputs sync the DOM value on every render. When the
+  // user types the first digit, setHour/setMinute → setSelectedDate → re-render
+  // → React calls node.value = sameValue which resets Chromium's internal cursor
+  // state. The second digit's onChange then sees a replaced value instead of an
+  // appended one, so "11" never forms. Solution: intercept digit keys in onKeyDown
+  // with e.preventDefault() so the DOM never changes. We accumulate in plain refs
+  // that React's reconciliation cycle cannot touch.
+  const hourDigitBufferRef = useRef<string>("");
+  const hourDigitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const minuteDigitBufferRef = useRef<string>("");
+  const minuteDigitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up all accumulation timers on unmount
+  useEffect(() => {
+    return () => {
+      if (hourDigitTimerRef.current) clearTimeout(hourDigitTimerRef.current);
+      if (minuteDigitTimerRef.current) clearTimeout(minuteDigitTimerRef.current);
+    };
+  }, []);
   const [isHourFocused, setIsHourFocused] = useState(false);
   const [isMinuteFocused, setIsMinuteFocused] = useState(false);
-  const [hourTypingValue, setHourTypingValue] = useState<string>(String(hours12));
-  const [minuteTypingValue, setMinuteTypingValue] = useState<string>(
+  // ── Typing values for the header pill inputs ───────────────────────────
+  //
+  // We keep a mutable ref alongside the React state so that blur handlers always
+  // read the latest value even when called synchronously (e.g. minuteRef.focus()
+  // triggers onBlur BEFORE React has committed the pending state update from
+  // the same onKeyDown batch). Without the ref, blur reads a stale closure copy
+  // and calls setHour(oldValue), overwriting the digit we just committed.
+  const [hourTypingValue, _setHourTypingValue] = useState<string>(String(hours12));
+  const hourTypingValueRef = useRef<string>(String(hours12));
+  const setHourTypingValue = useCallback((val: string) => {
+    hourTypingValueRef.current = val;
+    _setHourTypingValue(val);
+  }, []);
+
+  const [minuteTypingValue, _setMinuteTypingValue] = useState<string>(
     minutes < 10 ? `0${minutes}` : String(minutes),
   );
+  const minuteTypingValueRef = useRef<string>(minutes < 10 ? `0${minutes}` : String(minutes));
+  const setMinuteTypingValue = useCallback((val: string) => {
+    minuteTypingValueRef.current = val;
+    _setMinuteTypingValue(val);
+  }, []);
 
   // Keep typing values in sync when date changes from drum wheel or presets,
   // but never clobber the field the user is actively typing in.
@@ -288,57 +328,52 @@ export const AppleTimePicker = memo(function AppleTimePicker({
     }
   }, [hours12, minutes, isHourFocused, isMinuteFocused]);
 
+  // onChange is now only responsible for paste (3-4 digit continuous entry) and
+  // backspace/clear. Regular digit keystrokes are handled in onKeyDown below.
   const handleHourInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const rawVal = e.target.value.replace(/\D/g, "");
+
+      // Empty: user cleared the field via backspace/select-all+delete
       if (!rawVal) {
+        hourDigitBufferRef.current = "";
+        if (hourDigitTimerRef.current) {
+          clearTimeout(hourDigitTimerRef.current);
+          hourDigitTimerRef.current = null;
+        }
         setHourTypingValue("");
         return;
       }
 
-      // Check if user entered 3 or 4 digits continuously (e.g. 120 -> 1:20, 0120 -> 1:20, 1230 -> 12:30, 530 -> 5:30)
+      // 3-4 digit continuous paste (e.g. "120" -> 1:20, "1230" -> 12:30)
       if (rawVal.length >= 3) {
         const parsed = parseTimeDigits(rawVal);
         if (parsed) {
+          hourDigitBufferRef.current = "";
+          minuteDigitBufferRef.current = "";
+          if (hourDigitTimerRef.current) {
+            clearTimeout(hourDigitTimerRef.current);
+            hourDigitTimerRef.current = null;
+          }
           setHour(parsed.hour);
           setMinute(parsed.minute);
           setHourTypingValue(String(parsed.hour));
           setMinuteTypingValue(parsed.minute < 10 ? `0${parsed.minute}` : String(parsed.minute));
           minuteInputRef.current?.focus();
           minuteInputRef.current?.select();
-          return;
         }
-      }
-
-      // 1 or 2 digits
-      const val = rawVal.slice(0, 2);
-      const num = parseInt(val, 10);
-
-      // If user typed 0 as first digit, hold it and wait for second digit (e.g. 01..09)
-      if (val === "0") {
-        setHourTypingValue("0");
         return;
       }
 
+      // 1-2 digits arriving from backspace or a paste of a partial value:
+      // just update the display; the buffer-based onKeyDown logic handles live typing.
+      const val = rawVal.slice(0, 2);
+      const num = parseInt(val, 10);
       if (num >= 1 && num <= 12) {
         setHour(num);
         setHourTypingValue(val);
-        // If single digit 2..9 (cannot have a 2nd digit in 12h clock), or 2 digits typed,
-        // automatically jump to minute input and select it
-        if (num >= 2 || val.length >= 2) {
-          minuteInputRef.current?.focus();
-          minuteInputRef.current?.select();
-        }
-      } else if (num > 12) {
-        // If user typed into an unselected field (e.g. was 1, typed 3 -> "13"),
-        // the last typed digit is the user's intended new hour!
-        const lastDigit = parseInt(val.charAt(val.length - 1), 10);
-        if (lastDigit >= 1 && lastDigit <= 12) {
-          setHour(lastDigit);
-          setHourTypingValue(String(lastDigit));
-          minuteInputRef.current?.focus();
-          minuteInputRef.current?.select();
-        }
+      } else if (val === "0") {
+        setHourTypingValue("0");
       }
     },
     [setHour, setMinute],
@@ -347,54 +382,169 @@ export const AppleTimePicker = memo(function AppleTimePicker({
   const handleMinuteInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const rawVal = e.target.value.replace(/\D/g, "");
+
+      // Empty: cleared via backspace/delete
       if (!rawVal) {
+        minuteDigitBufferRef.current = "";
+        if (minuteDigitTimerRef.current) {
+          clearTimeout(minuteDigitTimerRef.current);
+          minuteDigitTimerRef.current = null;
+        }
         setMinuteTypingValue("");
         return;
       }
 
-      // Handle typing into an unselected field: if length > 2, take the last 2 digits
+      // Paste of more than 2 digits: take the last 2
       let val = rawVal;
-      if (val.length > 2) {
-        val = val.slice(-2);
-      }
-      setMinuteTypingValue(val);
-
+      if (val.length > 2) val = val.slice(-2);
       const num = parseInt(val, 10);
       if (num >= 0 && num <= 59) {
         setMinute(num);
+        setMinuteTypingValue(val);
       }
     },
     [setMinute],
   );
 
   const handleHourBlur = useCallback(() => {
+    // Cancel accumulation timer — blur commits whatever digit(s) are buffered.
+    hourDigitBufferRef.current = "";
+    if (hourDigitTimerRef.current) {
+      clearTimeout(hourDigitTimerRef.current);
+      hourDigitTimerRef.current = null;
+    }
     setIsHourFocused(false);
-    const { hour, text } = normalizeHourInput(hourTypingValue, hours12);
+    // Read from the ref, not the stale closure, so we always normalize the
+    // value the user actually typed — not whatever React last rendered.
+    const { hour, text } = normalizeHourInput(hourTypingValueRef.current, hours12);
     setHour(hour);
     setHourTypingValue(text);
-  }, [hourTypingValue, hours12, setHour]);
+  }, [hours12, setHour, setHourTypingValue]);
 
   const handleMinuteBlur = useCallback(() => {
+    minuteDigitBufferRef.current = "";
+    if (minuteDigitTimerRef.current) {
+      clearTimeout(minuteDigitTimerRef.current);
+      minuteDigitTimerRef.current = null;
+    }
     setIsMinuteFocused(false);
-    const { minute, text } = normalizeMinuteInput(minuteTypingValue, minutes);
+    // Same ref-based read as handleHourBlur above.
+    const { minute, text } = normalizeMinuteInput(minuteTypingValueRef.current, minutes);
     setMinute(minute);
     setMinuteTypingValue(text);
-  }, [minuteTypingValue, minutes, setMinute]);
+  }, [minutes, setMinute, setMinuteTypingValue]);
 
   const handleHourKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
+      // ── Digit interception ──────────────────────────────────────────────────
+      // Digits are handled here (with preventDefault) so the DOM value NEVER
+      // changes during accumulation. This bypasses React's controlled-input
+      // reconciliation, which would reset the cursor/selection between keystrokes.
+      if (e.key >= "0" && e.key <= "9") {
+        e.preventDefault();
+        const digit = e.key;
+        const buffer = hourDigitBufferRef.current;
+
+        if (buffer.length === 0) {
+          // ── First digit ──────────────────────────────────────────────────
+          const num = parseInt(digit, 10);
+          if (num === 0) {
+            // "0x" prefix: hold "0", wait for second digit (01..09)
+            hourDigitBufferRef.current = "0";
+            setHourTypingValue("0");
+          } else if (num >= 2) {
+            // 2-9: unambiguous single-digit hour, advance to minutes immediately
+            hourDigitBufferRef.current = "";
+            setHour(num);
+            setHourTypingValue(digit);
+            minuteInputRef.current?.focus();
+            minuteInputRef.current?.select();
+          } else {
+            // num === 1: ambiguous (could be 1, 10, 11, 12)
+            // Show "1" and start 800 ms window for a second digit.
+            hourDigitBufferRef.current = "1";
+            setHour(1);
+            setHourTypingValue("1");
+            if (hourDigitTimerRef.current) clearTimeout(hourDigitTimerRef.current);
+            hourDigitTimerRef.current = setTimeout(() => {
+              hourDigitBufferRef.current = "";
+              hourDigitTimerRef.current = null;
+              minuteInputRef.current?.focus();
+              minuteInputRef.current?.select();
+            }, 800);
+          }
+        } else {
+          // ── Second digit ─────────────────────────────────────────────────
+          if (hourDigitTimerRef.current) {
+            clearTimeout(hourDigitTimerRef.current);
+            hourDigitTimerRef.current = null;
+          }
+          const combined = buffer + digit;
+          const num = parseInt(combined, 10);
+          hourDigitBufferRef.current = "";
+
+          if (num >= 1 && num <= 12) {
+            // Valid 2-digit hour (01-12): strip leading zero, advance
+            const display = String(num); // "01" -> "1", "11" -> "11"
+            setHour(num);
+            setHourTypingValue(display);
+            minuteInputRef.current?.focus();
+            minuteInputRef.current?.select();
+          } else {
+            // Combined value > 12 or 00: treat this digit as a fresh first digit
+            const newNum = parseInt(digit, 10);
+            if (newNum === 0) {
+              hourDigitBufferRef.current = "0";
+              setHourTypingValue("0");
+            } else if (newNum >= 2) {
+              setHour(newNum);
+              setHourTypingValue(digit);
+              minuteInputRef.current?.focus();
+              minuteInputRef.current?.select();
+            } else {
+              // newNum === 1: start fresh accumulation window
+              hourDigitBufferRef.current = "1";
+              setHour(1);
+              setHourTypingValue("1");
+              hourDigitTimerRef.current = setTimeout(() => {
+                hourDigitBufferRef.current = "";
+                hourDigitTimerRef.current = null;
+                minuteInputRef.current?.focus();
+                minuteInputRef.current?.select();
+              }, 800);
+            }
+          }
+        }
+        return;
+      }
+
+      // ── Backspace: clear accumulation buffer, let DOM handle the delete ──
+      if (e.key === "Backspace") {
+        hourDigitBufferRef.current = "";
+        if (hourDigitTimerRef.current) {
+          clearTimeout(hourDigitTimerRef.current);
+          hourDigitTimerRef.current = null;
+        }
+        // Fall through — browser deletes last char, onChange updates display
+        return;
+      }
+
+      // ── Navigation & shortcuts ───────────────────────────────────────────
       if (e.key === "ArrowUp") {
         e.preventDefault();
+        hourDigitBufferRef.current = "";
         const nextH = hours12 === 12 ? 1 : hours12 + 1;
         setHour(nextH);
         setHourTypingValue(String(nextH));
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
+        hourDigitBufferRef.current = "";
         const nextH = hours12 === 1 ? 12 : hours12 - 1;
         setHour(nextH);
         setHourTypingValue(String(nextH));
       } else if (e.key === ":" || e.key === "ArrowRight" || e.key === "Tab") {
         e.preventDefault();
+        hourDigitBufferRef.current = "";
         minuteInputRef.current?.focus();
         minuteInputRef.current?.select();
       } else if (e.key === "a" || e.key === "A") {
@@ -416,18 +566,103 @@ export const AppleTimePicker = memo(function AppleTimePicker({
 
   const handleMinuteKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
+      // ── Digit interception ──────────────────────────────────────────────────
+      if (e.key >= "0" && e.key <= "9") {
+        e.preventDefault();
+        const digit = e.key;
+        const buffer = minuteDigitBufferRef.current;
+
+        if (buffer.length === 0) {
+          // ── First digit ──────────────────────────────────────────────────
+          const num = parseInt(digit, 10);
+          minuteDigitBufferRef.current = digit;
+          // Show the digit immediately
+          setMinuteTypingValue(digit);
+          // If first digit is 6-9: no valid tens (60-99 > 59), commit as single
+          if (num >= 6) {
+            minuteDigitBufferRef.current = "";
+            setMinute(num);
+            setMinuteTypingValue(num < 10 ? `0${num}` : String(num));
+          } else {
+            // 0-5: could be tens digit of 00-59, wait for second
+            if (minuteDigitTimerRef.current) clearTimeout(minuteDigitTimerRef.current);
+            minuteDigitTimerRef.current = setTimeout(() => {
+              minuteDigitBufferRef.current = "";
+              minuteDigitTimerRef.current = null;
+              // Commit whatever single digit was buffered, normalized to 2 digits
+              const n = parseInt(minuteTypingValueRef.current, 10);
+              const normalized = isNaN(n) ? minutes : Math.max(0, Math.min(59, n));
+              setMinuteTypingValue(normalized < 10 ? `0${normalized}` : String(normalized));
+            }, 800);
+          }
+        } else {
+          // ── Second digit ─────────────────────────────────────────────────
+          if (minuteDigitTimerRef.current) {
+            clearTimeout(minuteDigitTimerRef.current);
+            minuteDigitTimerRef.current = null;
+          }
+          const combined = buffer + digit;
+          const num = parseInt(combined, 10);
+          minuteDigitBufferRef.current = "";
+
+          if (num >= 0 && num <= 59) {
+            setMinute(num);
+            setMinuteTypingValue(num < 10 ? `0${num}` : String(num));
+          } else {
+            // > 59: treat this digit as a fresh first digit
+            const newNum = parseInt(digit, 10);
+            minuteDigitBufferRef.current = digit;
+            setMinuteTypingValue(digit);
+            if (newNum >= 6) {
+              minuteDigitBufferRef.current = "";
+              setMinute(newNum);
+              setMinuteTypingValue(newNum < 10 ? `0${newNum}` : String(newNum));
+            } else {
+              minuteDigitTimerRef.current = setTimeout(() => {
+                minuteDigitBufferRef.current = "";
+                minuteDigitTimerRef.current = null;
+                const n = parseInt(minuteTypingValueRef.current, 10);
+                const normalized = isNaN(n) ? minutes : Math.max(0, Math.min(59, n));
+                setMinuteTypingValue(normalized < 10 ? `0${normalized}` : String(normalized));
+              }, 800);
+            }
+          }
+        }
+        return;
+      }
+
+      // ── Backspace: clear buffer, let DOM handle the delete ───────────────
+      if (e.key === "Backspace") {
+        minuteDigitBufferRef.current = "";
+        if (minuteDigitTimerRef.current) {
+          clearTimeout(minuteDigitTimerRef.current);
+          minuteDigitTimerRef.current = null;
+        }
+        // If field is already empty, go back to hour
+        if (!minuteTypingValue) {
+          e.preventDefault();
+          hourInputRef.current?.focus();
+          hourInputRef.current?.select();
+        }
+        return;
+      }
+
+      // ── Navigation & shortcuts ───────────────────────────────────────────
       if (e.key === "ArrowUp") {
         e.preventDefault();
+        minuteDigitBufferRef.current = "";
         const nextM = (minutes + (e.shiftKey ? 5 : 1)) % 60;
         setMinute(nextM);
         setMinuteTypingValue(nextM < 10 ? `0${nextM}` : String(nextM));
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
+        minuteDigitBufferRef.current = "";
         const nextM = (minutes - (e.shiftKey ? 5 : 1) + 60) % 60;
         setMinute(nextM);
         setMinuteTypingValue(nextM < 10 ? `0${nextM}` : String(nextM));
-      } else if (e.key === "ArrowLeft" || (e.key === "Backspace" && !minuteTypingValue)) {
+      } else if (e.key === "ArrowLeft") {
         e.preventDefault();
+        minuteDigitBufferRef.current = "";
         hourInputRef.current?.focus();
         hourInputRef.current?.select();
       } else if (e.key === "a" || e.key === "A") {
@@ -713,6 +948,17 @@ function WheelColumn<T extends number>({
   const userInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Refs that always hold the latest prop values so the 100 ms scroll-debounce
+  // timer closure never reads a stale selectedValue or onSelect.
+  const selectedValueRef = useRef(selectedValue);
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => {
+    selectedValueRef.current = selectedValue;
+  }, [selectedValue]);
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
   const selectedIndex = useMemo(() => {
     return items.indexOf(selectedValue);
   }, [items, selectedValue]);
@@ -753,8 +999,10 @@ function WheelColumn<T extends number>({
       const nearestIdx = Math.round(el.scrollTop / ITEM_HEIGHT);
       const clampedIdx = Math.max(0, Math.min(items.length - 1, nearestIdx));
       const nextVal = items[clampedIdx];
-      if (nextVal !== undefined && nextVal !== selectedValue) {
-        onSelect(nextVal);
+      // Use refs instead of the closure-captured values so we always compare
+      // against the current selectedValue even if props changed during the 100 ms window.
+      if (nextVal !== undefined && nextVal !== selectedValueRef.current) {
+        onSelectRef.current(nextVal);
       }
       // Snap exactly to target
       el.scrollTo({ top: clampedIdx * ITEM_HEIGHT, behavior: "smooth" });

@@ -2,6 +2,16 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.10] - 2026-09-18
+
+### AppleTimePicker numeric accumulation, drum wheel sync, and bundled desktop distribution
+
+- **AppleTimePicker numeric accumulation**: Introduced an 800ms accumulation buffer for keyboard numeric entry. Users can now seamlessly type two-digit hours (e.g. typing "11" or "12") without the input prematurely jumping or getting stuck at single-digit "1".
+- **Drum wheel scroll synchronization**: Fixed a stale closure race condition in the drum wheel column scroll handler by reading active selection state from mutable references, eliminating visual desynchronization between the header pill and the picker wheel.
+- **Bundled self-contained desktop installers**: Continued bundling the Code-OSS runtime directly inside `.dmg`, `.exe`, and `.AppImage` packages, ensuring zero remote download dependencies or 404 runtime zip errors on cold start.
+- **Development runtime isolation**: Verified local editor asset resolution in development mode (`bun run dev:desktop`) directly from the workspace checkout.
+- **Client runtime error handling**: Aligned relay discovery error propagation with Effect yieldable error contracts.
+
 ## [v1.3.9] - 2026-09-17
 
 ### Bundled self-contained desktop installers, dev runtime isolation, and runtime stability
