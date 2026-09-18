@@ -67,6 +67,7 @@ import {
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
 import { CodeHostManager, resolveCodeHostConfig } from "./codeHostManager";
 import { BrowserHostManager } from "./browserHostManager";
+import { resolveUserDataPathWithFs } from "./userDataPath";
 import { NativeViewStackCoordinator } from "./nativeViewStackCoordinator";
 import {
   normalizeNotificationToasts,
@@ -1276,24 +1277,13 @@ function isDirectory(pathname: string): boolean {
  * lose their Chromium profile data (localStorage, cookies, sessions).
  */
 function resolveUserDataPath(): string {
-  const configuredPath = process.env.TABS_DESKTOP_USER_DATA_DIR?.trim();
-  if (configuredPath) {
-    return Path.resolve(configuredPath);
-  }
-
-  const appDataBase =
-    process.platform === "win32"
-      ? process.env.APPDATA || Path.join(OS.homedir(), "AppData", "Roaming")
-      : process.platform === "darwin"
-        ? Path.join(OS.homedir(), "Library", "Application Support")
-        : process.env.XDG_CONFIG_HOME || Path.join(OS.homedir(), ".config");
-
-  const legacyPath = Path.join(appDataBase, LEGACY_USER_DATA_DIR_NAME);
-  if (FS.existsSync(legacyPath)) {
-    return legacyPath;
-  }
-
-  return Path.join(appDataBase, USER_DATA_DIR_NAME);
+  return resolveUserDataPathWithFs({
+    isDevelopment,
+    logger: {
+      warn: (msg) => writeDesktopLogHeader(msg),
+      info: (msg) => writeDesktopLogHeader(msg),
+    },
+  });
 }
 
 function configureAppIdentity(): void {
