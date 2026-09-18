@@ -205,6 +205,7 @@ describe("ProviderCommandReactor", () => {
       rollbackConversation: () => unsupported(),
       getInstanceInfo: () => unsupported(),
       streamEvents: Stream.fromPubSub(runtimeEventPubSub),
+      subscribeEvents: PubSub.subscribe(runtimeEventPubSub),
     };
 
     const orchestrationLayer = OrchestrationEngineLive.pipe(

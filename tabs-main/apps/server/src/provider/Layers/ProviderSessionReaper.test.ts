@@ -5,6 +5,7 @@ import {
   TurnId,
   ProviderDriverKind,
   ProviderInstanceId,
+  type ProviderRuntimeEvent,
 } from "@tabs/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -15,6 +16,7 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as PubSub from "effect/PubSub";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery";
@@ -175,6 +177,9 @@ describe("ProviderSessionReaper", () => {
       },
       rollbackConversation: () => unsupported(),
       streamEvents: Stream.empty,
+      subscribeEvents: PubSub.unbounded<ProviderRuntimeEvent>().pipe(
+        Effect.flatMap((ps) => PubSub.subscribe(ps)),
+      ),
     };
 
     const runtimeRepositoryLayer = ProviderSessionRuntimeRepositoryLive.pipe(

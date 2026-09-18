@@ -98,6 +98,7 @@ function createProviderServiceHarness(
     rollbackConversation,
     getInstanceInfo: () => unsupported(),
     streamEvents: Stream.fromPubSub(runtimeEventPubSub),
+    subscribeEvents: PubSub.subscribe(runtimeEventPubSub),
   };
 
   const emit = (event: LegacyProviderRuntimeEvent): void => {

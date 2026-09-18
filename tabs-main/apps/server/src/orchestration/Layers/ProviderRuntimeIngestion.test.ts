@@ -85,6 +85,7 @@ function createProviderServiceHarness() {
     rollbackConversation: () => unsupported(),
     getInstanceInfo: () => unsupported(),
     streamEvents: Stream.fromPubSub(runtimeEventPubSub),
+    subscribeEvents: PubSub.subscribe(runtimeEventPubSub),
   };
 
   const setSession = (session: ProviderSession): void => {

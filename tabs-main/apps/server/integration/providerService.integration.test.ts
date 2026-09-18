@@ -99,21 +99,18 @@ const makeIntegrationFixture = Effect.gen(function* () {
 });
 
 const collectEventsDuring = <A, E, R>(
-  stream: Stream.Stream<ProviderRuntimeEvent>,
+  provider: ProviderServiceShape,
   count: number,
   action: Effect.Effect<A, E, R>,
 ) =>
   Effect.gen(function* () {
-    const queue = yield* Queue.unbounded<ProviderRuntimeEvent>();
-    yield* Stream.runForEach(stream, (event) => Queue.offer(queue, event).pipe(Effect.asVoid)).pipe(
-      Effect.forkScoped,
-    );
+    const subscription = yield* provider.subscribeEvents;
 
     yield* action;
 
     return yield* Effect.forEach(
       Array.from({ length: count }, () => undefined),
-      () => Queue.take(queue),
+      () => PubSub.take(subscription),
       { discard: false },
     );
   });
@@ -129,7 +126,7 @@ const runTurn = (input: {
     yield* input.harness.queueTurnResponse(input.threadId, input.response);
 
     return yield* collectEventsDuring(
-      input.provider.streamEvents,
+      input.provider,
       input.response.events.length,
       input.provider.sendTurn({
         threadId: input.threadId,
@@ -139,10 +136,7 @@ const runTurn = (input: {
     );
   });
 
-// TODO(provider-migration): these integration tests time out (15s) — startSession
-// hangs against the mock adapter harness after the provider instance-registry
-// migration. Quarantined as `.skip` until the harness wiring is updated.
-it.effect.skip("replays typed runtime fixture events", () =>
+it.effect("replays typed runtime fixture events", () =>
   Effect.gen(function* () {
     const fixture = yield* makeIntegrationFixture;
 
@@ -176,7 +170,7 @@ it.effect.skip("replays typed runtime fixture events", () =>
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
-it.effect.skip("replays file-changing fixture turn events", () =>
+it.effect("replays file-changing fixture turn events", () =>
   Effect.gen(function* () {
     const fixture = yield* makeIntegrationFixture;
     const { join } = yield* Path.Path;
@@ -216,7 +210,7 @@ it.effect.skip("replays file-changing fixture turn events", () =>
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
-it.effect.skip("runs multi-turn tool/approval flow", () =>
+it.effect("runs multi-turn tool/approval flow", () =>
   Effect.gen(function* () {
     const fixture = yield* makeIntegrationFixture;
     const { join } = yield* Path.Path;
@@ -271,7 +265,7 @@ it.effect.skip("runs multi-turn tool/approval flow", () =>
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
-it.effect.skip("rolls back provider conversation state only", () =>
+it.effect("rolls back provider conversation state only", () =>
   Effect.gen(function* () {
     const fixture = yield* makeIntegrationFixture;
     const { join } = yield* Path.Path;
