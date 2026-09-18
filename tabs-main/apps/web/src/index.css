@@ -102,6 +102,32 @@
   .settings-loading-glint {
     animation: none;
   }
+
+  [data-slot="dialog-backdrop"],
+  [data-slot="dialog-popup"],
+  [data-slot="alert-dialog-backdrop"],
+  [data-slot="alert-dialog-popup"],
+  [data-slot="command-dialog-backdrop"],
+  [data-slot="command-dialog-popup"],
+  [data-slot="sheet-backdrop"],
+  [data-slot="sheet-popup"] {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+html[data-reduced-motion="reduce"] [data-slot="dialog-backdrop"],
+html[data-reduced-motion="reduce"] [data-slot="dialog-popup"],
+html[data-reduced-motion="reduce"] [data-slot="alert-dialog-backdrop"],
+html[data-reduced-motion="reduce"] [data-slot="alert-dialog-popup"],
+html[data-reduced-motion="reduce"] [data-slot="command-dialog-backdrop"],
+html[data-reduced-motion="reduce"] [data-slot="command-dialog-popup"],
+html[data-reduced-motion="reduce"] [data-slot="sheet-backdrop"],
+html[data-reduced-motion="reduce"] [data-slot="sheet-popup"] {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
 }
 
 /* Normalize legacy Lucide loaders to the product's quiet ring indicator. */
