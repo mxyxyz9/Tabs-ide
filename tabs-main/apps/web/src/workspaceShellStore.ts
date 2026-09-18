@@ -6,6 +6,7 @@ import {
   BrowserDevicePreset,
   DEFAULT_PROJECT_TOOL_KIND,
   DEFAULT_PROJECT_TOOL_ORDER,
+  ProjectBrowserSettings,
   ProjectWorkspaceSessionState,
   ProjectWorkspaceSettings,
   type BrowserDevicePreset as BrowserDevicePresetType,
@@ -14,32 +15,347 @@ import {
   type ProjectWorkspaceSettings as ProjectWorkspaceSettingsType,
 } from "@tabs/contracts/settings";
 import { ProjectId, ThreadId } from "@tabs/contracts";
-import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
+import {
+  DEFAULT_CODE_CHROME_STATE,
+  coerceChromeState,
+  type CodeChromeState,
+} from "@tabs/shared/codeChrome";
 
 const WORKSPACE_SHELL_STORAGE_KEY = "tabs:workspace-shell:v1";
 
-// One-time cleanup: nuke any previously-corrupted localStorage data written
-// by the Python-script refactor. The persist middleware now uses version 2
-// and will migrate any old data, but as an extra safety net we explicitly
-// remove the old key here so there's no chance of reading stale state.
-if (typeof localStorage !== "undefined") {
-  try {
-    const raw = localStorage.getItem(WORKSPACE_SHELL_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { version?: number };
-      // If the stored version is less than 2, wipe it so we start fresh.
-      if (typeof parsed?.version !== "number" || parsed.version < 2) {
-        localStorage.removeItem(WORKSPACE_SHELL_STORAGE_KEY);
-      }
-    }
-  } catch {
-    // If parsing fails, the data is corrupt — remove it.
-    localStorage.removeItem(WORKSPACE_SHELL_STORAGE_KEY);
-  }
-}
-
 const decodeProjectWorkspaceSettingsSchema = Schema.decodeUnknownSync(ProjectWorkspaceSettings);
 const decodeProjectWorkspaceSessionState = Schema.decodeSync(ProjectWorkspaceSessionState);
+
+function sanitizeSessionState(value: unknown): ProjectWorkspaceSessionStateType {
+  const defaults = decodeProjectWorkspaceSessionState({});
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return defaults;
+  }
+  const s = value as Record<string, unknown>;
+
+  const openProjectIds = Array.isArray(s.openProjectIds)
+    ? s.openProjectIds.filter(
+        (id): id is ProjectId => typeof id === "string" && id.trim().length > 0,
+      )
+    : [];
+
+  const activeProjectId =
+    typeof s.activeProjectId === "string" && s.activeProjectId.trim().length > 0
+      ? (s.activeProjectId as ProjectId)
+      : null;
+
+  const pendingTabIds = Array.isArray(s.pendingTabIds)
+    ? s.pendingTabIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+
+  const activePendingTabId =
+    typeof s.activePendingTabId === "string" && s.activePendingTabId.trim().length > 0
+      ? s.activePendingTabId
+      : null;
+
+  const activeToolIdByProjectId: Record<ProjectId, any> = {};
+  if (
+    s.activeToolIdByProjectId &&
+    typeof s.activeToolIdByProjectId === "object" &&
+    !Array.isArray(s.activeToolIdByProjectId)
+  ) {
+    for (const [k, v] of Object.entries(s.activeToolIdByProjectId)) {
+      if (typeof k === "string" && typeof v === "string" && k.trim().length > 0) {
+        activeToolIdByProjectId[k as ProjectId] = v;
+      }
+    }
+  }
+
+  const rememberedThreadIdByProjectId: Record<ProjectId, ThreadId> = {};
+  if (
+    s.rememberedThreadIdByProjectId &&
+    typeof s.rememberedThreadIdByProjectId === "object" &&
+    !Array.isArray(s.rememberedThreadIdByProjectId)
+  ) {
+    for (const [k, v] of Object.entries(s.rememberedThreadIdByProjectId)) {
+      if (typeof k === "string" && typeof v === "string" && k.trim().length > 0) {
+        rememberedThreadIdByProjectId[k as ProjectId] = v as ThreadId;
+      }
+    }
+  }
+
+  return {
+    openProjectIds,
+    activeProjectId,
+    pendingTabIds,
+    activePendingTabId,
+    activeToolIdByProjectId,
+    rememberedThreadIdByProjectId,
+  };
+}
+
+function sanitizeCodeToolState(value: unknown): ProjectCodeToolState {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return defaultCodeToolState();
+  }
+  const c = value as Record<string, unknown>;
+  return {
+    lastFocusedPath: typeof c.lastFocusedPath === "string" ? c.lastFocusedPath : null,
+    lastFocusedLineNumber:
+      typeof c.lastFocusedLineNumber === "number" && Number.isFinite(c.lastFocusedLineNumber)
+        ? c.lastFocusedLineNumber
+        : null,
+    navigationNonce:
+      typeof c.navigationNonce === "number" && Number.isFinite(c.navigationNonce)
+        ? c.navigationNonce
+        : 0,
+    sideChatOpen: typeof c.sideChatOpen === "boolean" ? c.sideChatOpen : false,
+    sideChatThreadId:
+      typeof c.sideChatThreadId === "string" && c.sideChatThreadId.trim().length > 0
+        ? (c.sideChatThreadId as ThreadId)
+        : null,
+  };
+}
+
+function sanitizeGitToolState(value: unknown): ProjectGitToolState {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return defaultGitToolState();
+  }
+  const g = value as Record<string, unknown>;
+  return {
+    selectedPath: typeof g.selectedPath === "string" ? g.selectedPath : null,
+    selectedCommit: typeof g.selectedCommit === "string" ? g.selectedCommit : null,
+  };
+}
+
+function sanitizeServerToolState(value: unknown): ProjectServerToolState {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return defaultServerToolState();
+  }
+  const s = value as Record<string, unknown>;
+  const logQueryByProcessId: Record<string, string> = {};
+  if (
+    s.logQueryByProcessId &&
+    typeof s.logQueryByProcessId === "object" &&
+    !Array.isArray(s.logQueryByProcessId)
+  ) {
+    for (const [pk, pv] of Object.entries(s.logQueryByProcessId)) {
+      if (typeof pk === "string" && typeof pv === "string") {
+        logQueryByProcessId[pk] = pv;
+      }
+    }
+  }
+  return { logQueryByProcessId };
+}
+
+function sanitizeBrowserToolState(
+  value: unknown,
+  settingsFallback?: ProjectWorkspaceSettingsType,
+): ProjectBrowserToolState {
+  const fallback = settingsFallback
+    ? defaultBrowserToolState(settingsFallback)
+    : {
+        currentUrl: "",
+        devicePreset: Schema.decodeSync(BrowserDevicePreset)("project-default"),
+        customWidth: null,
+        customHeight: null,
+        landscape: false,
+      };
+
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return fallback;
+  }
+  const b = value as Record<string, unknown>;
+  const currentUrl = typeof b.currentUrl === "string" ? b.currentUrl : fallback.currentUrl;
+  let devicePreset: BrowserDevicePresetType = fallback.devicePreset;
+  try {
+    devicePreset = Schema.decodeUnknownSync(BrowserDevicePreset)(b.devicePreset);
+  } catch {
+    devicePreset = fallback.devicePreset;
+  }
+  const customWidth =
+    typeof b.customWidth === "number" && Number.isFinite(b.customWidth) ? b.customWidth : null;
+  const customHeight =
+    typeof b.customHeight === "number" && Number.isFinite(b.customHeight) ? b.customHeight : null;
+  const landscape = typeof b.landscape === "boolean" ? b.landscape : false;
+  const chromeExpanded = typeof b.chromeExpanded === "boolean" ? b.chromeExpanded : undefined;
+
+  return {
+    currentUrl,
+    devicePreset,
+    customWidth,
+    customHeight,
+    landscape,
+    ...(chromeExpanded !== undefined ? { chromeExpanded } : {}),
+  };
+}
+
+export function migrateWorkspaceShellPersistedState(
+  persistedState: unknown,
+  _version: number,
+): WorkspaceShellPersistedState {
+  const defaults = createDefaultWorkspaceShellPersistedState();
+  if (
+    typeof persistedState !== "object" ||
+    persistedState === null ||
+    Array.isArray(persistedState)
+  ) {
+    return defaults;
+  }
+
+  const raw = persistedState as Record<string, unknown>;
+
+  // 1. Session recovery
+  const session = sanitizeSessionState(raw.session);
+
+  // 2. Project settings by project ID
+  const projectSettingsByProjectId: Record<ProjectId, ProjectWorkspaceSettingsType> = {};
+  if (
+    raw.projectSettingsByProjectId &&
+    typeof raw.projectSettingsByProjectId === "object" &&
+    !Array.isArray(raw.projectSettingsByProjectId)
+  ) {
+    for (const [id, rawSettings] of Object.entries(raw.projectSettingsByProjectId)) {
+      if (
+        typeof id !== "string" ||
+        !id.trim() ||
+        typeof rawSettings !== "object" ||
+        rawSettings === null
+      ) {
+        continue;
+      }
+      const projectId = id as ProjectId;
+      try {
+        projectSettingsByProjectId[projectId] = decodeProjectWorkspaceSettings(rawSettings);
+      } catch {
+        // Nested field recovery: if full decoding failed, salvage browser settings if valid
+        try {
+          let recovered = createDefaultProjectWorkspaceSettings();
+          const rawObj = rawSettings as Record<string, unknown>;
+          if (rawObj.browser && typeof rawObj.browser === "object" && rawObj.browser !== null) {
+            const rawBrowser = { ...(rawObj.browser as Record<string, unknown>) };
+            if (rawBrowser.partitionMode === "named") rawBrowser.partitionMode = "profile";
+            else if (rawBrowser.partitionMode === "project") rawBrowser.partitionMode = "shared";
+            const browser = Schema.decodeUnknownSync(ProjectBrowserSettings)(rawBrowser);
+            recovered = { ...recovered, browser };
+          }
+          projectSettingsByProjectId[projectId] = recovered;
+        } catch {
+          projectSettingsByProjectId[projectId] = createDefaultProjectWorkspaceSettings();
+        }
+      }
+    }
+  }
+
+  // 3. Browser URLs by session key
+  const browserUrlBySessionKey: Record<string, string> = {};
+  if (
+    raw.browserUrlBySessionKey &&
+    typeof raw.browserUrlBySessionKey === "object" &&
+    !Array.isArray(raw.browserUrlBySessionKey)
+  ) {
+    for (const [k, v] of Object.entries(raw.browserUrlBySessionKey)) {
+      if (typeof k === "string" && typeof v === "string") {
+        browserUrlBySessionKey[k] = v;
+      }
+    }
+  }
+
+  // 4. Browser state by project ID
+  const browserStateByProjectId: Record<ProjectId, ProjectBrowserToolState> = {};
+  if (
+    raw.browserStateByProjectId &&
+    typeof raw.browserStateByProjectId === "object" &&
+    !Array.isArray(raw.browserStateByProjectId)
+  ) {
+    for (const [k, v] of Object.entries(raw.browserStateByProjectId)) {
+      if (typeof k === "string" && k.trim()) {
+        const projectId = k as ProjectId;
+        browserStateByProjectId[projectId] = sanitizeBrowserToolState(
+          v,
+          projectSettingsByProjectId[projectId],
+        );
+      }
+    }
+  }
+
+  // 5. Browser state by session key
+  const browserStateBySessionKey: Record<string, ProjectBrowserToolState> = {};
+  if (
+    raw.browserStateBySessionKey &&
+    typeof raw.browserStateBySessionKey === "object" &&
+    !Array.isArray(raw.browserStateBySessionKey)
+  ) {
+    for (const [k, v] of Object.entries(raw.browserStateBySessionKey)) {
+      if (typeof k === "string" && k.trim()) {
+        browserStateBySessionKey[k] = sanitizeBrowserToolState(v);
+      }
+    }
+  }
+
+  // 6. Code state by project ID
+  const codeStateByProjectId: Record<ProjectId, ProjectCodeToolState> = {};
+  if (
+    raw.codeStateByProjectId &&
+    typeof raw.codeStateByProjectId === "object" &&
+    !Array.isArray(raw.codeStateByProjectId)
+  ) {
+    for (const [k, v] of Object.entries(raw.codeStateByProjectId)) {
+      if (typeof k === "string" && k.trim()) {
+        codeStateByProjectId[k as ProjectId] = sanitizeCodeToolState(v);
+      }
+    }
+  }
+
+  // 7. Code chrome state by project ID
+  const codeChromeStateByProjectId: Record<ProjectId, CodeChromeState> = {};
+  if (
+    raw.codeChromeStateByProjectId &&
+    typeof raw.codeChromeStateByProjectId === "object" &&
+    !Array.isArray(raw.codeChromeStateByProjectId)
+  ) {
+    for (const [k, v] of Object.entries(raw.codeChromeStateByProjectId)) {
+      if (typeof k === "string" && k.trim()) {
+        codeChromeStateByProjectId[k as ProjectId] = coerceChromeState(v);
+      }
+    }
+  }
+
+  // 8. Git state by project ID
+  const gitStateByProjectId: Record<ProjectId, ProjectGitToolState> = {};
+  if (
+    raw.gitStateByProjectId &&
+    typeof raw.gitStateByProjectId === "object" &&
+    !Array.isArray(raw.gitStateByProjectId)
+  ) {
+    for (const [k, v] of Object.entries(raw.gitStateByProjectId)) {
+      if (typeof k === "string" && k.trim()) {
+        gitStateByProjectId[k as ProjectId] = sanitizeGitToolState(v);
+      }
+    }
+  }
+
+  // 9. Server state by project ID
+  const serverStateByProjectId: Record<ProjectId, ProjectServerToolState> = {};
+  if (
+    raw.serverStateByProjectId &&
+    typeof raw.serverStateByProjectId === "object" &&
+    !Array.isArray(raw.serverStateByProjectId)
+  ) {
+    for (const [k, v] of Object.entries(raw.serverStateByProjectId)) {
+      if (typeof k === "string" && k.trim()) {
+        serverStateByProjectId[k as ProjectId] = sanitizeServerToolState(v);
+      }
+    }
+  }
+
+  return {
+    session,
+    projectSettingsByProjectId,
+    browserStateByProjectId,
+    browserStateBySessionKey,
+    browserUrlBySessionKey,
+    codeStateByProjectId,
+    codeChromeStateByProjectId,
+    gitStateByProjectId,
+    serverStateByProjectId,
+  };
+}
 
 /** Persistent browser state uses project/tab keys; environment-scoped UI keys belong to a different store. */
 export function browserSessionStateKey(projectId: ProjectId, sessionId = "browser"): string {
@@ -197,6 +513,22 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
         (p: any) => p && p.autoStart,
       );
     }
+  }
+
+  if (
+    toDecode !== null &&
+    typeof toDecode === "object" &&
+    "browser" in toDecode &&
+    (toDecode as any).browser &&
+    typeof (toDecode as any).browser === "object"
+  ) {
+    const rawBrowser = { ...(toDecode as any).browser };
+    if (rawBrowser.partitionMode === "named") {
+      rawBrowser.partitionMode = "profile";
+    } else if (rawBrowser.partitionMode === "project") {
+      rawBrowser.partitionMode = "shared";
+    }
+    toDecode = { ...(toDecode as any), browser: rawBrowser };
   }
 
   const decoded = decodeProjectWorkspaceSettingsSchema(toDecode);
@@ -986,12 +1318,10 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
     {
       name: WORKSPACE_SHELL_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
-      // Bump version whenever persisted shape changes to force a clean reset.
-      // Version 2: Clear corrupted data written by partial Python-script refactor.
+      // Stable persistence version 2 with field-by-field migration recovery.
       version: 2,
-      migrate: (_persistedState: unknown, _version: number) => {
-        // Any state from version < 2 is potentially corrupted — start fresh.
-        return createDefaultWorkspaceShellPersistedState();
+      migrate: (persistedState: unknown, version: number) => {
+        return migrateWorkspaceShellPersistedState(persistedState, version);
       },
       partialize: (state) => ({
         session: state.session,
@@ -1006,31 +1336,9 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        // Sanitize session
-        if (state.session) {
-          state.session = {
-            ...state.session,
-            openProjectIds: state.session.openProjectIds ?? [],
-            pendingTabIds: state.session.pendingTabIds ?? [],
-            activePendingTabId: state.session.activePendingTabId ?? null,
-            activeProjectId: state.session.activeProjectId ?? null,
-            activeToolIdByProjectId: state.session.activeToolIdByProjectId ?? {},
-            rememberedThreadIdByProjectId: state.session.rememberedThreadIdByProjectId ?? {},
-          };
-        }
-        // Decode persisted settings and merge built-in tools introduced after the
-        // project was first saved. Custom tools and user visibility/order survive.
-        if (state.projectSettingsByProjectId) {
-          const sanitized: typeof state.projectSettingsByProjectId = {};
-          for (const [id, settings] of Object.entries(state.projectSettingsByProjectId)) {
-            try {
-              sanitized[id as keyof typeof sanitized] = decodeProjectWorkspaceSettings(settings);
-            } catch {
-              sanitized[id as keyof typeof sanitized] = createDefaultProjectWorkspaceSettings();
-            }
-          }
-          state.projectSettingsByProjectId = sanitized;
-        }
+        // Re-sanitize hydrated state to enforce runtime invariants across schema evolution
+        const sanitized = migrateWorkspaceShellPersistedState(state, 2);
+        Object.assign(state, sanitized);
       },
     },
   ),
