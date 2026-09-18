@@ -392,8 +392,16 @@ export class BrowserHostManager {
   private readonly observedProfileSessions = new WeakSet<Session>();
   private readonly observedAutomationSessions = new WeakSet<Session>();
   private readonly recentlyClosedTabs = new Map<string, RecentlyClosedTab[]>();
+  private readonly knownPartitions = new Set<string>();
+  private disposed = false;
   readonly diagnostics = new BrowserAuthDiagnostics();
   readonly comparisons: BrowserComparisonController;
+
+  private recordPartition(partition?: string | null): void {
+    if (partition) {
+      this.knownPartitions.add(partition);
+    }
+  }
 
   constructor(
     private readonly getWindow: () => BrowserWindow | null,
@@ -548,6 +556,7 @@ export class BrowserHostManager {
         partition,
       },
     });
+    this.recordPartition(partition);
     configurePartitionSession(view.webContents.session);
     this.observeProfileSession(partition, view.webContents.session);
     view.setBackgroundColor("#111111");
@@ -659,6 +668,7 @@ export class BrowserHostManager {
         partition,
       },
     });
+    this.recordPartition(partition);
     configurePartitionSession(view.webContents.session);
     this.observeProfileSession(partition, view.webContents.session);
     view.setBackgroundColor("#111111");
@@ -693,6 +703,7 @@ export class BrowserHostManager {
     const partition = deriveBrowserPartition({ profileId: trimmed });
     const s = electronSession.fromPartition(partition);
     this.observeProfileSession(partition, s);
+    this.recordPartition(partition);
     await s.closeAllConnections();
     await s.clearData({
       dataTypes: [
@@ -705,7 +716,7 @@ export class BrowserHostManager {
         "webSQL",
       ],
     });
-    s.flushStorageData();
+    await s.flushStorageData();
     for (const session of this.sessions.values()) {
       if (session.partition === partition && session.currentUrl) {
         await this.loadUrl(session, session.currentUrl);
@@ -718,6 +729,7 @@ export class BrowserHostManager {
     if (!browserSession) {
       throw new Error("Browser session is not available.");
     }
+    this.recordPartition(browserSession.partition);
     const storageSession = browserSession.view.webContents.session;
     await storageSession.closeAllConnections();
     await storageSession.clearData({
@@ -731,7 +743,7 @@ export class BrowserHostManager {
         "webSQL",
       ],
     });
-    storageSession.flushStorageData();
+    await storageSession.flushStorageData();
     if (browserSession.currentUrl) {
       await this.loadUrl(browserSession, browserSession.currentUrl);
     }
@@ -741,6 +753,7 @@ export class BrowserHostManager {
     const trimmed = normalizeBrowserProfileId(profileId);
     const partition = deriveBrowserPartition({ profileId: trimmed });
     const s = electronSession.fromPartition(partition);
+    this.recordPartition(partition);
     this.observeProfileSession(partition, s);
 
     const isPersistent =
@@ -854,7 +867,7 @@ export class BrowserHostManager {
         ],
         originMatchingMode: "third-parties-included",
       });
-      s.flushStorageData();
+      await s.flushStorageData();
       for (const session of this.sessions.values()) {
         if (
           session.partition === partition &&
@@ -872,6 +885,7 @@ export class BrowserHostManager {
   async openProfileLoginWindow(profileId: string, targetUrl?: string): Promise<void> {
     const trimmed = normalizeBrowserProfileId(profileId);
     const partition = deriveBrowserPartition({ profileId: trimmed });
+    this.recordPartition(partition);
     await this.openLoginWindow(
       partition,
       trimmed,
@@ -2174,17 +2188,106 @@ export class BrowserHostManager {
     }
   }
 
-  dispose(): void {
-    for (const controller of this.browserImports.values()) controller.abort();
-    void this.comparisons.closeAll();
+  async flushAndShutdownSessions(options?: { timeoutMs?: number }): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+
+    const timeoutMs = options?.timeoutMs ?? 5000;
+
+    for (const controller of this.browserImports.values()) {
+      try {
+        controller.abort();
+      } catch {
+        /* best effort */
+      }
+    }
+    try {
+      void this.comparisons.closeAll();
+    } catch {
+      /* best effort */
+    }
     this.hideActiveSession();
+
+    // Deduplicate distinct persistent sessions to flush
+    const sessionsToFlush = new Map<string, Session>();
+
     for (const session of this.sessions.values()) {
-      this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
+      const partition = session.partition;
+      const s = session.view?.webContents?.session;
+      const isPersistent =
+        isPersistentPartition(partition) ||
+        partition.startsWith("persist:") ||
+        (typeof (s as any)?.isPersistent === "function" && Boolean((s as any).isPersistent()));
+
+      if (isPersistent && session.view && !session.view.webContents.isDestroyed()) {
+        if (s && !sessionsToFlush.has(partition)) {
+          sessionsToFlush.set(partition, s);
+        }
+      }
+    }
+
+    for (const partition of this.knownPartitions) {
+      const isPersistent = isPersistentPartition(partition) || partition.startsWith("persist:");
+      if (isPersistent && !sessionsToFlush.has(partition)) {
+        try {
+          const s = electronSession.fromPartition(partition);
+          if (s) {
+            sessionsToFlush.set(partition, s);
+          }
+        } catch {
+          /* best effort */
+        }
+      }
+    }
+
+    // Flush storage in parallel with bounded timeout per session
+    const flushTasks = Array.from(sessionsToFlush.entries()).map(async ([partition, s]) => {
+      try {
+        if (typeof s.flushStorageData === "function") {
+          await Promise.race([
+            s.flushStorageData(),
+            new Promise<void>((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`Session flush timed out after ${timeoutMs}ms`)),
+                timeoutMs,
+              ),
+            ),
+          ]);
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[browserHostManager] Failed to flush partition ${partition}: ${message}`);
+      }
+    });
+
+    await Promise.allSettled(flushTasks);
+
+    // After flush phase completes, close WebContents and clean up timers
+    for (const session of this.sessions.values()) {
+      try {
+        this.closePictureInPicture({ projectId: session.projectId, sessionId: session.sessionId });
+      } catch {
+        /* best effort */
+      }
       this.clearHumanControlTimer(session);
       this.clearCrashRecoveryTimer(session);
-      session.view.webContents.close({ waitForBeforeUnload: false });
+      try {
+        if (!session.view.webContents.isDestroyed()) {
+          session.view.webContents.close({ waitForBeforeUnload: false });
+        }
+      } catch {
+        /* best effort */
+      }
     }
     this.sessions.clear();
+  }
+
+  dispose(): void {
+    void this.flushAndShutdownSessions().catch((err) => {
+      console.warn("[browserHostManager] Shutdown flush error during dispose:", err);
+    });
   }
 
   private async loadUrl(session: BrowserSession, url: string, failOnError = false): Promise<void> {

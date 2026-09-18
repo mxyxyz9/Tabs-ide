@@ -1409,6 +1409,18 @@ async function installDownloadedUpdate(): Promise<{
   isQuitting = true;
   clearUpdatePollTimer();
   try {
+    try {
+      writeDesktopLogHeader("flushing Browser session storage before update...");
+      await browserHostManager.flushAndShutdownSessions();
+    } catch (err: any) {
+      writeDesktopLogHeader(`Browser session flush failed: ${err?.message}`);
+    }
+    try {
+      writeDesktopLogHeader("flushing Code-OSS session storage before update...");
+      await codeHostManager.flushAndShutdownSessions();
+    } catch (err: any) {
+      writeDesktopLogHeader(`Code-OSS session flush failed: ${err?.message}`);
+    }
     await Effect.runPromise(resolvedShutdown.request);
     await Promise.race([
       (async () => {
@@ -3706,10 +3718,16 @@ app.on("before-quit", (event) => {
   mainWindow?.webContents.send(APP_CLOSING_CHANNEL);
 
   clearUpdatePollTimer();
-  browserHostManager.dispose();
   codeControlChannel.dispose();
 
   void (async () => {
+    try {
+      writeDesktopLogHeader("flushing Browser session storage to disk...");
+      await browserHostManager.flushAndShutdownSessions();
+    } catch (err: any) {
+      writeDesktopLogHeader(`Browser session flush failed: ${err?.message}`);
+    }
+
     try {
       writeDesktopLogHeader("flushing Code-OSS session storage to disk...");
       await codeHostManager.flushAndShutdownSessions();
