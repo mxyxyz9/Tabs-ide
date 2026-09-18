@@ -18,6 +18,43 @@ This document covers how to run desktop releases from one tag, first without sig
 - Publishes the CLI package (`apps/server`, npm package `tabs`) with OIDC trusted publishing.
 - Signing is optional and auto-detected per platform from secrets.
 
+## Platform Readiness & Distribution Tiers
+
+Tabs desktop releases distinguish between fully production-ready platforms, internal/beta builds, and deferred distribution requirements:
+
+### 1. Linux (`.AppImage`) — Production-Ready
+
+- **Build Isolation**: Builds completely independently in CI/local environments without requiring any Apple credentials or secrets.
+- **User Data & Session Continuity**: Canonical production storage is located at `$XDG_CONFIG_HOME/tabs` (defaulting to `~/.config/tabs`), with development mode strictly isolated to `~/.config/tabs-dev`.
+- **Legacy Path Migration**: Resolves historical distribution names (`Tabs (Alpha)`, `Tabs`) deterministically. If the canonical directory does not exist and exactly one legacy directory exists, it is safely reused/migrated. If both exist with data, canonical is prioritized without destructive overwriting or unsafe merging.
+- **Filesystem Safety**: Case-sensitive paths and symlink containment are enforced.
+
+### 2. Windows (`.exe` NSIS Installer) — Production-Ready
+
+- **Build Isolation**: Builds completely independently in CI/local environments without requiring any Apple credentials or secrets.
+- **User Data & DPAPI Continuity**: Canonical storage is located at `%APPDATA%\tabs` (dev at `%APPDATA%\tabs-dev`). Cookie and token encryption uses Windows DPAPI scoped to the Windows user account, persisting seamlessly across version updates.
+- **Installer Safety**: NSIS package handles clean install-over-existing-version upgrades, maintaining desktop shortcuts, stable `appId` (`com.tabs.ide`), and custom protocol handlers.
+- **Azure Trusted Signing**: Optional for local and internal builds; production signing is isolated to Windows CI jobs using Azure ATS secrets.
+
+### 3. macOS (`.dmg`, `.zip`) — Release Tiers & Accepted Exception
+
+- **Internal / Beta Builds (Unsigned / Ad-hoc)**:
+  - Local development and automated testing produce functional ad-hoc signed macOS artifacts (`Signature=adhoc`) without requiring Apple Developer credentials.
+  - These artifacts are intended strictly for developer use and internal dogfooding.
+- **Production Distribution (Explicitly Deferred)**:
+  - Public macOS release distribution requires Apple Developer ID Application code signing and Apple Notarization to pass Gatekeeper without user security overrides.
+  - Because an Apple Developer account is not currently active, **Apple Developer ID signing and notarization are an explicitly deferred production-release requirement**.
+  - Local macOS packaging and non-macOS release jobs (Windows and Linux) must never be blocked or failed due to the absence of Apple Developer credentials.
+
+### 4. Browser-Partition Shutdown & Updater Flushing
+
+- Both standard application quit (`app.on("before-quit")`) and automatic update restarts (`autoUpdater.quitAndInstall()` / `installDownloadedUpdate()`) execute asynchronous, parallel session flushing:
+  - Discovers all distinct persistent browser sessions (`persist:tabs-browser:*`).
+  - Deduplicates shared sessions (e.g. multiple tabs sharing the same named or project profile).
+  - Flushes cookies, localStorage, IndexedDB, and HTTP cache with a bounded timeout per partition.
+  - Closes child WebContents only after all storage flushes have completed.
+  - Flushes the Code-OSS session and main Electron default session before final process exit.
+
 ## Desktop auto-update notes
 
 - Runtime updater: `electron-updater` in `apps/desktop/src/main.ts`.
