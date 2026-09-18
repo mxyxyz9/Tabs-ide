@@ -63,7 +63,9 @@ describe("Linux and multi-platform userData continuity", () => {
     // Never overwrites or merges into populated canonical directory
     expect(resolved).toBe(`${defaultBase}/tabs`);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("Active canonical profile at tabs found alongside legacy directory (Tabs (Alpha))"),
+      expect.stringContaining(
+        "Active canonical profile at tabs found alongside legacy directory (Tabs (Alpha))",
+      ),
     );
   });
 

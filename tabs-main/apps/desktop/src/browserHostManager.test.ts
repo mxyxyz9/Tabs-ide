@@ -1218,12 +1218,16 @@ describe("browser partition shutdown flushing", () => {
     const callOrder: string[] = [];
 
     // Tab 1: Project 1 (shared project partition)
-    const { session: tab1, flushStorageData: flush1, close: close1, sessionObj: s1 } =
-      createMockSession({
-        sessionId: "tab-1",
-        key: "proj-1::tab-1",
-        partition: "persist:tabs-browser:project:proj-1",
-      });
+    const {
+      session: tab1,
+      flushStorageData: flush1,
+      close: close1,
+      sessionObj: s1,
+    } = createMockSession({
+      sessionId: "tab-1",
+      key: "proj-1::tab-1",
+      partition: "persist:tabs-browser:project:proj-1",
+    });
     flush1.mockImplementation(async () => {
       callOrder.push("flush-proj-1");
     });
@@ -1244,7 +1248,11 @@ describe("browser partition shutdown flushing", () => {
     });
 
     // Tab 3: Named profile "work"
-    const { session: tab3, flushStorageData: flush3, close: close3 } = createMockSession({
+    const {
+      session: tab3,
+      flushStorageData: flush3,
+      close: close3,
+    } = createMockSession({
       sessionId: "tab-3",
       key: "proj-2::tab-3",
       partition: "persist:tabs-browser:profile:work",
@@ -1293,7 +1301,12 @@ describe("browser partition shutdown flushing", () => {
     const manager = new BrowserHostManager(() => null);
     const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
 
-    const { session: ephemeralTab, flushStorageData, close, isPersistent } = createMockSession({
+    const {
+      session: ephemeralTab,
+      flushStorageData,
+      close,
+      isPersistent,
+    } = createMockSession({
       sessionId: "ephemeral-tab",
       key: "proj-1::ephemeral-tab",
       partition: "tabs-browser-ephemeral:project:proj-1",
@@ -1318,21 +1331,27 @@ describe("browser partition shutdown flushing", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     // Failing partition
-    const { session: failingTab, flushStorageData: failingFlush, close: failingClose } =
-      createMockSession({
-        sessionId: "failing-tab",
-        key: "p::failing",
-        partition: "persist:tabs-browser:project:failing",
-      });
+    const {
+      session: failingTab,
+      flushStorageData: failingFlush,
+      close: failingClose,
+    } = createMockSession({
+      sessionId: "failing-tab",
+      key: "p::failing",
+      partition: "persist:tabs-browser:project:failing",
+    });
     failingFlush.mockRejectedValue(new Error("Disk IO lock error"));
 
     // Healthy partition
-    const { session: healthyTab, flushStorageData: healthyFlush, close: healthyClose } =
-      createMockSession({
-        sessionId: "healthy-tab",
-        key: "p::healthy",
-        partition: "persist:tabs-browser:project:healthy",
-      });
+    const {
+      session: healthyTab,
+      flushStorageData: healthyFlush,
+      close: healthyClose,
+    } = createMockSession({
+      sessionId: "healthy-tab",
+      key: "p::healthy",
+      partition: "persist:tabs-browser:project:healthy",
+    });
 
     sessions.set(failingTab.key, failingTab);
     sessions.set(healthyTab.key, healthyTab);
@@ -1349,7 +1368,9 @@ describe("browser partition shutdown flushing", () => {
 
     // Log recorded diagnostic without secrets
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[browserHostManager] Failed to flush partition persist:tabs-browser:project:failing: Disk IO lock error"),
+      expect.stringContaining(
+        "[browserHostManager] Failed to flush partition persist:tabs-browser:project:failing: Disk IO lock error",
+      ),
     );
 
     warnSpy.mockRestore();
@@ -1378,4 +1399,3 @@ describe("browser partition shutdown flushing", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 });
-

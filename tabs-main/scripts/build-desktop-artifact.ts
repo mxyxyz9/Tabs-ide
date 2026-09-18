@@ -1391,7 +1391,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
 
   // Validate Effect transitive dependencies to prevent version mismatch crashes (e.g. ByteSize import)
-  const sharedPkgPath = path.join(stageAppDir, "node_modules/@effect/platform-node-shared/package.json");
+  const sharedPkgPath = path.join(
+    stageAppDir,
+    "node_modules/@effect/platform-node-shared/package.json",
+  );
   if (yield* fs.exists(sharedPkgPath)) {
     const sharedPkg = JSON.parse(yield* fs.readFileString(sharedPkgPath)) as { version?: string };
     const expectedEffect =

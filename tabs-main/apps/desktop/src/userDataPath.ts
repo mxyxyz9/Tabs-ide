@@ -16,10 +16,12 @@ export interface ResolveUserDataOptions {
   homedir?: string | undefined;
   isDevelopment?: boolean | undefined;
   fs?: FsProbe | undefined;
-  logger?: {
-    warn: (message: string) => void;
-    info?: (message: string) => void;
-  } | undefined;
+  logger?:
+    | {
+        warn: (message: string) => void;
+        info?: (message: string) => void;
+      }
+    | undefined;
 }
 
 export const CANONICAL_PROD_DIR_NAME = "tabs";
@@ -98,7 +100,9 @@ export function resolveUserDataPathWithFs(options: ResolveUserDataOptions = {}):
 
   // Linux continuity handling
   const canonicalPopulated = isPopulatedDirectory(canonicalPath, fs);
-  const legacyNames = isDevelopment ? VERIFIED_LEGACY_DEV_DIR_NAMES : VERIFIED_LEGACY_PROD_DIR_NAMES;
+  const legacyNames = isDevelopment
+    ? VERIFIED_LEGACY_DEV_DIR_NAMES
+    : VERIFIED_LEGACY_PROD_DIR_NAMES;
 
   const populatedLegacyPaths: string[] = [];
   for (const name of legacyNames) {

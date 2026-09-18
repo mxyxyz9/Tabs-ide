@@ -78,12 +78,12 @@ describe("workspaceShellStore migration", () => {
       "thread-1",
     );
 
-    expect(migrated.projectSettingsByProjectId["project-alpha" as ProjectId]?.browser).toMatchObject(
-      {
-        defaultUrl: "https://example.com",
-        partitionMode: "shared",
-      },
-    );
+    expect(
+      migrated.projectSettingsByProjectId["project-alpha" as ProjectId]?.browser,
+    ).toMatchObject({
+      defaultUrl: "https://example.com",
+      partitionMode: "shared",
+    });
     expect(migrated.browserUrlBySessionKey["project-alpha:browser"]).toBe(
       "https://example.com/dashboard",
     );
@@ -96,9 +96,9 @@ describe("workspaceShellStore migration", () => {
       selectedPath: "README.md",
       selectedCommit: "abc1234",
     });
-    expect(migrated.serverStateByProjectId["project-alpha" as ProjectId]?.logQueryByProcessId).toEqual(
-      { proc1: "error" },
-    );
+    expect(
+      migrated.serverStateByProjectId["project-alpha" as ProjectId]?.logQueryByProcessId,
+    ).toEqual({ proc1: "error" });
   });
 
   it("preserves named browser profiles and assignments across migration (both standard 'profile' and legacy 'named')", () => {

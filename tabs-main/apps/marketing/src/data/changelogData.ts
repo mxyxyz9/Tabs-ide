@@ -102,8 +102,7 @@ export const changelogData: ChangelogRelease[] = [
   },
   {
     tag: "v1.3.8",
-    title:
-      "Code-OSS 1.138 upstream runtime sync, native code host contracts, and UI refinements",
+    title: "Code-OSS 1.138 upstream runtime sync, native code host contracts, and UI refinements",
     date: "September 16, 2026",
     shortDate: "Sep 16",
     type: "feature",

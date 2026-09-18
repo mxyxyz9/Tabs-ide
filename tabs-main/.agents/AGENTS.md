@@ -15,7 +15,7 @@
    - `out/vs/code/electron-browser/workbench/workbench-dev.html`
    - `out-build/nls.messages.json`
    - `product.json`
-   If any are missing, run `cd ../tabs-code-main && npm install && npm run compile`.
+     If any are missing, run `cd ../tabs-code-main && npm install && npm run compile`.
 
 ## Task Completion Requirements
 
