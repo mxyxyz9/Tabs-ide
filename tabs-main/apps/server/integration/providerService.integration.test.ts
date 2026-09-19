@@ -3,7 +3,7 @@ import { ProviderDriverKind, ProviderInstanceId, ThreadId } from "@tabs/contract
 import { DEFAULT_SERVER_SETTINGS } from "@tabs/contracts/settings";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, assert } from "@effect/vitest";
-import { Effect, FileSystem, Layer, Path, PubSub, Queue, Stream } from "effect";
+import { Effect, FileSystem, Layer, Path, PubSub, Stream } from "effect";
 
 import { ProviderUnsupportedError } from "../src/provider/Errors.ts";
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";

@@ -14,9 +14,9 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import * as PubSub from "effect/PubSub";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery";
@@ -178,7 +178,7 @@ describe("ProviderSessionReaper", () => {
       rollbackConversation: () => unsupported(),
       streamEvents: Stream.empty,
       subscribeEvents: PubSub.unbounded<ProviderRuntimeEvent>().pipe(
-        Effect.flatMap((ps) => PubSub.subscribe(ps)),
+        Effect.flatMap((pubsub) => PubSub.subscribe(pubsub)),
       ),
     };
 

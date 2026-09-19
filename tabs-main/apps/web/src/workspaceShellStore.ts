@@ -7,6 +7,10 @@ import {
   DEFAULT_PROJECT_TOOL_KIND,
   DEFAULT_PROJECT_TOOL_ORDER,
   ProjectBrowserSettings,
+  ProjectCustomEmbedDefinition,
+  ProjectServerPresetDefinition,
+  ProjectServerProcessDefinition,
+  ProjectToolDefinition as ProjectToolDefinitionSchema,
   ProjectWorkspaceSessionState,
   ProjectWorkspaceSettings,
   type BrowserDevicePreset as BrowserDevicePresetType,
@@ -53,7 +57,10 @@ function sanitizeSessionState(value: unknown): ProjectWorkspaceSessionStateType 
       ? s.activePendingTabId
       : null;
 
-  const activeToolIdByProjectId: Record<ProjectId, any> = {};
+  const activeToolIdByProjectId: Record<
+    ProjectId,
+    ProjectWorkspaceSessionStateType["activeToolIdByProjectId"][ProjectId]
+  > = {};
   if (
     s.activeToolIdByProjectId &&
     typeof s.activeToolIdByProjectId === "object" &&
@@ -185,6 +192,81 @@ function sanitizeBrowserToolState(
   };
 }
 
+function decodeArrayOrDefault<S extends Schema.Decoder<unknown>>(
+  schema: S,
+  value: unknown,
+  fallback: S["Type"],
+): S["Type"] {
+  try {
+    return Schema.decodeUnknownSync(schema)(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function recoverProjectWorkspaceSettings(
+  value: Record<string, unknown>,
+): ProjectWorkspaceSettingsType {
+  const defaults = createDefaultProjectWorkspaceSettings();
+  const normalized = { ...value };
+
+  if (
+    Array.isArray(normalized.serverProcesses) &&
+    !("terminalProcesses" in normalized) &&
+    !("serverPresets" in normalized)
+  ) {
+    normalized.terminalProcesses = normalized.serverProcesses.filter(
+      (process) =>
+        process &&
+        typeof process === "object" &&
+        (!("autoStart" in process) || !Boolean((process as { autoStart?: unknown }).autoStart)),
+    );
+    normalized.serverPresets = normalized.serverProcesses.filter(
+      (process) =>
+        process &&
+        typeof process === "object" &&
+        "autoStart" in process &&
+        Boolean((process as { autoStart?: unknown }).autoStart),
+    );
+  }
+
+  let browser = defaults.browser;
+  if (normalized.browser && typeof normalized.browser === "object") {
+    const rawBrowser = { ...(normalized.browser as Record<string, unknown>) };
+    if (rawBrowser.partitionMode === "named") rawBrowser.partitionMode = "profile";
+    if (rawBrowser.partitionMode === "project") rawBrowser.partitionMode = "shared";
+    try {
+      browser = Schema.decodeUnknownSync(ProjectBrowserSettings)(rawBrowser);
+    } catch {
+      // Preserve the safe default when this field alone is invalid.
+    }
+  }
+
+  return decodeProjectWorkspaceSettings({
+    tools: decodeArrayOrDefault(
+      Schema.Array(ProjectToolDefinitionSchema),
+      normalized.tools,
+      defaults.tools,
+    ),
+    browser,
+    terminalProcesses: decodeArrayOrDefault(
+      Schema.Array(ProjectServerProcessDefinition),
+      normalized.terminalProcesses,
+      defaults.terminalProcesses,
+    ),
+    serverPresets: decodeArrayOrDefault(
+      Schema.Array(ProjectServerPresetDefinition),
+      normalized.serverPresets,
+      defaults.serverPresets,
+    ),
+    customEmbeds: decodeArrayOrDefault(
+      Schema.Array(ProjectCustomEmbedDefinition),
+      normalized.customEmbeds,
+      defaults.customEmbeds,
+    ),
+  });
+}
+
 export function migrateWorkspaceShellPersistedState(
   persistedState: unknown,
   _version: number,
@@ -223,18 +305,10 @@ export function migrateWorkspaceShellPersistedState(
       try {
         projectSettingsByProjectId[projectId] = decodeProjectWorkspaceSettings(rawSettings);
       } catch {
-        // Nested field recovery: if full decoding failed, salvage browser settings if valid
         try {
-          let recovered = createDefaultProjectWorkspaceSettings();
-          const rawObj = rawSettings as Record<string, unknown>;
-          if (rawObj.browser && typeof rawObj.browser === "object" && rawObj.browser !== null) {
-            const rawBrowser = { ...(rawObj.browser as Record<string, unknown>) };
-            if (rawBrowser.partitionMode === "named") rawBrowser.partitionMode = "profile";
-            else if (rawBrowser.partitionMode === "project") rawBrowser.partitionMode = "shared";
-            const browser = Schema.decodeUnknownSync(ProjectBrowserSettings)(rawBrowser);
-            recovered = { ...recovered, browser };
-          }
-          projectSettingsByProjectId[projectId] = recovered;
+          projectSettingsByProjectId[projectId] = recoverProjectWorkspaceSettings(
+            rawSettings as Record<string, unknown>,
+          );
         } catch {
           projectSettingsByProjectId[projectId] = createDefaultProjectWorkspaceSettings();
         }

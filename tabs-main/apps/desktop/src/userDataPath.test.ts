@@ -18,15 +18,9 @@ function createMockFs(files: Record<string, string[] | "file" | "symlink">): FsP
       const entry = files[path];
       if (!entry) throw new Error(`ENOENT: no such file or directory, ${path}`);
       return {
-        isDirectory: () => Array.isArray(entry),
-      };
-    },
-    lstatSync: (path: string) => {
-      const entry = files[path];
-      if (!entry) throw new Error(`ENOENT: no such file or directory, ${path}`);
-      return {
-        isDirectory: () => Array.isArray(entry),
-        isSymbolicLink: () => entry === "symlink",
+        // stat follows symlinks. A fixed-name user-data symlink is a supported
+        // continuity mechanism, not an attacker-controlled path component.
+        isDirectory: () => Array.isArray(entry) || entry === "symlink",
       };
     },
   };
@@ -46,7 +40,7 @@ describe("Linux and multi-platform userData continuity", () => {
     expect(resolved).toBe(`${defaultBase}/${CANONICAL_PROD_DIR_NAME}`);
   });
 
-  it("uses canonical production 'tabs' when populated, even if legacy directory also exists", () => {
+  it("keeps the explicit legacy profile when canonical data also exists", () => {
     const warn = vi.fn();
     const fs = createMockFs({
       [`${defaultBase}/tabs`]: ["Cookies", "Preferences"],
@@ -60,11 +54,12 @@ describe("Linux and multi-platform userData continuity", () => {
       logger: { warn },
     });
 
-    // Never overwrites or merges into populated canonical directory
-    expect(resolved).toBe(`${defaultBase}/tabs`);
+    // Prior releases always selected Tabs (Alpha) whenever it existed. An
+    // update must not silently switch the active Chromium profile.
+    expect(resolved).toBe(`${defaultBase}/Tabs (Alpha)`);
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining(
-        "Active canonical profile at tabs found alongside legacy directory (Tabs (Alpha))",
+        "Existing legacy profile Tabs (Alpha) and canonical profile tabs both contain data",
       ),
     );
   });
@@ -182,7 +177,7 @@ describe("Linux and multi-platform userData continuity", () => {
     expect(resolved).toBe(`${defaultBase}/tabs`);
   });
 
-  it("rejects symlinks for populated legacy directories to prevent symlink traversal", () => {
+  it("preserves a legacy profile reached through a filesystem symlink", () => {
     const fs = createMockFs({
       [`${defaultBase}/Tabs (Alpha)`]: "symlink",
     });
@@ -193,8 +188,7 @@ describe("Linux and multi-platform userData continuity", () => {
       fs,
     });
 
-    // Does not follow symlink as a populated directory, falls back to canonical
-    expect(resolved).toBe(`${defaultBase}/tabs`);
+    expect(resolved).toBe(`${defaultBase}/Tabs (Alpha)`);
   });
 
   it("resolves Windows user data path under %APPDATA%", () => {
@@ -209,6 +203,22 @@ describe("Linux and multi-platform userData continuity", () => {
     expect(resolved).toBe("C:\\Users\\testuser\\AppData\\Roaming\\tabs");
   });
 
+  it("keeps the Windows legacy profile when a canonical directory also exists", () => {
+    const base = "C:\\Users\\testuser\\AppData\\Roaming";
+    const fs = createMockFs({
+      [`${base}\\tabs`]: ["NewData"],
+      [`${base}\\Tabs (Alpha)`]: ["ExistingProfile"],
+    });
+    const resolved = resolveUserDataPathWithFs({
+      platform: "win32",
+      env: { APPDATA: base },
+      homedir: "C:\\Users\\testuser",
+      fs,
+    });
+
+    expect(resolved).toBe(`${base}\\Tabs (Alpha)`);
+  });
+
   it("resolves macOS user data path under Library/Application Support", () => {
     const fs = createMockFs({});
     const resolved = resolveUserDataPathWithFs({
@@ -218,6 +228,21 @@ describe("Linux and multi-platform userData continuity", () => {
     });
 
     expect(resolved).toBe("/Users/testuser/Library/Application Support/tabs");
+  });
+
+  it("keeps the macOS legacy profile when a canonical directory also exists", () => {
+    const base = "/Users/testuser/Library/Application Support";
+    const fs = createMockFs({
+      [`${base}/tabs`]: ["NewData"],
+      [`${base}/Tabs (Alpha)`]: ["ExistingProfile"],
+    });
+    const resolved = resolveUserDataPathWithFs({
+      platform: "darwin",
+      homedir: "/Users/testuser",
+      fs,
+    });
+
+    expect(resolved).toBe(`${base}/Tabs (Alpha)`);
   });
 
   it("honors explicit TABS_DESKTOP_USER_DATA_DIR override across all platforms", () => {

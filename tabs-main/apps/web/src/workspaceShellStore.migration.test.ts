@@ -324,6 +324,66 @@ describe("workspaceShellStore migration", () => {
     expect(Array.isArray(settings?.tools)).toBe(true);
   });
 
+  it("recovers valid settings fields independently when a sibling field is corrupted", () => {
+    const raw = {
+      projectSettingsByProjectId: {
+        "field-recovery": {
+          tools: "INVALID_NOT_AN_ARRAY",
+          browser: {
+            partitionMode: "profile",
+            partitionProfile: "field-recovery-profile",
+          },
+          terminalProcesses: [
+            {
+              id: "terminal-1",
+              label: "Dev server",
+              command: "bun run dev",
+              cwd: "",
+              env: {},
+              autoStart: false,
+            },
+          ],
+          serverPresets: [
+            {
+              id: "server-1",
+              label: "API",
+              commands: ["bun run server"],
+              cwd: "",
+              env: {},
+              autoStart: true,
+            },
+          ],
+          customEmbeds: [
+            {
+              id: "docs",
+              label: "Docs",
+              url: "https://example.com/docs",
+              resumeLastVisitedPage: false,
+              partitionMode: "profile",
+              partitionProfile: "field-recovery-profile",
+            },
+          ],
+        },
+      },
+    };
+
+    const settings = migrateWorkspaceShellPersistedState(raw, 1).projectSettingsByProjectId[
+      "field-recovery" as ProjectId
+    ];
+
+    expect(settings?.browser.partitionProfile).toBe("field-recovery-profile");
+    expect(settings?.terminalProcesses).toHaveLength(1);
+    expect(settings?.terminalProcesses[0]?.commands).toEqual(["bun run dev"]);
+    expect(settings?.serverPresets).toHaveLength(1);
+    expect(settings?.customEmbeds).toEqual([
+      expect.objectContaining({
+        id: "docs",
+        resumeLastVisitedPage: false,
+        partitionProfile: "field-recovery-profile",
+      }),
+    ]);
+  });
+
   it("handles completely malformed or non-object persisted data without throwing", () => {
     expect(() => migrateWorkspaceShellPersistedState(null, 1)).not.toThrow();
     expect(migrateWorkspaceShellPersistedState(null, 1)).toEqual(

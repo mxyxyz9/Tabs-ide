@@ -121,11 +121,7 @@ export interface ProviderServiceShape {
    */
   readonly streamEvents: Stream.Stream<ProviderRuntimeEvent>;
 
-  /**
-   * Subscribes to the canonical runtime event PubSub.
-   * Synchronously creates a subscription dequeue so consumers can register
-   * before triggering turns without racing on background stream startup.
-   */
+  /** Atomically subscribes before a caller starts work that can publish events. */
   readonly subscribeEvents: Effect.Effect<
     PubSub.Subscription<ProviderRuntimeEvent>,
     never,

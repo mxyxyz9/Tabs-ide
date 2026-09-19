@@ -47,14 +47,14 @@ describe("Reduced Motion in Dialog and Overlay Primitives", () => {
     expect(sheetHtml).toContain('data-slot="sheet-backdrop"');
   });
 
-  it("verifies dialog, alert-dialog, command, and sheet components declare motion-reduce classes on popup primitives", () => {
+  it("disables popup transitions without removing their final layout transforms", () => {
     const files = ["dialog.tsx", "alert-dialog.tsx", "command.tsx", "sheet.tsx"];
     for (const file of files) {
       const filePath = resolve(__dirname, file);
       const content = readFileSync(filePath, "utf-8");
       expect(content).toContain("motion-reduce:transition-none");
       expect(content).toContain("motion-reduce:duration-0");
-      expect(content).toContain("motion-reduce:transform-none");
+      expect(content).not.toContain("motion-reduce:transform-none");
     }
   });
 
@@ -82,6 +82,6 @@ describe("Reduced Motion in Dialog and Overlay Primitives", () => {
 
     expect(cssContent).toContain("transition: none !important");
     expect(cssContent).toContain("animation: none !important");
-    expect(cssContent).toContain("transform: none !important");
+    expect(cssContent).not.toContain("transform: none !important");
   });
 });

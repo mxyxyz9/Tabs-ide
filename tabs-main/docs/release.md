@@ -22,18 +22,18 @@ This document covers how to run desktop releases from one tag, first without sig
 
 Tabs desktop releases distinguish between fully production-ready platforms, internal/beta builds, and deferred distribution requirements:
 
-### 1. Linux (`.AppImage`) — Production-Ready
+### 1. Linux (`.AppImage`) - Release Configuration
 
 - **Build Isolation**: Builds completely independently in CI/local environments without requiring any Apple credentials or secrets.
-- **User Data & Session Continuity**: Canonical production storage is located at `$XDG_CONFIG_HOME/tabs` (defaulting to `~/.config/tabs`), with development mode strictly isolated to `~/.config/tabs-dev`.
-- **Legacy Path Migration**: Resolves historical distribution names (`Tabs (Alpha)`, `Tabs`) deterministically. If the canonical directory does not exist and exactly one legacy directory exists, it is safely reused/migrated. If both exist with data, canonical is prioritized without destructive overwriting or unsafe merging.
-- **Filesystem Safety**: Case-sensitive paths and symlink containment are enforced.
+- **User Data & Session Continuity**: New production installs use `$XDG_CONFIG_HOME/tabs` (defaulting to `~/.config/tabs`), with development mode isolated to `~/.config/tabs-dev`.
+- **Legacy Path Compatibility**: Existing `Tabs (Alpha)` profiles retain the precedence used by prior releases. The resolver can also reuse Electron's historical `Tabs` default when no established canonical or alpha profile exists. It never merges or deletes profile directories automatically.
+- **Native Verification**: AppImage launch and install-over-existing behavior must be verified on a Linux CI runner or release machine; macOS unit tests cover path selection only.
 
-### 2. Windows (`.exe` NSIS Installer) — Production-Ready
+### 2. Windows (`.exe` NSIS Installer) - Release Configuration
 
 - **Build Isolation**: Builds completely independently in CI/local environments without requiring any Apple credentials or secrets.
-- **User Data & DPAPI Continuity**: Canonical storage is located at `%APPDATA%\tabs` (dev at `%APPDATA%\tabs-dev`). Cookie and token encryption uses Windows DPAPI scoped to the Windows user account, persisting seamlessly across version updates.
-- **Installer Safety**: NSIS package handles clean install-over-existing-version upgrades, maintaining desktop shortcuts, stable `appId` (`com.tabs.ide`), and custom protocol handlers.
+- **User Data & DPAPI Continuity**: New installs use `%APPDATA%\tabs` (dev at `%APPDATA%\tabs-dev`); existing `%APPDATA%\Tabs (Alpha)` profiles continue to be selected for compatibility.
+- **Installer Identity**: The package uses stable `appId` `com.tabs.app`. NSIS install-over-existing and DPAPI continuity still require native Windows release validation; they cannot be proven by macOS unit tests.
 - **Azure Trusted Signing**: Optional for local and internal builds; production signing is isolated to Windows CI jobs using Azure ATS secrets.
 
 ### 3. macOS (`.dmg`, `.zip`) — Release Tiers & Accepted Exception
@@ -51,7 +51,7 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
 - Both standard application quit (`app.on("before-quit")`) and automatic update restarts (`autoUpdater.quitAndInstall()` / `installDownloadedUpdate()`) execute asynchronous, parallel session flushing:
   - Discovers all distinct persistent browser sessions (`persist:tabs-browser:*`).
   - Deduplicates shared sessions (e.g. multiple tabs sharing the same named or project profile).
-  - Flushes cookies, localStorage, IndexedDB, and HTTP cache with a bounded timeout per partition.
+  - Flushes DOM storage synchronously and awaits each Chromium cookie store with a bounded timeout.
   - Closes child WebContents only after all storage flushes have completed.
   - Flushes the Code-OSS session and main Electron default session before final process exit.
 

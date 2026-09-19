@@ -113,7 +113,6 @@
   [data-slot="sheet-popup"] {
     transition: none !important;
     animation: none !important;
-    transform: none !important;
   }
 }
 
@@ -127,7 +126,6 @@ html[data-reduced-motion="reduce"] [data-slot="sheet-backdrop"],
 html[data-reduced-motion="reduce"] [data-slot="sheet-popup"] {
   transition: none !important;
   animation: none !important;
-  transform: none !important;
 }
 
 /* Normalize legacy Lucide loaders to the product's quiet ring indicator. */

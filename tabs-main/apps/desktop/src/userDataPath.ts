@@ -6,7 +6,6 @@ export interface FsProbe {
   existsSync: (path: string) => boolean;
   readdirSync?: (path: string) => string[];
   statSync?: (path: string) => { isDirectory: () => boolean };
-  lstatSync?: (path: string) => { isDirectory: () => boolean; isSymbolicLink: () => boolean };
 }
 
 export interface ResolveUserDataOptions {
@@ -29,7 +28,7 @@ export const CANONICAL_DEV_DIR_NAME = "tabs-dev";
 
 // Verified historical legacy directory names based on repository evidence:
 // 1. "Tabs (Alpha)" - explicit legacy name in main.ts
-// 2. "Tabs" - Electron default productName directory on Linux
+// 2. "Tabs" - Electron's default productName directory before the override
 // In development: "Tabs (Dev)"
 export const VERIFIED_LEGACY_PROD_DIR_NAMES = ["Tabs (Alpha)", "Tabs"] as const;
 export const VERIFIED_LEGACY_DEV_DIR_NAMES = ["Tabs (Dev)"] as const;
@@ -37,11 +36,6 @@ export const VERIFIED_LEGACY_DEV_DIR_NAMES = ["Tabs (Dev)"] as const;
 function isDirectoryEntry(path: string, fs: FsProbe): boolean {
   try {
     if (!fs.existsSync(path)) return false;
-    if (fs.lstatSync) {
-      const lstat = fs.lstatSync(path);
-      if (lstat.isSymbolicLink()) return false;
-      return lstat.isDirectory();
-    }
     if (fs.statSync) {
       return fs.statSync(path).isDirectory();
     }
@@ -92,7 +86,10 @@ export function resolveUserDataPathWithFs(options: ResolveUserDataOptions = {}):
   if (platform !== "linux") {
     const legacyName = isDevelopment ? "Tabs (Dev)" : "Tabs (Alpha)";
     const legacyPath = pathUtil.join(appDataBase, legacyName);
-    if (isDirectoryEntry(legacyPath, fs) && !isDirectoryEntry(canonicalPath, fs)) {
+    // Preserve the exact precedence used before this resolver was extracted.
+    // Switching to canonical merely because both paths exist would strand the
+    // profile that prior versions selected on every launch.
+    if (isDirectoryEntry(legacyPath, fs)) {
       return legacyPath;
     }
     return canonicalPath;
@@ -112,7 +109,31 @@ export function resolveUserDataPathWithFs(options: ResolveUserDataOptions = {}):
     }
   }
 
-  // Case A: Canonical is already populated -> always preserve canonical. Never overwrite or merge.
+  // Tabs (Alpha) / Tabs (Dev) was the explicit legacy path selected by
+  // previous versions whenever it existed. Retain that precedence even if a
+  // canonical directory was created later, so an update cannot silently move
+  // users to a different Chromium profile.
+  const primaryLegacyPath = pathUtil.join(appDataBase, legacyNames[0]);
+  if (isDirectoryEntry(primaryLegacyPath, fs)) {
+    if (canonicalPopulated) {
+      logger.warn(
+        `[userDataPath] Existing legacy profile ${pathUtil.basename(primaryLegacyPath)} and canonical profile ${canonicalName} both contain data. Continuing with the legacy profile used by prior releases; set TABS_DESKTOP_USER_DATA_DIR to override.`,
+      );
+    } else if (populatedLegacyPaths.length > 1) {
+      const allCandidates = populatedLegacyPaths.map((p) => pathUtil.basename(p)).join(", ");
+      logger.warn(
+        `[userDataPath] Multiple legacy profile directories found: [${allCandidates}]. Selecting ${pathUtil.basename(primaryLegacyPath)} deterministically without merging. To select a different directory, set TABS_DESKTOP_USER_DATA_DIR.`,
+      );
+    } else {
+      logger.info?.(
+        `[userDataPath] Canonical profile missing; reusing verified legacy profile directory ${pathUtil.basename(primaryLegacyPath)}.`,
+      );
+    }
+    return primaryLegacyPath;
+  }
+
+  // The explicit legacy path is absent, so an established canonical profile is
+  // authoritative over Electron's older default product-name directory.
   if (canonicalPopulated) {
     if (populatedLegacyPaths.length > 0) {
       const legacyBaseNames = populatedLegacyPaths.map((p) => pathUtil.basename(p)).join(", ");
@@ -123,7 +144,7 @@ export function resolveUserDataPathWithFs(options: ResolveUserDataOptions = {}):
     return canonicalPath;
   }
 
-  // Case B: Canonical is empty/missing, exactly one verified legacy directory has data -> reuse it safely.
+  // Canonical is empty/missing and one legacy directory has data: reuse it.
   if (populatedLegacyPaths.length === 1) {
     const chosen = populatedLegacyPaths[0]!;
     logger.info?.(

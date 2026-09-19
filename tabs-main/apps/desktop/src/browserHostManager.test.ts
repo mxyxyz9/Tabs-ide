@@ -311,6 +311,7 @@ describe("BrowserHostManager profile storage", () => {
           { domain: ".google.com", name: "sid", path: "/", secure: true },
         ]),
         remove: vi.fn().mockResolvedValue(undefined),
+        flushStore: vi.fn().mockResolvedValue(undefined),
       },
       closeAllConnections: vi.fn().mockResolvedValue(undefined),
       clearData: vi.fn().mockResolvedValue(undefined),
@@ -332,11 +333,12 @@ describe("BrowserHostManager profile storage", () => {
         origins: ["https://github.com", "http://github.com"],
       }),
     );
+    expect(profileSession.cookies.flushStore).toHaveBeenCalledOnce();
   });
 
   it("uses comprehensive Chromium data clearing for a profile", async () => {
     const profileSession = {
-      cookies: { on: vi.fn() },
+      cookies: { on: vi.fn(), flushStore: vi.fn().mockResolvedValue(undefined) },
       closeAllConnections: vi.fn().mockResolvedValue(undefined),
       clearData: vi.fn().mockResolvedValue(undefined),
       flushStorageData: vi.fn(),
@@ -354,10 +356,12 @@ describe("BrowserHostManager profile storage", () => {
       expect.objectContaining({ dataTypes: expect.arrayContaining(["cookies", "indexedDB"]) }),
     );
     expect(profileSession.flushStorageData).toHaveBeenCalledOnce();
+    expect(profileSession.cookies.flushStore).toHaveBeenCalledOnce();
   });
 
   it("clears the exact partition owned by an active browser session", async () => {
     const storageSession = {
+      cookies: { flushStore: vi.fn().mockResolvedValue(undefined) },
       closeAllConnections: vi.fn().mockResolvedValue(undefined),
       clearData: vi.fn().mockResolvedValue(undefined),
       flushStorageData: vi.fn(),
@@ -384,6 +388,7 @@ describe("BrowserHostManager profile storage", () => {
       }),
     );
     expect(storageSession.flushStorageData).toHaveBeenCalledOnce();
+    expect(storageSession.cookies.flushStore).toHaveBeenCalledOnce();
   });
 });
 
@@ -1142,7 +1147,8 @@ describe("browser partition shutdown flushing", () => {
     const executeJavaScript = vi.fn().mockResolvedValue(true);
     const sendInputEvent = vi.fn();
     const close = vi.fn();
-    const flushStorageData = vi.fn().mockResolvedValue(undefined);
+    const flushStorageData = vi.fn();
+    const flushStore = vi.fn().mockResolvedValue(undefined);
     const isPersistent = vi.fn(() => true);
     const debuggerApi = {
       isAttached: vi.fn(() => false),
@@ -1152,7 +1158,7 @@ describe("browser partition shutdown flushing", () => {
       on: vi.fn(),
     };
     const sessionObj = {
-      cookies: { on: vi.fn(), flushStore: vi.fn() },
+      cookies: { on: vi.fn(), flushStore },
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),
       flushStorageData,
@@ -1208,7 +1214,15 @@ describe("browser partition shutdown flushing", () => {
       transientError: null,
       ...overrides,
     };
-    return { session, webContents, sessionObj, close, flushStorageData, isPersistent };
+    return {
+      session,
+      webContents,
+      sessionObj,
+      close,
+      flushStorageData,
+      flushStore,
+      isPersistent,
+    };
   }
 
   it("flushes every distinct persistent session before closing views", async () => {
@@ -1220,7 +1234,8 @@ describe("browser partition shutdown flushing", () => {
     // Tab 1: Project 1 (shared project partition)
     const {
       session: tab1,
-      flushStorageData: flush1,
+      flushStorageData: flushStorage1,
+      flushStore: flushCookies1,
       close: close1,
       sessionObj: s1,
     } = createMockSession({
@@ -1228,7 +1243,7 @@ describe("browser partition shutdown flushing", () => {
       key: "proj-1::tab-1",
       partition: "persist:tabs-browser:project:proj-1",
     });
-    flush1.mockImplementation(async () => {
+    flushCookies1.mockImplementation(async () => {
       callOrder.push("flush-proj-1");
     });
     close1.mockImplementation(() => {
@@ -1250,7 +1265,8 @@ describe("browser partition shutdown flushing", () => {
     // Tab 3: Named profile "work"
     const {
       session: tab3,
-      flushStorageData: flush3,
+      flushStorageData: flushStorage3,
+      flushStore: flushCookies3,
       close: close3,
     } = createMockSession({
       sessionId: "tab-3",
@@ -1258,7 +1274,7 @@ describe("browser partition shutdown flushing", () => {
       partition: "persist:tabs-browser:profile:work",
       profileId: "work",
     });
-    flush3.mockImplementation(async () => {
+    flushCookies3.mockImplementation(async () => {
       callOrder.push("flush-work");
     });
     close3.mockImplementation(() => {
@@ -1272,9 +1288,11 @@ describe("browser partition shutdown flushing", () => {
     await manager.flushAndShutdownSessions();
 
     // Verify deduplication: proj-1 session flushed exactly ONCE despite 2 tabs sharing it
-    expect(flush1).toHaveBeenCalledTimes(1);
+    expect(flushStorage1).toHaveBeenCalledTimes(1);
+    expect(flushCookies1).toHaveBeenCalledTimes(1);
     // Work profile session flushed exactly once
-    expect(flush3).toHaveBeenCalledTimes(1);
+    expect(flushStorage3).toHaveBeenCalledTimes(1);
+    expect(flushCookies3).toHaveBeenCalledTimes(1);
 
     // Verify order of operations: all flushes happened BEFORE any views were closed
     const lastFlushIndex = Math.max(
@@ -1304,6 +1322,7 @@ describe("browser partition shutdown flushing", () => {
     const {
       session: ephemeralTab,
       flushStorageData,
+      flushStore,
       close,
       isPersistent,
     } = createMockSession({
@@ -1319,6 +1338,7 @@ describe("browser partition shutdown flushing", () => {
 
     // Ephemeral partition is NOT flushed to disk
     expect(flushStorageData).not.toHaveBeenCalled();
+    expect(flushStore).not.toHaveBeenCalled();
     // But view is safely closed and sessions cleared
     expect(close).toHaveBeenCalledTimes(1);
     expect(sessions.size).toBe(0);
@@ -1333,7 +1353,7 @@ describe("browser partition shutdown flushing", () => {
     // Failing partition
     const {
       session: failingTab,
-      flushStorageData: failingFlush,
+      flushStore: failingFlush,
       close: failingClose,
     } = createMockSession({
       sessionId: "failing-tab",
@@ -1345,7 +1365,7 @@ describe("browser partition shutdown flushing", () => {
     // Healthy partition
     const {
       session: healthyTab,
-      flushStorageData: healthyFlush,
+      flushStore: healthyFlush,
       close: healthyClose,
     } = createMockSession({
       sessionId: "healthy-tab",
@@ -1376,11 +1396,59 @@ describe("browser partition shutdown flushing", () => {
     warnSpy.mockRestore();
   });
 
+  it("bounds a stalled cookie flush and closes the view after the timeout", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { session, flushStorageData, flushStore, close } = createMockSession({
+      key: "p::stalled",
+      partition: "persist:tabs-browser:project:stalled",
+    });
+    flushStore.mockImplementation(() => new Promise<void>(() => {}));
+    sessions.set(session.key, session);
+
+    await manager.flushAndShutdownSessions({ timeoutMs: 5 });
+
+    expect(flushStorageData).toHaveBeenCalledOnce();
+    expect(flushStore).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Cookie flush timed out after 5ms"),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("returns the in-flight shutdown to concurrent callers", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
+    let releaseFlush!: () => void;
+    const { session, flushStore, close } = createMockSession({
+      key: "p::concurrent",
+      partition: "persist:tabs-browser:project:concurrent",
+    });
+    flushStore.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFlush = resolve;
+        }),
+    );
+    sessions.set(session.key, session);
+
+    const first = manager.flushAndShutdownSessions({ timeoutMs: 1000 });
+    const second = manager.flushAndShutdownSessions({ timeoutMs: 1000 });
+    await vi.waitFor(() => expect(flushStore).toHaveBeenCalledOnce());
+    expect(close).not.toHaveBeenCalled();
+
+    releaseFlush();
+    await Promise.all([first, second]);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("is idempotent on repeated calls and when followed by dispose()", async () => {
     const manager = new BrowserHostManager(() => null);
     const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
 
-    const { session, flushStorageData, close } = createMockSession({
+    const { session, flushStorageData, flushStore, close } = createMockSession({
       sessionId: "tab-1",
       key: "p::tab-1",
       partition: "persist:tabs-browser:project:p",
@@ -1389,6 +1457,7 @@ describe("browser partition shutdown flushing", () => {
 
     await manager.flushAndShutdownSessions();
     expect(flushStorageData).toHaveBeenCalledTimes(1);
+    expect(flushStore).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
 
     // Subsequent calls are no-ops
@@ -1396,6 +1465,7 @@ describe("browser partition shutdown flushing", () => {
     manager.dispose();
 
     expect(flushStorageData).toHaveBeenCalledTimes(1);
+    expect(flushStore).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
   });
 });

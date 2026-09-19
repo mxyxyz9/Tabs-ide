@@ -188,6 +188,22 @@ export function getCleanDesktopUserAgent(): string {
   return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
 let activeBrowserHostManager: BrowserHostManager | null = null;
 
 export function configurePartitionSession(s: Session): void {
@@ -393,7 +409,7 @@ export class BrowserHostManager {
   private readonly observedAutomationSessions = new WeakSet<Session>();
   private readonly recentlyClosedTabs = new Map<string, RecentlyClosedTab[]>();
   private readonly knownPartitions = new Set<string>();
-  private disposed = false;
+  private shutdownPromise: Promise<void> | null = null;
   readonly diagnostics = new BrowserAuthDiagnostics();
   readonly comparisons: BrowserComparisonController;
 
@@ -716,7 +732,8 @@ export class BrowserHostManager {
         "webSQL",
       ],
     });
-    await s.flushStorageData();
+    s.flushStorageData();
+    await s.cookies.flushStore();
     for (const session of this.sessions.values()) {
       if (session.partition === partition && session.currentUrl) {
         await this.loadUrl(session, session.currentUrl);
@@ -743,7 +760,8 @@ export class BrowserHostManager {
         "webSQL",
       ],
     });
-    await storageSession.flushStorageData();
+    storageSession.flushStorageData();
+    await storageSession.cookies.flushStore();
     if (browserSession.currentUrl) {
       await this.loadUrl(browserSession, browserSession.currentUrl);
     }
@@ -867,7 +885,8 @@ export class BrowserHostManager {
         ],
         originMatchingMode: "third-parties-included",
       });
-      await s.flushStorageData();
+      s.flushStorageData();
+      await s.cookies.flushStore();
       for (const session of this.sessions.values()) {
         if (
           session.partition === partition &&
@@ -2189,13 +2208,15 @@ export class BrowserHostManager {
   }
 
   async flushAndShutdownSessions(options?: { timeoutMs?: number }): Promise<void> {
-    if (this.disposed) {
-      return;
+    if (this.shutdownPromise) {
+      return this.shutdownPromise;
     }
-    this.disposed = true;
 
-    const timeoutMs = options?.timeoutMs ?? 5000;
+    this.shutdownPromise = this.performShutdown(options?.timeoutMs ?? 5000);
+    return this.shutdownPromise;
+  }
 
+  private async performShutdown(timeoutMs: number): Promise<void> {
     for (const controller of this.browserImports.values()) {
       try {
         controller.abort();
@@ -2242,19 +2263,19 @@ export class BrowserHostManager {
       }
     }
 
-    // Flush storage in parallel with bounded timeout per session
+    // flushStorageData writes DOM storage synchronously. Cookie persistence is
+    // a separate asynchronous Electron API, so await and bound flushStore.
     const flushTasks = Array.from(sessionsToFlush.entries()).map(async ([partition, s]) => {
       try {
         if (typeof s.flushStorageData === "function") {
-          await Promise.race([
-            s.flushStorageData(),
-            new Promise<void>((_, reject) =>
-              setTimeout(
-                () => reject(new Error(`Session flush timed out after ${timeoutMs}ms`)),
-                timeoutMs,
-              ),
-            ),
-          ]);
+          s.flushStorageData();
+        }
+        if (typeof s.cookies?.flushStore === "function") {
+          await withTimeout(
+            s.cookies.flushStore(),
+            timeoutMs,
+            `Cookie flush timed out after ${timeoutMs}ms`,
+          );
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

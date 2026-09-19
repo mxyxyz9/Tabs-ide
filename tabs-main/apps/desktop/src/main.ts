@@ -492,6 +492,22 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
 function getSafeExternalUrl(rawUrl: unknown): string | null {
   if (typeof rawUrl !== "string" || rawUrl.length === 0) {
     return null;
@@ -3779,10 +3795,20 @@ app.on("before-quit", (event) => {
       try {
         if (mainWindow && !mainWindow.isDestroyed()) {
           writeDesktopLogHeader("flushing storage data to disk");
-          await mainWindow.webContents.session.flushStorageData();
+          mainWindow.webContents.session.flushStorageData();
+          await withTimeout(
+            mainWindow.webContents.session.cookies.flushStore(),
+            5000,
+            "Default cookie flush timed out after 5000ms",
+          );
         } else {
           writeDesktopLogHeader("flushing default session storage data to disk");
-          await session.defaultSession.flushStorageData();
+          session.defaultSession.flushStorageData();
+          await withTimeout(
+            session.defaultSession.cookies.flushStore(),
+            5000,
+            "Default cookie flush timed out after 5000ms",
+          );
         }
       } catch (err: any) {
         writeDesktopLogHeader(`flush storage failed: ${err.message}`);
