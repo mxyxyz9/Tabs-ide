@@ -1,5 +1,3 @@
-import { resolveReleaseNotes } from "../src/lib/release-note-content";
-
 const GITHUB_RELEASES_URL = "https://api.github.com/repos/mxyxyz9/Tabs-ide/releases";
 const RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
 
@@ -17,6 +15,21 @@ interface GitHubRelease {
   draft?: unknown;
   prerelease?: unknown;
   assets?: unknown;
+}
+
+// Keep the Vercel function self-contained. Vercel compiles files in `api/` as
+// independent functions, so importing application source can leave an
+// unresolved runtime module in the generated Node function.
+function resolveReleaseNotes(body: string | null): string {
+  if (
+    body &&
+    /^\s*\*\*Full Changelog\*\*:\s*https:\/\/github\.com\/mxyxyz9\/Tabs-ide\/compare\/v?\d+\.\d+\.\d+\.\.\.v?\d+\.\d+\.\d+\s*$/i.test(
+      body,
+    )
+  ) {
+    return "This maintenance release is documented in the linked GitHub comparison.";
+  }
+  return body?.trim() || "Release notes were not recorded for this version.";
 }
 
 function sanitizeRelease(value: unknown) {
@@ -50,7 +63,7 @@ function sanitizeRelease(value: unknown) {
     name: release.name,
     html_url: release.html_url,
     published_at: release.published_at,
-    body: resolveReleaseNotes(release.tag_name, release.body),
+    body: resolveReleaseNotes(release.body),
     assets,
   };
 }
