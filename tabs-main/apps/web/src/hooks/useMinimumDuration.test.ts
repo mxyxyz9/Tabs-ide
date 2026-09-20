@@ -3,8 +3,8 @@ import { STARTUP_ANIMATION_HOLD_MS, STARTUP_ANIMATION_EXIT_MS } from "../compone
 
 describe("Startup splash timing constraints", () => {
   it("keeps the loader visible long enough to resolve on a warm launch", () => {
-    expect(STARTUP_ANIMATION_HOLD_MS).toBe(900);
-    expect(STARTUP_ANIMATION_HOLD_MS).toBeLessThanOrEqual(1_000);
+    expect(STARTUP_ANIMATION_HOLD_MS).toBe(1_800);
+    expect(STARTUP_ANIMATION_HOLD_MS).toBeLessThanOrEqual(2_000);
   });
 
   it("preserves the exact one-second bottom-to-top exit", () => {

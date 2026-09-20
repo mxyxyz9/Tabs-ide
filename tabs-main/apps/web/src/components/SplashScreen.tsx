@@ -6,7 +6,7 @@ import "./loaders.css";
 
 // Give the loader enough time to resolve into the Tabs wordmark on a warm
 // launch, then reveal the workspace with a deliberate one-second upward wipe.
-export const STARTUP_ANIMATION_HOLD_MS = 900;
+export const STARTUP_ANIMATION_HOLD_MS = 1_800;
 export const STARTUP_ANIMATION_EXIT_MS = 1_000;
 
 const GLASS_MESSAGES = [
@@ -238,18 +238,17 @@ function SolariTile({
 
   useEffect(() => {
     let cancelled = false;
-    // Resolve the complete wordmark during the minimum splash hold so warm
-    // launches show the animation instead of cutting it off mid-flip.
-    const settleAt = 100 + index * 80;
+    // Settle in a smooth cascade from top-left to bottom-right across the 8 tiles.
+    const settleAt = 250 + index * 160;
     const iv = setInterval(() => {
       if (!cancelled) setCh(SOLARI_CHARS[Math.floor(Math.random() * SOLARI_CHARS.length)]!);
-    }, 70);
+    }, 60);
     const to = setTimeout(() => {
       clearInterval(iv);
       if (cancelled) return;
       setCh(target);
       setJustSettled(true);
-      setTimeout(() => !cancelled && setJustSettled(false), 420);
+      setTimeout(() => !cancelled && setJustSettled(false), 380);
     }, settleAt);
 
     return () => {
@@ -262,7 +261,7 @@ function SolariTile({
   return (
     <div
       className={cn(
-        "relative flex h-[64px] w-[52px] items-center justify-center rounded-[6px] border text-[26px] font-light transition-all duration-300",
+        "relative flex h-[64px] w-[52px] items-center justify-center rounded-[6px] border text-[26px] font-light transition-all duration-300 ease-out",
         isBlock
           ? justSettled
             ? "border-white/90 bg-white/22 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
