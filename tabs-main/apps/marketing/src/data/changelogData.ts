@@ -21,16 +21,54 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 153;
+export const TOTAL_TAGS_COUNT = 154;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.11",
+    title:
+      "Refined Solari startup cascade, browser partition persistence, and storage migration resilience",
+    date: "September 20, 2026",
+    shortDate: "Sep 20",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Introduced a smoothed startup splash sequence with relaxed Solari grid cascade timings, hardened desktop shutdown by proactively flushing browser partitions, added migration resilience for workspace shell storage, and preserved Linux legacy user data across historical paths.",
+    highlights: [
+      "Paced the Solari tile cascade with a relaxed 160ms letter stagger, 250ms scramble lead-in, and 1.8s hold time for a smooth 8-tile highlight wave.",
+      "Proactively flushes in-memory session cookies and cache partitions before application shutdown, preventing session state loss on exit.",
+      "Hardened schema migration routines to validate and preserve user state during storage format upgrades without data corruption.",
+      "Preserved Linux user data across verified historical configuration paths.",
+      "Honored user accessibility preferences across all core dialog primitives (Alert Dialog, Command Palette, Dialog, and Sheet).",
+      "Maintained self-contained desktop installers (.dmg, .exe, .AppImage) bundling the complete Code-OSS runtime directly.",
+    ],
+    categories: [
+      {
+        title: "User Experience & Startup Polish",
+        items: [
+          "Relaxed startup Solari tile cascade timing with 160ms stagger and 250ms scramble lead-in.",
+          "Smoothed tile highlight transition with a 380ms ease-out outline glow wave.",
+          "Extended minimum startup animation hold time to 1.8 seconds to gracefully resolve the full wordmark.",
+          "Honored prefers-reduced-motion across Alert Dialog, Dialog, Sheet, and Command Palette.",
+        ],
+      },
+      {
+        title: "Desktop & Storage Stability",
+        items: [
+          "Proactively flushed browser session partitions prior to application shutdown.",
+          "Hardened workspace shell storage migration against invalid schemas and state corruption.",
+          "Preserved Linux user data across verified legacy paths.",
+          "Strengthened provider session integration test coverage.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.10",
     title:
       "AppleTimePicker numeric accumulation, drum wheel sync, and bundled desktop distribution",
     date: "September 18, 2026",
     shortDate: "Sep 18",
-    isLatest: true,
     type: "patch",
     summary:
       "Stabilized keyboard time entry with a two-digit accumulation buffer and timer for hours and minutes, resolved drum wheel scroll synchronization race conditions, and continued bundled self-contained desktop installer distribution.",
