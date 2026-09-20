@@ -12,6 +12,7 @@ import {
   type GitApplyHunkMode,
   type ProjectId,
   type PreviewAnnotationPayload,
+  EnvironmentId,
   ThreadId,
   type GitBranch,
   type GitStatusFile,
@@ -42,6 +43,14 @@ import {
   useProjectBrowserState,
   projectUiStateKey,
 } from "~/state/scopedStateStore";
+import { agentsLayoutActions } from "../state/agentsLayout";
+import {
+  AGENT_THREAD_DRAG_MIME,
+  PINNED_THREAD_DRAG_MIME,
+  serializeAgentThreadDrag,
+  setActiveAgentDrag,
+  clearActiveAgentDrag,
+} from "./agents/agentDragPayload";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams, useRouterState } from "@tanstack/react-router";
 import {
@@ -1308,6 +1317,7 @@ function AgentsThreadList(props: {
   threads: ReadonlyArray<Thread>;
   activeThreadId: ThreadId | null;
   onSelectThread: (threadId: ThreadId) => void;
+  onOpenThreadToSide?: (threadId: ThreadId) => void;
   onCreateThread: () => void;
   onDeleteThread: (thread: Thread) => void | Promise<void>;
   onArchiveThread: (thread: Thread) => void | Promise<void>;
@@ -1591,7 +1601,7 @@ function AgentsThreadList(props: {
   const actionableCount = activeThreads.length - settledCount - snoozedCount;
 
   return (
-    <div className="flex h-full min-h-0 min-w-0">
+    <div className="flex h-full min-h-0 min-w-0 flex-1">
       {/* ── Sidebar ── */}
       <div
         className={cn(
@@ -1954,15 +1964,39 @@ function AgentsThreadList(props: {
                     </div>
                   )}
                   <div
-                    draggable={section === "pinned"}
-                    onDragStart={() => section === "pinned" && setDraggedPinnedThreadId(thread.id)}
-                    onDragEnd={() => setDraggedPinnedThreadId(null)}
+                    draggable={true}
+                    onDragStart={(event) => {
+                      if (section === "pinned") {
+                        setDraggedPinnedThreadId(thread.id);
+                        event.dataTransfer.setData(PINNED_THREAD_DRAG_MIME, thread.id);
+                      }
+                      const envId =
+                        thread.environmentId ??
+                        props.project.environmentId ??
+                        EnvironmentId.makeUnsafe("primary");
+                      const payload = {
+                        type: "tabs:agent-thread" as const,
+                        environmentId: envId,
+                        projectId: thread.projectId,
+                        threadId: thread.id,
+                      };
+                      event.dataTransfer.setData(
+                        AGENT_THREAD_DRAG_MIME,
+                        serializeAgentThreadDrag(payload),
+                      );
+                      event.dataTransfer.effectAllowed = "copyMove";
+                      setActiveAgentDrag(payload);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedPinnedThreadId(null);
+                      clearActiveAgentDrag();
+                    }}
                     onDragOver={(event) => {
                       if (section === "pinned" && draggedPinnedThreadId !== null)
                         event.preventDefault();
                     }}
                     onDrop={(event) => {
-                      if (section !== "pinned") return;
+                      if (section !== "pinned" || draggedPinnedThreadId === null) return;
                       event.preventDefault();
                       void dropPinnedThread(thread.id);
                     }}
@@ -1985,7 +2019,13 @@ function AgentsThreadList(props: {
                             <button
                               type="button"
                               aria-label={`${thread.title}, ${accessibleState}, ${props.project.name}`}
-                              onClick={() => props.onSelectThread(thread.id)}
+                              onClick={(event) => {
+                                if (event.altKey || event.metaKey || event.ctrlKey) {
+                                  props.onOpenThreadToSide?.(thread.id);
+                                  return;
+                                }
+                                props.onSelectThread(thread.id);
+                              }}
                               className={cn(
                                 "relative flex size-9 items-center justify-center rounded-lg transition-colors",
                                 active
@@ -2045,7 +2085,13 @@ function AgentsThreadList(props: {
                             render={
                               <button
                                 type="button"
-                                onClick={() => props.onSelectThread(thread.id)}
+                                onClick={(event) => {
+                                  if (event.altKey || event.metaKey || event.ctrlKey) {
+                                    props.onOpenThreadToSide?.(thread.id);
+                                    return;
+                                  }
+                                  props.onSelectThread(thread.id);
+                                }}
                                 className={cn(
                                   "min-w-0 flex-1 text-left",
                                   section === "settled" ? "px-2.5 py-1.5" : "px-2.5 py-2",
@@ -2312,6 +2358,10 @@ function AgentsThreadList(props: {
                           >
                             {!isArchived && (
                               <>
+                                <MenuItem onClick={() => props.onOpenThreadToSide?.(thread.id)}>
+                                  <Columns2Icon className="size-3.5" />
+                                  Open to the side
+                                </MenuItem>
                                 <MenuItem onClick={() => void dispatchLifecycle(thread, "pin")}>
                                   <PinIcon className="size-3.5" />
                                   {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
@@ -12611,17 +12661,33 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         activeThreadId={routeThreadId}
         onSelectThread={(threadId) => {
           if (!activeProject.environmentId) return;
+          const pKey = projectUiStateKey(activeProject.environmentId, activeProject.id);
+          agentsLayoutActions.openInActivePane(pKey, threadId);
           void navigate({
             to: "/$environmentId/$threadId",
             params: { environmentId: activeProject.environmentId, threadId },
           });
         }}
-        onCreateThread={() =>
-          void handleNewThread(activeProject.id, {
+        onOpenThreadToSide={(threadId) => {
+          if (!activeProject.environmentId) return;
+          const pKey = projectUiStateKey(activeProject.environmentId, activeProject.id);
+          agentsLayoutActions.openToSide(pKey, threadId);
+          void navigate({
+            to: "/$environmentId/$threadId",
+            params: { environmentId: activeProject.environmentId, threadId },
+          });
+        }}
+        onCreateThread={async () => {
+          if (!activeProject.environmentId) return;
+          const tid = await handleNewThread(activeProject.id, {
             environmentId: activeProject.environmentId,
             envMode: settings.defaultThreadEnvMode,
-          })
-        }
+          });
+          if (tid) {
+            const pKey = projectUiStateKey(activeProject.environmentId, activeProject.id);
+            agentsLayoutActions.openInActivePane(pKey, tid);
+          }
+        }}
         onDeleteThread={handleDeleteThread}
         onArchiveThread={handleArchiveThread}
         onUnarchiveThread={handleUnarchiveThread}
@@ -12663,7 +12729,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const renderedContent = shouldAnimateReactSurface ? (
     <div
       key={`${activeProject?.id ?? "none"}:${activeTool?.id ?? "none"}`}
-      className="tabs-surface-enter flex h-full min-h-0 flex-1 flex-col"
+      className="tabs-surface-enter flex h-full min-h-0 min-w-0 flex-1 flex-col"
     >
       {content}
     </div>

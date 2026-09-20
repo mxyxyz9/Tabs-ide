@@ -47,7 +47,7 @@ export function useHandleNewThread() {
         // Agents tab (a thread route force-switches the active tool to "agents").
         skipNavigation?: boolean;
       },
-    ): Promise<void> => {
+    ): Promise<ThreadId | null> => {
       const {
         clearProjectDraftThreadId,
         getDraftThread,
@@ -78,7 +78,7 @@ export function useHandleNewThread() {
           }
           setProjectDraftThreadId(projectId, storedDraftThread.threadId);
           if (options?.skipNavigation || routeThreadId === storedDraftThread.threadId) {
-            return;
+            return storedDraftThread.threadId;
           }
           if (projectEnvironmentId) {
             await navigate({
@@ -89,6 +89,7 @@ export function useHandleNewThread() {
               },
             });
           }
+          return storedDraftThread.threadId;
         })();
       }
 
@@ -108,7 +109,7 @@ export function useHandleNewThread() {
           });
         }
         setProjectDraftThreadId(projectId, routeThreadId);
-        return Promise.resolve();
+        return Promise.resolve(routeThreadId);
       }
 
       const threadId = newThreadId();
@@ -125,7 +126,7 @@ export function useHandleNewThread() {
         applyStickyState(threadId);
 
         if (options?.skipNavigation) {
-          return;
+          return threadId;
         }
         if (projectEnvironmentId) {
           await navigate({
@@ -133,6 +134,7 @@ export function useHandleNewThread() {
             params: { environmentId: projectEnvironmentId, threadId },
           });
         }
+        return threadId;
       })();
     },
     [navigate, projects, routeThreadId],

@@ -219,7 +219,7 @@ function recoverProjectWorkspaceSettings(
       (process) =>
         process &&
         typeof process === "object" &&
-        (!("autoStart" in process) || !Boolean((process as { autoStart?: unknown }).autoStart)),
+        (!("autoStart" in process) || !(process as { autoStart?: unknown }).autoStart),
     );
     normalized.serverPresets = normalized.serverProcesses.filter(
       (process) =>

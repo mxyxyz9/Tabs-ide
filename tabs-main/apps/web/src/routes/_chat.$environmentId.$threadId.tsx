@@ -1,10 +1,9 @@
 import { EnvironmentId, ThreadId } from "@tabs/contracts";
 import { createFileRoute, retainSearchParams, useNavigate } from "@tanstack/react-router";
-import { Suspense, lazy, type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
-import ChatView from "../components/ChatView";
+import { AgentsSplitWorkspace } from "../components/agents/AgentsSplitWorkspace";
 import { RightPanelTabs } from "../components/RightPanelTabs";
-import { useComposerDraftStore } from "../composerDraftStore";
 import { composerDraftsAtom, scopedComposerThreadId } from "../state/composerDrafts";
 import { threadsAtom, threadsHydratedAtom } from "../state/threads";
 import { useAtomValue } from "@effect/atom-react";
@@ -200,6 +199,9 @@ function ChatThreadRouteView() {
   // TanStack Router keeps active route components mounted across param-only navigations
   // unless remountDeps are configured, so this stays warm across thread switches.
   const [hasOpenedDiff, setHasOpenedDiff] = useState(diffOpen);
+  const [diffTargetThreadId, setDiffTargetThreadId] = useState<ThreadId | null>(null);
+  const activeDiffThreadId = diffTargetThreadId ?? threadId;
+
   const closeDiff = useCallback(() => {
     void navigate({
       to: "/$environmentId/$threadId",
@@ -244,19 +246,20 @@ function ChatThreadRouteView() {
   if (!shouldUseDiffSheet) {
     return (
       <>
-        <div className="flex h-full min-h-0 flex-col overflow-hidden overscroll-y-none bg-background text-foreground">
-          <ChatView
-            key={`${environmentId}:${threadId}`}
-            environmentId={environmentId}
-            threadId={threadId}
-          />
-        </div>
+        <AgentsSplitWorkspace
+          environmentId={environmentId}
+          routeThreadId={threadId}
+          diffOpen={diffOpen}
+          onOpenDiff={openDiff}
+          onCloseDiff={closeDiff}
+          onDiffThreadChange={setDiffTargetThreadId}
+        />
         <DiffPanelInlineSidebar
           diffOpen={diffOpen}
           onCloseDiff={closeDiff}
           onOpenDiff={openDiff}
           renderDiffContent={shouldRenderDiffContent}
-          threadId={threadId}
+          threadId={activeDiffThreadId}
           environmentId={environmentId}
         />
       </>
@@ -265,18 +268,19 @@ function ChatThreadRouteView() {
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden overscroll-y-none bg-background text-foreground">
-        <ChatView
-          key={`${environmentId}:${threadId}`}
-          environmentId={environmentId}
-          threadId={threadId}
-        />
-      </div>
+      <AgentsSplitWorkspace
+        environmentId={environmentId}
+        routeThreadId={threadId}
+        diffOpen={diffOpen}
+        onOpenDiff={openDiff}
+        onCloseDiff={closeDiff}
+        onDiffThreadChange={setDiffTargetThreadId}
+      />
       <DiffPanelSheet diffOpen={diffOpen} onCloseDiff={closeDiff}>
         {shouldRenderDiffContent ? (
           <RightPanelTabs
             mode="sheet"
-            threadId={threadId}
+            threadId={activeDiffThreadId}
             environmentId={environmentId}
             onClose={closeDiff}
           />

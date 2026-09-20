@@ -21,16 +21,56 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 154;
+export const TOTAL_TAGS_COUNT = 155;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.12",
+    title:
+      "Agents split-thread workspace, multi-pane composer isolation, and responsive layout polish",
+    date: "September 20, 2026",
+    shortDate: "Sep 20",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Introduced an Agents-only side-by-side split-thread workspace in Tabs with drag-and-drop thread placement, independent composer drafts and timelines, real-time concurrent streaming, smooth draggable divider resizing, '+ New Thread' creation in split mode, and production-grade responsive bounds.",
+    highlights: [
+      "Side-by-side split-thread workspace: Compare and interact with multiple agent threads simultaneously inside the Agents workspace.",
+      "Drag-and-drop & shortcut splitting: Drag any sidebar thread row to split left or right, or use the 'Open to the side' context menu and Alt+Click.",
+      "Full composer & timeline isolation: Independent draft states, staged attachments, scroll positions, tool call approvals, and diff panels per pane.",
+      "Concurrent real-time streaming: Both panes receive and render live token streams without cross-talk or UI locking.",
+      "Draggable resizer & accessibility: Draggable pane divider with double-click 50/50 reset, arrow key keyboard resizing, and full ARIA semantics.",
+      "Production-grade responsiveness: Bounded flex layouts and container queries eliminating clipping and overflow on 1024px displays with expanded sidebars.",
+    ],
+    categories: [
+      {
+        title: "Agents Split-Thread Workspace",
+        items: [
+          "Side-by-side agent conversation panes with proportional draggable resizer.",
+          "HTML5 drag-and-drop thread placement with interactive drop zone overlays.",
+          "'Open to the side' sidebar context menu action and Alt+Click shortcut.",
+          "Independent draft persistence in useComposerDraftStore across split panes.",
+          "Targeted diff reviews and isolated keyboard shortcuts for the active pane.",
+          "Smooth '+ New Thread' creation in active pane while preserving dual split.",
+        ],
+      },
+      {
+        title: "UI Responsiveness & Layout Stability",
+        items: [
+          "Eliminated flexbox minimum-width trap across workspace surface containers.",
+          "Integrated pane controls (active dot, maximize/restore, close) natively into ChatHeader.",
+          "Container-query driven header compactness hiding redundant badges in split mode.",
+          "Narrow-window fallback (< 600px) displaying active thread with quick-switch banner.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.11",
     title:
       "Refined Solari startup cascade, browser partition persistence, and storage migration resilience",
     date: "September 20, 2026",
     shortDate: "Sep 20",
-    isLatest: true,
     type: "patch",
     summary:
       "Introduced a smoothed startup splash sequence with relaxed Solari grid cascade timings, hardened desktop shutdown by proactively flushing browser partitions, added migration resilience for workspace shell storage, and preserved Linux legacy user data across historical paths.",

@@ -410,6 +410,14 @@ interface ChatViewProps {
    * Ignored unless `compact` is set; the full Agents tab navigates as normal.
    */
   onRequestThread?: (threadId: ThreadId) => void;
+  isActivePane?: boolean | undefined;
+  onActivatePane?: (() => void) | undefined;
+  onToggleDiff?: (() => void) | undefined;
+  diffOpen?: boolean | undefined;
+  isSplitActive?: boolean | undefined;
+  isMaximized?: boolean | undefined;
+  onToggleMaximize?: (() => void) | undefined;
+  onClosePane?: (() => void) | undefined;
 }
 
 export default function ChatView({
@@ -417,6 +425,14 @@ export default function ChatView({
   threadId,
   compact = false,
   onRequestThread,
+  isActivePane = true,
+  onActivatePane,
+  onToggleDiff: propOnToggleDiff,
+  diffOpen: propDiffOpen,
+  isSplitActive = false,
+  isMaximized = false,
+  onToggleMaximize,
+  onClosePane,
 }: ChatViewProps) {
   const [threadApi, setThreadApi] = useState<Awaited<ReturnType<typeof environmentApi>> | null>(
     null,
@@ -1060,7 +1076,7 @@ export default function ChatView({
   const isServerThread = serverThread !== undefined;
   const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
-  const diffOpen = rawSearch.diff === "1";
+  const diffOpen = propDiffOpen !== undefined ? propDiffOpen : rawSearch.diff === "1";
   const activeThreadId = activeThread?.id ?? null;
   const activeLatestTurn = activeThread?.latestTurn ?? null;
   const activeContextWindow = useMemo(
@@ -2066,6 +2082,10 @@ export default function ChatView({
     [keybindings],
   );
   const onToggleDiff = useCallback(() => {
+    if (propOnToggleDiff) {
+      propOnToggleDiff();
+      return;
+    }
     // The diff panel is a full Agents-tab feature driven by route search params.
     // The compact side chat has no diff route, so don't navigate the app there.
     if (compact || !environmentId) return;
@@ -2078,7 +2098,7 @@ export default function ChatView({
         return diffOpen ? { ...rest, diff: undefined } : { ...rest, diff: "1" };
       },
     });
-  }, [compact, diffOpen, environmentId, navigate, threadId]);
+  }, [compact, diffOpen, environmentId, navigate, propOnToggleDiff, threadId]);
 
   const envLocked = Boolean(
     activeThread &&
@@ -2759,14 +2779,14 @@ export default function ChatView({
   }, [activeThread?.id]);
 
   useEffect(() => {
-    if (!activeThread?.id || terminalState.terminalOpen) return;
+    if (!activeThread?.id || terminalState.terminalOpen || !isActivePane) return;
     const frame = window.requestAnimationFrame(() => {
       focusComposer();
     });
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [activeThread?.id, focusComposer, terminalState.terminalOpen]);
+  }, [activeThread?.id, focusComposer, isActivePane, terminalState.terminalOpen]);
 
   useEffect(() => {
     composerImagesRef.current = composerImages;
@@ -2977,7 +2997,7 @@ export default function ChatView({
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
-      if (!activeThreadId || event.defaultPrevented) return;
+      if (!activeThreadId || event.defaultPrevented || !isActivePane) return;
 
       if (
         (event.metaKey || event.ctrlKey) &&
@@ -3155,6 +3175,7 @@ export default function ChatView({
     stashCurrentPrompt,
     toggleTerminalVisibility,
     isServerThread,
+    isActivePane,
     threadApi,
   ]);
 
@@ -3226,6 +3247,7 @@ export default function ChatView({
 
   useEffect(() => {
     const handlePickedAnnotation = (event: Event) => {
+      if (!isActivePane) return;
       const detail = (event as CustomEvent<PreviewAnnotationPickedDetail>).detail;
       if (!detail || detail.projectId !== activeProject?.id || !activeThreadId) return;
       const annotation: PreviewAnnotationPayload = detail.annotation;
@@ -3274,6 +3296,7 @@ export default function ChatView({
     addComposerDraftPreviewAnnotation,
     addComposerImage,
     focusComposer,
+    isActivePane,
     setThreadError,
   ]);
 
@@ -5955,14 +5978,20 @@ export default function ChatView({
   ) : null;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+    <div
+      onPointerDownCapture={onActivatePane}
+      onFocusCapture={onActivatePane}
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+    >
       {/* Top bar — hidden in the compact side-chat embed (the Code tab provides
           its own chrome; the branch/github/terminal/diff tools live in Agents). */}
       {compact ? null : (
         <header
           className={cn(
-            "border-b border-border px-3 sm:px-5",
+            "@container/chat-header border-b border-border transition-colors",
+            isSplitActive ? "px-2.5 sm:px-3" : "px-3 sm:px-5",
             isElectron ? "drag-region flex h-[52px] items-center" : "py-2 sm:py-3",
+            isSplitActive && !isActivePane && "opacity-80 hover:opacity-100 transition-opacity",
           )}
         >
           <ChatHeader
@@ -5982,6 +6011,11 @@ export default function ChatView({
             diffOpen={diffOpen}
             onToggleTerminal={toggleTerminalVisibility}
             onToggleDiff={onToggleDiff}
+            isSplitActive={isSplitActive}
+            isActivePane={isActivePane}
+            isMaximized={isMaximized}
+            onToggleMaximize={onToggleMaximize}
+            onClosePane={onClosePane}
           />
         </header>
       )}
@@ -6003,7 +6037,10 @@ export default function ChatView({
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <div
                 ref={setMessagesScrollContainerRef}
-                className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3 sm:px-5 sm:py-4"
+                className={cn(
+                  "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain py-3",
+                  isSplitActive ? "px-2.5 sm:px-3" : "px-3 sm:px-5 sm:py-4",
+                )}
                 onScroll={onMessagesScroll}
                 onClickCapture={onMessagesClickCapture}
                 onWheel={onMessagesWheel}

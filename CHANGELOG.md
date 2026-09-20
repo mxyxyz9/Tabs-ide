@@ -2,6 +2,31 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.12] - 2026-09-20
+
+### Agents split-thread workspace, multi-pane composer isolation, and responsive layout polish
+
+- **Agents split-thread workspace**: View and interact with two agent threads side-by-side directly in the conversation area without opening separate windows.
+- **Drag-and-drop thread placement**: Drag any sidebar thread row into the conversation area with real-time drop zone previews to split left or right.
+- **Context menu & shortcut splitting**: Quick "Open to the side" context menu action and <kbd>Alt</kbd>+Click on sidebar thread rows.
+- **Composer & timeline isolation**: Independent composer draft inputs, attachment staging, scroll containers, tool call execution, and review diff targeting per pane.
+- **Concurrent live streaming**: Real-time token streaming across both panes simultaneously with zero cross-talk.
+- **Draggable pane divider & accessibility**: Smooth pointer dragging, 50/50 double-click reset, keyboard arrow resizing, and full ARIA separator semantics.
+- **Seamless '+ New Thread' creation**: Creating a new thread while in split mode targets the active pane without closing the secondary pane.
+- **Production-grade responsiveness**: Flexbox containment and container queries preventing layout clipping and horizontal overflow at 1024px screen widths with open sidebars.
+- **Bundled self-contained desktop installers**: Maintained full self-contained desktop packages across macOS (Apple Silicon & Intel), Windows x64, and Linux x64 bundling the complete Code-OSS runtime directly.
+
+## [v1.3.11] - 2026-09-20
+
+### Refined Solari startup cascade, browser partition persistence, and storage migration resilience
+
+- **Smoothed startup animation**: Paced the Solari tile cascade with a relaxed 160ms letter stagger, 250ms scramble lead-in, and a 1.8s hold time.
+- **Desktop partition persistence**: Proactively flushes in-memory session cookies and cache partitions before application shutdown, preventing session state loss on exit.
+- **Workspace storage migration resilience**: Hardened schema migration routines to validate and preserve user state during storage format upgrades without data corruption.
+- **Linux legacy user data preservation**: Added automatic detection and migration from legacy configuration paths on Linux distributions.
+- **Reduced motion accessibility**: Honored user accessibility preferences across all core dialog primitives (Alert Dialog, Command Palette, Dialog, and Sheet).
+- **Bundled self-contained desktop installers**: Maintained full self-contained desktop packages across macOS (Apple Silicon & Intel), Windows x64, and Linux x64 bundling the complete Code-OSS runtime directly.
+
 ## [v1.3.10] - 2026-09-18
 
 ### AppleTimePicker numeric accumulation, drum wheel sync, and bundled desktop distribution

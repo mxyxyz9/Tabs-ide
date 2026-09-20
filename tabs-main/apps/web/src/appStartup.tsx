@@ -64,6 +64,12 @@ export const startup = Promise.all([
   managedAuthShellModule?.then((module) => module.default) ?? null,
   router.load(),
 ]).then(([ManagedAuthShell]) => {
+  const rootEl = document.getElementById("root");
+  if (rootEl) {
+    rootEl.removeAttribute("style");
+    rootEl.removeAttribute("aria-busy");
+    rootEl.className = "h-dvh w-full overflow-hidden";
+  }
   const app = <AppRoot router={router} />;
   reactRoot.render(
     <React.StrictMode>
