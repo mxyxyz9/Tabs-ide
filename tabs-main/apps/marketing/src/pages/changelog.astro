@@ -9,12 +9,15 @@ import ConceptFiveChangelog from "../components/changelog/ConceptFiveChangelog.a
 */
 import SiteScripts from "../components/SiteScripts.astro";
 import SiteThemeHead from "../components/SiteThemeHead.astro";
+import SeoHead from "../components/SeoHead.astro";
 
 import "../styles/concepts.css";
 import "../styles/concept-one.css";
 import "../styles/changelog-refined.css";
 // import "../styles/concept-four.css";
 // import "../styles/concept-five.css";
+const title = "Tabs IDE Changelog — Release Notes and Downloads";
+const description = "Read the latest Tabs IDE release notes, features, fixes, and download links, updated automatically from verified GitHub releases.";
 ---
 
 <!doctype html>
@@ -25,9 +28,10 @@ import "../styles/changelog-refined.css";
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Tabs changelog and release notes. In-detail logs of features, enhancements, and desktop builds."
+      content={description}
     />
-    <title>Tabs Changelog — The Ship Log</title>
+    <title>{title}</title>
+    <SeoHead title={title} description={description} path="/changelog" type="article" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

@@ -2,9 +2,13 @@
 import ConceptOneDownload from "../components/download/ConceptOneDownload.astro";
 import SiteScripts from "../components/SiteScripts.astro";
 import SiteThemeHead from "../components/SiteThemeHead.astro";
+import SeoHead from "../components/SeoHead.astro";
 
 import "../styles/concepts.css";
 import "../styles/concept-one.css";
+
+const title = "Download Tabs IDE for macOS, Windows, or Linux";
+const description = "Download the latest stable Tabs IDE desktop workspace for Apple Silicon and Intel Macs, Windows x64, or Linux AppImage.";
 ---
 
 <!doctype html>
@@ -15,9 +19,10 @@ import "../styles/concept-one.css";
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Download Tabs desktop workspace. Standalone packages for macOS (Apple Silicon & Intel), Windows x64, and Linux AppImage."
+      content={description}
     />
-    <title>Download Tabs for macOS, Windows, or Linux</title>
+    <title>{title}</title>
+    <SeoHead title={title} description={description} path="/downloads" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

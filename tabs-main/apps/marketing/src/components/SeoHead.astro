@@ -1,0 +1,42 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  path?: string;
+  type?: "website" | "article";
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const {
+  title,
+  description,
+  path = "/",
+  type = "website",
+  structuredData,
+} = Astro.props;
+
+const siteUrl = "https://buildwithtabs.me";
+const canonical = new URL(path, siteUrl).toString();
+const socialImage = new URL("/screenshot.jpeg", siteUrl).toString();
+---
+
+<link rel="canonical" href={canonical} />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+
+<meta property="og:type" content={type} />
+<meta property="og:site_name" content="Tabs IDE" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={socialImage} />
+<meta property="og:image:alt" content="Tabs IDE desktop coding workspace" />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={socialImage} />
+<meta name="twitter:image:alt" content="Tabs IDE desktop coding workspace" />
+
+{structuredData && (
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+)}
