@@ -1,264 +1,173 @@
 <p align="center">
-  <img src="logo/dark mode icon.svg" width="120" alt="Tabs Logo" />
+  <img src="tabs-main/apps/desktop/resources/icon.png" width="112" alt="Tabs IDE app icon" />
 </p>
 
 <h1 align="center">Tabs IDE</h1>
 
 <p align="center">
-  <strong>A desktop-first workspace for coding agents.</strong><br/>
-  Chat with AI, edit code, run terminals, manage git — all in one place.
+  <strong>A desktop workspace built for coding with agents.</strong><br />
+  Chat, edit, browse, run commands, and manage Git without losing context.
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#building-installers">Building Installers</a> •
-  <a href="#project-structure">Project Structure</a> •
-  <a href="#contributing">Contributing</a>
+  <a href="#why-tabs">Why Tabs</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#releases">Releases</a>
 </p>
 
+> [!NOTE]
+> Tabs is under active development. Interfaces, workflows, and packaging may change between releases.
 
+## Why Tabs
 
----
+Coding with an agent usually means juggling a chat window, an editor, terminals, Git tools, and browser tabs. Tabs brings those surfaces into one project-aware desktop app so the agent and the developer work from the same context.
 
-## What is Tabs?
+### One workspace, fewer handoffs
 
-Tabs is a desktop application that combines a **chat-driven AI coding interface** with a full **VS Code-based editor**, **embedded terminals**, **browser tooling**, and **git controls** — all wired together through a local WebSocket server.
+- **Agent conversations** with streaming responses and support for Codex and Claude
+- **Code-OSS editor** embedded as a native desktop workbench
+- **Terminal sessions** backed by local PTYs
+- **Browser tools** with shared, isolated, or named persistent profiles
+- **Git workflows** for branches, commits, diffs, stashes, merges, rebases, and pull requests
+- **Project sessions** that preserve state across restarts
+- **Cross-platform packaging** for macOS, Windows, and Linux
 
-It supports multiple AI providers:
-- **OpenAI Codex** — via the Codex CLI app-server (JSON-RPC over stdio)
-- **Anthropic Claude** — via the Claude Agent SDK
-
-## Features
-
-- 🤖 **AI-Powered Chat** — Provider-backed agent threads with streaming responses
-- 📝 **Embedded Code Editor** — Full VS Code (Code-OSS) workbench inside the Code tab
-- 💻 **Integrated Terminals** — Embedded terminal sessions with PTY support
-- 🌐 **Browser Tooling** — Built-in browser surfaces with persistent, isolated login sessions
-- 🔀 **Git Controls** — Full git workflow: branches, commits, diffs, stash, merge, rebase, PRs
-- 🛡️ **Tailscale & Connections** — Secure remote network access and Tailscale VPN status integration
-- ⚙️ **Source Control Settings** — Discover and configure Git/source control repositories and credentials
-- 🎛️ **Model Picker Settings** — Select, configure, and switch between provider models directly from settings
-- ⌨️ **Custom Keybindings** — Configurable keyboard shortcuts
-- 🔄 **Session Checkpointing** — Git-based session state persistence
-- 📦 **Cross-Platform** — macOS (DMG), Windows (NSIS), Linux (AppImage)
-- 🎨 **Modern UI** — React 19 + TailwindCSS 4 with dark mode
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Electron Shell                        │
-│                   (apps/desktop)                         │
-│                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │   Chat Tab    │  │   Code Tab   │  │ Terminal Tab  │  │
-│  │  (React UI)   │  │  (VS Code)   │  │   (xterm)    │  │
-│  └──────┬───────┘  └──────────────┘  └──────┬───────┘  │
-│         │                                     │         │
-│         └──────────────┬──────────────────────┘         │
-│                        │ WebSocket                      │
-│  ┌─────────────────────┴──────────────────────────┐    │
-│  │              Local Server (apps/server)          │    │
-│  │                                                  │    │
-│  │  ┌────────────┐  ┌─────────┐  ┌─────────────┐  │    │
-│  │  │Orchestration│  │   Git   │  │  Terminals  │  │    │
-│  │  │  (Events)   │  │ Service │  │   (PTY)     │  │    │
-│  │  └──────┬─────┘  └─────────┘  └─────────────┘  │    │
-│  │         │                                        │    │
-│  │  ┌──────┴──────────────────┐                    │    │
-│  │  │    Provider Runtime     │                    │    │
-│  │  │  ┌───────┐  ┌────────┐ │                    │    │
-│  │  │  │ Codex │  │ Claude │ │                    │    │
-│  │  │  └───────┘  └────────┘ │                    │    │
-│  │  └─────────────────────────┘                    │    │
-│  └─────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 19, Vite 8, TailwindCSS 4, Zustand, TanStack Router & Query |
-| **Editor** | Lexical (composer), xterm.js 6 (terminal), @pierre/diffs |
-| **Backend** | Node.js, Effect-TS, WebSocket, SQLite |
-| **Desktop** | Electron 44, embedded VS Code (Code-OSS) workbench |
-| **AI Providers** | Codex CLI (JSON-RPC), Claude Agent SDK |
-| **Build** | Bun, Turborepo, tsdown, electron-builder |
-| **Quality** | Vitest, Playwright, oxlint, oxfmt |
-
-## Getting Started
+## Quick start
 
 ### Prerequisites
 
-- **Bun** 1.3+
-- **Node.js** 24+
-- A working **Codex CLI** install (for Codex-backed threads)
-- A working **Claude CLI** install (for Claude-backed threads)
+- [Bun](https://bun.sh/) 1.3.9 or newer in the 1.3 line
+- Node.js 22.12 or newer
+- A local Codex CLI and/or Claude CLI installation
+- The compiled Code-OSS runtime in `tabs-code-main/`
 
-### Install
+### Install dependencies
 
 ```bash
 cd tabs-main
 bun install
 ```
 
-### Compile the embedded VS Code editor
+### Prepare Code-OSS
 
-```bash
-cd tabs-code-main
-npm install
-npm run compile
-```
+The desktop app requires a compiled sibling checkout of `tabs-code-main`. If its compiled assets are missing, build that runtime using its documented toolchain before starting Tabs.
 
-### Run in development
-
-```bash
-# Run everything (web + server)
-cd tabs-main
-bun run dev
-
-# Or run specific parts
-bun run dev:web        # Web app only
-bun run dev:server     # Server only
-bun run dev:desktop    # Desktop (Electron) app
-```
-
-### Quality checks
-
-```bash
-bun run fmt:check    # Check formatting
-bun run lint         # Run linter
-bun run typecheck    # TypeScript type checking
-bun run test         # Run all tests
-```
-
-### Browser sessions and Google sign-in
-
-Browser tabs use persistent Electron storage partitions, so cookies, local storage, and other
-site data can survive tab switches and application restarts:
-
-- **Shared (Project)** uses one partition for every browser tab in the current project. Signing in
-  to Google through one tab, such as Figma, can let another tab in that project, such as ChatGPT,
-  reuse the existing Google session.
-- **Isolated** gives the browser tab its own partition. Its login is not shared with other tabs.
-- **Named Profile** shares a persistent partition across every project and tab assigned to that
-  profile, while remaining isolated from other profiles.
-
-Google may reject a fresh third-party OAuth flow inside an embedded browser. Reusing an existing
-Google session in the same Shared or Named Profile partition can work because the account has
-already been authenticated there. Tabs persists successful browser cookies to disk, but individual
-sites can still expire sessions, revoke cookies, require verification again, or block embedded
-authentication. Tabs never copies cookies from Chrome, Safari, or another external browser.
-
-## Building Installers
-
-### macOS (DMG)
+### Launch the desktop app
 
 ```bash
 cd tabs-main
-bun run dist:desktop:dmg           # Auto-detects arch
-bun run dist:desktop:dmg:arm64     # Apple Silicon
-bun run dist:desktop:dmg:x64       # Intel
+bun run dev:desktop
 ```
 
-### Windows (NSIS Installer)
+`dev:desktop` is the supported development entry point. The plain web development server does not provide Electron IPC, native editor hosting, or the desktop authentication bridge.
 
-> ⚠️ Must be built on a Windows machine or CI — cross-compilation is not supported due to native modules.
+## How it works
 
-```bash
-bun run dist:desktop:win
+```text
+┌──────────────────────────── Tabs desktop (Electron) ────────────────────────┐
+│                                                                             │
+│   React workspace        Code-OSS workbench       Browser / terminals       │
+│          │                       │                         │                  │
+│          └────────────── project and session context ──────┘                  │
+│                                  │                                          │
+│                         local WebSocket server                              │
+│                     ┌────────────┼────────────┐                             │
+│                 agent runtime    Git       persistence                       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Linux (AppImage)
+The Electron shell owns the desktop window and native integrations. The React workspace provides Tabs' project and tool surfaces, while a compiled Code-OSS workbench is mounted inside the Code tool. A local server coordinates agent providers, terminals, Git operations, browser automation, and SQLite-backed state.
 
-```bash
-bun run dist:desktop:linux
-```
+### Technology
 
-### CI Builds
+| Area | Stack |
+| --- | --- |
+| Workspace UI | React 19, Vite, Tailwind CSS, Zustand, TanStack Router and Query |
+| Desktop | Electron with an embedded Code-OSS workbench |
+| Server | Node.js, Effect, WebSocket, SQLite |
+| Agent providers | Codex app-server and Claude Agent SDK |
+| Tooling | Bun, Turborepo, Vitest, Playwright, oxlint, oxfmt |
 
-Use the **Build Desktop Installers** GitHub Actions workflow to build for any platform:
+## Repository map
 
-1. Go to **Actions** → **Build Desktop Installers** → **Run workflow**
-2. Select platforms (e.g. `mac-arm64,win-x64`)
-3. Download artifacts from the completed workflow run
-
-For production releases, push a version tag:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-This triggers the full **Release Desktop** workflow which builds all platforms, signs the binaries, publishes to npm, and creates a GitHub Release.
-
-## Project Structure
-
-```
-.
-├── tabs-main/                  # Core monorepo
+```text
+tabs/
+├── tabs-main/          Product monorepo
 │   ├── apps/
-│   │   ├── web/                # React/Vite frontend (~58K LOC)
-│   │   │   ├── src/components/ # UI components (117 total)
-│   │   │   ├── src/hooks/      # React hooks
-│   │   │   ├── src/lib/        # Utilities & queries
-│   │   │   └── src/routes/     # TanStack Router pages
-│   │   ├── server/             # Node.js WebSocket server (~62K LOC)
-│   │   │   ├── src/orchestration/  # Event-sourced domain logic
-│   │   │   ├── src/provider/       # AI provider adapters
-│   │   │   ├── src/git/            # Git operations service
-│   │   │   ├── src/terminal/       # PTY terminal management
-│   │   │   └── src/persistence/    # SQLite storage
-│   │   ├── desktop/            # Electron shell (~6K LOC)
-│   │   └── marketing/          # Astro marketing site
-│   ├── packages/
-│   │   ├── contracts/          # Effect/Schema shared types
-│   │   └── shared/             # Shared runtime utilities
-│   └── scripts/                # Build & release scripts
-│
-├── tabs-code-main/             # Forked VS Code (Code-OSS)
-│                               # Compiled workbench for the Code tab
-│
-├── tabs-code-web/              # VS Code web build output
-├── vscode-web/                 # VS Code web build output
-└── logo/                       # Brand assets (SVG icons)
+│   │   ├── desktop/    Electron shell and native integrations
+│   │   ├── marketing/  Public website
+│   │   ├── server/     Local WebSocket backend
+│   │   └── web/        React workspace UI
+│   ├── packages/       Shared contracts and runtime libraries
+│   └── scripts/        Development, build, and release tooling
+├── tabs-code-main/     Tabs' Code-OSS runtime fork
+├── .github/            CI, release workflows, and release notes
+└── README.md
 ```
 
-One-off migration and compatibility-repair material is kept under
-`_maintenance/legacy-repair/` (ignored by Git) rather than in the repository
-root. It is not needed to run the product.
+The two source trees have different responsibilities: `tabs-main/` is the Tabs product, while `tabs-code-main/` is the editor runtime bundled into desktop builds. Neither is generated output.
 
-### Key Design Patterns
+## Development
 
-- **Effect-TS** — The server uses Effect for services, layers, typed errors, and structured concurrency
-- **Event Sourcing** — Orchestration uses a decider/projector pattern for session lifecycle
-- **Schema-First** — All client/server types defined in `@tabs/contracts` using Effect Schema
-- **Logic Extraction** — UI components have companion `.logic.ts` files separating business logic from rendering
+Run project commands from `tabs-main/`:
 
-## Environment Variables
+```bash
+bun run dev:desktop   # Start the complete Electron application
+bun run typecheck     # Check TypeScript across the monorepo
+bun run lint          # Run oxlint
+bun run fmt:check     # Verify formatting
+bun run test          # Run the test tasks
+```
 
-| Variable | Description |
-|----------|-------------|
-| `TABS_PORT` | Server port |
-| `TABS_HOME` | Tabs home directory |
-| `TABS_AUTH_TOKEN` | Authentication token |
-| `TABS_MODE` | Runtime mode |
-| `TABS_CODE_OSS_BUILD_DIR` | Override path to tabs-code-main |
-| `TABS_CODE_OSS_ENTRY` | URL for web-hosted workbench mode |
-| `TABS_DESKTOP_WS_URL` | WebSocket URL override for desktop |
-| `TABS_LOG_WS_EVENTS` | Enable WebSocket event logging |
-| `TABS_NO_BROWSER` | Disable auto browser opening |
+Useful focused commands:
+
+```bash
+bun run dev:server
+bun run dev:web
+bun run dev:marketing
+bun run test:desktop-smoke
+```
+
+### Browser profiles
+
+Tabs keeps embedded-browser data in persistent Electron partitions:
+
+- **Shared (Project)** shares one session between browser tabs in a project.
+- **Isolated** gives one tab its own session.
+- **Named Profile** shares a selected session across projects and tabs.
+
+Sites remain responsible for their own authentication policies. Tabs does not copy cookies from external browsers, and some providers may block sign-in from an embedded browser.
+
+## Releases
+
+Desktop installers are self-contained and bundle the compiled Code-OSS runtime.
+
+```bash
+cd tabs-main
+bun run dist:desktop:dmg         # macOS, current architecture
+bun run dist:desktop:dmg:arm64   # macOS, Apple Silicon
+bun run dist:desktop:dmg:x64     # macOS, Intel
+bun run dist:desktop:win         # Windows NSIS installer
+bun run dist:desktop:linux       # Linux AppImage
+```
+
+Windows installers should be built on Windows or in CI because the application includes native modules. Production tags use the release workflow and require a matching file in `.github/release-notes/`.
+
+See [CHANGELOG.md](CHANGELOG.md) for shipped changes.
 
 ## Contributing
 
-1. Read [CONTRIBUTING.md](tabs-main/CONTRIBUTING.md) before opening a change
-2. All of `bun fmt`, `bun lint`, and `bun typecheck` must pass
-3. Use `bun run test` (not `bun test`) to run tests
-4. Performance and reliability are core priorities
+Before opening a change:
+
+1. Read the [contribution guide](tabs-main/CONTRIBUTING.md).
+2. Keep product changes in `tabs-main/` and editor-runtime changes in `tabs-code-main/`.
+3. Run formatting, lint, type checking, and the relevant tests.
+4. Document user-visible changes in the appropriate release notes.
+
+Performance, reliability, and predictable recovery behavior take priority over clever shortcuts.
 
 ## License
 
-[MIT](tabs-main/LICENSE)
+Tabs is available under the [MIT License](tabs-main/LICENSE).
