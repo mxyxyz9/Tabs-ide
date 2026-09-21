@@ -229,6 +229,35 @@
 .hs-changelog-article .hs-cl-details-content {
   padding: 24px;
 }
+.hs-changelog-article .hs-cl-markdown > :first-child {
+  margin-top: 0;
+}
+.hs-changelog-article .hs-cl-markdown > :last-child {
+  margin-bottom: 0;
+}
+.hs-changelog-article .hs-cl-markdown strong {
+  font-weight: 700;
+  color: var(--hs-ink);
+}
+.hs-changelog-article .hs-cl-markdown :is(pre, table) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.hs-changelog-article .hs-cl-markdown pre {
+  padding: 16px;
+  border-radius: 8px;
+  background: #f3f6fc;
+}
+.hs-changelog-article .hs-cl-markdown code {
+  overflow-wrap: anywhere;
+}
+.hs-changelog-article .hs-cl-markdown :is(ul, ol) {
+  padding-left: 18px;
+}
+.hs-changelog-article .hs-cl-markdown img {
+  max-width: 100%;
+  height: auto;
+}
 .hs-changelog-article .hs-cl-bullet-list {
   line-height: 1.8;
   padding-left: 18px;

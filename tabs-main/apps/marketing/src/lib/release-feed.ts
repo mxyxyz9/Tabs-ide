@@ -1,5 +1,6 @@
 import { fetchAllReleases, pickAsset, type Platform, type Release } from "./releases";
 import { resolveReleaseNotes } from "./release-note-content";
+import { renderReleaseMarkdown } from "./release-markdown";
 
 const downloadLabels: Record<Platform, [string, string]> = {
   "mac-arm64": ["macOS", "Apple Silicon"],
@@ -14,51 +15,26 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string) {
   return node;
 }
 
-function appendInline(container: HTMLElement, value: string) {
-  const pattern = /\[([^\]]+)]\((https:\/\/[^\s)]+)\)|(https:\/\/[^\s]+)/g;
-  let cursor = 0;
-  for (const match of value.matchAll(pattern)) {
-    const index = match.index ?? 0;
-    container.append(value.slice(cursor, index));
-    const link = el("a");
-    link.href = match[2] ?? match[3] ?? "";
-    link.textContent = match[1] ?? match[3] ?? "Link";
+function renderNotes(body: string | null) {
+  const content = el("div", "hs-cl-markdown");
+  content.innerHTML = renderReleaseMarkdown(body);
+  for (const heading of content.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+    const subheading = el("h4", "hs-cl-category-title");
+    subheading.replaceChildren(...Array.from(heading.childNodes));
+    heading.replaceWith(subheading);
+  }
+  for (const list of content.querySelectorAll("ul")) list.classList.add("hs-cl-bullet-list");
+  for (const link of content.querySelectorAll("a")) {
+    const url = new URL(link.getAttribute("href") ?? "", "https://github.com/mxyxyz9/Tabs-ide/");
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      link.replaceWith(...Array.from(link.childNodes));
+      continue;
+    }
+    link.href = url.toString();
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    container.append(link);
-    cursor = index + match[0].length;
   }
-  container.append(value.slice(cursor));
-}
-
-function renderNotes(body: string | null) {
-  const fragment = document.createDocumentFragment();
-  const lines = (body?.trim() || "No release notes were provided for this release.").split(/\r?\n/);
-  let list: HTMLUListElement | null = null;
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      list = null;
-      continue;
-    }
-    const bullet = line.match(/^[-*]\s+(.+)/);
-    if (bullet) {
-      if (!list) {
-        list = el("ul", "hs-cl-bullet-list");
-        fragment.append(list);
-      }
-      const item = el("li");
-      appendInline(item, bullet[1] ?? "");
-      list.append(item);
-      continue;
-    }
-    list = null;
-    const heading = line.match(/^#{2,4}\s+(.+)/);
-    const node = heading ? el("h4", "hs-cl-category-title") : el("p");
-    appendInline(node, (heading?.[1] ?? line).replaceAll("**", ""));
-    fragment.append(node);
-  }
-  return fragment;
+  return content;
 }
 
 function buildReleaseCard(release: Release, isLatest: boolean) {
