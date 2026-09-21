@@ -368,7 +368,7 @@ export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
     clientInfo: {
       name: "t3code_desktop",
-      title: "T3 Code Desktop",
+      title: "Tabs Desktop",
       version: packageJson.version,
     },
     capabilities: {
@@ -527,7 +527,7 @@ const makePendingCodexProvider = (
           version: null,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Codex is disabled in T3 Code settings.",
+          message: "Codex is disabled in Tabs settings.",
         },
       });
     }
@@ -611,7 +611,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Codex is disabled in T3 Code settings.",
+        message: "Codex is disabled in Tabs settings.",
       },
     });
   }
