@@ -793,22 +793,22 @@ export const changelogData: ChangelogRelease[] = [
   },
   {
     tag: "v1.2.119",
-    title: "Strict structured output and Effect runtime alignment",
+    title: "More reliable structured agent responses",
     date: "August 4, 2026",
     shortDate: "Aug 4",
     type: "patch",
     summary:
-      "Constrained provider responses to validated JSON schemas and synchronized Effect version dependencies across the monorepo.",
+      "Agent tools now receive validated structured responses more consistently, reducing failures caused by malformed data.",
     highlights: [
-      "Native JSON Schema constraints on agent tool calling to eliminate parse exceptions.",
-      "Synchronized Effect runtime packages across shared, server, and client apps.",
+      "Reduced failures when an agent tool returns incomplete or malformed structured data.",
+      "Improved consistency across agent providers when handling structured responses.",
     ],
     categories: [
       {
-        title: "Schema Reliability",
+        title: "Response reliability",
         items: [
-          "Enforced strict schema output parsing on provider RPC endpoints.",
-          "Cleaned up legacy schema contracts and added regression test coverage.",
+          "Validate structured tool responses before they reach the workspace.",
+          "Report invalid responses consistently instead of failing later in the interaction.",
         ],
       },
     ],
