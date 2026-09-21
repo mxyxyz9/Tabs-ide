@@ -89,8 +89,13 @@ function legacyReleaseNotes(tag: string): string | null {
  * published before the manual-notes workflow was introduced.
  */
 export function resolveReleaseNotes(tag: string, body: string | null): string {
-  if (manualReleaseNotes[tag]) return manualReleaseNotes[tag];
   if (isComparisonOnly(body))
-    return legacyReleaseNotes(tag) ?? "Release notes were not recorded for this version.";
-  return body?.trim() || "Release notes were not recorded for this version.";
+    return (
+      manualReleaseNotes[tag] ??
+      legacyReleaseNotes(tag) ??
+      "Release notes were not recorded for this version."
+    );
+  return (
+    body?.trim() || manualReleaseNotes[tag] || "Release notes were not recorded for this version."
+  );
 }

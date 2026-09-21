@@ -70,15 +70,7 @@ jobs:
             echo "Missing manual release notes: $notes_file" >&2
             exit 1
           fi
-          note_lines="$(grep -Evc '^[[:space:]]*(#.*)?$' "$notes_file")"
-          if (( note_lines < 3 )); then
-            echo "Release notes must contain a headline and meaningful in-site copy." >&2
-            exit 1
-          fi
-          if grep -Eq '^\*\*Full Changelog\*\*:[[:space:]]*https?://' "$notes_file"; then
-            echo "A compare link alone is not a release note. Describe the shipped changes." >&2
-            exit 1
-          fi
+          node scripts/validate-release-notes.mjs "$notes_file"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

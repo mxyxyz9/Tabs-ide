@@ -4,6 +4,8 @@ Create `.github/release-notes/vX.Y.Z.md` before creating the matching release ta
 
 Write notes for the changes introduced between the previous shipped version and this version. Do not list failed CI attempts, retries, or release-pipeline fixes unless they changed the delivered application.
 
+Follow the [Tabs release-notes skill](../../.agents/skills/tabs-release-notes/SKILL.md) when drafting or reviewing the copy. Run `node scripts/validate-release-notes.mjs .github/release-notes/vX.Y.Z.md` before tagging. The release workflow runs the same check, but a person must still verify that every claim describes something actually shipped.
+
 Use this shape:
 
 ```md

@@ -42,6 +42,9 @@ describe("release note content", () => {
     expect(resolveReleaseNotes("v9.9.9", "## New\n\n- A real change")).toBe(
       "## New\n\n- A real change",
     );
+    expect(resolveReleaseNotes("v1.3.4", "## Corrected public notes\n\n- A shipped change")).toBe(
+      "## Corrected public notes\n\n- A shipped change",
+    );
   });
 
   it("uses the existing curated entry for an older generated release", () => {

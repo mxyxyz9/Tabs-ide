@@ -26,58 +26,51 @@ export const TOTAL_TAGS_COUNT = 155;
 export const changelogData: ChangelogRelease[] = [
   {
     tag: "v1.3.12",
-    title:
-      "Agents split-thread workspace, multi-pane composer isolation, and responsive layout polish",
+    title: "Work with two agent threads side by side",
     date: "September 20, 2026",
     shortDate: "Sep 20",
     isLatest: true,
     type: "feature",
     summary:
-      "Introduced an Agents-only side-by-side split-thread workspace in Tabs with drag-and-drop thread placement, independent composer drafts and timelines, real-time concurrent streaming, smooth draggable divider resizing, '+ New Thread' creation in split mode, and production-grade responsive bounds.",
+      "Open two agent conversations in the same Tabs window, keep a separate draft in each pane, and resize the view to suit your screen.",
     highlights: [
-      "Side-by-side split-thread workspace: Compare and interact with multiple agent threads simultaneously inside the Agents workspace.",
-      "Drag-and-drop & shortcut splitting: Drag any sidebar thread row to split left or right, or use the 'Open to the side' context menu and Alt+Click.",
-      "Full composer & timeline isolation: Independent draft states, staged attachments, scroll positions, tool call approvals, and diff panels per pane.",
-      "Concurrent real-time streaming: Both panes receive and render live token streams without cross-talk or UI locking.",
-      "Draggable resizer & accessibility: Draggable pane divider with double-click 50/50 reset, arrow key keyboard resizing, and full ARIA semantics.",
-      "Production-grade responsiveness: Bounded flex layouts and container queries eliminating clipping and overflow on 1024px displays with expanded sidebars.",
+      "Open a second conversation by dragging a thread, choosing 'Open to the side', or Alt-clicking it.",
+      "Keep a separate draft, attachments, and message position in each pane.",
+      "Follow agent replies in both panes while you work.",
+      "Resize the divider with a mouse or keyboard, or double-click to split the space evenly.",
+      "On narrow windows, Tabs shows one thread at a time with a quick way to switch.",
     ],
     categories: [
       {
-        title: "Agents Split-Thread Workspace",
+        title: "Working side by side",
         items: [
-          "Side-by-side agent conversation panes with proportional draggable resizer.",
-          "HTML5 drag-and-drop thread placement with interactive drop zone overlays.",
-          "'Open to the side' sidebar context menu action and Alt+Click shortcut.",
-          "Independent draft persistence in useComposerDraftStore across split panes.",
-          "Targeted diff reviews and isolated keyboard shortcuts for the active pane.",
-          "Smooth '+ New Thread' creation in active pane while preserving dual split.",
+          "Drag a thread into either side of the conversation area.",
+          "Choose 'Open to the side' from a thread's menu or Alt-click it.",
+          "Start a new thread in the active pane without closing the other conversation.",
         ],
       },
       {
-        title: "UI Responsiveness & Layout Stability",
+        title: "Layout and controls",
         items: [
-          "Eliminated flexbox minimum-width trap across workspace surface containers.",
-          "Integrated pane controls (active dot, maximize/restore, close) natively into ChatHeader.",
-          "Container-query driven header compactness hiding redundant badges in split mode.",
-          "Narrow-window fallback (< 600px) displaying active thread with quick-switch banner.",
+          "Resize the divider by dragging or with the arrow keys.",
+          "Maximize or close a pane from its header controls.",
+          "Switch quickly between threads when the window is too narrow for two panes.",
         ],
       },
     ],
   },
   {
     tag: "v1.3.11",
-    title:
-      "Refined Solari startup cascade, browser partition persistence, and storage migration resilience",
+    title: "Smoother startup and more reliable saved sessions",
     date: "September 20, 2026",
     shortDate: "Sep 20",
     type: "patch",
     summary:
-      "Introduced a smoothed startup splash sequence with relaxed Solari grid cascade timings, hardened desktop shutdown by proactively flushing browser partitions, added migration resilience for workspace shell storage, and preserved Linux legacy user data across historical paths.",
+      "Startup feels smoother, and Tabs better preserves browser sessions and workspace settings when closing or updating the app.",
     highlights: [
       "Paced the Solari tile cascade with a relaxed 160ms letter stagger, 250ms scramble lead-in, and 1.8s hold time for a smooth 8-tile highlight wave.",
       "Proactively flushes in-memory session cookies and cache partitions before application shutdown, preventing session state loss on exit.",
-      "Hardened schema migration routines to validate and preserve user state during storage format upgrades without data corruption.",
+      "Improved how existing workspace settings are carried forward during updates.",
       "Preserved Linux user data across verified historical configuration paths.",
       "Honored user accessibility preferences across all core dialog primitives (Alert Dialog, Command Palette, Dialog, and Sheet).",
       "Maintained self-contained desktop installers (.dmg, .exe, .AppImage) bundling the complete Code-OSS runtime directly.",
@@ -98,26 +91,24 @@ export const changelogData: ChangelogRelease[] = [
           "Proactively flushed browser session partitions prior to application shutdown.",
           "Hardened workspace shell storage migration against invalid schemas and state corruption.",
           "Preserved Linux user data across verified legacy paths.",
-          "Strengthened provider session integration test coverage.",
+          "Improved preservation of older Linux user data during updates.",
         ],
       },
     ],
   },
   {
     tag: "v1.3.10",
-    title:
-      "AppleTimePicker numeric accumulation, drum wheel sync, and bundled desktop distribution",
+    title: "Easier keyboard entry in the time picker",
     date: "September 18, 2026",
     shortDate: "Sep 18",
     type: "patch",
     summary:
-      "Stabilized keyboard time entry with a two-digit accumulation buffer and timer for hours and minutes, resolved drum wheel scroll synchronization race conditions, and continued bundled self-contained desktop installer distribution.",
+      "Typing a two-digit time is more reliable, and the selected value stays in sync when you scroll.",
     highlights: [
       "Added 800ms numeric accumulation buffer allowing smooth typing of two-digit hours without premature auto-advance sticking at '1'.",
-      "Fixed drum wheel scroll synchronization race conditions by referencing live selected state in debounced scroll handlers.",
+      "The displayed time now stays in step with the picker wheel while scrolling.",
       "Maintained self-contained desktop installers (.dmg, .exe, .AppImage) bundling the complete Code-OSS runtime.",
-      "Verified development runtime isolation preventing remote downloads during local development runs.",
-      "Aligned relay discovery error propagation with Effect yieldable error contracts.",
+      "Fixed a time picker issue that could leave the selected hour stuck on its first digit.",
     ],
     categories: [
       {
@@ -140,18 +131,15 @@ export const changelogData: ChangelogRelease[] = [
   },
   {
     tag: "v1.3.9",
-    title:
-      "Bundled self-contained desktop installers, dev runtime isolation, and runtime stability",
+    title: "Desktop installers include the editor",
     date: "September 17, 2026",
     shortDate: "Sep 17",
     type: "patch",
     summary:
-      "Self-contained bundled desktop installers embedding the Code-OSS runtime directly inside application packages, isolated dev runtime resolution preventing unnecessary remote downloads, and pinned platform runtime dependencies fixing startup crashes.",
+      "The desktop installer includes the editor it needs to start, so a separate runtime download is no longer required after installation.",
     highlights: [
       "Packaged desktop releases (.dmg, .exe, .AppImage) now bundle the complete Code-OSS runtime directly inside the application package.",
-      "Isolated dev runtime resolution ensuring development builds load the local checkout rather than attempting GitHub release downloads.",
-      "Pinned @effect/platform-node-shared dependency to eliminate transitive version mismatch crashes.",
-      "Enforced strict runtime staging validations to guarantee zero silent thin-installer regressions.",
+      "Fixed a dependency issue that could stop the packaged app from opening.",
     ],
     categories: [
       {
@@ -180,16 +168,15 @@ export const changelogData: ChangelogRelease[] = [
   },
   {
     tag: "v1.3.8",
-    title: "Code-OSS 1.138 upstream runtime sync, native code host contracts, and UI refinements",
+    title: "Updated editor and workspace controls",
     date: "September 16, 2026",
     shortDate: "Sep 16",
     type: "feature",
     summary:
-      "Full synchronization with upstream VS Code 1.138 across the vendored Code-OSS runtime, updated AgentHost services and generated Codex protocol schemas, typed native code host IPC contracts with automated testing, and workspace UI polish.",
+      "Tabs updates the embedded editor to the VS Code 1.138 codebase and refines workspace controls, time entry, and settings.",
     highlights: [
       "Synchronized vendored Code-OSS runtime with upstream VS Code 1.138.0, updating workbench parts, chat widgets, and extensions.",
-      "Upstream-aligned AgentHost turn lifecycle coordination and refreshed Codex JSON-RPC protocol schemas.",
-      "Typed Electron desktop-to-native code host IPC contracts backed by automated contract tests.",
+      "Refined the layout, prompt stash, and message queue panels.",
       "Refined workspace shell layout, prompt stash and message queue panels, time picker input mechanics, and notification settings.",
     ],
     categories: [
@@ -229,18 +216,17 @@ export const changelogData: ChangelogRelease[] = [
   },
   {
     tag: "v1.3.7",
-    title:
-      "Notification history, schedule popover styling, time picker typing, and provider session lifecycle",
+    title: "Notification history and scheduling improvements",
     date: "September 16, 2026",
     shortDate: "Sep 16",
     type: "feature",
     summary:
-      "Dedicated notification history drawer with desktop alert preferences, schedule popover backdrop blur with keyboard time picker typing overhaul, prompt staging panels, and scoped provider event loops.",
+      "Review past notifications, adjust desktop alerts, enter scheduled times more easily, and choose available Codex reasoning levels.",
     highlights: [
       "Persistent notification history drawer with category filtering, sound/badge controls, and desktop overlay synchronization.",
       "Overhauled schedule popover with backdrop blur and direct keyboard numeric entry for time and date pickers.",
       "Prompt stash and message queue panels for organizing and sequencing agent commands without interrupting execution.",
-      "Session-scoped provider lifecycles ensuring clean teardown of adapter event loops and background fibers.",
+      "Ending an agent conversation now stops its background updates more reliably.",
     ],
     categories: [
       {
@@ -412,7 +398,6 @@ export const changelogData: ChangelogRelease[] = [
       "Embedded Code-OSS, browser preview, and testing views suspend during active toasts and notifications so alerts remain visible.",
       "Auxiliary bar items filtered out from the primary activity bar to prevent cluttering main rail navigation.",
       "Excluded routine lease heartbeats from slow RPC latency tracking and added concurrency guards to activity reporting.",
-      "Refined production website deployment packaging and verified live release assets.",
     ],
     categories: [
       {
