@@ -25,6 +25,21 @@ export function readBlockScalar(manifestText: string, key: string): string | nul
   return normalizeText(body.map((line) => line.slice(indentation)).join("\n"));
 }
 
+export function readReleaseNotes(manifestText: string): string | null {
+  const quotedMatch = manifestText.match(/^releaseNotes:\s*"((?:[^"\\]|\\.)*)"\s*$/m);
+  if (quotedMatch && quotedMatch[1] !== undefined) {
+    try {
+      return normalizeText(JSON.parse(`"${quotedMatch[1]}"`) as string);
+    } catch {
+      return normalizeText(
+        quotedMatch[1].replace(/\\r\\n|\\r|\\n/g, "\n").replace(/\\"/g, '"'),
+      );
+    }
+  }
+
+  return readBlockScalar(manifestText, "releaseNotes");
+}
+
 export function verifyDesktopUpdateMetadata(
   manifestText: string,
   expectedVersion: string,
@@ -35,7 +50,7 @@ export function verifyDesktopUpdateMetadata(
   if (version !== expectedVersion) {
     throw new Error(`${label} has version ${version ?? "<missing>"}; expected ${expectedVersion}.`);
   }
-  const releaseNotes = readBlockScalar(manifestText, "releaseNotes");
+  const releaseNotes = readReleaseNotes(manifestText);
   if (releaseNotes !== normalizeText(expectedReleaseNotes)) {
     throw new Error(`${label} does not contain the exact release notes for ${expectedVersion}.`);
   }
