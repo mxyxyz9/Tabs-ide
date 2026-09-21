@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://buildwithtabs.me/sitemap.xml
+Sitemap: https://buildwithtabs.com/sitemap.xml
