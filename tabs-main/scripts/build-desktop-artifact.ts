@@ -769,6 +769,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   signed: boolean,
   thin: boolean,
   afterPackHook: boolean,
+  releaseNotes: string | null,
 ) {
   const buildConfig: Record<string, unknown> = {
     appId: "com.tabs.app",
@@ -777,6 +778,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     directories: {
       buildResources: "apps/desktop/resources",
     },
+    ...(releaseNotes ? { releaseInfo: { releaseNotes } } : {}),
     // Restore tabs-code-main/node_modules that electron-builder drops from the
     // extraFiles copy before platform signing runs. Without it the packaged
     // Code-OSS server fails on `import minimist from 'minimist'`. No-op for
@@ -1356,6 +1358,16 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.signed,
       effectiveThin,
       afterPackHookStaged,
+      (() => {
+        const releaseNotesPath = path.join(
+          repoRoot,
+          "..",
+          ".github",
+          "release-notes",
+          `v${appVersion}.md`,
+        );
+        return existsSync(releaseNotesPath) ? readFileSync(releaseNotesPath, "utf8").trim() : null;
+      })(),
     ),
     dependencies: {
       ...resolvedServerDependencies,

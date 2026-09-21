@@ -2,6 +2,48 @@ import type { DesktopUpdateActionResult, DesktopUpdateState } from "@tabs/contra
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
+export function getDesktopUpdateReleaseNotesPreview(state: DesktopUpdateState): string | null {
+  const notes = state.releaseNotes
+    ?.replace(/^#{1,6}\s+/gm, "")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\*\*|__/g, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^[-*]\s+/gm, "• ")
+    .trim();
+  if (!notes) return null;
+  return notes.length > 360 ? `${notes.slice(0, 357).trimEnd()}…` : notes;
+}
+
+export function describeDesktopUpdate(state: DesktopUpdateState): string {
+  const previewNotice =
+    state.distribution === "unsigned-preview"
+      ? " This preview build verifies updates with the Tabs release key, but is not Apple-notarized."
+      : "";
+  switch (state.status) {
+    case "disabled":
+      return "Automatic updates are disabled for this build.";
+    case "checking":
+      return `Checking for updates…${previewNotice}`;
+    case "up-to-date":
+      return `Tabs is up to date.${previewNotice}`;
+    case "available":
+      return `Version ${state.availableVersion ?? ""} is available to download.${previewNotice}`.trim();
+    case "downloading":
+      return `Downloading update${
+        typeof state.downloadPercent === "number" ? ` (${Math.floor(state.downloadPercent)}%)` : ""
+      }…${previewNotice}`;
+    case "downloaded":
+      return `Version ${
+        state.downloadedVersion ?? state.availableVersion ?? ""
+      } is ready. Restart to install.${previewNotice}`.trim();
+    case "error":
+      return state.message ?? "The last update attempt failed.";
+    default:
+      return "Tabs is up to date.";
+  }
+}
+
 export function resolveDesktopUpdateButtonAction(
   state: DesktopUpdateState,
 ): DesktopUpdateButtonAction {

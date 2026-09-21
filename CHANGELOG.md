@@ -2,6 +2,15 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.13] - 2026-09-21
+
+### In-app desktop updates and release notes preview
+
+- **In-app macOS preview updates**: macOS preview builds now verify and install updates in place, with automatic cryptographic signature and checksum verification.
+- **Release notes preview in the sidebar**: Hover over the update button or check About settings to review what changed before downloading or restarting.
+- **Clear download progress**: See real-time download percentage directly in the update button tooltip and About settings.
+- **Updated website and documentation**: Fresh product screenshots, social cards, and updated release documentation on buildwithtabs.com.
+
 ## [v1.3.12] - 2026-09-20
 
 ### Work with two agent threads side by side

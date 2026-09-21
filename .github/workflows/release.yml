@@ -381,11 +381,9 @@ jobs:
           set -euo pipefail
           mkdir -p release-publish
 
-          # Installers for every platform, plus the electron-updater feed files
-          # (latest.yml / latest-linux.yml + blockmaps) so Windows and Linux can
-          # auto-update. macOS auto-update needs a code-signed build, so we ship
-          # only the .dmg there (no latest-mac.yml / .zip) and users update
-          # manually from the release page.
+          # Installers for every platform, plus updater payloads. Unsigned macOS
+          # preview builds use the ZIP through Tabs' independently signed update
+          # manifest; Developer ID builds may continue using the same payload.
           # Each job only produces its own platform's files, so most patterns
           # match nothing on a given runner. `nullglob` drops empty *wildcard*
           # globs, but the literal latest*.yml names need an explicit existence
@@ -394,6 +392,7 @@ jobs:
           shopt -s nullglob
           for pattern in \
             "tabs-main/release/*.dmg" \
+            "tabs-main/release/*.zip" \
             "tabs-main/release/*.AppImage" \
             "tabs-main/release/*.AppImage.blockmap" \
             "tabs-main/release/*.exe" \
@@ -430,6 +429,11 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.ref }}
 
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
       - name: Download all desktop artifacts
         uses: actions/download-artifact@v8
         with:
@@ -451,10 +455,34 @@ jobs:
           dmgs=(release-assets/*.dmg)
           appimages=(release-assets/*.AppImage)
           installers=(release-assets/*.exe)
-          if (( ${#dmgs[@]} != 2 || ${#appimages[@]} != 1 || ${#installers[@]} != 1 )); then
-            echo "::error::Expected 2 DMGs, 1 AppImage, and 1 Windows installer; found ${#dmgs[@]}, ${#appimages[@]}, and ${#installers[@]}."
+          mac_zips=(release-assets/*.zip)
+          if (( ${#dmgs[@]} != 2 || ${#mac_zips[@]} != 2 || ${#appimages[@]} != 1 || ${#installers[@]} != 1 )); then
+            echo "::error::Expected 2 DMGs, 2 macOS ZIPs, 1 AppImage, and 1 Windows installer; found ${#dmgs[@]}, ${#mac_zips[@]}, ${#appimages[@]}, and ${#installers[@]}."
             exit 1
           fi
+
+      - name: Create signed macOS preview update manifest
+        working-directory: tabs-main
+        env:
+          TABS_MAC_UPDATE_PRIVATE_KEY: ${{ secrets.TABS_MAC_UPDATE_PRIVATE_KEY }}
+          RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          node --experimental-strip-types scripts/create-mac-preview-update-manifest.ts \
+            ../release-assets \
+            "$RELEASE_VERSION" \
+            "$RELEASE_REPOSITORY" \
+            "../.github/release-notes/v$RELEASE_VERSION.md"
+
+      - name: Verify desktop update release notes
+        working-directory: tabs-main
+        env:
+          RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          node --experimental-strip-types scripts/verify-desktop-update-metadata.ts \
+            ../release-assets \
+            "$RELEASE_VERSION" \
+            "../.github/release-notes/v$RELEASE_VERSION.md"
 
       - name: Publish release
         uses: softprops/action-gh-release@v3
@@ -467,9 +495,12 @@ jobs:
           make_latest: ${{ needs.preflight.outputs.make_latest }}
           files: |
             release-assets/*.dmg
+            release-assets/*.zip
             release-assets/*.AppImage
             release-assets/*.AppImage.blockmap
             release-assets/*.exe
             release-assets/*.exe.blockmap
             release-assets/latest.yml
             release-assets/latest-linux.yml
+            release-assets/tabs-mac-preview-update.json
+            release-assets/tabs-mac-preview-update.json.sig

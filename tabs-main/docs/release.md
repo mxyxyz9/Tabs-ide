@@ -40,7 +40,12 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
 
 - **Internal / Beta Builds (Unsigned / Ad-hoc)**:
   - Local development and automated testing produce functional ad-hoc signed macOS artifacts (`Signature=adhoc`) without requiring Apple Developer credentials.
-  - These artifacts are intended strictly for developer use and internal dogfooding.
+  - Public preview builds use the dedicated macOS preview updater. Every update manifest is signed with the Tabs Ed25519 release key, and the app verifies that signature plus the selected ZIP's SHA-512 digest before staging it.
+  - The same handwritten `.github/release-notes/vX.Y.Z.md` content is embedded in the Windows and AppImage update metadata and in the signed macOS preview manifest. The desktop update UI shows it before download or installation.
+  - The private update key is stored only in the `TABS_MAC_UPDATE_PRIVATE_KEY` GitHub Actions secret. The matching public key is embedded in `apps/desktop/src/macPreviewUpdater.ts`. Losing the private key requires a manual-install migration; never rotate it silently.
+  - The updater performs an atomic same-volume application swap with rollback. It does not clear quarantine, disable Gatekeeper, request administrator privileges, or claim that the build is Apple-notarized.
+  - Users must still approve the first downloaded build in System Settings > Privacy & Security. Ad-hoc signatures do not provide stable Apple code identity, so privacy or Keychain permissions may need to be granted again after an update.
+  - Builds released before this updater was embedded cannot bootstrap themselves and need one final manual installation. Later preview releases can update in place.
 - **Production Distribution (Explicitly Deferred)**:
   - Public macOS release distribution requires Apple Developer ID Application code signing and Apple Notarization to pass Gatekeeper without user security overrides.
   - Because an Apple Developer account is not currently active, **Apple Developer ID signing and notarization are an explicitly deferred production-release requirement**.
@@ -62,6 +67,7 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
   - Background checks run on startup delay + interval.
   - No automatic download or install.
   - The desktop UI shows a rocket update button when an update is available; click once to download, click again after download to restart/install.
+  - Hovering or focusing the update button shows a concise release-notes preview. Settings > About provides a keyboard-accessible, scrollable "What's new" popover with the full Markdown notes.
 - Provider: GitHub Releases (`provider: github`) configured at build time.
 - Repository slug source:
   - `TABS_DESKTOP_UPDATE_REPOSITORY` (format `owner/repo`), if set.
@@ -70,12 +76,18 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
   - set `TABS_DESKTOP_UPDATE_GITHUB_TOKEN` (or `GH_TOKEN`) in the desktop app runtime environment.
   - the app forwards it as an `Authorization: Bearer <token>` request header for updater HTTP calls.
 - Required release assets for updater:
-  - platform installers (`.exe`, `.dmg`, `.AppImage`, plus macOS `.zip` for Squirrel.Mac update payloads)
-  - `latest*.yml` metadata
+  - platform installers (`.exe`, `.dmg`, `.AppImage`, plus macOS `.zip` payloads for the preview updater)
+  - `latest.yml` and `latest-linux.yml` metadata for Windows and AppImage updates
   - `*.blockmap` files (used for differential downloads)
-- macOS metadata note:
-  - `electron-updater` reads `latest-mac.yml` for both Intel and Apple Silicon.
-  - The workflow merges the per-arch mac manifests into one `latest-mac.yml` before publishing the GitHub Release.
+- Unsigned macOS preview updater assets:
+  - `Tabs-<version>-arm64.zip` and `Tabs-<version>-x64.zip`
+  - `tabs-mac-preview-update.json`
+  - `tabs-mac-preview-update.json.sig`
+  - The release workflow fails rather than publishing an unsigned preview manifest when `TABS_MAC_UPDATE_PRIVATE_KEY` is unavailable.
+  - macOS does not consume `latest-mac.yml`; the dedicated signed JSON manifest selects and authenticates the correct architecture ZIP.
+- Release-note integrity:
+  - Every platform uses `.github/release-notes/vX.Y.Z.md` as its source.
+  - The workflow verifies that `latest.yml` and `latest-linux.yml` contain the exact notes before publishing, while the macOS notes are covered by the Ed25519 manifest signature.
 
 ## 0) npm OIDC trusted publishing setup (CLI)
 

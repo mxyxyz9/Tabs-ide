@@ -65,6 +65,7 @@ import {
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
+import { MacPreviewUpdater } from "./macPreviewUpdater";
 import { CodeHostManager, resolveCodeHostConfig } from "./codeHostManager";
 import { BrowserHostManager } from "./browserHostManager";
 import { resolveUserDataPathWithFs } from "./userDataPath";
@@ -682,6 +683,7 @@ let updateCheckInFlight = false;
 let updateDownloadInFlight = false;
 let updaterConfigured = false;
 let updateState: DesktopUpdateState = initialUpdateState();
+let macPreviewUpdater: MacPreviewUpdater | null = null;
 
 function resolveUpdaterErrorContext(): DesktopUpdateErrorContext {
   if (updateDownloadInFlight) return "download";
@@ -1341,6 +1343,20 @@ function setUpdateState(patch: Partial<DesktopUpdateState>): void {
   emitUpdateState();
 }
 
+function normalizeUpdateReleaseNotes(
+  notes: string | ReadonlyArray<{ readonly note?: string | null }> | null | undefined,
+): string | null {
+  const text = Array.isArray(notes)
+    ? notes
+        .map((entry) => entry.note?.trim() ?? "")
+        .filter(Boolean)
+        .join("\n\n")
+    : typeof notes === "string"
+      ? notes.trim()
+      : "";
+  return text ? text.slice(0, 50_000) : null;
+}
+
 function shouldEnableAutoUpdates(): boolean {
   return (
     getAutoUpdateDisabledReason({
@@ -1349,7 +1365,6 @@ function shouldEnableAutoUpdates(): boolean {
       platform: process.platform,
       appImage: process.env.APPIMAGE,
       disabledByEnv: process.env.TABS_DISABLE_AUTO_UPDATE === "1",
-      macUpdatesSupported: process.env.TABS_ENABLE_MAC_AUTO_UPDATE === "1",
     }) === null
   );
 }
@@ -1367,7 +1382,23 @@ async function checkForUpdates(reason: string): Promise<void> {
   console.info(`[desktop-updater] Checking for updates (${reason})...`);
 
   try {
-    await autoUpdater.checkForUpdates();
+    if (macPreviewUpdater) {
+      const update = await macPreviewUpdater.checkForUpdates();
+      if (update) {
+        setUpdateState(
+          reduceDesktopUpdateStateOnUpdateAvailable(
+            updateState,
+            update.version,
+            new Date().toISOString(),
+            update.releaseNotes,
+          ),
+        );
+      } else {
+        setUpdateState(reduceDesktopUpdateStateOnNoUpdate(updateState, new Date().toISOString()));
+      }
+    } else {
+      await autoUpdater.checkForUpdates();
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     setUpdateState(
@@ -1392,7 +1423,16 @@ async function downloadAvailableUpdate(): Promise<{
   console.info("[desktop-updater] Downloading update...");
 
   try {
-    await autoUpdater.downloadUpdate();
+    if (macPreviewUpdater) {
+      const version = await macPreviewUpdater.downloadUpdate((percent) => {
+        if (shouldBroadcastDownloadProgress(updateState, percent) || updateState.message !== null) {
+          setUpdateState(reduceDesktopUpdateStateOnDownloadProgress(updateState, percent));
+        }
+      });
+      setUpdateState(reduceDesktopUpdateStateOnDownloadComplete(updateState, version));
+    } else {
+      await autoUpdater.downloadUpdate();
+    }
     return { accepted: true, completed: true };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1415,6 +1455,9 @@ async function installDownloadedUpdate(): Promise<{
   isQuitting = true;
   clearUpdatePollTimer();
   try {
+    if (macPreviewUpdater) {
+      await macPreviewUpdater.stageUpdate();
+    }
     try {
       writeDesktopLogHeader("flushing Browser session storage before update...");
       await browserHostManager.flushAndShutdownSessions();
@@ -1441,7 +1484,12 @@ async function installDownloadedUpdate(): Promise<{
       ),
     ]);
     isQuittingConfirmed = true;
-    autoUpdater.quitAndInstall();
+    if (macPreviewUpdater) {
+      macPreviewUpdater.quitAndInstall(process.pid);
+      app.exit(0);
+    } else {
+      autoUpdater.quitAndInstall();
+    }
     return { accepted: true, completed: true };
   } catch (error: unknown) {
     const message = formatErrorMessage(error);
@@ -1466,12 +1514,39 @@ function configureAutoUpdater(): void {
 
   const githubToken =
     process.env.TABS_DESKTOP_UPDATE_GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || "";
+  const appUpdateYml = readAppUpdateYml();
+  if (process.platform === "darwin") {
+    const owner = appUpdateYml?.owner?.trim();
+    const repo = appUpdateYml?.repo?.trim();
+    if (!owner || !repo) {
+      updaterConfigured = false;
+      setUpdateState({
+        ...updateState,
+        enabled: false,
+        status: "disabled",
+        message: "The macOS preview update repository is not configured.",
+      });
+      return;
+    }
+    const appBundlePath = Path.resolve(process.execPath, "..", "..", "..");
+    macPreviewUpdater = new MacPreviewUpdater({
+      appBundlePath,
+      currentVersion: app.getVersion(),
+      repository: `${owner}/${repo}`,
+      arch: desktopRuntimeInfo.hostArch === "arm64" ? "arm64" : "x64",
+      tempDirectory: app.getPath("temp"),
+      ...(githubToken ? { requestHeaders: { Authorization: `Bearer ${githubToken}` } } : {}),
+    });
+    setUpdateState({ ...updateState, distribution: "unsigned-preview" });
+    console.info(
+      "[desktop-updater] Using Ed25519-verified macOS preview updates. The app remains ad-hoc signed and is not notarized.",
+    );
+  }
   if (githubToken) {
     // When a token is provided, re-configure the feed with `private: true` so
     // electron-updater uses the GitHub API (api.github.com) instead of the
     // public Atom feed (github.com/…/releases.atom) which rejects Bearer auth.
-    const appUpdateYml = readAppUpdateYml();
-    if (appUpdateYml?.provider === "github") {
+    if (!macPreviewUpdater && appUpdateYml?.provider === "github") {
       autoUpdater.setFeedURL({
         ...appUpdateYml,
         provider: "github" as const,
@@ -1496,64 +1571,73 @@ function configureAutoUpdater(): void {
     );
   }
 
-  autoUpdater.on("checking-for-update", () => {
-    console.info("[desktop-updater] Looking for updates...");
-  });
-  autoUpdater.on("update-available", (info) => {
-    setUpdateState(
-      reduceDesktopUpdateStateOnUpdateAvailable(
-        updateState,
-        info.version,
-        new Date().toISOString(),
-      ),
-    );
-    lastLoggedDownloadMilestone = -1;
-    console.info(`[desktop-updater] Update available: ${info.version}`);
-  });
-  autoUpdater.on("update-not-available", () => {
-    setUpdateState(reduceDesktopUpdateStateOnNoUpdate(updateState, new Date().toISOString()));
-    lastLoggedDownloadMilestone = -1;
-    console.info("[desktop-updater] No updates available.");
-  });
-  autoUpdater.on("error", (error) => {
-    const message = formatErrorMessage(error);
-    if (
-      !autoUpdater.disableDifferentialDownload &&
-      message.toLowerCase().includes("differential")
-    ) {
-      console.warn("[desktop-updater] Differential download failed, falling back to full download");
-      autoUpdater.disableDifferentialDownload = true;
-    }
-    if (!updateCheckInFlight && !updateDownloadInFlight) {
-      setUpdateState({
-        status: "error",
-        message,
-        checkedAt: new Date().toISOString(),
-        downloadPercent: null,
-        errorContext: resolveUpdaterErrorContext(),
-        canRetry: updateState.availableVersion !== null || updateState.downloadedVersion !== null,
-      });
-    }
-    console.error(`[desktop-updater] Updater error: ${message}`);
-  });
-  autoUpdater.on("download-progress", (progress) => {
-    const percent = Math.floor(progress.percent);
-    if (
-      shouldBroadcastDownloadProgress(updateState, progress.percent) ||
-      updateState.message !== null
-    ) {
-      setUpdateState(reduceDesktopUpdateStateOnDownloadProgress(updateState, progress.percent));
-    }
-    const milestone = percent - (percent % 10);
-    if (milestone > lastLoggedDownloadMilestone) {
-      lastLoggedDownloadMilestone = milestone;
-      console.info(`[desktop-updater] Download progress: ${percent}%`);
-    }
-  });
-  autoUpdater.on("update-downloaded", (info) => {
-    setUpdateState(reduceDesktopUpdateStateOnDownloadComplete(updateState, info.version));
-    console.info(`[desktop-updater] Update downloaded: ${info.version}`);
-  });
+  if (!macPreviewUpdater)
+    autoUpdater.on("checking-for-update", () => {
+      console.info("[desktop-updater] Looking for updates...");
+    });
+  if (!macPreviewUpdater)
+    autoUpdater.on("update-available", (info) => {
+      setUpdateState(
+        reduceDesktopUpdateStateOnUpdateAvailable(
+          updateState,
+          info.version,
+          new Date().toISOString(),
+          normalizeUpdateReleaseNotes(info.releaseNotes),
+        ),
+      );
+      lastLoggedDownloadMilestone = -1;
+      console.info(`[desktop-updater] Update available: ${info.version}`);
+    });
+  if (!macPreviewUpdater)
+    autoUpdater.on("update-not-available", () => {
+      setUpdateState(reduceDesktopUpdateStateOnNoUpdate(updateState, new Date().toISOString()));
+      lastLoggedDownloadMilestone = -1;
+      console.info("[desktop-updater] No updates available.");
+    });
+  if (!macPreviewUpdater)
+    autoUpdater.on("error", (error) => {
+      const message = formatErrorMessage(error);
+      if (
+        !autoUpdater.disableDifferentialDownload &&
+        message.toLowerCase().includes("differential")
+      ) {
+        console.warn(
+          "[desktop-updater] Differential download failed, falling back to full download",
+        );
+        autoUpdater.disableDifferentialDownload = true;
+      }
+      if (!updateCheckInFlight && !updateDownloadInFlight) {
+        setUpdateState({
+          status: "error",
+          message,
+          checkedAt: new Date().toISOString(),
+          downloadPercent: null,
+          errorContext: resolveUpdaterErrorContext(),
+          canRetry: updateState.availableVersion !== null || updateState.downloadedVersion !== null,
+        });
+      }
+      console.error(`[desktop-updater] Updater error: ${message}`);
+    });
+  if (!macPreviewUpdater)
+    autoUpdater.on("download-progress", (progress) => {
+      const percent = Math.floor(progress.percent);
+      if (
+        shouldBroadcastDownloadProgress(updateState, progress.percent) ||
+        updateState.message !== null
+      ) {
+        setUpdateState(reduceDesktopUpdateStateOnDownloadProgress(updateState, progress.percent));
+      }
+      const milestone = percent - (percent % 10);
+      if (milestone > lastLoggedDownloadMilestone) {
+        lastLoggedDownloadMilestone = milestone;
+        console.info(`[desktop-updater] Download progress: ${percent}%`);
+      }
+    });
+  if (!macPreviewUpdater)
+    autoUpdater.on("update-downloaded", (info) => {
+      setUpdateState(reduceDesktopUpdateStateOnDownloadComplete(updateState, info.version));
+      console.info(`[desktop-updater] Update downloaded: ${info.version}`);
+    });
 
   clearUpdatePollTimer();
 

@@ -95,6 +95,7 @@ import {
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
+  getDesktopUpdateReleaseNotesPreview,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
   shouldShowArm64IntelBuildWarning,
@@ -1813,6 +1814,9 @@ export default function Sidebar() {
   const desktopUpdateTooltip = desktopUpdateState
     ? getDesktopUpdateButtonTooltip(desktopUpdateState)
     : "Update available";
+  const desktopUpdateReleaseNotesPreview = desktopUpdateState
+    ? getDesktopUpdateReleaseNotesPreview(desktopUpdateState)
+    : null;
 
   const desktopUpdateButtonDisabled = isDesktopUpdateButtonDisabled(desktopUpdateState);
   const desktopUpdateButtonAction = desktopUpdateState
@@ -1965,7 +1969,18 @@ export default function Sidebar() {
                     </button>
                   }
                 />
-                <TooltipPopup side="bottom">{desktopUpdateTooltip}</TooltipPopup>
+                <TooltipPopup
+                  side="bottom"
+                  align="end"
+                  className="max-w-sm whitespace-pre-line text-left"
+                >
+                  <span className="font-medium">{desktopUpdateTooltip}</span>
+                  {desktopUpdateReleaseNotesPreview ? (
+                    <span className="mt-1 block text-muted-foreground">
+                      {desktopUpdateReleaseNotesPreview}
+                    </span>
+                  ) : null}
+                </TooltipPopup>
               </Tooltip>
             )}
           </SidebarHeader>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { DesktopUpdateState } from "@tabs/contracts";
 import {
   type DesktopUpdateButtonAction,
+  describeDesktopUpdate,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
   isDesktopUpdateButtonDisabled,
@@ -10,6 +11,7 @@ import {
 import { isElectron } from "../../env";
 import { APP_VERSION } from "../../branding";
 import { Button } from "../ui/button";
+import { DesktopUpdateReleaseNotes } from "../DesktopUpdateReleaseNotes";
 import { SettingsRow, SettingsSection, SettingsSectionHeader } from "./SettingsLayout";
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
@@ -53,35 +55,61 @@ function uninstallInstructions(os: DesktopOsKind): string[] {
   }
 }
 
-function describeDesktopUpdate(state: DesktopUpdateState): string {
-  switch (state.status) {
-    case "disabled":
-      return "Automatic updates are disabled for this build.";
-    case "checking":
-      return "Checking for updates…";
-    case "up-to-date":
-      return "Tabs is up to date.";
-    case "available":
-      return `Version ${state.availableVersion ?? ""} is available to download.`.trim();
-    case "downloading":
-      return `Downloading update${
-        typeof state.downloadPercent === "number" ? ` (${Math.floor(state.downloadPercent)}%)` : ""
-      }…`;
-    case "downloaded":
-      return `Version ${
-        state.downloadedVersion ?? state.availableVersion ?? ""
-      } is ready. Restart to install.`.trim();
-    case "error":
-      return state.message ?? "The last update attempt failed.";
-    default:
-      return "Tabs is up to date.";
-  }
-}
-
 function desktopUpdateButtonLabel(action: DesktopUpdateButtonAction): string {
   if (action === "install") return "Restart & install";
   if (action === "download") return "Download update";
   return "";
+}
+
+function DesktopUpdateControl({
+  state,
+  runUpdateAction,
+}: {
+  readonly state: DesktopUpdateState;
+  readonly runUpdateAction: (action: DesktopUpdateButtonAction) => void;
+}) {
+  const action = resolveDesktopUpdateButtonAction(state);
+  if (action === "none") {
+    if (state.status === "disabled" || state.status === "error") {
+      return (
+        <Button
+          size="xs"
+          variant="outline"
+          className="cursor-pointer"
+          onClick={() => void window.desktopBridge?.openExternal(TABS_RELEASES_URL)}
+        >
+          View releases
+        </Button>
+      );
+    }
+    return (
+      <div className="flex items-center gap-1">
+        <DesktopUpdateReleaseNotes state={state} />
+        <span className="text-xs text-muted-foreground">
+          {state.status === "checking"
+            ? "Checking…"
+            : state.status === "downloading"
+              ? "Downloading…"
+              : "Up to date"}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <DesktopUpdateReleaseNotes state={state} />
+      <Button
+        size="xs"
+        variant="outline"
+        className="cursor-pointer"
+        disabled={isDesktopUpdateButtonDisabled(state)}
+        title={getDesktopUpdateButtonTooltip(state)}
+        onClick={() => runUpdateAction(action)}
+      >
+        {desktopUpdateButtonLabel(action)}
+      </Button>
+    </div>
+  );
 }
 
 export function AboutSettings() {
@@ -144,6 +172,11 @@ export function AboutSettings() {
                 typeof updateState.downloadPercent === "number" ? (
                 <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-border">
                   <div
+                    role="progressbar"
+                    aria-label="Downloading Tabs update"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.floor(updateState.downloadPercent)}
                     className="h-full rounded-full bg-primary transition-[width]"
                     style={{
                       width: `${Math.floor(updateState.downloadPercent)}%`,
@@ -152,40 +185,7 @@ export function AboutSettings() {
                 </div>
               ) : null
             }
-            control={(() => {
-              const action = resolveDesktopUpdateButtonAction(updateState);
-              if (action === "none") {
-                if (updateState.status === "disabled" || updateState.status === "error") {
-                  return (
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      className="cursor-pointer"
-                      onClick={() => void window.desktopBridge?.openExternal(TABS_RELEASES_URL)}
-                    >
-                      View releases
-                    </Button>
-                  );
-                }
-                return (
-                  <span className="text-xs text-muted-foreground">
-                    {updateState.status === "checking" ? "Checking…" : "Up to date"}
-                  </span>
-                );
-              }
-              return (
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="cursor-pointer"
-                  disabled={isDesktopUpdateButtonDisabled(updateState)}
-                  title={getDesktopUpdateButtonTooltip(updateState)}
-                  onClick={() => runUpdateAction(action)}
-                >
-                  {desktopUpdateButtonLabel(action)}
-                </Button>
-              );
-            })()}
+            control={<DesktopUpdateControl state={updateState} runUpdateAction={runUpdateAction} />}
           />
         ) : null}
 

@@ -126,11 +126,13 @@ describe("updateMachine", () => {
       },
       "1.1.0",
       "2026-03-04T00:00:00.000Z",
+      "## What changed\n\n- Faster startup",
     );
     const downloading = reduceDesktopUpdateStateOnDownloadStart(available);
     const progress = reduceDesktopUpdateStateOnDownloadProgress(downloading, 55.5);
 
     expect(available.status).toBe("available");
+    expect(available.releaseNotes).toContain("Faster startup");
     expect(downloading.status).toBe("downloading");
     expect(downloading.downloadPercent).toBe(0);
     expect(progress.downloadPercent).toBe(55.5);

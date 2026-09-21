@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@tabs/contracts";
 
 import {
+  describeDesktopUpdate,
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
+  getDesktopUpdateReleaseNotesPreview,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
   shouldHighlightDesktopUpdateError,
@@ -145,6 +147,27 @@ describe("getDesktopUpdateActionError", () => {
 });
 
 describe("desktop update UI helpers", () => {
+  it("discloses the unsigned preview update channel", () => {
+    expect(
+      describeDesktopUpdate({
+        ...baseState,
+        status: "up-to-date",
+        distribution: "unsigned-preview",
+      }),
+    ).toContain("not Apple-notarized");
+  });
+
+  it("creates a concise plain-text release notes preview for the update tooltip", () => {
+    expect(
+      getDesktopUpdateReleaseNotesPreview({
+        ...baseState,
+        status: "available",
+        availableVersion: "1.1.0",
+        releaseNotes: "## What changed\n\n- **Faster startup**\n- Better updates",
+      }),
+    ).toBe("What changed\n\n• Faster startup\n• Better updates");
+  });
+
   it("toasts only for accepted incomplete actions", () => {
     expect(
       shouldToastDesktopUpdateActionResult({

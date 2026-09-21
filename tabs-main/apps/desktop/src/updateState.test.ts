@@ -87,6 +87,18 @@ describe("getAutoUpdateDisabledReason", () => {
     ).toContain("TABS_DISABLE_AUTO_UPDATE");
   });
 
+  it("allows packaged macOS preview updates without Developer ID", () => {
+    expect(
+      getAutoUpdateDisabledReason({
+        isDevelopment: false,
+        isPackaged: true,
+        platform: "darwin",
+        appImage: undefined,
+        disabledByEnv: false,
+      }),
+    ).toBeNull();
+  });
+
   it("reports linux non-AppImage builds as disabled", () => {
     expect(
       getAutoUpdateDisabledReason({

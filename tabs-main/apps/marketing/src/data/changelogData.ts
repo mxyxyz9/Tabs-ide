@@ -21,15 +21,48 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 155;
+export const TOTAL_TAGS_COUNT = 156;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.13",
+    title: "In-app desktop updates and release notes preview",
+    date: "September 21, 2026",
+    shortDate: "Sep 21",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Tabs now checks for desktop updates directly within the application, previews release notes before downloading or installing, and provides in-app updates for preview builds on macOS.",
+    highlights: [
+      "macOS preview builds now verify and install updates in place, with automatic cryptographic signature and checksum verification.",
+      "Hover over the update button or check About settings to review what changed before downloading or restarting.",
+      "See real-time download percentage directly in the update button tooltip and About settings.",
+      "Fresh product screenshots, social cards, and updated release documentation on buildwithtabs.com.",
+    ],
+    categories: [
+      {
+        title: "Desktop updates",
+        items: [
+          "In-app preview updates on macOS verified with Ed25519 signatures and SHA-512 digests.",
+          "Release notes preview in the sidebar update button and full notes in About settings.",
+          "Real-time download progress tracking in update tooltips and settings.",
+        ],
+      },
+      {
+        title: "Documentation & marketing",
+        items: [
+          "Updated marketing screenshots and social previews.",
+          "Documented macOS preview updater architecture and verification guarantees.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.12",
     title: "Work with two agent threads side by side",
     date: "September 20, 2026",
     shortDate: "Sep 20",
-    isLatest: true,
+    isLatest: false,
     type: "feature",
     summary:
       "Open two agent conversations in the same Tabs window, keep a separate draft in each pane, and resize the view to suit your screen.",

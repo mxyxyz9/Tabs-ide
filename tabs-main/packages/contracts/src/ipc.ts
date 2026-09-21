@@ -308,6 +308,7 @@ export type DesktopTheme =
   | "solarized-light"
   | (string & {});
 export type DesktopUpdateChannel = "latest" | "nightly";
+export type DesktopUpdateDistribution = "platform-signed" | "unsigned-preview";
 export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
 
 export const DesktopUpdateStatusSchema = Schema.Literals([
@@ -323,6 +324,10 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.String;
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
+export const DesktopUpdateDistributionSchema = Schema.Literals([
+  "platform-signed",
+  "unsigned-preview",
+]);
 export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly"]);
 
 export interface DesktopAppBranding {
@@ -353,11 +358,13 @@ export interface DesktopUpdateState {
   enabled: boolean;
   status: DesktopUpdateStatus;
   channel?: DesktopUpdateChannel;
+  distribution?: DesktopUpdateDistribution;
   currentVersion: string;
   hostArch: DesktopRuntimeArch;
   appArch: DesktopRuntimeArch;
   runningUnderArm64Translation: boolean;
   availableVersion: string | null;
+  releaseNotes?: string | null;
   downloadedVersion: string | null;
   downloadPercent: number | null;
   checkedAt: string | null;
@@ -370,11 +377,13 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   enabled: Schema.Boolean,
   status: DesktopUpdateStatusSchema,
   channel: Schema.optionalKey(DesktopUpdateChannelSchema),
+  distribution: Schema.optionalKey(DesktopUpdateDistributionSchema),
   currentVersion: Schema.String,
   hostArch: DesktopRuntimeArchSchema,
   appArch: DesktopRuntimeArchSchema,
   runningUnderArm64Translation: Schema.Boolean,
   availableVersion: Schema.NullOr(Schema.String),
+  releaseNotes: Schema.optionalKey(Schema.NullOr(Schema.String)),
   downloadedVersion: Schema.NullOr(Schema.String),
   downloadPercent: Schema.NullOr(Schema.Number),
   checkedAt: Schema.NullOr(Schema.String),
