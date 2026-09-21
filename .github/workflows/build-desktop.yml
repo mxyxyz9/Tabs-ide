@@ -101,8 +101,22 @@ jobs:
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
         run: |
           npm install --ignore-scripts
-          cd build && npm install --ignore-scripts && cd ..
-          node --experimental-strip-types build/npm/electronTypes.ts
+          # Download electron.d.ts types required for workbench compilation.
+          # GitHub release assets can intermittently return 5xx responses.
+          for attempt in 1 2 3 4 5; do
+            if node --experimental-strip-types build/npm/electronTypes.ts; then
+              break
+            fi
+
+            if [[ "$attempt" == 5 ]]; then
+              echo "::error::Unable to download electron.d.ts after $attempt attempts"
+              exit 1
+            fi
+
+            delay=$((attempt * 15))
+            echo "::warning::Electron type download failed; retrying in ${delay}s (attempt ${attempt}/5)"
+            sleep "$delay"
+          done
           # Remove cpu-features (optional dependency of ssh2) which fails to compile
           # against modern Electron/V8 due to nan pointer tagging deprecation.
           rm -rf node_modules/cpu-features
