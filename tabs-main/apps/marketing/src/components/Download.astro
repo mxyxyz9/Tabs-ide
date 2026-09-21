@@ -58,7 +58,9 @@ const hardwareThemes: Record<
   compact ? (
     <div class="download-block compact">
       <a class="cta" href="/downloads">
-        Download Tabs IDE <span aria-hidden="true">↗</span>
+        <canvas class="cta-liquid-canvas" aria-hidden="true"></canvas>
+        <span class="cta-label">Download Tabs IDE</span>
+        <span class="cta-arrow" aria-hidden="true">↗</span>
       </a>
       <span class="download-meta">
         <span data-version>{latest.tag_name}</span> / macOS, Windows &amp; Linux

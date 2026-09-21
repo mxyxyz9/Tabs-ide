@@ -8,16 +8,23 @@ import { RELEASES_URL } from "../../lib/releases";
 
 <article data-concept="1" class="headspace hs-changelog-article">
   <header class="hs-nav hs-wrap">
-    <a class="hs-brand" href="/" aria-label="Tabs IDE home">
-      <TabsLogo size={32} />
-      <span>tabs<span class="hs-brand-suffix">IDE</span></span>
-    </a>
+    <div class="hs-brand-lockup">
+      <a class="hs-brand" href="/" aria-label="Tabs IDE home">
+        <TabsLogo size={32} />
+        <span>Tabs<span class="hs-brand-suffix">IDE</span></span>
+      </a>
+      <span class="hs-brand-divider" aria-hidden="true"></span>
+      <div class="hs-access-tag" aria-label="Early Access">
+        <span>EARLY</span>
+        <span>ACCESS</span>
+      </div>
+    </div>
     <nav aria-label="Page navigation">
       <a href="/#v2-workspace">Inside Tabs</a>
       <a href="/changelog" aria-current="page">What's new</a>
       <a href="https://github.com/mxyxyz9/Tabs-ide">GitHub <Icon name="ArrowUpRight" size={14} /></a>
     </nav>
-    <a class="hs-nav-download" href="/downloads">Get Tabs <Icon name="ArrowDown" size={16} /></a>
+    <a class="hs-nav-download" href="/downloads"><span class="btn-fill" aria-hidden="true"></span><span>Get Tabs</span> <Icon name="ArrowDown" size={16} /></a>
   </header>
 
   <section class="hs-cl-hero hs-wrap">

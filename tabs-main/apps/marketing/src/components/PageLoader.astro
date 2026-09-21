@@ -2,7 +2,19 @@
 import TabsLogo from "./TabsLogo.astro";
 ---
 <div id="tabs-page-loader" class="page-loader" hidden>
-  <div class="loader-wordmark"><TabsLogo size={26} /><span>tabs</span></div>
+  <div class="loader-wordmark">
+    <div class="hs-brand-lockup">
+      <div class="hs-brand">
+        <TabsLogo size={26} />
+        <span>Tabs<span class="hs-brand-suffix">IDE</span></span>
+      </div>
+      <span class="hs-brand-divider" aria-hidden="true"></span>
+      <div class="hs-access-tag" aria-label="Early Access">
+        <span>EARLY</span>
+        <span>ACCESS</span>
+      </div>
+    </div>
+  </div>
   <div class="loader-composition" aria-hidden="true">
     <svg class="loader-drawing" viewBox="0 0 360 280" fill="none">
       <g class="sheet sheet-back"><path pathLength="100" d="M86 78V62a10 10 0 0 1 10-10h57l19 19h94a10 10 0 0 1 10 10v117a10 10 0 0 1-10 10H96a10 10 0 0 1-10-10V78Z" /></g>
@@ -22,8 +34,26 @@ import TabsLogo from "./TabsLogo.astro";
   .page-loader { position:fixed; inset:0; z-index:99999; background:#fbfcfe; color:#263149; overflow:hidden; clip-path:inset(0 0 0 0); transition:clip-path .95s cubic-bezier(.76,0,.24,1),visibility 0s .95s; }
   .page-loader[hidden] { display:none; }
   .page-loader.loader-dismissed { clip-path:inset(0 0 100% 0); visibility:hidden; pointer-events:none; }
-  .loader-wordmark { position:absolute; top:6.5%; left:7%; display:flex; gap:8px; align-items:center; color:#3458f5; }
-  .loader-wordmark span { font-size:28px; font-weight:750; letter-spacing:-1.5px; }
+  .loader-wordmark { position:absolute; top:6.5%; left:7%; display:flex; align-items:center; }
+  .loader-wordmark .hs-brand-lockup { display:flex; align-items:center; min-width:max-content; }
+  .loader-wordmark .hs-brand { display:flex; align-items:center; gap:9px; color:#3259ed; text-decoration:none; }
+  .loader-wordmark .hs-brand svg { height:26px; width:auto; flex-shrink:0; }
+  .loader-wordmark .hs-brand > span { font-family:"DM Sans", sans-serif; font-size:24px; letter-spacing:-0.03em; font-weight:700; display:inline-flex; align-items:baseline; line-height:1; color:#3259ed; }
+  .loader-wordmark .hs-brand-suffix { font-size:24px; font-weight:350; letter-spacing:-0.01em; color:#93a7fd; margin-left:8px; line-height:1; border:none; background:transparent; padding:0; vertical-align:baseline; }
+  .loader-wordmark .hs-brand-divider { display:inline-block; width:1.5px; height:20px; background:#e2e8f0; margin:0 15px; flex-shrink:0; }
+  .loader-wordmark .hs-access-tag { display:inline-flex; flex-direction:column; justify-content:center; font-family:"DM Sans", sans-serif; font-size:8px; font-weight:800; letter-spacing:0.14em; line-height:1.15; color:#0e172a; text-transform:uppercase; user-select:none; white-space:nowrap; }
+  @media(max-width:760px) {
+    .loader-wordmark .hs-brand svg { height:22px; }
+    .loader-wordmark .hs-brand > span, .loader-wordmark .hs-brand-suffix { font-size:20px; }
+    .loader-wordmark .hs-brand-divider { height:17px; margin:0 12px; }
+    .loader-wordmark .hs-access-tag { font-size:7px; letter-spacing:0.12em; }
+  }
+  @media(max-width:480px) {
+    .loader-wordmark .hs-brand svg { height:19px; }
+    .loader-wordmark .hs-brand > span, .loader-wordmark .hs-brand-suffix { font-size:17px; }
+    .loader-wordmark .hs-brand-divider { height:14px; margin:0 8px; }
+    .loader-wordmark .hs-access-tag { font-size:6.5px; letter-spacing:0.1em; }
+  }
   .loader-composition { position:absolute; top:45%; left:50%; transform:translate(-50%,-50%); width:min(360px,85vw); }
   .loader-drawing { display:block; width:100%; overflow:visible; }
   .sheet { transform-origin:180px 140px; }

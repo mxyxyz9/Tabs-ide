@@ -85,10 +85,10 @@
   flex-shrink: 0;
 }
 .edition-two .e2-github-star:is(:hover, :focus-visible) {
-  color: var(--hs-blue);
-  background: #f5f7ff;
-  border-color: #b9c7ee;
-  box-shadow: 0 3px 10px #3259ed0b;
+  color: white;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: 0 8px 26px -4px rgba(50, 89, 237, 0.35);
 }
 .edition-two .e2-github-star:focus-visible {
   outline: 2px solid var(--hs-blue);

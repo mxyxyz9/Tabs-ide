@@ -19,25 +19,84 @@
   justify-content: space-between;
   gap: 24px;
 }
+.headspace .hs-brand-lockup {
+  display: flex;
+  align-items: center;
+  min-width: max-content;
+}
 .headspace .hs-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   color: var(--hs-blue);
+  text-decoration: none;
+}
+.headspace .hs-brand svg {
+  height: 26px;
+  width: auto;
+  flex-shrink: 0;
 }
 .headspace .hs-brand > span {
-  font-size: 36px;
-  letter-spacing: -2px;
-  font-weight: 650;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: baseline;
+  line-height: 1;
 }
 .headspace .hs-brand-suffix {
-  font-size: 11px;
-  letter-spacing: 0;
-  border: 1px solid #3259ed40;
-  border-radius: 5px;
-  padding: 3px 5px;
+  font-size: 24px;
+  font-weight: 350;
+  letter-spacing: -0.01em;
+  color: #93a7fd;
   margin-left: 8px;
-  vertical-align: middle;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  vertical-align: baseline;
+}
+.headspace .hs-brand-divider {
+  display: inline-block;
+  width: 1.5px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 15px;
+  flex-shrink: 0;
+}
+.headspace .hs-access-tag {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.15;
+  color: #0e172a;
+  text-transform: uppercase;
+  user-select: none;
+  white-space: nowrap;
+}
+.headspace .hs-access-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: #1e2847;
+  color: #c8d3ec;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+.headspace .hs-access-badge:hover {
+  background: #263258;
 }
 .headspace .hs-nav nav {
   display: flex;
@@ -63,7 +122,7 @@
   font-size: 14px;
 }
 .headspace .hs-nav-download:hover {
-  background: #edf1fd;
+  background: transparent;
 }
 .headspace .hs-hero {
   display: grid;
@@ -111,13 +170,39 @@
   margin-top: 29px;
 }
 .headspace .cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 17px 22px;
   border-radius: 8px;
   gap: 35px;
   background: var(--hs-blue);
   color: white;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 5px 18px #3259ed25;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.headspace .cta .cta-label {
+  font-family: inherit;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.headspace .cta .cta-arrow {
+  font-size: 22px !important;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
 }
 .headspace .cta:hover {
   transform: translateY(-2px);
@@ -685,6 +770,20 @@
 .headspace .hs-end .cta {
   color: #2544b2;
   background: white;
+}
+.headspace .hs-end .cta .cta-label,
+.headspace .hs-end .cta .cta-arrow {
+  color: #2544b2;
+}
+.headspace .hs-end .cta:hover {
+  color: #2544b2;
+  background: white;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.18);
+}
+.headspace .hs-end .cta:hover .cta-label,
+.headspace .hs-end .cta:hover .cta-arrow {
+  color: #2544b2;
 }
 .headspace .hs-end .download-meta {
   color: #d4dfff;
@@ -1345,8 +1444,31 @@
   .headspace .hs-nav nav {
     display: none;
   }
+  .headspace .hs-brand-lockup {
+    gap: 0;
+  }
+  .headspace .hs-brand svg {
+    height: 22px;
+  }
   .headspace .hs-brand > span {
-    font-size: 32px;
+    font-size: 20px;
+  }
+  .headspace .hs-brand-suffix {
+    font-size: 20px;
+    margin-left: 7px;
+  }
+  .headspace .hs-brand-divider {
+    height: 17px;
+    margin: 0 12px;
+  }
+  .headspace .hs-access-tag {
+    font-size: 7px;
+    letter-spacing: 0.12em;
+  }
+  .headspace .hs-access-badge {
+    font-size: 7.5px;
+    height: 18px;
+    padding: 0 6px;
   }
   .headspace .hs-hero {
     grid-template-columns: 1fr;
@@ -1543,7 +1665,33 @@
   }
 }
 
-/* ─── Headspace: Download & Changelog Pages ───────────────────────── */
+@media (max-width: 480px) {
+  .headspace .hs-brand svg {
+    height: 19px;
+  }
+  .headspace .hs-brand > span {
+    font-size: 17px;
+  }
+  .headspace .hs-brand-suffix {
+    font-size: 17px;
+    margin-left: 5px;
+  }
+  .headspace .hs-brand-divider {
+    height: 14px;
+    margin: 0 8px;
+  }
+  .headspace .hs-access-tag {
+    font-size: 6.5px;
+    letter-spacing: 0.1em;
+  }
+  .headspace .hs-access-badge {
+    font-size: 7px;
+    height: 16px;
+    padding: 0 5px;
+  }
+}
+
+
 .headspace.hs-download-article,
 .headspace.hs-changelog-article {
   background: #fbfcfe;
