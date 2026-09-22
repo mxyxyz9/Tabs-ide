@@ -2,6 +2,14 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.15] - 2026-09-22
+
+### Centered release notes dialog with dedicated close control
+
+- **Centered release notes dialog**: Replaced the edge-anchored popover with a spacious, centered modal dialog that gives release notes plenty of reading room across all display sizes.
+- **Dedicated close button**: Added an accessible top-right close button with an X icon, complementing keyboard escape and backdrop click to dismiss.
+- **Scroll-faded changelog panel**: Added a smooth, scroll-faded reading panel so you can easily browse long update notes while keeping titles and close actions anchored.
+
 ## [v1.3.14] - 2026-09-22
 
 ### Reliable settings drafts and input saving

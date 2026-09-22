@@ -21,15 +21,40 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 157;
+export const TOTAL_TAGS_COUNT = 158;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.15",
+    title: "Centered release notes dialog with dedicated close control",
+    date: "September 22, 2026",
+    shortDate: "Sep 22",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Tabs now opens software update release notes in a centered modal dialog with an accessible top-right close button, blurred backdrop scrim, and smooth scrolling.",
+    highlights: [
+      "Replaced the edge-anchored popover with a spacious, centered modal dialog that gives release notes plenty of reading room across all display sizes.",
+      "Added an accessible top-right close button with an X icon, complementing keyboard escape and backdrop click to dismiss.",
+      "Added a smooth, scroll-faded reading panel so you can easily browse long update notes while keeping titles and close actions anchored.",
+    ],
+    categories: [
+      {
+        title: "Desktop Experience",
+        items: [
+          "Centered release notes modal dialog with blurred backdrop scrim.",
+          "Dedicated top-right close button with X icon.",
+          "Scroll-faded reading area for clean changelog browsing.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.14",
     title: "Reliable settings drafts and input saving",
     date: "September 22, 2026",
     shortDate: "Sep 22",
-    isLatest: true,
+    isLatest: false,
     type: "feature",
     summary:
       "Tabs now isolates unsaved drafts in workspace settings, debounces continuous settings inputs with instant flush on blur or close, and ensures theme previews revert cleanly when cancelled.",

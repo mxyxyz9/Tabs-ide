@@ -1,3 +1,4 @@
+import "../index.css";
 import { expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-react";
@@ -50,4 +51,21 @@ test("does not show a changelog action when update metadata has no notes", async
   await expect
     .element(screen.getByRole("button", { name: "What's new in Tabs 1.4.0" }))
     .not.toBeInTheDocument();
+});
+
+test("dismisses release notes modal via close button (X mark) and Done button", async () => {
+  const screen = await render(<DesktopUpdateReleaseNotes state={availableUpdate} />);
+  const trigger = screen.getByRole("button", { name: "What's new in Tabs 1.4.0" });
+
+  await trigger.click();
+  const closeButton = page.getByRole("button", { name: "Close" });
+  await expect.element(closeButton).toBeVisible();
+  await userEvent.click(closeButton);
+  await expect.element(page.getByText("What’s new in Tabs 1.4.0")).not.toBeInTheDocument();
+
+  await trigger.click();
+  const doneButton = page.getByRole("button", { name: "Done" });
+  await expect.element(doneButton).toBeVisible();
+  await userEvent.click(doneButton);
+  await expect.element(page.getByText("What’s new in Tabs 1.4.0")).not.toBeInTheDocument();
 });

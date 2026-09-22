@@ -67,7 +67,7 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
   - Background checks run on startup delay + interval.
   - No automatic download or install.
   - The desktop UI shows a rocket update button when an update is available; click once to download, click again after download to restart/install.
-  - Hovering or focusing the update button shows a concise release-notes preview. Settings > About provides a keyboard-accessible, scrollable "What's new" popover with the full Markdown notes.
+  - Hovering or focusing the update button shows a concise release-notes preview. Settings > About provides a keyboard-accessible, scrollable "What's new" centered modal dialog with an X mark close button and full Markdown notes.
 - Provider: GitHub Releases (`provider: github`) configured at build time.
 - Repository slug source:
   - `TABS_DESKTOP_UPDATE_REPOSITORY` (format `owner/repo`), if set.
