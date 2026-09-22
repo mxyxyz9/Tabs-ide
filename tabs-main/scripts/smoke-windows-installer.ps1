@@ -1,12 +1,28 @@
 $ErrorActionPreference = "Stop"
 $installer = (Get-ChildItem tabs-main/release -Filter *.exe | Select-Object -First 1).FullName
+$initialInstaller = $installer
+if ($env:TABS_SMOKE_PREVIOUS_VERSION) {
+  $version = $env:TABS_SMOKE_PREVIOUS_VERSION
+  $assetName = "Tabs-$version-x64.exe"
+  $initialInstaller = Join-Path $env:RUNNER_TEMP $assetName
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    & gh release download "v$version" --repo $env:GITHUB_REPOSITORY --pattern $assetName --dir $env:RUNNER_TEMP --clobber
+    if ($LASTEXITCODE -eq 0) { break }
+    if ($attempt -eq 3) { throw "Could not download previous installer v$version." }
+    Start-Sleep -Seconds (5 * $attempt)
+  }
+  $expectedDigest = & gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v$version" --jq ".assets[] | select(.name == `"$assetName`") | .digest"
+  if ($LASTEXITCODE -ne 0 -or -not $expectedDigest) { throw "Could not verify previous installer digest." }
+  $actualDigest = "sha256:$((Get-FileHash $initialInstaller -Algorithm SHA256).Hash.ToLowerInvariant())"
+  if ($actualDigest -ne $expectedDigest) { throw "Previous installer checksum mismatch." }
+}
 $installDir = Join-Path $env:RUNNER_TEMP "TabsSmokeInstall"
 $unrelatedDir = Join-Path $env:RUNNER_TEMP "TabsUnrelatedProcess"
 New-Item $unrelatedDir -ItemType Directory -Force | Out-Null
 $holder = $null
 $unrelated = $null
 try {
-  & $installer /S "/D=$installDir"
+  & $initialInstaller /S "/D=$installDir"
   if ($LASTEXITCODE -ne 0) { throw "Initial NSIS install failed: $LASTEXITCODE" }
   if (-not (Test-Path (Join-Path $installDir "Tabs.exe"))) { throw "Tabs.exe was not installed." }
 
