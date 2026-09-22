@@ -13,6 +13,7 @@ import {
 } from "./baseSchemas.ts";
 import {
   KeybindingCommand,
+  KeybindingRule,
   KeybindingValue,
   KeybindingWhen,
   ResolvedKeybindingsConfig,
@@ -586,6 +587,18 @@ export const ServerUpsertKeybindingResult = Schema.Struct({
   issues: ServerConfigIssues,
 });
 export type ServerUpsertKeybindingResult = typeof ServerUpsertKeybindingResult.Type;
+
+export const ServerBatchUpsertKeybindingsInput = Schema.Struct({
+  rules: Schema.Array(KeybindingRule),
+});
+export type ServerBatchUpsertKeybindingsInput = typeof ServerBatchUpsertKeybindingsInput.Type;
+
+export const ServerBatchUpsertKeybindingsResult = Schema.Struct({
+  keybindings: ResolvedKeybindingsConfig,
+  issues: ServerConfigIssues,
+  importedCount: Schema.Number,
+});
+export type ServerBatchUpsertKeybindingsResult = typeof ServerBatchUpsertKeybindingsResult.Type;
 
 export const ServerRemoveKeybindingResult = ServerUpsertKeybindingResult;
 export type ServerRemoveKeybindingResult = typeof ServerRemoveKeybindingResult.Type;

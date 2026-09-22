@@ -1,4 +1,4 @@
-import { type ProjectWorkspaceSettings, type BrowserPartitionMode } from "@tabs/contracts/settings";
+import { type BrowserPartitionMode } from "@tabs/contracts/settings";
 import {
   DndContext,
   type DragEndEvent,
@@ -19,7 +19,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronDownIcon,
-  ChevronUpIcon,
   GripVerticalIcon,
   PlusIcon,
   Trash2Icon,
@@ -27,7 +26,7 @@ import {
   LockIcon,
   CheckIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MasterDetail,
   MasterDetailContent,
@@ -74,7 +73,6 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import { useConfirm } from "~/hooks/useConfirm";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Input } from "./ui/input";
-import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
 import { toastManager } from "./ui/toast";
 import { Separator } from "./ui/separator";
@@ -85,14 +83,48 @@ import {
   workspaceShellActions,
 } from "../state/workspaceShell";
 import { useSettingsViewState } from "~/state/scopedStateStore";
-import { SettingsHeaderPortal } from "../routes/_chat.settings";
+import { registerDraftSource, useSettingsDraftSource } from "../state/settingsDraftRegistry";
+import {
+  type CustomEmbedDraft,
+  type ServerProcessDraft,
+  type ProjectWorkspaceDraftSnapshot,
+  createCustomEmbedDrafts,
+  createTerminalProcessDrafts,
+  createServerPresetDrafts,
+  createCustomEmbedToolId,
+  createServerProcessToolId,
+  isCustomEmbedDraftDirty,
+  isServerProcessDraftDirty,
+  updatePersistedEmbedPartition,
+  updateEmbedDraftPartition,
+  deletePersistedCustomEmbed,
+  deletePersistedServerProcess,
+  deletePersistedServerPreset,
+  deleteCustomEmbedDraft,
+  deleteServerProcessDraft,
+  deleteServerPresetDraft,
+  syncCustomEmbedDrafts,
+  syncTerminalProcessDrafts,
+  syncServerPresetDrafts,
+  savePersistedCustomEmbed,
+  commitSingleCustomEmbedDraft,
+  resetSingleCustomEmbedDraft,
+  savePersistedServerProcess,
+  commitSingleServerProcessDraft,
+  resetSingleServerProcessDraft,
+  savePersistedServerPreset,
+  commitSingleServerPresetDraft,
+  resetSingleServerPresetDraft,
+  getProjectWorkspaceDrafts,
+  setProjectWorkspaceDrafts,
+  clearProjectWorkspaceDrafts,
+  isProjectWorkspaceSnapshotDirty,
+} from "./projectWorkspaceDrafts";
+
+export type { CustomEmbedDraft, ServerProcessDraft };
 
 function createCustomEmbedId() {
   return `embed-${crypto.randomUUID()}`;
-}
-
-function createCustomEmbedToolId(embedId: string) {
-  return `custom-${embedId}`;
 }
 
 function createServerProcessId() {
@@ -114,10 +146,6 @@ function BrowserGoogleSignInGuidance() {
   );
 }
 
-function createServerProcessToolId(processId: string) {
-  return `terminal-${processId}`;
-}
-
 function describeToolKind(kind: string) {
   switch (kind) {
     case "custom_embed":
@@ -127,22 +155,6 @@ function describeToolKind(kind: string) {
     default:
       return kind;
   }
-}
-
-function reorderItems<T>(items: readonly T[], index: number, direction: -1 | 1): T[] {
-  const nextIndex = index + direction;
-  if (nextIndex < 0 || nextIndex >= items.length) {
-    return [...items];
-  }
-  const reordered = [...items];
-  const current = reordered[index];
-  const target = reordered[nextIndex];
-  if (!current || !target) {
-    return reordered;
-  }
-  reordered[index] = target;
-  reordered[nextIndex] = current;
-  return reordered;
 }
 
 function BrowserProfileSelector({
@@ -343,214 +355,49 @@ function SortableToolRow({
   );
 }
 
-function mergeToolGroup(
-  currentTools: ProjectWorkspaceSettings["tools"],
-  replacementTools: ProjectWorkspaceSettings["tools"],
-  kind: "custom_embed" | "custom_process",
-  fallbackAfterKind: ProjectWorkspaceSettings["tools"][number]["kind"],
-) {
-  const firstExistingIndex = currentTools.findIndex((tool) => tool.kind === kind);
-  const fallbackIndex = currentTools.findIndex((tool) => tool.kind === fallbackAfterKind);
-  const filteredTools = currentTools.filter((tool) => tool.kind !== kind);
-  const insertionIndex =
-    firstExistingIndex >= 0
-      ? Math.min(firstExistingIndex, filteredTools.length)
-      : fallbackIndex >= 0
-        ? Math.min(fallbackIndex + 1, filteredTools.length)
-        : filteredTools.length;
-
-  return [
-    ...filteredTools.slice(0, insertionIndex),
-    ...replacementTools,
-    ...filteredTools.slice(insertionIndex),
-  ];
-}
-
-function buildCustomEmbedToolsFromDrafts(drafts: readonly CustomEmbedDraft[]) {
-  return drafts.map((draft) => ({
-    id: createCustomEmbedToolId(draft.id),
-    kind: "custom_embed" as const,
-    label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled browser tab",
-    visible: draft.visible,
-    customEmbedId: draft.id,
-  }));
-}
-
-function buildCustomProcessToolsFromDrafts(drafts: readonly ServerProcessDraft[]) {
-  return drafts.map((draft) => ({
-    id: createServerProcessToolId(draft.id),
-    kind: "custom_process" as const,
-    label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal",
-    visible: draft.visible,
-    terminalProcessId: draft.id,
-  }));
-}
-
-interface CustomEmbedDraft {
-  id: string;
-  label: string;
-  url: string;
-  visible: boolean;
-  resumeLastVisitedPage: boolean;
-  partitionMode: BrowserPartitionMode;
-  partitionProfile: string;
-  isNew: boolean;
-  originalLabel: string;
-  originalUrl: string;
-  originalVisible: boolean;
-  originalResumeLastVisitedPage: boolean;
-  originalPartitionMode: BrowserPartitionMode;
-  originalPartitionProfile: string;
-}
-
-export interface ServerProcessDraft {
-  id: string;
-  label: string;
-  commands: string[];
-  cwd: string;
-  autoStart: boolean;
-  visible: boolean;
-  isNew: boolean;
-  originalLabel: string;
-  originalCommands: string[];
-  originalCwd: string;
-  originalAutoStart: boolean;
-  originalVisible: boolean;
-  previewUrl?: string | undefined;
-  autoOpenPreview?: boolean | undefined;
-  previewOpenTarget?: "in-app" | "external" | undefined;
-  previewFocus?: boolean | undefined;
-  dependsOn?: readonly string[] | undefined;
-  originalPreviewUrl?: string | undefined;
-  originalAutoOpenPreview?: boolean | undefined;
-  originalPreviewOpenTarget?: "in-app" | "external" | undefined;
-  originalPreviewFocus?: boolean | undefined;
-  originalDependsOn?: readonly string[] | undefined;
-}
-
-function createCustomEmbedDrafts(settings: ProjectWorkspaceSettings): CustomEmbedDraft[] {
-  return (settings.customEmbeds ?? []).map((embed) => {
-    const tool = (settings.tools ?? []).find(
-      (entry) => entry.kind === "custom_embed" && entry.customEmbedId === embed.id,
-    );
-    return {
-      id: embed.id,
-      label: embed.label,
-      url: embed.url,
-      resumeLastVisitedPage: embed.resumeLastVisitedPage ?? true,
-      partitionMode: embed.partitionMode ?? "shared",
-      partitionProfile: embed.partitionProfile ?? "",
-      visible: tool?.visible ?? true,
-      isNew: false,
-      originalLabel: embed.label,
-      originalUrl: embed.url,
-      originalResumeLastVisitedPage: embed.resumeLastVisitedPage ?? true,
-      originalPartitionMode: embed.partitionMode ?? "shared",
-      originalPartitionProfile: embed.partitionProfile ?? "",
-      originalVisible: tool?.visible ?? true,
-    };
-  });
-}
-
-function createTerminalProcessDrafts(settings: ProjectWorkspaceSettings): ServerProcessDraft[] {
-  return (settings.terminalProcesses ?? []).map((process) => {
-    const tool = (settings.tools ?? []).find(
-      (entry) => entry.kind === "custom_process" && entry.terminalProcessId === process.id,
-    );
-    return {
-      id: process.id,
-      label: process.label,
-      commands: process.commands.length > 0 ? [...process.commands] : [""],
-      cwd: process.cwd,
-      autoStart: process.autoStart,
-      visible: tool?.visible ?? true,
-      isNew: false,
-      originalLabel: process.label,
-      originalCommands: process.commands.length > 0 ? [...process.commands] : [""],
-      originalCwd: process.cwd,
-      originalAutoStart: process.autoStart,
-      originalVisible: tool?.visible ?? true,
-    };
-  });
-}
-
-function createServerPresetDrafts(settings: ProjectWorkspaceSettings): ServerProcessDraft[] {
-  return settings.serverPresets.map((process) => {
-    return {
-      id: process.id,
-      label: process.label,
-      commands: process.commands.length > 0 ? [...process.commands] : [""],
-      cwd: process.cwd,
-      autoStart: process.autoStart,
-      visible: true,
-      isNew: false,
-      originalLabel: process.label,
-      originalCommands: process.commands.length > 0 ? [...process.commands] : [""],
-      originalCwd: process.cwd,
-      originalAutoStart: process.autoStart,
-      originalVisible: true,
-      previewUrl: process.previewUrl,
-      autoOpenPreview: process.autoOpenPreview,
-      previewOpenTarget: process.previewOpenTarget,
-      previewFocus: process.previewFocus,
-      dependsOn: process.dependsOn,
-      originalPreviewUrl: process.previewUrl,
-      originalAutoOpenPreview: process.autoOpenPreview,
-      originalPreviewOpenTarget: process.previewOpenTarget,
-      originalPreviewFocus: process.previewFocus,
-      originalDependsOn: process.dependsOn,
-    };
-  });
-}
-
-function isCustomEmbedDraftDirty(draft: CustomEmbedDraft) {
-  return (
-    draft.isNew ||
-    draft.label !== draft.originalLabel ||
-    draft.url !== draft.originalUrl ||
-    draft.visible !== draft.originalVisible ||
-    draft.resumeLastVisitedPage !== draft.originalResumeLastVisitedPage ||
-    draft.partitionMode !== draft.originalPartitionMode ||
-    draft.partitionProfile !== draft.originalPartitionProfile
-  );
-}
-
-function isServerProcessDraftDirty(draft: ServerProcessDraft) {
-  return (
-    draft.isNew ||
-    draft.label !== draft.originalLabel ||
-    draft.cwd !== draft.originalCwd ||
-    draft.autoStart !== draft.originalAutoStart ||
-    draft.visible !== draft.originalVisible ||
-    draft.previewUrl !== draft.originalPreviewUrl ||
-    draft.autoOpenPreview !== draft.originalAutoOpenPreview ||
-    draft.previewOpenTarget !== draft.originalPreviewOpenTarget ||
-    draft.previewFocus !== draft.originalPreviewFocus ||
-    JSON.stringify(draft.dependsOn) !== JSON.stringify(draft.originalDependsOn) ||
-    draft.commands.length !== draft.originalCommands.length ||
-    draft.commands.some((command, index) => command !== draft.originalCommands[index])
-  );
-}
-
 export function ProjectWorkspaceSettingsSection() {
   const { fontPreferences } = useTheme();
   const activeFontCombo = getActiveFontCombo(fontPreferences);
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirmDialog } = useConfirm();
   const activeProjectId = useWorkspaceActiveProjectId();
   const activeProject = useAtomValue(projectsAtom, (state) =>
     activeProjectId ? (state.find((project) => project.id === activeProjectId) ?? null) : null,
   );
   const projectSettings = useProjectWorkspaceSettings(activeProjectId);
   const upsertProjectSettings = workspaceShellActions.upsertProjectSettings;
-  const [customEmbedDrafts, setCustomEmbedDrafts] = useState<CustomEmbedDraft[]>([]);
-  const [serverProcessDrafts, setServerProcessDrafts] = useState<ServerProcessDraft[]>([]);
-  const [expandedToolbarToolIds, setExpandedToolbarToolIds] = useState<Record<string, boolean>>({});
+  const initialCached = activeProjectId ? getProjectWorkspaceDrafts(activeProjectId) : undefined;
+  const [customEmbedDrafts, setCustomEmbedDrafts] = useState<CustomEmbedDraft[]>(() => {
+    if (initialCached)
+      return syncCustomEmbedDrafts(initialCached.customEmbedDrafts, projectSettings);
+    return createCustomEmbedDrafts(projectSettings);
+  });
+  const [serverProcessDrafts, setServerProcessDrafts] = useState<ServerProcessDraft[]>(() => {
+    if (initialCached)
+      return syncTerminalProcessDrafts(initialCached.serverProcessDrafts, projectSettings);
+    return createTerminalProcessDrafts(projectSettings);
+  });
 
-  const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>("");
-  const [resumeLastVisitedPageDraft, setResumeLastVisitedPageDraft] = useState<boolean>(true);
-  const [browserPartitionModeDraft, setBrowserPartitionModeDraft] =
-    useState<BrowserPartitionMode>("shared");
-  const [browserPartitionProfileDraft, setBrowserPartitionProfileDraft] = useState<string>("");
+  const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>(
+    () => initialCached?.browserDefaultUrlDraft ?? projectSettings?.browser?.defaultUrl ?? "",
+  );
+  const [resumeLastVisitedPageDraft, setResumeLastVisitedPageDraft] = useState<boolean>(
+    () =>
+      initialCached?.resumeLastVisitedPageDraft ??
+      projectSettings?.browser?.resumeLastVisitedPage ??
+      true,
+  );
+  const [browserPartitionModeDraft, setBrowserPartitionModeDraft] = useState<BrowserPartitionMode>(
+    () =>
+      initialCached?.browserPartitionModeDraft ??
+      projectSettings?.browser?.partitionMode ??
+      "shared",
+  );
+  const [browserPartitionProfileDraft, setBrowserPartitionProfileDraft] = useState<string>(
+    () =>
+      initialCached?.browserPartitionProfileDraft ??
+      projectSettings?.browser?.partitionProfile ??
+      "",
+  );
 
   const [alwaysMinAgents, setAlwaysMinAgents] = useState<boolean>(() => {
     try {
@@ -583,16 +430,16 @@ export function ProjectWorkspaceSettingsSection() {
   };
 
   const isBrowserDefaultUrlDirty = projectSettings
-    ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl
+    ? browserDefaultUrlDraft !== (projectSettings.browser?.defaultUrl ?? "")
     : false;
   const isResumeLastVisitedPageDirty = projectSettings
-    ? resumeLastVisitedPageDraft !== projectSettings.browser.resumeLastVisitedPage
+    ? resumeLastVisitedPageDraft !== (projectSettings.browser?.resumeLastVisitedPage ?? true)
     : false;
   const isBrowserPartitionModeDirty = projectSettings
-    ? browserPartitionModeDraft !== (projectSettings.browser.partitionMode ?? "shared")
+    ? browserPartitionModeDraft !== (projectSettings.browser?.partitionMode ?? "shared")
     : false;
   const isBrowserPartitionProfileDirty = projectSettings
-    ? browserPartitionProfileDraft !== (projectSettings.browser.partitionProfile ?? "")
+    ? browserPartitionProfileDraft !== (projectSettings.browser?.partitionProfile ?? "")
     : false;
 
   const isBrowserSettingsDirty =
@@ -601,20 +448,11 @@ export function ProjectWorkspaceSettingsSection() {
     isBrowserPartitionModeDirty ||
     isBrowserPartitionProfileDirty;
 
-  useEffect(() => {
-    setBrowserDefaultUrlDraft(projectSettings?.browser?.defaultUrl ?? "");
-    setResumeLastVisitedPageDraft(projectSettings?.browser?.resumeLastVisitedPage ?? true);
-    setBrowserPartitionModeDraft(projectSettings?.browser?.partitionMode ?? "shared");
-    setBrowserPartitionProfileDraft(projectSettings?.browser?.partitionProfile ?? "");
-  }, [
-    projectSettings?.browser?.defaultUrl,
-    projectSettings?.browser?.resumeLastVisitedPage,
-    projectSettings?.browser?.partitionMode,
-    projectSettings?.browser?.partitionProfile,
-    activeProjectId,
-  ]);
-
-  const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>([]);
+  const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>(() => {
+    if (initialCached)
+      return syncServerPresetDrafts(initialCached.serverPresetDrafts, projectSettings);
+    return createServerPresetDrafts(projectSettings);
+  });
   const [settingsViewState, updateSettingsViewState] = useSettingsViewState();
   const projectIdKey = activeProjectId ?? "default";
   const projectMasterDetail = settingsViewState.projectWorkspaceMasterDetail[projectIdKey] ?? {
@@ -720,17 +558,112 @@ export function ProjectWorkspaceSettingsSection() {
     setPendingToggle(null);
   }, [activeProjectId, pendingToggle, upsertProjectSettings]);
 
+  const draftsRef = useRef<ProjectWorkspaceDraftSnapshot>({
+    customEmbedDrafts,
+    serverProcessDrafts,
+    serverPresetDrafts,
+    browserDefaultUrlDraft,
+    resumeLastVisitedPageDraft,
+    browserPartitionModeDraft,
+    browserPartitionProfileDraft,
+  });
+  draftsRef.current = {
+    customEmbedDrafts,
+    serverProcessDrafts,
+    serverPresetDrafts,
+    browserDefaultUrlDraft,
+    resumeLastVisitedPageDraft,
+    browserPartitionModeDraft,
+    browserPartitionProfileDraft,
+  };
+
+  const projectSettingsRef = useRef(projectSettings);
+  projectSettingsRef.current = projectSettings;
+
+  // Persist dirty drafts to cache upon unmount and ensure settings draft source reflects dirty state
   useEffect(() => {
-    if (!projectSettings) {
+    return () => {
+      if (activeProjectId && projectSettingsRef.current) {
+        const snapshot = draftsRef.current;
+        if (isProjectWorkspaceSnapshotDirty(snapshot, projectSettingsRef.current)) {
+          setProjectWorkspaceDrafts(activeProjectId, snapshot);
+          registerDraftSource({ sourceId: "workspace", isDirty: true, label: "Workspace" });
+        } else {
+          clearProjectWorkspaceDrafts(activeProjectId);
+        }
+      }
+    };
+  }, [activeProjectId]);
+
+  const prevProjectIdRef = useRef<string | null>(activeProjectId);
+
+  useEffect(() => {
+    if (!projectSettings || !activeProjectId) {
+      prevProjectIdRef.current = activeProjectId;
       setCustomEmbedDrafts([]);
       setServerProcessDrafts([]);
       setServerPresetDrafts([]);
       return;
     }
-    setCustomEmbedDrafts(createCustomEmbedDrafts(projectSettings));
-    setServerProcessDrafts(createTerminalProcessDrafts(projectSettings));
-    setServerPresetDrafts(createServerPresetDrafts(projectSettings));
-  }, [projectSettings, activeProjectId]);
+
+    if (activeProjectId !== prevProjectIdRef.current) {
+      if (prevProjectIdRef.current && projectSettingsRef.current) {
+        const outgoingSnapshot = draftsRef.current;
+        if (isProjectWorkspaceSnapshotDirty(outgoingSnapshot, projectSettingsRef.current)) {
+          setProjectWorkspaceDrafts(prevProjectIdRef.current, outgoingSnapshot);
+        } else {
+          clearProjectWorkspaceDrafts(prevProjectIdRef.current);
+        }
+      }
+      prevProjectIdRef.current = activeProjectId;
+
+      const cached = getProjectWorkspaceDrafts(activeProjectId);
+      if (cached) {
+        setCustomEmbedDrafts(syncCustomEmbedDrafts(cached.customEmbedDrafts, projectSettings));
+        setServerProcessDrafts(
+          syncTerminalProcessDrafts(cached.serverProcessDrafts, projectSettings),
+        );
+        setServerPresetDrafts(syncServerPresetDrafts(cached.serverPresetDrafts, projectSettings));
+        setBrowserDefaultUrlDraft(cached.browserDefaultUrlDraft);
+        setResumeLastVisitedPageDraft(cached.resumeLastVisitedPageDraft);
+        setBrowserPartitionModeDraft(cached.browserPartitionModeDraft);
+        setBrowserPartitionProfileDraft(cached.browserPartitionProfileDraft);
+      } else {
+        setCustomEmbedDrafts(createCustomEmbedDrafts(projectSettings));
+        setServerProcessDrafts(createTerminalProcessDrafts(projectSettings));
+        setServerPresetDrafts(createServerPresetDrafts(projectSettings));
+        setBrowserDefaultUrlDraft(projectSettings.browser?.defaultUrl ?? "");
+        setResumeLastVisitedPageDraft(projectSettings.browser?.resumeLastVisitedPage ?? true);
+        setBrowserPartitionModeDraft(projectSettings.browser?.partitionMode ?? "shared");
+        setBrowserPartitionProfileDraft(projectSettings.browser?.partitionProfile ?? "");
+      }
+      return;
+    }
+
+    // Same project: sync external updates without clobbering dirty drafts
+    if (!isBrowserDefaultUrlDirty) {
+      setBrowserDefaultUrlDraft(projectSettings.browser?.defaultUrl ?? "");
+    }
+    if (!isResumeLastVisitedPageDirty) {
+      setResumeLastVisitedPageDraft(projectSettings.browser?.resumeLastVisitedPage ?? true);
+    }
+    if (!isBrowserPartitionModeDirty) {
+      setBrowserPartitionModeDraft(projectSettings.browser?.partitionMode ?? "shared");
+    }
+    if (!isBrowserPartitionProfileDirty) {
+      setBrowserPartitionProfileDraft(projectSettings.browser?.partitionProfile ?? "");
+    }
+    setCustomEmbedDrafts((current) => syncCustomEmbedDrafts(current, projectSettings));
+    setServerProcessDrafts((current) => syncTerminalProcessDrafts(current, projectSettings));
+    setServerPresetDrafts((current) => syncServerPresetDrafts(current, projectSettings));
+  }, [
+    projectSettings,
+    activeProjectId,
+    isBrowserDefaultUrlDirty,
+    isResumeLastVisitedPageDirty,
+    isBrowserPartitionModeDirty,
+    isBrowserPartitionProfileDirty,
+  ]);
 
   const customEmbedsDirty = useMemo(
     () =>
@@ -752,6 +685,12 @@ export function ProjectWorkspaceSettingsSection() {
       serverProcessDrafts.length !== (projectSettings?.terminalProcesses?.length ?? 0),
     [serverProcessDrafts, projectSettings?.terminalProcesses],
   );
+
+  const isWorkspaceDirty =
+    isBrowserSettingsDirty || customEmbedsDirty || serverPresetsDirty || serverProcessesDirty;
+
+  useSettingsDraftSource("workspace", isWorkspaceDirty, "Workspace");
+
   const toolbarPreviewTools = useMemo(() => {
     return (projectSettings?.tools ?? []).filter((tool) => {
       if (tool.kind === "custom_embed") {
@@ -768,8 +707,6 @@ export function ProjectWorkspaceSettingsSection() {
     () => toolbarPreviewTools.filter((tool) => tool.visible).length,
     [toolbarPreviewTools],
   );
-  const [lastToolWarning, setLastToolWarning] = useState<string | null>(null);
-
   const dndSensors = useSensors(
     // Require a small drag distance so taps/clicks on the row still work.
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -943,157 +880,71 @@ export function ProjectWorkspaceSettingsSection() {
     );
   };
 
-  const removeCustomEmbedDraft = (embedId: string) => {
-    setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== embedId));
-  };
-
-  const removeServerProcessDraft = (processId: string) => {
-    setServerProcessDrafts((current) => current.filter((entry) => entry.id !== processId));
-  };
-
-  const saveCustomEmbeds = (overrideDrafts?: CustomEmbedDraft[]) => {
-    const draftsToSave = Array.isArray(overrideDrafts) ? overrideDrafts : customEmbedDrafts;
-    upsertProjectSettings(projectId, (current) => {
-      const nextCustomEmbeds = draftsToSave.map((draft) => {
-        const existingEmbed = current.customEmbeds?.find((e) => e.id === draft.id);
-        return {
-          id: draft.id,
-          label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled tab",
-          url: draft.url.trim(),
-          resumeLastVisitedPage: draft.resumeLastVisitedPage,
-          partitionMode: draft.partitionMode,
-          ...(draft.partitionMode === "profile" && draft.partitionProfile.trim().length > 0
-            ? { partitionProfile: draft.partitionProfile.trim() }
-            : {}),
-          ...(existingEmbed?.lastVisitedUrl
-            ? { lastVisitedUrl: existingEmbed.lastVisitedUrl }
-            : {}),
-        };
-      });
-      const nextCustomEmbedTools = draftsToSave.map((draft, index) => ({
-        id: createCustomEmbedToolId(draft.id),
-        kind: "custom_embed" as const,
-        label:
-          nextCustomEmbeds[index]?.label ??
-          (draft.label.trim().length > 0 ? draft.label.trim() : "Untitled tab"),
-        visible: draft.visible,
-        customEmbedId: draft.id,
-      }));
-
-      return {
-        ...current,
-        customEmbeds: nextCustomEmbeds,
-        tools: mergeToolGroup(current.tools, nextCustomEmbedTools, "custom_embed", "browser"),
-      };
-    });
-  };
-
   const saveCustomEmbedPartition = (
     embedId: string,
     partitionMode: BrowserPartitionMode,
     partitionProfile?: string,
   ) => {
-    const nextDrafts = customEmbedDrafts.map((entry) =>
-      entry.id === embedId
-        ? {
-            ...entry,
-            partitionMode,
-            partitionProfile:
-              partitionMode === "profile" ? (partitionProfile ?? entry.partitionProfile) : "",
-          }
-        : entry,
+    if (!activeProjectId) return;
+    const resolvedProfile = partitionMode === "profile" ? (partitionProfile ?? "").trim() : "";
+    upsertProjectSettings(activeProjectId, (current) =>
+      updatePersistedEmbedPartition(current, embedId, partitionMode, resolvedProfile),
     );
-    setCustomEmbedDrafts(nextDrafts);
-    saveCustomEmbeds(nextDrafts);
+    setCustomEmbedDrafts((current) =>
+      updateEmbedDraftPartition(current, embedId, partitionMode, resolvedProfile),
+    );
     toastManager.add({
       type: "success",
       title: "Browser session assignment saved",
       description:
         partitionMode === "profile"
-          ? `This tab now uses the "${partitionProfile ?? nextDrafts.find((entry) => entry.id === embedId)?.partitionProfile ?? "default"}" profile.`
+          ? `This tab now uses the "${resolvedProfile || "default"}" profile.`
           : partitionMode === "isolated"
             ? "This tab now uses its own isolated session."
             : "This tab now shares the project's browser session.",
     });
   };
 
-  const saveServerProcesses = (overrideDrafts?: ServerProcessDraft[]) => {
-    const draftsToSave = Array.isArray(overrideDrafts) ? overrideDrafts : serverProcessDrafts;
-    upsertProjectSettings(projectId, (current) => {
-      const nextServerProcesses = draftsToSave.map((draft) => ({
-        id: draft.id,
-        label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal",
-        commands: draft.commands,
-        cwd: draft.cwd,
-        env: {},
-        autoStart: draft.autoStart,
-      }));
-      const nextProcessTools = draftsToSave.map((draft, index) => ({
-        id: createServerProcessToolId(draft.id),
-        kind: "custom_process" as const,
-        label:
-          nextServerProcesses[index]?.label ??
-          (draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal"),
-        visible: draft.visible,
-        terminalProcessId: draft.id,
-      }));
-
-      return {
-        ...current,
-        terminalProcesses: nextServerProcesses,
-        tools: mergeToolGroup(current.tools, nextProcessTools, "custom_process", "server"),
-      };
-    });
+  const saveSingleCustomEmbed = (embedId: string) => {
+    if (!activeProjectId) return;
+    const draft = customEmbedDrafts.find((d) => d.id === embedId);
+    if (!draft) return;
+    upsertProjectSettings(activeProjectId, (current) => savePersistedCustomEmbed(current, draft));
+    setCustomEmbedDrafts((current) => commitSingleCustomEmbedDraft(current, embedId));
   };
 
-  const saveServerPresets = (overrideDrafts?: ServerProcessDraft[]) => {
-    const draftsToSave = Array.isArray(overrideDrafts) ? overrideDrafts : serverPresetDrafts;
-    upsertProjectSettings(projectId, (current) => ({
-      ...current,
-      serverPresets: draftsToSave.map((draft) => {
-        const res: any = {
-          id: draft.id,
-          label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled preset",
-          commands: draft.commands,
-          cwd: draft.cwd,
-          env: {},
-          autoStart: draft.autoStart,
-        };
-        if (draft.previewUrl !== undefined) res.previewUrl = draft.previewUrl;
-        if (draft.autoOpenPreview !== undefined) res.autoOpenPreview = draft.autoOpenPreview;
-        if (draft.previewOpenTarget !== undefined) res.previewOpenTarget = draft.previewOpenTarget;
-        if (draft.previewFocus !== undefined) res.previewFocus = draft.previewFocus;
-        if (draft.dependsOn !== undefined) res.dependsOn = draft.dependsOn;
-        return res;
-      }),
-    }));
-    setServerPresetDrafts((current) =>
-      current.map((draft) => ({
-        ...draft,
-        isNew: false,
-        originalLabel: draft.label,
-        originalCommands: [...draft.commands],
-        originalCwd: draft.cwd,
-        originalAutoStart: draft.autoStart,
-        originalPreviewUrl: draft.previewUrl,
-        originalAutoOpenPreview: draft.autoOpenPreview,
-        originalPreviewOpenTarget: draft.previewOpenTarget,
-        originalPreviewFocus: draft.previewFocus,
-        originalDependsOn: draft.dependsOn,
-      })),
+  const resetSingleCustomEmbed = (embedId: string) => {
+    setCustomEmbedDrafts((current) =>
+      resetSingleCustomEmbedDraft(current, embedId, projectSettings),
     );
   };
 
-  const resetCustomEmbeds = () => {
-    setCustomEmbedDrafts(createCustomEmbedDrafts(projectSettings));
+  const saveSingleServerProcess = (processId: string) => {
+    if (!activeProjectId) return;
+    const draft = serverProcessDrafts.find((d) => d.id === processId);
+    if (!draft) return;
+    upsertProjectSettings(activeProjectId, (current) => savePersistedServerProcess(current, draft));
+    setServerProcessDrafts((current) => commitSingleServerProcessDraft(current, processId));
   };
 
-  const resetServerPresets = () => {
-    setServerPresetDrafts(createServerPresetDrafts(projectSettings));
+  const resetSingleServerProcess = (processId: string) => {
+    setServerProcessDrafts((current) =>
+      resetSingleServerProcessDraft(current, processId, projectSettings),
+    );
   };
 
-  const resetServerProcesses = () => {
-    setServerProcessDrafts(createTerminalProcessDrafts(projectSettings));
+  const saveSingleServerPreset = (presetId: string) => {
+    if (!activeProjectId) return;
+    const draft = serverPresetDrafts.find((d) => d.id === presetId);
+    if (!draft) return;
+    upsertProjectSettings(activeProjectId, (current) => savePersistedServerPreset(current, draft));
+    setServerPresetDrafts((current) => commitSingleServerPresetDraft(current, presetId));
+  };
+
+  const resetSingleServerPreset = (presetId: string) => {
+    setServerPresetDrafts((current) =>
+      resetSingleServerPresetDraft(current, presetId, projectSettings),
+    );
   };
 
   return (
@@ -1196,19 +1047,6 @@ export function ProjectWorkspaceSettingsSection() {
                   strategy={verticalListSortingStrategy}
                 >
                   {toolbarPreviewTools.map((tool) => {
-                    const isExpanded = expandedToolbarToolIds[tool.id] === true;
-                    const embedDraft =
-                      tool.kind === "custom_embed"
-                        ? (customEmbedDrafts.find(
-                            (entry) => createCustomEmbedToolId(entry.id) === tool.id,
-                          ) ?? null)
-                        : null;
-                    const processDraft =
-                      tool.kind === "custom_process"
-                        ? (serverProcessDrafts.find(
-                            (entry) => createServerProcessToolId(entry.id) === tool.id,
-                          ) ?? null)
-                        : null;
                     const isLastToolLocked = visibleToolsCount <= 1 && tool.visible;
 
                     return (
@@ -1515,7 +1353,7 @@ export function ProjectWorkspaceSettingsSection() {
                             No tabs
                           </div>
                         ) : (
-                          customEmbedDrafts.map((draft, index) => (
+                          customEmbedDrafts.map((draft) => (
                             <MasterDetailItem
                               key={draft.id}
                               label={draft.label.trim() || "Untitled"}
@@ -1712,15 +1550,15 @@ export function ProjectWorkspaceSettingsSection() {
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  onClick={resetCustomEmbeds}
-                                  disabled={!customEmbedsDirty}
+                                  onClick={() => resetSingleCustomEmbed(activeDraft.id)}
+                                  disabled={!isDirty}
                                 >
                                   Cancel
                                 </Button>
                                 <Button
                                   type="button"
-                                  onClick={() => saveCustomEmbeds()}
-                                  disabled={!customEmbedsDirty}
+                                  onClick={() => saveSingleCustomEmbed(activeDraft.id)}
+                                  disabled={!isDirty}
                                 >
                                   Save Changes
                                 </Button>
@@ -1778,7 +1616,7 @@ export function ProjectWorkspaceSettingsSection() {
                             No terminals
                           </div>
                         ) : (
-                          serverProcessDrafts.map((draft, index) => (
+                          serverProcessDrafts.map((draft) => (
                             <MasterDetailItem
                               key={draft.id}
                               label={draft.label.trim() || "Untitled"}
@@ -1983,15 +1821,15 @@ export function ProjectWorkspaceSettingsSection() {
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  onClick={resetServerProcesses}
-                                  disabled={!serverProcessesDirty}
+                                  onClick={() => resetSingleServerProcess(activeDraft.id)}
+                                  disabled={!isDirty}
                                 >
                                   Cancel
                                 </Button>
                                 <Button
                                   type="button"
-                                  onClick={() => saveServerProcesses()}
-                                  disabled={!serverProcessesDirty}
+                                  onClick={() => saveSingleServerProcess(activeDraft.id)}
+                                  disabled={!isDirty}
                                 >
                                   Save Changes
                                 </Button>
@@ -2049,7 +1887,7 @@ export function ProjectWorkspaceSettingsSection() {
                             No presets
                           </div>
                         ) : (
-                          serverPresetDrafts.map((draft, index) => (
+                          serverPresetDrafts.map((draft) => (
                             <MasterDetailItem
                               key={draft.id}
                               label={draft.label.trim() || "Untitled"}
@@ -2113,15 +1951,15 @@ export function ProjectWorkspaceSettingsSection() {
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  onClick={resetServerPresets}
-                                  disabled={!serverPresetsDirty}
+                                  onClick={() => resetSingleServerPreset(activeDraft.id)}
+                                  disabled={!isDirty}
                                 >
                                   Cancel
                                 </Button>
                                 <Button
                                   type="button"
-                                  onClick={() => saveServerPresets()}
-                                  disabled={!serverPresetsDirty}
+                                  onClick={() => saveSingleServerPreset(activeDraft.id)}
+                                  disabled={!isDirty}
                                 >
                                   Save Changes
                                 </Button>
@@ -2197,12 +2035,11 @@ export function ProjectWorkspaceSettingsSection() {
             <Button
               variant="destructive"
               onClick={() => {
-                if (tabToDeleteId) {
-                  const nextDrafts = customEmbedDrafts.filter(
-                    (entry) => entry.id !== tabToDeleteId,
+                if (tabToDeleteId && activeProjectId) {
+                  upsertProjectSettings(activeProjectId, (current) =>
+                    deletePersistedCustomEmbed(current, tabToDeleteId),
                   );
-                  setCustomEmbedDrafts(nextDrafts);
-                  saveCustomEmbeds(nextDrafts);
+                  setCustomEmbedDrafts((current) => deleteCustomEmbedDraft(current, tabToDeleteId));
                   if (activeCustomEmbedId === tabToDeleteId) setActiveCustomEmbedId(null);
                 }
                 setTabToDeleteId(null);
@@ -2236,12 +2073,13 @@ export function ProjectWorkspaceSettingsSection() {
             <Button
               variant="destructive"
               onClick={() => {
-                if (terminalToDeleteId) {
-                  const nextDrafts = serverProcessDrafts.filter(
-                    (entry) => entry.id !== terminalToDeleteId,
+                if (terminalToDeleteId && activeProjectId) {
+                  upsertProjectSettings(activeProjectId, (current) =>
+                    deletePersistedServerProcess(current, terminalToDeleteId),
                   );
-                  setServerProcessDrafts(nextDrafts);
-                  saveServerProcesses(nextDrafts);
+                  setServerProcessDrafts((current) =>
+                    deleteServerProcessDraft(current, terminalToDeleteId),
+                  );
                   if (activeServerProcessId === terminalToDeleteId) setActiveServerProcessId(null);
                 }
                 setTerminalToDeleteId(null);
@@ -2275,12 +2113,13 @@ export function ProjectWorkspaceSettingsSection() {
             <Button
               variant="destructive"
               onClick={() => {
-                if (presetToDeleteId) {
-                  const nextDrafts = serverPresetDrafts.filter(
-                    (entry) => entry.id !== presetToDeleteId,
+                if (presetToDeleteId && activeProjectId) {
+                  upsertProjectSettings(activeProjectId, (current) =>
+                    deletePersistedServerPreset(current, presetToDeleteId),
                   );
-                  setServerPresetDrafts(nextDrafts);
-                  saveServerPresets(nextDrafts);
+                  setServerPresetDrafts((current) =>
+                    deleteServerPresetDraft(current, presetToDeleteId),
+                  );
                   if (activeServerPresetId === presetToDeleteId) setActiveServerPresetId(null);
                 }
                 setPresetToDeleteId(null);

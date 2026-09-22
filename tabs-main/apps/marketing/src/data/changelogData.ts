@@ -21,15 +21,47 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 156;
+export const TOTAL_TAGS_COUNT = 157;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.14",
+    title: "Reliable settings drafts and input saving",
+    date: "September 22, 2026",
+    shortDate: "Sep 22",
+    isLatest: true,
+    type: "feature",
+    summary:
+      "Tabs now isolates unsaved drafts in workspace settings, debounces continuous settings inputs with instant flush on blur or close, and ensures theme previews revert cleanly when cancelled.",
+    highlights: [
+      "Editing custom browser tabs, terminal tabs, or server presets keeps your in-progress changes isolated until you choose to save or cancel.",
+      "Settings text fields automatically debounce updates during typing and flush immediately on blur, Enter, or when closing the application.",
+      "Exploring and customizing colors in the Theme Studio safely reverts back to your previous theme if you exit or cancel without applying changes.",
+      "Refreshed brand typography and visual aurora liquid effects across buildwithtabs.com.",
+      "Improved stability and validation when importing custom keybinding configurations.",
+    ],
+    categories: [
+      {
+        title: "Settings & Workspaces",
+        items: [
+          "Isolated entity-level drafts for custom Browser Tabs, Terminal Tabs, and Server Presets.",
+          "Debounced input persistence with instant flush on blur, Enter, and application shutdown.",
+          "Theme Studio preview rollback on cancel or close.",
+          "Server keybindings batch upsert validation and error handling.",
+        ],
+      },
+      {
+        title: "Design & Brand",
+        items: ["Refreshed brand typography and visual aurora liquid wave effects."],
+      },
+    ],
+  },
   {
     tag: "v1.3.13",
     title: "In-app desktop updates and release notes preview",
     date: "September 21, 2026",
     shortDate: "Sep 21",
-    isLatest: true,
+    isLatest: false,
     type: "feature",
     summary:
       "Tabs now checks for desktop updates directly within the application, previews release notes before downloading or installing, and provides in-app updates for preview builds on macOS.",

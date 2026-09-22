@@ -115,6 +115,7 @@ const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const OPEN_POPOUT_WINDOW_CHANNEL = "desktop:open-popout-window";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const APP_CLOSING_CHANNEL = "desktop:app-closing";
+const APP_SETTINGS_FLUSH_DONE_CHANNEL = "desktop:settings-flush-done";
 const QUIT_CONFIRMATION_REQUEST_CHANNEL = "desktop:quit-confirmation-request";
 const QUIT_CONFIRMATION_RESPONSE_CHANNEL = "desktop:quit-confirmation-response";
 const GET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:get-confirm-before-quit";
@@ -3803,14 +3804,31 @@ app.on("before-quit", (event) => {
   isQuitting = true;
   writeDesktopLogHeader("before-quit received, performing async cleanup");
 
-  // Notify the renderer to show the close animation.
-  // The renderer goes into "idle" (waving) while we clean up.
+  const rendererSettingsFlush =
+    mainWindow && !mainWindow.isDestroyed()
+      ? new Promise<void>((resolve) => {
+          const handleFlushDone = () => {
+            clearTimeout(timeoutId);
+            resolve();
+          };
+          const timeoutId = setTimeout(() => {
+            ipcMain.removeListener(APP_SETTINGS_FLUSH_DONE_CHANNEL, handleFlushDone);
+            writeDesktopLogHeader("renderer settings flush timed out after 2000ms");
+            resolve();
+          }, 2000);
+          ipcMain.once(APP_SETTINGS_FLUSH_DONE_CHANNEL, handleFlushDone);
+        })
+      : Promise.resolve();
+
+  // Notify the renderer to show the close animation and flush pending settings.
   mainWindow?.webContents.send(APP_CLOSING_CHANNEL);
 
   clearUpdatePollTimer();
   codeControlChannel.dispose();
 
   void (async () => {
+    await rendererSettingsFlush;
+
     try {
       writeDesktopLogHeader("flushing Browser session storage to disk...");
       await browserHostManager.flushAndShutdownSessions();

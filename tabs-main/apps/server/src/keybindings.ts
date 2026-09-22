@@ -262,6 +262,17 @@ export interface KeybindingsShape {
   ) => Effect.Effect<ResolvedKeybindingsConfig, KeybindingsConfigError>;
 
   /**
+   * Atomically batch-upsert multiple keybinding rules and persist the resulting
+   * configuration once. Validates all entries before any write.
+   */
+  readonly batchUpsertKeybindingRules: (
+    rules: ReadonlyArray<KeybindingRule>,
+  ) => Effect.Effect<
+    { readonly keybindings: ResolvedKeybindingsConfig; readonly importedCount: number },
+    KeybindingsConfigError
+  >;
+
+  /**
    * Remove the custom override for a command, reverting it to the built-in
    * default (if any). Writes config atomically.
    */
@@ -651,6 +662,71 @@ const makeKeybindings = Effect.gen(function* () {
             issues: [],
           });
           return nextResolved;
+        }),
+      ),
+    batchUpsertKeybindingRules: (rules) =>
+      upsertSemaphore.withPermits(1)(
+        Effect.gen(function* () {
+          // 1. Validate all rules upfront before performing any file mutations
+          for (let i = 0; i < rules.length; i++) {
+            const rule = rules[i];
+            const decodeResult = yield* Effect.exit(
+              Schema.decodeUnknownEffect(KeybindingRule)(rule),
+            );
+            if (decodeResult._tag === "Failure") {
+              return yield* Effect.fail(
+                new KeybindingsConfigError({
+                  configPath: keybindingsConfigPath,
+                  detail: `Invalid keybinding entry at index ${i}: command=${(rule as any)?.command}`,
+                  cause: decodeResult.cause,
+                }),
+              );
+            }
+          }
+
+          const customConfig = yield* loadWritableCustomKeybindingsConfig();
+
+          // 2. Deterministic deduplication: later entries in the batch override earlier entries
+          const incomingByCommand = new Map<string, KeybindingRule>();
+          for (const rule of rules) {
+            incomingByCommand.set(rule.command, rule);
+          }
+
+          // 3. Preserve existing custom keybindings not overridden by incoming rules
+          const remainingExisting = customConfig.filter(
+            (entry) => !incomingByCommand.has(entry.command),
+          );
+          const nextConfig = [...remainingExisting, ...incomingByCommand.values()];
+
+          if (nextConfig.length > MAX_KEYBINDINGS_COUNT) {
+            return yield* Effect.fail(
+              new KeybindingsConfigError({
+                configPath: keybindingsConfigPath,
+                detail: `Keybindings limit exceeded: maximum allowed is ${MAX_KEYBINDINGS_COUNT} rules, but resulting configuration would have ${nextConfig.length} rules.`,
+              }),
+            );
+          }
+
+          // 4. Atomic single write using writeConfigAtomically (safe temp-write + rename)
+          yield* writeConfigAtomically(nextConfig);
+
+          // 5. Update cache and emit change only after write succeeds
+          const nextResolved = mergeWithDefaultKeybindings(
+            compileResolvedKeybindingsConfig(nextConfig),
+          );
+          const importedCount = incomingByCommand.size;
+          yield* Cache.set(resolvedConfigCache, resolvedConfigCacheKey, {
+            keybindings: nextResolved,
+            issues: [],
+          });
+          yield* emitChange({
+            keybindings: nextResolved,
+            issues: [],
+          });
+          return {
+            keybindings: nextResolved,
+            importedCount,
+          };
         }),
       ),
     removeKeybindingRule: (rule) =>

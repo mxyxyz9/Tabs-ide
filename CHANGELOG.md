@@ -2,6 +2,16 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.14] - 2026-09-22
+
+### Reliable settings drafts and input saving
+
+- **Workspace draft isolation**: Editing custom browser tabs, terminal tabs, or server presets keeps your in-progress changes isolated until you choose to save or cancel, preventing unrelated actions from committing dirty drafts.
+- **Debounced input persistence**: Settings text fields automatically debounce updates during typing and flush immediately on blur, Enter, or when closing the application.
+- **Clean theme preview rollback**: Exploring and customizing colors in the Theme Studio safely reverts back to your previous theme if you exit or cancel without applying changes.
+- **Early Access brand refinements**: Refreshed brand typography and visual aurora liquid effects across buildwithtabs.com.
+- **Keybindings batch importing**: Improved stability and validation when importing custom keybinding configurations.
+
 ## [v1.3.13] - 2026-09-21
 
 ### In-app desktop updates and release notes preview

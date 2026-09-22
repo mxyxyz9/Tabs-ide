@@ -154,6 +154,7 @@ import type {
   ServerSupportBundleResult,
   ServerTraceDiagnosticsResult,
   ServerUpsertKeybindingResult,
+  ServerBatchUpsertKeybindingsResult,
   ServerRunProviderMaintenanceInput,
 } from "./server.ts";
 import type {
@@ -169,7 +170,11 @@ import type {
   TerminalWriteInput,
   TerminalEvent,
 } from "./terminal.ts";
-import type { ServerRemoveKeybindingInput, ServerUpsertKeybindingInput } from "./server.ts";
+import type {
+  ServerBatchUpsertKeybindingsInput,
+  ServerRemoveKeybindingInput,
+  ServerUpsertKeybindingInput,
+} from "./server.ts";
 import type {
   UsageSummary,
   UsageSummaryInput,
@@ -1369,6 +1374,7 @@ export interface DesktopBridge {
   preview?: DesktopPreviewBridge;
   /** Fired by main when the app is about to quit. */
   onAppClosing: (listener: () => void) => () => void;
+  notifySettingsFlushDone: () => void;
   onAppCleanupDone: (listener: () => void) => () => void;
   notifyReadyToExit: () => Promise<void>;
   getConfirmBeforeQuit: () => Promise<boolean>;
@@ -1487,6 +1493,9 @@ export interface LocalApi {
     }) => Promise<ServerProviderUpdatedPayload>;
     updateProvider: (input: ServerProviderUpdateInput) => Promise<ServerProviderUpdatedPayload>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
+    batchUpsertKeybindings: (
+      input: ServerBatchUpsertKeybindingsInput,
+    ) => Promise<ServerBatchUpsertKeybindingsResult>;
     removeKeybinding: (input: ServerRemoveKeybindingInput) => Promise<ServerRemoveKeybindingResult>;
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;

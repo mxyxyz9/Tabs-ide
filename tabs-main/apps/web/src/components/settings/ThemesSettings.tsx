@@ -23,8 +23,16 @@ import {
   MIN_PROMPT_FONT_SIZE,
 } from "@tabs/contracts/settings";
 import { useConfirm } from "../../hooks/useConfirm";
-import { useTheme, buildFontPreferencesFromThemeConfig } from "../../hooks/useTheme";
-import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
+import {
+  useTheme,
+  buildFontPreferencesFromThemeConfig,
+  commitCustomTheme,
+} from "../../hooks/useTheme";
+import {
+  useDebouncedSettingsUpdate,
+  useSettings,
+  useUpdateSettings,
+} from "../../hooks/useSettings";
 import { useServerConfig } from "../../state/settings";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -46,6 +54,7 @@ import {
   hsvToHex,
   rgbToHex,
   type CustomThemeConfig,
+  type FontPreferences,
   type ThemePreference,
 } from "../../lib/themes";
 import { SettingsSection, SettingsSectionHeader } from "./SettingsLayout";
@@ -774,9 +783,11 @@ export function ThemesSettings() {
   } = useTheme();
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
+  const debouncedSettings = useDebouncedSettingsUpdate(350);
   const serverConfig = useServerConfig();
 
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [studioInitialConfig, setStudioInitialConfig] = useState<CustomThemeConfig | null>(null);
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
   const [importExportTab, setImportExportTab] = useState<"import" | "export">("import");
   const [isCustomFontMode, setIsCustomFontMode] = useState(false);
@@ -813,29 +824,37 @@ export function ThemesSettings() {
     [setCustomThemeConfig, setTheme, setFontPreferences],
   );
 
-  const handleSavePreset = useCallback(
-    (name: string, config: CustomThemeConfig) => {
-      const newPreset: SavedCustomPreset = {
-        id: `custom-saved-${Date.now()}`,
-        name,
-        config,
-        createdAt: Date.now(),
-      };
-      setSavedPresets((prev) => {
-        const next = [newPreset, ...prev];
-        saveSavedPresetsToStorage(next);
-        return next;
-      });
-      setCustomThemeConfig(config);
-      setTheme("custom");
+  const handleSavePreset = useCallback((name: string, config: CustomThemeConfig) => {
+    const newPreset: SavedCustomPreset = {
+      id: `custom-saved-${Date.now()}`,
+      name,
+      config,
+      createdAt: Date.now(),
+    };
+    setSavedPresets((prev) => {
+      const next = [newPreset, ...prev];
+      saveSavedPresetsToStorage(next);
+      return next;
+    });
+    toastManager.add({
+      type: "success",
+      title: "Preset Saved",
+      description: `Preset "${name}" saved cleanly.`,
+    });
+  }, []);
+
+  const handleApplyStudio = useCallback(
+    (draftConfig: CustomThemeConfig, draftFonts?: FontPreferences) => {
+      commitCustomTheme(draftConfig, draftFonts);
       setIsStudioOpen(false);
+      setStudioInitialConfig(null);
       toastManager.add({
         type: "success",
-        title: "Preset Saved",
-        description: `Preset "${name}" saved cleanly.`,
+        title: "Theme Applied",
+        description: "Custom theme applied and saved.",
       });
     },
-    [setCustomThemeConfig, setTheme],
+    [],
   );
 
   const handleDeletePreset = useCallback(
@@ -955,6 +974,7 @@ export function ThemesSettings() {
           }}
           onOpenStudio={() => {
             setEditingStudioPresetName("");
+            setStudioInitialConfig(null);
             setIsStudioOpen(true);
           }}
           onOpenImport={() => {
@@ -964,9 +984,8 @@ export function ThemesSettings() {
           onDeletePreset={handleDeletePreset}
           onRenamePreset={handleRenamePreset}
           onEditPresetInStudio={(preset) => {
-            setCustomThemeConfig(preset.config);
             setEditingStudioPresetName(preset.name);
-            setTheme("custom");
+            setStudioInitialConfig(preset.config);
             setIsStudioOpen(true);
           }}
         />
@@ -1371,7 +1390,10 @@ export function ThemesSettings() {
                     ...prev,
                     fontSizeInterface: val,
                   }));
-                  updateSettings({ fontSizeInterface: val });
+                  debouncedSettings.updateSettings({ fontSizeInterface: val });
+                }}
+                onBlur={() => {
+                  void debouncedSettings.flush();
                 }}
                 aria-label="Interface font size slider"
                 className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
@@ -1410,7 +1432,10 @@ export function ThemesSettings() {
                     ...prev,
                     fontSizeCode: val,
                   }));
-                  updateSettings({ fontSizeCode: val });
+                  debouncedSettings.updateSettings({ fontSizeCode: val });
+                }}
+                onBlur={() => {
+                  void debouncedSettings.flush();
                 }}
                 aria-label="Code font size slider"
                 className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
@@ -1453,7 +1478,10 @@ export function ThemesSettings() {
                     ...prev,
                     fontSizePrompt: val,
                   }));
-                  updateSettings({ fontSizePrompt: val });
+                  debouncedSettings.updateSettings({ fontSizePrompt: val });
+                }}
+                onBlur={() => {
+                  void debouncedSettings.flush();
                 }}
                 aria-label="Prompt font size slider"
                 className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none"
@@ -1576,17 +1604,14 @@ export function ThemesSettings() {
 
       <CustomThemeStudioModal
         isOpen={isStudioOpen}
-        onClose={() => setIsStudioOpen(false)}
-        config={customThemeConfig}
-        initialPresetName={editingStudioPresetName}
-        onChange={(next) => {
-          setCustomThemeConfig(next);
-          if (theme !== "custom") {
-            setTheme("custom");
-          }
+        onClose={() => {
+          setIsStudioOpen(false);
+          setStudioInitialConfig(null);
         }}
+        config={studioInitialConfig ?? customThemeConfig}
+        initialPresetName={editingStudioPresetName}
         onSavePreset={handleSavePreset}
-        onFontsImported={(fonts) => setFontPreferences(fonts)}
+        onApply={handleApplyStudio}
       />
 
       {(() => {

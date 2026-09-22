@@ -55,6 +55,7 @@ import {
 } from "~/components/Icons";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { DebouncedSettingsInput } from "./DebouncedSettingsInput";
 import { Switch } from "~/components/ui/switch";
 import { Badge } from "~/components/ui/badge";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
@@ -1504,24 +1505,15 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                             <span className="text-xs font-medium text-foreground">
                               {providerDisplayName} binary path
                             </span>
-                            <Input
+                            <DebouncedSettingsInput
                               id={`provider-install-${providerCard.provider}-binary-path`}
                               className="mt-1.5"
                               value={providerCard.binaryPathValue}
-                              onChange={(event) => {
-                                const currentProvidersMap = settings.providers as Record<
-                                  string,
-                                  any
-                                >;
-                                const defaultProvidersMap =
-                                  DEFAULT_UNIFIED_SETTINGS.providers as Record<string, any>;
-                                updateSettings({
+                              onPersist={(val) => {
+                                return updateSettings({
                                   providers: {
-                                    ...settings.providers,
                                     [providerCard.provider]: {
-                                      ...(currentProvidersMap[providerCard.provider] ??
-                                        defaultProvidersMap[providerCard.provider]),
-                                      binaryPath: event.target.value,
+                                      binaryPath: val,
                                     },
                                   },
                                 });
@@ -1551,7 +1543,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                 />
                               ) : null}
                             </div>
-                            <Input
+                            <DebouncedSettingsInput
                               aria-label={`${providerDisplayName} API key`}
                               className="mt-1.5"
                               type="password"
@@ -1560,13 +1552,11 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                   ? providerCard.providerConfig.apiKey
                                   : ""
                               }
-                              onChange={(event) =>
+                              onPersist={(val) =>
                                 updateSettings({
                                   providers: {
-                                    ...settings.providers,
                                     [providerCard.provider]: {
-                                      ...providerCard.providerConfig,
-                                      apiKey: event.target.value,
+                                      apiKey: val,
                                     },
                                   },
                                 })
@@ -1596,17 +1586,15 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                             <span className="text-xs font-medium text-foreground">
                               CODEX_HOME path
                             </span>
-                            <Input
+                            <DebouncedSettingsInput
                               id={`provider-install-${providerCard.homePathKey}`}
                               className="mt-1.5"
                               value={codexHomePath}
-                              onChange={(event) =>
+                              onPersist={(val) =>
                                 updateSettings({
                                   providers: {
-                                    ...settings.providers,
                                     codex: {
-                                      ...settings.providers.codex,
-                                      homePath: event.target.value,
+                                      homePath: val,
                                     },
                                   },
                                 })
@@ -1631,18 +1619,15 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                               <span className="text-xs font-medium text-foreground">
                                 GitHub Enterprise Host (optional)
                               </span>
-                              <Input
+                              <DebouncedSettingsInput
                                 id="provider-copilot-ghe-host"
                                 className="mt-1.5"
                                 value={settings.providers.copilot?.gheHost ?? ""}
-                                onChange={(event) =>
+                                onPersist={(val) =>
                                   updateSettings({
                                     providers: {
-                                      ...settings.providers,
                                       copilot: {
-                                        ...(settings.providers.copilot ??
-                                          DEFAULT_UNIFIED_SETTINGS.providers.copilot),
-                                        gheHost: event.target.value,
+                                        gheHost: val,
                                       },
                                     },
                                   })
@@ -1661,19 +1646,16 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                               <span className="text-xs font-medium text-foreground">
                                 GitHub Token (optional)
                               </span>
-                              <Input
+                              <DebouncedSettingsInput
                                 id="provider-copilot-token"
                                 type="password"
                                 className="mt-1.5"
                                 value={settings.providers.copilot?.token ?? ""}
-                                onChange={(event) =>
+                                onPersist={(val) =>
                                   updateSettings({
                                     providers: {
-                                      ...settings.providers,
                                       copilot: {
-                                        ...(settings.providers.copilot ??
-                                          DEFAULT_UNIFIED_SETTINGS.providers.copilot),
-                                        token: event.target.value,
+                                        token: val,
                                       },
                                     },
                                   })

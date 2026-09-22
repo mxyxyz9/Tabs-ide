@@ -8,7 +8,7 @@ import {
 } from "@tabs/contracts/settings";
 import type { AiProvider, ServerProvider } from "@tabs/contracts";
 import { createModelSelection } from "@tabs/shared/model";
-import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
+import { useDebouncedSettingField, useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useTheme } from "../../hooks/useTheme";
 import { useResetOnboarding } from "../../onboarding/firstRun";
@@ -135,6 +135,12 @@ export function GeneralSettings() {
   const [zoomFactor, updateZoom] = useZoomFactor();
   const activeProjectId = useWorkspaceActiveProjectId();
   const serverConfig = useServerConfig();
+
+  const panelDurationField = useDebouncedSettingField<number>({
+    value: settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS,
+    onPersist: (val) => updateSettings({ panelAnimationDurationMs: val }),
+    delay: 300,
+  });
 
   const [confirmBeforeQuit, setConfirmBeforeQuit] = useState(true);
   useEffect(() => {
@@ -420,15 +426,13 @@ export function GeneralSettings() {
           title="Panel animations"
           description="Set how fast workspace panels open and close (0 ms suppresses panel transitions)."
           resetAction={
-            (settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS) !==
-            DEFAULT_PANEL_ANIMATION_DURATION_MS ? (
+            panelDurationField.value !== DEFAULT_PANEL_ANIMATION_DURATION_MS ? (
               <SettingResetButton
                 label="panel animations"
-                onClick={() =>
-                  updateSettings({
-                    panelAnimationDurationMs: DEFAULT_PANEL_ANIMATION_DURATION_MS,
-                  })
-                }
+                onClick={async () => {
+                  panelDurationField.setValue(DEFAULT_PANEL_ANIMATION_DURATION_MS);
+                  await panelDurationField.flush();
+                }}
               />
             ) : null
           }
@@ -438,7 +442,7 @@ export function GeneralSettings() {
                 htmlFor="panel-animation-duration"
                 className="min-w-16 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground border border-border/50"
               >
-                {settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS} ms
+                {panelDurationField.value} ms
               </output>
               <input
                 id="panel-animation-duration"
@@ -446,13 +450,14 @@ export function GeneralSettings() {
                 min={0}
                 max={400}
                 step={25}
-                value={settings.panelAnimationDurationMs ?? DEFAULT_PANEL_ANIMATION_DURATION_MS}
+                value={panelDurationField.value}
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   if (Number.isInteger(val) && val >= 0 && val <= 400) {
-                    updateSettings({ panelAnimationDurationMs: val });
+                    panelDurationField.onChange(val);
                   }
                 }}
+                onBlur={panelDurationField.onBlur}
                 aria-label="Panel animation duration slider"
                 className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
               />

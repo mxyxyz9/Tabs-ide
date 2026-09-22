@@ -41,6 +41,12 @@ import { cn, getHashAwareSearchParams, isPopoutMode } from "~/lib/utils";
 import { isElectron } from "~/env";
 import { useConfirm } from "~/hooks/useConfirm";
 import {
+  useIsAnyDraftDirty,
+  useDirtyDraftSources,
+  clearAllDraftSources,
+} from "~/state/settingsDraftRegistry";
+import { clearProjectWorkspaceDrafts } from "~/components/projectWorkspaceDrafts";
+import {
   DEFAULT_UNIFIED_SETTINGS,
   PROVIDER_DISPLAY_NAMES,
   type KeybindingRule,
@@ -181,8 +187,26 @@ const SETTINGS_NAV: ReadonlyArray<{
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 
 function SettingsRouteView() {
-  const { confirmDialog } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
+  const isAnyDraftDirty = useIsAnyDraftDirty();
+  const dirtySources = useDirtyDraftSources();
+
+  const handleBack = useCallback(async () => {
+    if (isAnyDraftDirty) {
+      const sourceLabels = dirtySources.map((s) => s.label || s.sourceId).join(", ");
+      const shouldDiscard = await confirm(
+        `You have unsaved changes in ${sourceLabels || "Settings"}. Discard these changes and leave Settings?`,
+      );
+      if (!shouldDiscard) {
+        return;
+      }
+      clearProjectWorkspaceDrafts();
+      clearAllDraftSources();
+    }
+    void navigate({ to: "/" });
+  }, [isAnyDraftDirty, dirtySources, confirm, navigate]);
+
   const serverConfig = useServerConfig();
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
@@ -423,6 +447,18 @@ function SettingsRouteView() {
     [applyKeybindingMutation],
   );
 
+  const handleBatchUpsertKeybindings = useCallback(
+    async (rules: ReadonlyArray<KeybindingRule>) => {
+      const result = await ensureNativeApi().server.batchUpsertKeybindings({ rules: [...rules] });
+      void refreshServerConfig();
+      await queryClient.invalidateQueries({
+        queryKey: serverQueryKeys.config(),
+      });
+      return result;
+    },
+    [queryClient],
+  );
+
   const handleRemoveKeybinding = useCallback(
     (rule: KeybindingRule) =>
       applyKeybindingMutation(ensureNativeApi().server.removeKeybinding(rule)),
@@ -453,7 +489,7 @@ function SettingsRouteView() {
           <header className="border-b border-border px-3 py-2 sm:px-5">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-              <Button size="xs" variant="ghost" onClick={() => void navigate({ to: "/" })}>
+              <Button size="xs" variant="ghost" onClick={handleBack}>
                 <ArrowLeftIcon className="size-3.5" />
                 Back
               </Button>
@@ -471,12 +507,7 @@ function SettingsRouteView() {
 
         {isElectron && (
           <div className="drag-region flex h-[52px] shrink-0 items-center border-b border-border px-5">
-            <Button
-              size="xs"
-              variant="ghost"
-              className="no-drag"
-              onClick={() => void navigate({ to: "/" })}
-            >
+            <Button size="xs" variant="ghost" className="no-drag" onClick={handleBack}>
               <ArrowLeftIcon className="size-3.5" />
               Back
             </Button>
@@ -556,6 +587,7 @@ function SettingsRouteView() {
                       <KeybindingsSettings
                         keybindings={resolvedKeybindings}
                         onUpsert={handleUpsertKeybinding}
+                        onBatchUpsert={handleBatchUpsertKeybindings}
                         onRemove={handleRemoveKeybinding}
                         keybindingsConfigPath={keybindingsConfigPath as string}
                         availableEditors={(availableEditors as any) ?? []}

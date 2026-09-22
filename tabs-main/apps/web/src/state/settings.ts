@@ -94,7 +94,19 @@ export function rollbackServerSettings(previousSettings: ServerSettings) {
   );
 }
 
-export type SettingsSaveStatus = "idle" | "saving" | "saved" | "failed";
+export function rollbackClientSettings(previousSettings: ClientSettings) {
+  appAtomRegistry.set(clientSettingsAtom, previousSettings);
+  if (typeof document !== "undefined" && document.documentElement) {
+    document.documentElement.dataset.diffColorScheme = previousSettings.diffColorScheme;
+  }
+  try {
+    setLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, previousSettings, ClientSettingsSchema);
+  } catch (error) {
+    console.error("[CLIENT_SETTINGS] rollback persist failed", error);
+  }
+}
+
+export type SettingsSaveStatus = "idle" | "pending" | "saving" | "saved" | "failed";
 
 export interface SettingsPersistenceState {
   status: SettingsSaveStatus;
@@ -176,7 +188,9 @@ export function refreshServerConfig(): Promise<ServerConfig | null> {
   refreshServerConfigPromise = ensureNativeApi()
     .server.getConfig()
     .then((config) => {
-      setServerConfig(config);
+      if (config) {
+        setServerConfig(config);
+      }
       return config;
     })
     .catch((error) => {

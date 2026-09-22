@@ -1,5 +1,7 @@
 import {
+  MAX_KEYBINDINGS_COUNT,
   type KeybindingCommand,
+  type KeybindingRule,
   type KeybindingShortcut,
   type KeybindingWhenNode,
   type ResolvedKeybindingRule,
@@ -360,4 +362,183 @@ export function keybindingFromKeyboardEvent(
   if (event.shiftKey) parts.push("shift");
   parts.push(keyToken);
   return parts.join("+");
+}
+
+export interface KeybindingImportResult {
+  readonly validRules: ReadonlyArray<KeybindingRule>;
+  readonly skippedCommands: ReadonlyArray<string>;
+  readonly totalParsed: number;
+}
+
+export const COMMON_IDE_COMMAND_MAP: Record<string, KeybindingCommand> = {
+  "workbench.action.quickOpen": "commandPalette.toggle",
+  "workbench.action.showCommands": "commandPalette.toggle",
+  "workbench.action.toggleSidebarVisibility": "sidebar.toggle",
+  "workbench.action.terminal.toggleTerminal": "terminal.toggle",
+  "workbench.action.terminal.new": "terminal.new",
+  "workbench.action.terminal.split": "terminal.split",
+  "workbench.action.closeWindow": "window.close",
+  "workbench.action.reloadWindow": "window.reload",
+  "workbench.action.zoomIn": "zoom.in",
+  "workbench.action.zoomOut": "zoom.out",
+  "workbench.action.zoomReset": "zoom.reset",
+  "workbench.action.openSettings": "window.settings",
+  "workbench.action.nextEditor": "tab.next",
+  "workbench.action.previousEditor": "tab.prev",
+  "workbench.action.closeActiveEditor": "tab.close",
+  "workbench.action.files.newUntitledFile": "tab.new",
+  "chat.newChat": "chat.new",
+  "chat.newLocalChat": "chat.newLocal",
+};
+
+function stripJsonComments(content: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  let index = 0;
+
+  while (index < content.length) {
+    const current = content[index]!;
+    const next = content[index + 1];
+
+    if (inString) {
+      result += current;
+      if (escaped) {
+        escaped = false;
+      } else if (current === "\\") {
+        escaped = true;
+      } else if (current === '"') {
+        inString = false;
+      }
+      index++;
+      continue;
+    }
+
+    if (current === '"') {
+      inString = true;
+      result += current;
+      index++;
+      continue;
+    }
+
+    if (current === "/" && next === "/") {
+      result += "  ";
+      index += 2;
+      while (index < content.length && content[index] !== "\n" && content[index] !== "\r") {
+        result += " ";
+        index++;
+      }
+      continue;
+    }
+
+    if (current === "/" && next === "*") {
+      result += "  ";
+      index += 2;
+      while (index < content.length) {
+        if (content[index] === "*" && content[index + 1] === "/") {
+          result += "  ";
+          index += 2;
+          break;
+        }
+        const commentCharacter = content[index]!;
+        result += commentCharacter === "\n" || commentCharacter === "\r" ? commentCharacter : " ";
+        index++;
+      }
+      continue;
+    }
+
+    result += current;
+    index++;
+  }
+
+  return result;
+}
+
+export function parseAndValidateKeybindingImport(
+  jsoncContent: string,
+  knownCommandOptions?: ReadonlyArray<string>,
+): KeybindingImportResult {
+  const withoutComments = stripJsonComments(jsoncContent);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(withoutComments);
+  } catch {
+    throw new Error("Invalid JSON format in keybindings file.");
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Expected an array of keybindings.");
+  }
+  if (parsed.length === 0) {
+    throw new Error("The keybindings file is empty.");
+  }
+
+  // Structural validation upfront: ALL entries must be valid objects with non-empty string command and key
+  for (let i = 0; i < parsed.length; i++) {
+    const entry = parsed[i];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`Invalid keybinding entry at index ${i}: entry must be an object.`);
+    }
+    if (typeof (entry as any).command !== "string" || !(entry as any).command.trim()) {
+      throw new Error(
+        `Invalid keybinding entry at index ${i}: 'command' must be a non-empty string.`,
+      );
+    }
+    if (typeof (entry as any).key !== "string" || !(entry as any).key.trim()) {
+      throw new Error(`Invalid keybinding entry at index ${i}: 'key' must be a non-empty string.`);
+    }
+    if ((entry as any).when !== undefined && typeof (entry as any).when !== "string") {
+      throw new Error(
+        `Invalid keybinding entry at index ${i}: 'when' must be a string if provided.`,
+      );
+    }
+  }
+
+  const skippedCommands: string[] = [];
+  const dedupedRulesMap = new Map<string, KeybindingRule>();
+
+  for (const binding of parsed) {
+    let cmd = binding.command.trim();
+    if (COMMON_IDE_COMMAND_MAP[cmd]) {
+      cmd = COMMON_IDE_COMMAND_MAP[cmd];
+    } else if (knownCommandOptions && !knownCommandOptions.includes(cmd)) {
+      skippedCommands.push(binding.command);
+      continue;
+    }
+
+    const normalizedKey = binding.key
+      .trim()
+      .toLowerCase()
+      .replace(/\bcmd\b/g, "meta");
+
+    const rule: KeybindingRule = {
+      command: cmd as KeybindingCommand,
+      key: normalizedKey,
+      ...(typeof binding.when === "string" && binding.when.trim()
+        ? { when: binding.when.trim() }
+        : {}),
+    };
+
+    // Deterministic duplicate behavior: later entry overrides earlier entry
+    dedupedRulesMap.set(rule.command, rule);
+  }
+
+  const validRules = Array.from(dedupedRulesMap.values());
+  if (validRules.length === 0) {
+    throw new Error(
+      `No supported keybinding commands found to import.${skippedCommands.length > 0 ? ` Skipped ${skippedCommands.length} unsupported command(s).` : ""}`,
+    );
+  }
+
+  if (validRules.length > MAX_KEYBINDINGS_COUNT) {
+    throw new Error(
+      `The import contains ${validRules.length} valid keybindings, which exceeds the maximum allowed limit of ${MAX_KEYBINDINGS_COUNT} rules.`,
+    );
+  }
+
+  return {
+    validRules,
+    skippedCommands,
+    totalParsed: parsed.length,
+  };
 }

@@ -435,6 +435,8 @@ export function createWsNativeApi(options?: {
       runProviderMaintenance: (input) =>
         transport.request(WS_METHODS.serverRunProviderMaintenance, input),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
+      batchUpsertKeybindings: (input) =>
+        transport.request(WS_METHODS.serverBatchUpsertKeybindings, input),
       removeKeybinding: (input) => transport.request(WS_METHODS.serverRemoveKeybinding, input),
       getSettings: () => transport.request(WS_METHODS.serverGetSettings),
       updateSettings: (patch) => transport.request(WS_METHODS.serverUpdateSettings, { patch }),

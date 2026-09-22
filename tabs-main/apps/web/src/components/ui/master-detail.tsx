@@ -1,5 +1,4 @@
 import { type ReactNode, forwardRef } from "react";
-import { ScrollArea } from "./scroll-area";
 import { Button } from "./button";
 import { GripVerticalIcon, ChevronUpIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -97,7 +96,9 @@ export const MasterDetailItem = forwardRef<HTMLDivElement, MasterDetailItemProps
             <span
               className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-500"
               title="Unsaved changes"
-            />
+            >
+              <span className="sr-only">(unsaved changes)</span>
+            </span>
           ) : null}
         </Button>
         {dragHandleProps ? (

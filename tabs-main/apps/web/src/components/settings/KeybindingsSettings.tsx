@@ -81,14 +81,16 @@ import {
   unknownWhenVariables,
   whenAstToExpression,
   whenNodeRemoveLabel,
+  parseAndValidateKeybindingImport,
 } from "./keybindingsSettings.logic";
 
 export interface KeybindingsSettingsProps {
   readonly keybindings: ResolvedKeybindingsConfig;
   readonly onUpsert: (rule: KeybindingRule) => Promise<unknown> | unknown;
+  readonly onBatchUpsert: (rules: ReadonlyArray<KeybindingRule>) => Promise<unknown> | unknown;
   readonly onRemove: (rule: KeybindingRule) => Promise<unknown> | unknown;
   readonly keybindingsConfigPath?: string | null | undefined;
-  readonly availableEditors?: ReadonlyArray<string> | null | undefined;
+  readonly availableEditors?: ReadonlyArray<any> | null | undefined;
   readonly platform?: string;
 }
 
@@ -1002,18 +1004,12 @@ function KeybindingTableRow({
 export function KeybindingsSettings({
   keybindings,
   onUpsert,
+  onBatchUpsert,
   onRemove,
   keybindingsConfigPath,
   availableEditors,
   platform = typeof navigator === "undefined" ? "" : navigator.platform,
-}: {
-  keybindings: ResolvedKeybindingsConfig;
-  onUpsert: (rule: KeybindingRule) => void;
-  onRemove: (rule: KeybindingRule) => void;
-  keybindingsConfigPath: string;
-  availableEditors: Array<{ id: string; name: string }>;
-  platform?: string;
-}) {
+}: KeybindingsSettingsProps) {
   const { fontPreferences } = useTheme();
   const activeFontCombo = getActiveFontCombo(fontPreferences);
   const { confirm, confirmDialog } = useConfirm();
@@ -1114,76 +1110,44 @@ export function KeybindingsSettings({
   );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isImporting) return;
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setIsImporting(true);
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const content = e.target?.result as string;
-        // Strip single and multiline comments (JSONC)
-        const withoutComments = content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
-        const parsed = JSON.parse(withoutComments);
+        const content = (e.target?.result as string) ?? "";
+        const { validRules, skippedCommands } = parseAndValidateKeybindingImport(
+          content,
+          commandOptions,
+        );
 
-        if (!Array.isArray(parsed)) throw new Error("Expected an array of keybindings.");
-
-        let importedCount = 0;
-
-        // Basic mapping from common IDE commands to Tabs commands
-        const commandMap: Record<string, KeybindingCommand> = {
-          "workbench.action.quickOpen": "commandPalette.toggle",
-          "workbench.action.showCommands": "commandPalette.toggle",
-          "workbench.action.toggleSidebarVisibility": "sidebar.toggle",
-          "workbench.action.terminal.toggleTerminal": "terminal.toggle",
-          "workbench.action.terminal.new": "terminal.new",
-          "workbench.action.terminal.split": "terminal.split",
-          "workbench.action.closeWindow": "window.close",
-          "workbench.action.reloadWindow": "window.reload",
-          "workbench.action.zoomIn": "zoom.in",
-          "workbench.action.zoomOut": "zoom.out",
-          "workbench.action.zoomReset": "zoom.reset",
-          "workbench.action.openSettings": "window.settings",
-          "workbench.action.nextEditor": "tab.next",
-          "workbench.action.previousEditor": "tab.prev",
-          "workbench.action.closeActiveEditor": "tab.close",
-          "workbench.action.files.newUntitledFile": "tab.new",
-          "chat.newChat": "chat.new",
-          "chat.newLocalChat": "chat.newLocal",
-        };
-
-        for (const binding of parsed) {
-          if (!binding.key || !binding.command) continue;
-
-          let cmd = binding.command;
-          if (commandMap[cmd]) {
-            cmd = commandMap[cmd];
-          } else if (commandOptions.includes(cmd as KeybindingCommand)) {
-            // Already valid
-          } else {
-            // Unmapped or unsupported command, skip
-            continue;
-          }
-
-          // Normalize keys (e.g. "cmd+p" -> "meta+p")
-          let key = binding.key.toLowerCase().replace(/cmd/g, "meta");
-
-          await onUpsert({
-            command: cmd as KeybindingCommand,
-            key,
-            ...(binding.when ? { when: binding.when } : {}),
-          });
-          importedCount++;
+        // Submit complete validated import as one batch operation
+        let committedCount = validRules.length;
+        const res = await onBatchUpsert(validRules);
+        if (
+          res &&
+          typeof res === "object" &&
+          "importedCount" in res &&
+          typeof (res as any).importedCount === "number"
+        ) {
+          committedCount = (res as any).importedCount;
         }
 
+        const skippedMsg =
+          skippedCommands.length > 0 ? ` (${skippedCommands.length} unsupported skipped)` : "";
         toastManager.add({
           title: "Import Successful",
-          description: `Imported ${importedCount} keybindings.`,
+          description: `Imported ${committedCount} keybindings${skippedMsg}.`,
           type: "success",
         });
       } catch (err) {
@@ -1192,13 +1156,26 @@ export function KeybindingsSettings({
           description: err instanceof Error ? err.message : "Invalid keybindings file format.",
           type: "error",
         });
+      } finally {
+        setIsImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
       }
+    };
 
-      // Reset input so the same file can be selected again
+    reader.onerror = () => {
+      setIsImporting(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      toastManager.add({
+        title: "Import Failed",
+        description: "Failed to read the keybindings file.",
+        type: "error",
+      });
     };
+
     reader.readAsText(file);
   };
 
@@ -1314,11 +1291,13 @@ export function KeybindingsSettings({
               size="sm"
               variant="outline"
               className="gap-2 px-3"
+              disabled={isImporting}
+              aria-busy={isImporting}
               onClick={handleImportClick}
               aria-label="Import keybindings"
             >
               <DownloadIcon className="size-4" />
-              Import
+              {isImporting ? "Importing..." : "Import"}
             </Button>
             <Button
               type="button"

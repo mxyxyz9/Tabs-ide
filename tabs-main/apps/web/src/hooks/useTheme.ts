@@ -213,6 +213,64 @@ export function applyInterfaceFontSize(style: CSSStyleDeclaration, size: number)
   style.removeProperty("font-size");
 }
 
+export type ThemeSnapshotState = {
+  readonly theme: ThemePreference;
+  readonly customConfig: CustomThemeConfig;
+  readonly fontPreferences: FontPreferences;
+};
+
+export function snapshotThemeState(): ThemeSnapshotState {
+  return {
+    theme: getStoredPreference(),
+    customConfig: getStoredCustomThemeConfig(),
+    fontPreferences: getStoredFontPreferences(),
+  };
+}
+
+export function previewTheme(
+  preference: ThemePreference,
+  customConfig?: CustomThemeConfig,
+  fontPreferences?: FontPreferences,
+): void {
+  applyTheme(preference, true, customConfig, fontPreferences);
+}
+
+export function restoreThemeSnapshot(snapshot: ThemeSnapshotState): void {
+  applyTheme(snapshot.theme, true, snapshot.customConfig, snapshot.fontPreferences);
+}
+
+export function commitCustomTheme(
+  config: CustomThemeConfig,
+  fontPreferences?: FontPreferences,
+): void {
+  const previousCustomTheme = localStorage.getItem(CUSTOM_STORAGE_KEY);
+  const previousFontPreferences = localStorage.getItem(FONT_PREFERENCES_STORAGE_KEY);
+  const previousTheme = localStorage.getItem(STORAGE_KEY);
+
+  try {
+    localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(config));
+    if (fontPreferences) {
+      localStorage.setItem(FONT_PREFERENCES_STORAGE_KEY, JSON.stringify(fontPreferences));
+    }
+    localStorage.setItem(STORAGE_KEY, "custom");
+  } catch (error) {
+    const restoreItem = (key: string, previousValue: string | null) => {
+      if (previousValue === null) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, previousValue);
+      }
+    };
+    restoreItem(CUSTOM_STORAGE_KEY, previousCustomTheme);
+    restoreItem(FONT_PREFERENCES_STORAGE_KEY, previousFontPreferences);
+    restoreItem(STORAGE_KEY, previousTheme);
+    throw error;
+  }
+
+  applyTheme("custom", true, config, fontPreferences);
+  emitChange();
+}
+
 function applyTheme(
   preference: ThemePreference,
   suppressTransitions = false,
@@ -396,7 +454,11 @@ function applyTheme(
   }
 
   if (suppressTransitions && typeof document !== "undefined" && document.documentElement) {
-    requestAnimationFrame(() => {
+    const rAF =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : (cb: () => void) => setTimeout(cb, 0);
+    rAF(() => {
       if (typeof document !== "undefined" && document.documentElement) {
         void document.documentElement.offsetHeight;
       }

@@ -4,6 +4,7 @@ import { DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useTheme } from "../../hooks/useTheme";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
+import { useSettingsDraftSource } from "../../state/settingsDraftRegistry";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
@@ -189,8 +190,24 @@ export function AnimationsSettings() {
     savedCloseAnimationFontComboId,
   );
   const [previewCloseCustomAnimationFont, setPreviewCloseCustomAnimationFont] = useState<string>(
-    savedCloseCustomAnimationFont,
+    () => savedCloseCustomAnimationFont,
   );
+
+  const isAnimationsDirty =
+    previewStyle !== settings.splashLoaderStyle ||
+    previewPalette !== settings.splashLoaderPalette ||
+    previewTheme !== settings.splashLoaderTheme ||
+    closePreviewStyle !== settings.closeLoaderStyle ||
+    closePreviewPalette !== settings.closeLoaderPalette ||
+    closePreviewTheme !== settings.closeLoaderTheme ||
+    previewStartupAnimationFontComboId !== savedStartupAnimationFontComboId ||
+    (previewStartupAnimationFontComboId === "custom" &&
+      previewStartupCustomAnimationFont !== savedStartupCustomAnimationFont) ||
+    previewCloseAnimationFontComboId !== savedCloseAnimationFontComboId ||
+    (previewCloseAnimationFontComboId === "custom" &&
+      previewCloseCustomAnimationFont !== savedCloseCustomAnimationFont);
+
+  useSettingsDraftSource("animations", isAnimationsDirty, "Animations");
 
   const activeFontComboId =
     animationTab === "startup"
@@ -759,18 +776,7 @@ export function AnimationsSettings() {
             </div>
           </div>
 
-          {(previewStyle !== settings.splashLoaderStyle ||
-            previewPalette !== settings.splashLoaderPalette ||
-            previewTheme !== settings.splashLoaderTheme ||
-            closePreviewStyle !== settings.closeLoaderStyle ||
-            closePreviewPalette !== settings.closeLoaderPalette ||
-            closePreviewTheme !== settings.closeLoaderTheme ||
-            previewStartupAnimationFontComboId !== savedStartupAnimationFontComboId ||
-            (previewStartupAnimationFontComboId === "custom" &&
-              previewStartupCustomAnimationFont !== savedStartupCustomAnimationFont) ||
-            previewCloseAnimationFontComboId !== savedCloseAnimationFontComboId ||
-            (previewCloseAnimationFontComboId === "custom" &&
-              previewCloseCustomAnimationFont !== savedCloseCustomAnimationFont)) && (
+          {isAnimationsDirty && (
             <div className="flex justify-end p-4 sm:p-5 border-t border-border">
               <Button
                 onClick={() => {

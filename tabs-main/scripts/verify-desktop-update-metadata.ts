@@ -31,9 +31,7 @@ export function readReleaseNotes(manifestText: string): string | null {
     try {
       return normalizeText(JSON.parse(`"${quotedMatch[1]}"`) as string);
     } catch {
-      return normalizeText(
-        quotedMatch[1].replace(/\\r\\n|\\r|\\n/g, "\n").replace(/\\"/g, '"'),
-      );
+      return normalizeText(quotedMatch[1].replace(/\\r\\n|\\r|\\n/g, "\n").replace(/\\"/g, '"'));
     }
   }
 

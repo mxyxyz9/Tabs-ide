@@ -24,6 +24,7 @@ const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const OPEN_POPOUT_WINDOW_CHANNEL = "desktop:open-popout-window";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const APP_CLOSING_CHANNEL = "desktop:app-closing";
+const APP_SETTINGS_FLUSH_DONE_CHANNEL = "desktop:settings-flush-done";
 const QUIT_CONFIRMATION_REQUEST_CHANNEL = "desktop:quit-confirmation-request";
 const QUIT_CONFIRMATION_RESPONSE_CHANNEL = "desktop:quit-confirmation-response";
 const GET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:get-confirm-before-quit";
@@ -386,6 +387,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     return () => {
       ipcRenderer.removeListener(APP_CLOSING_CHANNEL, wrapped);
     };
+  },
+  notifySettingsFlushDone: () => {
+    ipcRenderer.send(APP_SETTINGS_FLUSH_DONE_CHANNEL);
   },
   getConfirmBeforeQuit: () => ipcRenderer.invoke(GET_CONFIRM_BEFORE_QUIT_CHANNEL),
   setConfirmBeforeQuit: (value: boolean) =>

@@ -9,7 +9,7 @@
  * write. The hook transparently routes reads/writes to the correct backing
  * store.
  */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ServerSettings,
   ServerSettingsPatch,
@@ -33,8 +33,10 @@ import { Predicate, Schema, Struct } from "effect";
 import { DeepMutable } from "effect/Types";
 import { deepMerge } from "@tabs/shared/Struct";
 import {
+  clientSettingsAtom,
   patchServerSettings,
   refreshServerConfig,
+  rollbackClientSettings,
   rollbackServerSettings,
   serverConfigAtom,
   setSettingsPersistence,
@@ -186,15 +188,49 @@ let latestServerUpdateSequence = 0;
 let savedTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let serverUpdateQueue: Promise<void> = Promise.resolve();
 
+export function resetSettingsStateForTesting(): void {
+  latestServerUpdateSequence = 0;
+  serverUpdateQueue = Promise.resolve();
+  shutdownListenersInstalled = false;
+  activeDebouncedUpdaters.clear();
+  if (savedTimeoutId) {
+    clearTimeout(savedTimeoutId);
+    savedTimeoutId = null;
+  }
+}
+
+/**
+ * Redacts tokens, passwords, and sensitive keys from error messages
+ * to prevent leaking secrets in status UI, telemetry, or logs.
+ */
+export function sanitizeErrorMessage(msg: string): string {
+  if (!msg) return msg;
+  return msg
+    .replace(
+      /(?:token|api[_-]?key|secret|password|bearer|authorization)[:=\s]+[^\s,;]+/gi,
+      (match) => {
+        const parts = match.split(/[:=\s]+/);
+        return `${parts[0]}=[REDACTED]`;
+      },
+    )
+    .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[REDACTED]")
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED]");
+}
+
 /**
  * Applies a settings patch directly to the appropriate backing store (server via RPC,
- * client via localStorage) with optimistic update, rollback on server rejection,
- * and out-of-order sequence protection.
+ * client via localStorage) with optimistic update, transactional rollback on rejection
+ * (Option A: rolling back both stores if either fails), and out-of-order sequence protection.
  */
 export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean> {
   const { serverPatch, clientPatch } = splitPatch(patch);
   const hasServerPatch = Object.keys(serverPatch).length > 0;
   const hasClientPatch = Object.keys(clientPatch).length > 0;
+
+  // Snapshot previous states for transactional rollback (Option A)
+  const previousClientSettings = appAtomRegistry.get(clientSettingsAtom);
+  const currentConfig = appAtomRegistry.get(serverConfigAtom);
+  const previousServerSettings = currentConfig?.settings ?? DEFAULT_SERVER_SETTINGS;
 
   if (hasClientPatch) {
     try {
@@ -215,7 +251,8 @@ export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean
         }, 3000);
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Failed to save client settings";
+      const rawMsg = error instanceof Error ? error.message : "Failed to save client settings";
+      const errorMsg = sanitizeErrorMessage(rawMsg);
       setSettingsPersistence({
         status: "failed",
         error: errorMsg,
@@ -229,8 +266,6 @@ export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean
 
   if (hasServerPatch) {
     const currentSeq = ++latestServerUpdateSequence;
-    const currentConfig = appAtomRegistry.get(serverConfigAtom);
-    const previousSettings = currentConfig?.settings ?? DEFAULT_SERVER_SETTINGS;
 
     patchServerSettings(serverPatch, (current) => mergeServerSettingsPatch(current, serverPatch));
 
@@ -274,18 +309,23 @@ export function applySettingsUpdate(patch: Record<string, any>): Promise<boolean
       })
       .catch(async (err) => {
         if (currentSeq === latestServerUpdateSequence) {
+          // Transactional rollback of both server and client (Option A)
           const refreshedConfig = await refreshServerConfig();
           if (!refreshedConfig) {
-            rollbackServerSettings(previousSettings);
+            rollbackServerSettings(previousServerSettings);
           }
-          const errorMsg =
+          if (hasClientPatch) {
+            rollbackClientSettings(previousClientSettings);
+          }
+          const rawMsg =
             err instanceof Error ? err.message : String(err ?? "Failed to save settings");
+          const errorMsg = sanitizeErrorMessage(rawMsg);
           setSettingsPersistence({
             status: "failed",
             error: errorMsg,
             lastSavedAt: null,
-            failedPatch: serverPatch,
-            retry: () => applySettingsUpdate(serverPatch),
+            failedPatch: patch,
+            retry: () => applySettingsUpdate(patch),
           });
         }
         return false;
@@ -318,14 +358,64 @@ export function useUpdateSettings() {
   };
 }
 
+// ── Centralized Debounced Settings Coordination ────────────────────────
+
+export interface DebouncedSettingsUpdater {
+  updateSettings: (patch: Record<string, any>) => void;
+  flush: () => Promise<boolean>;
+  cancel: () => void;
+  getPendingPatch: () => Record<string, any>;
+  hasPending: () => boolean;
+}
+
+const activeDebouncedUpdaters = new Set<DebouncedSettingsUpdater>();
+
+let shutdownListenersInstalled = false;
+export function ensureShutdownListeners(): void {
+  if (shutdownListenersInstalled) return;
+  if (typeof window === "undefined") return;
+  shutdownListenersInstalled = true;
+
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("beforeunload", () => {
+      void flushAllDebouncedSettings();
+    });
+  }
+
+  const bridge = (window as any).desktopBridge;
+  if (bridge?.onAppClosing) {
+    bridge.onAppClosing(() => {
+      void flushAllDebouncedSettings().finally(() => {
+        bridge.notifySettingsFlushDone?.();
+      });
+    });
+  }
+}
+
+export function registerDebouncedUpdater(updater: DebouncedSettingsUpdater): () => void {
+  activeDebouncedUpdaters.add(updater);
+  ensureShutdownListeners();
+  return () => {
+    activeDebouncedUpdaters.delete(updater);
+  };
+}
+
+export async function flushAllDebouncedSettings(): Promise<boolean> {
+  if (activeDebouncedUpdaters.size === 0) return true;
+  const updaters = Array.from(activeDebouncedUpdaters);
+  const results = await Promise.all(updaters.map((u) => u.flush()));
+  return results.every(Boolean);
+}
+
 /**
  * Controller for debouncing rapid settings updates (e.g. text fields or sliders)
- * and flushing pending changes on demand.
+ * and flushing pending changes on demand. Uses deepMerge to avoid clobbering
+ * nested structures like `providers`.
  */
 export function createDebouncedSettingsUpdater(
   updater: (patch: Record<string, any>) => Promise<boolean> = applySettingsUpdate,
   delay = 300,
-) {
+): DebouncedSettingsUpdater {
   let pendingPatch: Record<string, any> = {};
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -343,10 +433,7 @@ export function createDebouncedSettingsUpdater(
   };
 
   const queueUpdate = (patch: Record<string, any>) => {
-    pendingPatch = {
-      ...pendingPatch,
-      ...patch,
-    };
+    pendingPatch = deepMerge(pendingPatch, patch as any);
     if (timer) {
       clearTimeout(timer);
     }
@@ -368,41 +455,139 @@ export function createDebouncedSettingsUpdater(
     updateSettings: queueUpdate,
     flush,
     cancel,
-    getPendingPatch: () => pendingPatch,
+    getPendingPatch: () => ({ ...pendingPatch }),
+    hasPending: () => Object.keys(pendingPatch).length > 0,
   };
 }
 
 /**
  * Hook for debouncing rapid settings updates (e.g. text fields or sliders)
- * and automatically flushing pending changes on blur or window unload.
+ * and automatically flushing pending changes on unmount, window unload, or app quit.
  */
-export function useDebouncedSettingsUpdate(delay = 300) {
-  const { updateSettings } = useUpdateSettings();
-  const updaterRef = useRef<ReturnType<typeof createDebouncedSettingsUpdater> | null>(null);
+export function useDebouncedSettingsUpdate(
+  delay = 300,
+  updater: (patch: Record<string, any>) => Promise<boolean> = applySettingsUpdate,
+) {
+  const updaterRef = useRef<DebouncedSettingsUpdater | null>(null);
   if (!updaterRef.current) {
-    updaterRef.current = createDebouncedSettingsUpdater(updateSettings, delay);
+    updaterRef.current = createDebouncedSettingsUpdater(updater, delay);
   }
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      void updaterRef.current?.flush();
-    };
-    if (typeof window !== "undefined") {
-      window.addEventListener("beforeunload", handleBeforeUnload);
-      return () => {
-        window.removeEventListener("beforeunload", handleBeforeUnload);
-        void updaterRef.current?.flush();
-      };
-    }
+    const instance = updaterRef.current!;
+    const unregister = registerDebouncedUpdater(instance);
     return () => {
-      void updaterRef.current?.flush();
+      unregister();
+      void instance.flush();
     };
   }, []);
 
+  return updaterRef.current;
+}
+
+/**
+ * Hook for a single debounced setting field (text input or slider)
+ * providing instant responsive visual state with debounced persistence,
+ * immediate flush on blur, Enter, unmount, and app shutdown.
+ */
+export function useDebouncedSettingField<T extends string | number>({
+  value,
+  onPersist,
+  delay = 350,
+}: {
+  value: T;
+  onPersist: (val: T) => void | Promise<boolean>;
+  delay?: number;
+}) {
+  const [localValue, setLocalValue] = useState<T>(value);
+  const isDirtyRef = useRef(false);
+  const latestLocalRef = useRef<T>(value);
+  latestLocalRef.current = localValue;
+  const onPersistRef = useRef(onPersist);
+  onPersistRef.current = onPersist;
+
+  useEffect(() => {
+    if (!isDirtyRef.current) {
+      setLocalValue(value);
+    }
+  }, [value]);
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = useCallback((): Promise<boolean> => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (isDirtyRef.current) {
+      isDirtyRef.current = false;
+      const res = onPersistRef.current(latestLocalRef.current);
+      if (res instanceof Promise) {
+        return res;
+      }
+      return Promise.resolve(true);
+    }
+    return Promise.resolve(true);
+  }, []);
+
+  const handleChange = useCallback(
+    (nextVal: T) => {
+      latestLocalRef.current = nextVal;
+      setLocalValue(nextVal);
+      isDirtyRef.current = true;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        void flush();
+      }, delay);
+    },
+    [delay, flush],
+  );
+
+  const handleBlur = useCallback(() => {
+    void flush();
+  }, [flush]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        void flush();
+      }
+    },
+    [flush],
+  );
+
+  useEffect(() => {
+    const updaterInstance: DebouncedSettingsUpdater = {
+      updateSettings: () => {},
+      flush,
+      cancel: () => {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        isDirtyRef.current = false;
+      },
+      getPendingPatch: () => (isDirtyRef.current ? { value: latestLocalRef.current } : {}),
+      hasPending: () => isDirtyRef.current,
+    };
+    const unregister = registerDebouncedUpdater(updaterInstance);
+    return () => {
+      unregister();
+      void flush();
+    };
+  }, [flush]);
+
   return {
-    updateSettings: updaterRef.current.updateSettings,
-    flush: updaterRef.current.flush,
-    pendingPatch: updaterRef.current.getPendingPatch(),
+    value: localValue,
+    setValue: handleChange,
+    onChange: handleChange,
+    onBlur: handleBlur,
+    onKeyDown: handleKeyDown,
+    flush,
+    isDirty: isDirtyRef.current,
   };
 }
 

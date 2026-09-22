@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import {
   calculateLuminance,
-  evaluateThemeTokens,
   getOptimalPrimaryForeground,
   runThemeWcagCheck,
   toHexColor,
@@ -32,7 +31,15 @@ import {
   type RandomStyleMode,
   type ThemeId,
 } from "../lib/themes";
-import { buildFontPreferencesFromThemeConfig } from "../hooks/useTheme";
+import {
+  buildFontPreferencesFromThemeConfig,
+  commitCustomTheme,
+  previewTheme,
+  restoreThemeSnapshot,
+  snapshotThemeState,
+  type ThemeSnapshotState,
+} from "../hooks/useTheme";
+import { useSettingsDraftSource } from "../state/settingsDraftRegistry";
 import { CustomColorPicker } from "./ui/CustomColorPicker";
 import { WorkbenchMiniPreview } from "./WorkbenchMiniPreview";
 import { ThemeImportExportModal } from "./ThemeImportExportModal";
@@ -40,16 +47,18 @@ import { Button } from "./ui/button";
 import { Dialog, DialogPopup } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
+import { toastManager } from "./ui/toast";
 
-interface CustomThemeStudioModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  config: CustomThemeConfig;
-  onChange: (next: CustomThemeConfig) => void;
-  onSavePreset: (name: string, config: CustomThemeConfig) => void;
-  initialPresetName?: string;
+export interface CustomThemeStudioModalProps {
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly config: CustomThemeConfig;
+  readonly onChange?: (next: CustomThemeConfig) => void;
+  readonly onApply?: (config: CustomThemeConfig, fonts?: FontPreferences) => Promise<void> | void;
+  readonly onSavePreset: (name: string, config: CustomThemeConfig) => void;
+  readonly initialPresetName?: string;
   /** Called when a theme is imported inside the Studio, passing the resolved font preferences. */
-  onFontsImported?: (fonts: FontPreferences) => void;
+  readonly onFontsImported?: (fonts: FontPreferences) => void;
 }
 
 export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
@@ -57,30 +66,66 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
   onClose,
   config,
   onChange,
+  onApply,
   onSavePreset,
   initialPresetName = "",
   onFontsImported,
 }) => {
+  const [draftConfig, setDraftConfig] = useState<CustomThemeConfig>(config);
+  const [draftFonts, setDraftFonts] = useState<FontPreferences | undefined>(undefined);
   const [presetNameInput, setPresetNameInput] = useState(initialPresetName);
   const [randomStyle, setRandomStyle] = useState<RandomStyleMode>("pastel");
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
   const [importExportTab, setImportExportTab] = useState<"import" | "export">("import");
   const [autoTuneFeedback, setAutoTuneFeedback] = useState<string | null>(null);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+
+  const snapshotRef = useRef<ThemeSnapshotState | null>(null);
+  const initialDraftConfigRef = useRef<CustomThemeConfig>(config);
+
+  // Snapshot pre-open state and initialize local draft on open
+  useEffect(() => {
+    if (isOpen) {
+      snapshotRef.current = snapshotThemeState();
+      initialDraftConfigRef.current = config;
+      setDraftConfig(config);
+      setDraftFonts(undefined);
+      setApplyError(null);
+      setPresetNameInput(initialPresetName);
+      previewTheme("custom", config);
+    }
+  }, [isOpen, config, initialPresetName]);
+
+  const isDraftDirty =
+    isOpen &&
+    (JSON.stringify(draftConfig) !== JSON.stringify(initialDraftConfigRef.current) ||
+      (draftFonts !== undefined &&
+        JSON.stringify(draftFonts) !== JSON.stringify(snapshotRef.current?.fontPreferences)));
+  useSettingsDraftSource("theme-studio", isDraftDirty, "Theme Studio");
+
+  const handleDismiss = useCallback(() => {
+    if (snapshotRef.current) {
+      restoreThemeSnapshot(snapshotRef.current);
+    }
+    setApplyError(null);
+    onClose();
+  }, [onClose]);
 
   // Extended driver state for extra granular controls
   const mutedFgColor =
-    config.tokenOverrides?.["app.mutedForeground"] ||
-    (config.baseVariant === "dark" ? "#8a8a8a" : "#64748b");
+    draftConfig.tokenOverrides?.["app.mutedForeground"] ||
+    (draftConfig.baseVariant === "dark" ? "#8a8a8a" : "#64748b");
   const selectionColor =
-    config.tokenOverrides?.["editor.selectionBackground"] ||
-    (config.baseVariant === "dark" ? "#38bdf840" : "#2563eb33");
+    draftConfig.tokenOverrides?.["editor.selectionBackground"] ||
+    (draftConfig.baseVariant === "dark" ? "#38bdf840" : "#2563eb33");
   const hoverWashColor =
-    config.tokenOverrides?.["list.hoverBackground"] ||
-    (config.baseVariant === "dark" ? "#ffffff0f" : "#0000000d");
+    draftConfig.tokenOverrides?.["list.hoverBackground"] ||
+    (draftConfig.baseVariant === "dark" ? "#ffffff0f" : "#0000000d");
 
   // WCAG Contrast audit results
-  const wcagResults = useMemo(() => runThemeWcagCheck(config), [config]);
+  const wcagResults = useMemo(() => runThemeWcagCheck(draftConfig), [draftConfig]);
   const lowContrastCount = useMemo(
     () => wcagResults.filter((r) => r.isLowContrast).length,
     [wcagResults],
@@ -88,21 +133,31 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
 
   if (!isOpen) return null;
 
+  const updateDraft = (next: CustomThemeConfig, nextFonts?: FontPreferences) => {
+    setDraftConfig(next);
+    const fontsToUse = nextFonts ?? draftFonts;
+    if (nextFonts) {
+      setDraftFonts(nextFonts);
+    }
+    previewTheme("custom", next, fontsToUse);
+    onChange?.(next);
+  };
+
   const updatePrimaryColor = (key: keyof CustomThemeConfig["colors"], value: string) => {
-    onChange({
-      ...config,
+    updateDraft({
+      ...draftConfig,
       colors: {
-        ...config.colors,
+        ...draftConfig.colors,
         [key]: value,
       },
     });
   };
 
   const updateTokenOverride = (token: string, value: string) => {
-    onChange({
-      ...config,
+    updateDraft({
+      ...draftConfig,
       tokenOverrides: {
-        ...config.tokenOverrides,
+        ...draftConfig.tokenOverrides,
         [token]: value,
       },
     });
@@ -112,7 +167,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
     if (!presetId) return;
     const def = THEME_DEFINITIONS[presetId as ThemeId];
     if (def) {
-      onChange({
+      updateDraft({
         baseVariant: def.baseVariant,
         colors: {
           background: def.colors.background,
@@ -121,7 +176,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
           border: def.colors.border,
           primary: def.colors.primary,
         },
-        fonts: config.fonts,
+        fonts: draftConfig.fonts,
         tokenOverrides: {},
       });
       setPresetNameInput(`${def.name} Mod`);
@@ -129,31 +184,59 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
   };
 
   const handleRandomize = () => {
-    const randomizedColors = generateHarmonizedPalette(config.baseVariant, randomStyle);
-    onChange({
-      ...config,
+    const randomizedColors = generateHarmonizedPalette(draftConfig.baseVariant, randomStyle);
+    updateDraft({
+      ...draftConfig,
       colors: randomizedColors,
     });
     setPresetNameInput(generateAestheticThemeName());
   };
 
-  const handleSave = () => {
+  const handleSavePresetAction = () => {
     const name = presetNameInput.trim() || generateAestheticThemeName();
-    onSavePreset(name, config);
+    onSavePreset(name, draftConfig);
     setPresetNameInput("");
   };
 
-  const handleResetToDefault = () => {
-    const isLightMode = config.baseVariant === "light";
-    onChange(isLightMode ? DEFAULT_CUSTOM_THEME_LIGHT : DEFAULT_CUSTOM_THEME);
+  const handleApplyAction = async () => {
+    setIsApplying(true);
+    setApplyError(null);
+    try {
+      if (onApply) {
+        await onApply(draftConfig, draftFonts);
+      } else {
+        commitCustomTheme(draftConfig, draftFonts);
+        toastManager.add({
+          type: "success",
+          title: "Theme Applied",
+          description: "Custom theme applied and saved.",
+        });
+        onClose();
+      }
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err ?? "Failed to apply theme");
+      setApplyError(errorMsg);
+      toastManager.add({
+        type: "error",
+        title: "Save Failed",
+        description: errorMsg,
+      });
+    } finally {
+      setIsApplying(false);
+    }
   };
 
-  // Re-engineered Active Contrast Auto-Tune Engine
-  const handleAutoFixContrast = () => {
-    const isDark = config.baseVariant === "dark";
-    const bgLum = calculateLuminance(toHexColor(config.colors.background));
+  const handleResetToDefault = () => {
+    const isLightMode = draftConfig.baseVariant === "light";
+    updateDraft(isLightMode ? DEFAULT_CUSTOM_THEME_LIGHT : DEFAULT_CUSTOM_THEME);
+  };
 
-    let nextFg = config.colors.foreground;
+  // Active Contrast Auto-Tune Engine
+  const handleAutoFixContrast = () => {
+    const isDark = draftConfig.baseVariant === "dark";
+    const bgLum = calculateLuminance(toHexColor(draftConfig.colors.background));
+
+    let nextFg = draftConfig.colors.foreground;
     if (isDark && bgLum > 0.4) {
       nextFg = "#f5f5f5";
     } else if (!isDark && bgLum < 0.6) {
@@ -162,9 +245,9 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
       nextFg = isDark ? "#ffffff" : "#0f172a";
     }
 
-    const optimalPrimaryFg = getOptimalPrimaryForeground(config.colors.primary);
+    const optimalPrimaryFg = getOptimalPrimaryForeground(draftConfig.colors.primary);
 
-    const nextOverrides: Record<string, string> = { ...config.tokenOverrides };
+    const nextOverrides: Record<string, string> = { ...draftConfig.tokenOverrides };
     nextOverrides["app.primaryForeground"] = optimalPrimaryFg;
     nextOverrides["button.foreground"] = optimalPrimaryFg;
 
@@ -174,10 +257,10 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
       }
     }
 
-    onChange({
-      ...config,
+    updateDraft({
+      ...draftConfig,
       colors: {
-        ...config.colors,
+        ...draftConfig.colors,
         foreground: nextFg,
       },
       tokenOverrides: nextOverrides,
@@ -187,10 +270,8 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
     setTimeout(() => setAutoTuneFeedback(null), 2500);
   };
 
-  if (!isOpen) return null;
-
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleDismiss()}>
       <DialogPopup
         showCloseButton={false}
         className="max-h-[92vh] w-full max-w-5xl flex-col p-0 overflow-hidden rounded-3xl border border-border/80 bg-card text-card-foreground shadow-2xl"
@@ -204,7 +285,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                 Custom Theme Studio
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Design custom color suites with automated token derivation & live WCAG contrast
+                Design custom color suites with automated token derivation &amp; live WCAG contrast
                 checking.
               </p>
             </div>
@@ -257,13 +338,34 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleDismiss}
+              aria-label="Close Custom Theme Studio"
               className="rounded-xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
             >
               <X className="size-4" />
             </button>
           </div>
         </div>
+
+        {/* Actionable Error Alert if Apply Failed */}
+        {applyError && (
+          <div
+            role="alert"
+            className="flex items-center justify-between border-b border-destructive/30 bg-destructive/10 px-6 py-2.5 text-xs font-medium text-destructive"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>{applyError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setApplyError(null)}
+              className="hover:underline cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Modal Main Content Area: Spacious 2-Column Driver Layout */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -302,15 +404,15 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                   Base Window Variant
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  Titlebar & window frame chrome theme
+                  Titlebar &amp; window frame chrome theme
                 </span>
               </div>
               <div className="flex rounded-xl bg-muted p-1 border border-border/50">
                 <button
                   type="button"
-                  onClick={() => onChange({ ...config, baseVariant: "dark" })}
+                  onClick={() => updateDraft({ ...draftConfig, baseVariant: "dark" })}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                    config.baseVariant === "dark"
+                    draftConfig.baseVariant === "dark"
                       ? "bg-background text-foreground font-bold shadow-xs border border-border/50"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
@@ -320,9 +422,9 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onChange({ ...config, baseVariant: "light" })}
+                  onClick={() => updateDraft({ ...draftConfig, baseVariant: "light" })}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                    config.baseVariant === "light"
+                    draftConfig.baseVariant === "light"
                       ? "bg-background text-foreground font-bold shadow-xs border border-border/50"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
@@ -341,7 +443,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                 Palette Driver Controls (8 Granular Keys)
               </h4>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Core color drivers that automatically compute all ~95 VS Code & app tokens.
+                Core color drivers that automatically compute all ~95 VS Code &amp; app tokens.
               </p>
             </div>
 
@@ -351,32 +453,32 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             </div>
           </div>
 
-          {/* Spacious 2-Column Driver Grid (4 on Left, 4 on Right) */}
+          {/* Spacious 2-Column Driver Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Left Column: Drivers 1 to 4 */}
             <div className="space-y-3.5">
               <CustomColorPicker
                 label="1. Canvas Background"
                 description="Editor canvas & main container background"
-                value={config.colors.background}
+                value={draftConfig.colors.background}
                 onChange={(val) => updatePrimaryColor("background", val)}
               />
               <CustomColorPicker
                 label="2. Text / Foreground"
                 description="Headings, body typography, labels, code text"
-                value={config.colors.foreground}
+                value={draftConfig.colors.foreground}
                 onChange={(val) => updatePrimaryColor("foreground", val)}
               />
               <CustomColorPicker
                 label="3. Card / Surface"
                 description="Sidebar, tab bars, modals, floating popovers"
-                value={config.colors.card}
+                value={draftConfig.colors.card}
                 onChange={(val) => updatePrimaryColor("card", val)}
               />
               <CustomColorPicker
                 label="4. Border Outlines"
                 description="Dividers, card outlines, tab borders"
-                value={config.colors.border}
+                value={draftConfig.colors.border}
                 onChange={(val) => updatePrimaryColor("border", val)}
               />
             </div>
@@ -386,7 +488,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
               <CustomColorPicker
                 label="5. Primary Accent"
                 description="Active tab line, focus ring, primary buttons"
-                value={config.colors.primary}
+                value={draftConfig.colors.primary}
                 onChange={(val) => updatePrimaryColor("primary", val)}
               />
               <CustomColorPicker
@@ -455,8 +557,8 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             )}
           </div>
 
-          {/* Preset Generator & Actions */}
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          {/* Preset Generator & Final Apply / Cancel Actions */}
+          <div className="flex items-center flex-wrap gap-2.5 w-full sm:w-auto justify-end">
             <div className="flex items-center rounded-xl border border-border/80 bg-background/80 p-1 shadow-2xs">
               <Select
                 value={randomStyle}
@@ -490,15 +592,35 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
               placeholder="Preset Name..."
               value={presetNameInput}
               onChange={(e) => setPresetNameInput(e.target.value)}
-              className="w-40 h-9 text-xs rounded-xl bg-background border-border/80"
+              className="w-36 h-9 text-xs rounded-xl bg-background border-border/80"
             />
 
             <Button
               size="sm"
-              onClick={handleSave}
-              className="h-9 px-5 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm cursor-pointer whitespace-nowrap"
+              variant="outline"
+              onClick={handleSavePresetAction}
+              className="h-9 px-3.5 text-xs font-semibold rounded-xl border-border/80 hover:bg-muted cursor-pointer whitespace-nowrap"
             >
               Save Preset
+            </Button>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleDismiss}
+              className="h-9 px-3.5 text-xs font-medium rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer whitespace-nowrap"
+            >
+              Cancel
+            </Button>
+
+            <Button
+              size="sm"
+              onClick={handleApplyAction}
+              disabled={isApplying}
+              aria-busy={isApplying}
+              className="h-9 px-5 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm cursor-pointer whitespace-nowrap"
+            >
+              {isApplying ? "Applying..." : "Apply Theme"}
             </Button>
           </div>
         </div>
@@ -530,7 +652,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto pt-2">
-            <WorkbenchMiniPreview config={config} />
+            <WorkbenchMiniPreview config={draftConfig} />
           </div>
         </DialogPopup>
       </Dialog>
@@ -539,17 +661,15 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
         <ThemeImportExportModal
           isOpen={isImportExportOpen}
           onClose={() => setIsImportExportOpen(false)}
-          currentConfig={config}
+          currentConfig={draftConfig}
           currentName={presetNameInput || "Custom Theme"}
           initialTab={importExportTab}
           onImportTheme={(name, importedConfig) => {
-            onChange(importedConfig);
+            const nextFonts = buildFontPreferencesFromThemeConfig(importedConfig);
+            updateDraft(importedConfig, nextFonts);
             setPresetNameInput(name);
-            onSavePreset(name, importedConfig);
-            // Propagate imported fonts back to the parent theme settings
-            if (onFontsImported) {
-              onFontsImported(buildFontPreferencesFromThemeConfig(importedConfig));
-            }
+            onFontsImported?.(nextFonts);
+            setIsImportExportOpen(false);
           }}
         />
       )}
