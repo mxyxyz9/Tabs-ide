@@ -1870,14 +1870,25 @@ async function stopBackendProcessAndWait(
     }
 
     child.once("exit", onExit);
-    child.kill("SIGTERM");
 
-    forceKillTimer = setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) {
+    if (process.platform === "win32" && typeof child.pid === "number") {
+      try {
+        ChildProcess.spawn("taskkill", ["/F", "/T", "/PID", String(child.pid)], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+      } catch {
         child.kill("SIGKILL");
       }
-    }, 2_000);
-    forceKillTimer.unref();
+    } else {
+      child.kill("SIGTERM");
+      forceKillTimer = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill("SIGKILL");
+        }
+      }, 2_000);
+      forceKillTimer.unref();
+    }
 
     exitTimeoutTimer = setTimeout(() => {
       settle();
@@ -3991,6 +4002,13 @@ app.on("before-quit", (event) => {
         writeDesktopLogHeader(`flush storage failed: ${err.message}`);
       }
 
+      const quitWithFailsafe = (): void => {
+        app.quit();
+        setTimeout(() => {
+          app.exit(0);
+        }, 4000).unref();
+      };
+
       if (preparedLinuxUpdate) {
         const prepared = preparedLinuxUpdate;
         preparedLinuxUpdate = null;
@@ -4004,7 +4022,7 @@ app.on("before-quit", (event) => {
             );
             void prepared.dispose();
           })
-          .finally(() => app.quit());
+          .finally(() => quitWithFailsafe());
       } else if (nativeUpdateInstallPending) {
         // Release the lock before Windows launches the updated app.
         nativeUpdateInstallPending = false;
@@ -4012,10 +4030,10 @@ app.on("before-quit", (event) => {
         handOffNativeUpdateAfterCleanup({
           releaseSingleInstanceLock: () => app.releaseSingleInstanceLock(),
           updater: autoUpdater,
-          quit: () => app.quit(),
+          quit: () => quitWithFailsafe(),
         });
       } else {
-        app.quit();
+        quitWithFailsafe();
       }
     }
   })();

@@ -550,7 +550,7 @@ jobs:
             "$RELEASE_VERSION" \
             "../.github/release-notes/v$RELEASE_VERSION.md"
 
-      - name: Publish release
+      - name: Create draft release and upload assets
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.preflight.outputs.tag }}
@@ -558,7 +558,7 @@ jobs:
           name: Tabs v${{ needs.preflight.outputs.version }}
           body_path: .github/release-notes/${{ needs.preflight.outputs.tag }}.md
           prerelease: ${{ needs.preflight.outputs.is_prerelease }}
-          make_latest: ${{ needs.preflight.outputs.make_latest }}
+          draft: true
           files: |
             release-assets/*.dmg
             release-assets/*.zip
@@ -570,3 +570,26 @@ jobs:
             release-assets/latest-linux.yml
             release-assets/tabs-mac-preview-update.json
             release-assets/tabs-mac-preview-update.json.sig
+
+      - name: Verify release assets and publish atomically
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+          MAKE_LATEST: ${{ needs.preflight.outputs.make_latest }}
+        run: |
+          set -euo pipefail
+          echo "Verifying assets attached to draft release $TAG..."
+          asset_count=$(gh release view "$TAG" --json assets --jq '.assets | length')
+          echo "Attached assets count: $asset_count"
+          if [ "$asset_count" -lt 6 ]; then
+            echo "::error::Release $TAG has only $asset_count assets; aborting publication."
+            exit 1
+          fi
+
+          echo "Publishing release $TAG atomically (draft: false)..."
+          if [ "$MAKE_LATEST" = "true" ]; then
+            gh release edit "$TAG" --draft=false --latest
+          else
+            gh release edit "$TAG" --draft=false --latest=false
+          fi
+          echo "Release $TAG published successfully."

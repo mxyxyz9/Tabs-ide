@@ -13,6 +13,7 @@ import { BRAND_LOGO_SVG_PATHS } from "./lib/brand-assets.ts";
 import { renderSvgToIcoFile, renderSvgToPngFile } from "./lib/icon-assets.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import { updateMacUpdateMetadata } from "./lib/mac-update-artifact.ts";
+import { sanitizeMacAppSymlinks } from "./lib/mac-symlink-sanitizer.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -708,6 +709,10 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
   // replacing it here changes the app identity seen by macOS Keychain and makes
   // users enter their login password to read "Tabs Safe Storage" on startup.
   const appPath = path.join(dmgRoot, `${input.productName}.app`);
+  if (yield* fs.exists(appPath)) {
+    yield* Effect.log("[desktop-artifact] Sanitizing bundle symlinks before codesigning...");
+    yield* Effect.sync(() => sanitizeMacAppSymlinks(appPath));
+  }
   if (!input.signed && (yield* fs.exists(appPath))) {
     yield* Effect.log("[desktop-artifact] Ad-hoc codesigning the app bundle (no Developer ID)...");
     yield* runCommand(
@@ -843,6 +848,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   signed: boolean,
   thin: boolean,
   afterPackHook: boolean,
+  installerNshStaged: boolean,
   releaseNotes: string | null,
 ) {
   const buildConfig: Record<string, unknown> = {
@@ -926,6 +932,14 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       winConfig.azureSignOptions = yield* AzureTrustedSigningOptionsConfig;
     }
     buildConfig.win = winConfig;
+    if (target === "nsis" && installerNshStaged) {
+      buildConfig.nsis = {
+        include: "./build/installer.nsh",
+        differentialPackage: true,
+        oneClick: true,
+        perMachine: false,
+      };
+    }
   }
 
   return buildConfig;
@@ -1416,6 +1430,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     );
   }
 
+  const installerNshSource = path.join(repoRoot, "scripts", "installer.nsh");
+  let installerNshStaged = false;
+  if (yield* fs.exists(installerNshSource)) {
+    const buildDestDir = path.join(stageAppDir, "build");
+    yield* fs.makeDirectory(buildDestDir, { recursive: true });
+    yield* fs.copyFile(installerNshSource, path.join(buildDestDir, "installer.nsh"));
+    installerNshStaged = true;
+  }
+
   const stagePackageJson: StagePackageJson = {
     name: "tabs-desktop",
     version: appVersion,
@@ -1432,6 +1455,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.signed,
       effectiveThin,
       afterPackHookStaged,
+      installerNshStaged,
       (() => {
         const releaseNotesPath = path.join(
           repoRoot,

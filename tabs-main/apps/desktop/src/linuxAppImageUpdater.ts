@@ -19,14 +19,14 @@ while kill -0 "$old_pid" 2>/dev/null; do sleep 0.2; done
 if ! mv -- "$target" "$backup"; then
   echo "Could not move the previous AppImage into backup"
   rm -f -- "$staged"
-  rmdir -- "$stage_root"
+  rm -rf -- "$stage_root"
   exit 1
 fi
 if ! mv -- "$staged" "$target"; then
   echo "Could not install the staged AppImage; restoring previous version"
   mv -- "$backup" "$target"
   rm -f -- "$staged"
-  rmdir -- "$stage_root"
+  rm -rf -- "$stage_root"
   exit 1
 fi
 "$target" &
@@ -35,12 +35,12 @@ sleep 3
 if kill -0 "$new_pid" 2>/dev/null; then
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) installed and relaunched update"
   rm -f -- "$backup"
-  rmdir -- "$stage_root"
+  rm -rf -- "$stage_root"
 else
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) updated AppImage exited immediately; restoring previous version"
   rm -f -- "$target"
   mv -- "$backup" "$target"
-  rmdir -- "$stage_root"
+  rm -rf -- "$stage_root"
   "$target" &
   exit 1
 fi

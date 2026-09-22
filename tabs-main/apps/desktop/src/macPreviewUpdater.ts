@@ -69,13 +69,50 @@ interface DownloadedUpdate {
   readonly archivePath: string;
 }
 
-async function removeUpdatePath(path: string): Promise<void> {
-  await FSPromises.rm(path, {
-    recursive: true,
-    force: true,
-    maxRetries: REMOVE_RETRY_COUNT,
-    retryDelay: REMOVE_RETRY_DELAY_MS,
+async function runCommand(command: string, args: readonly string[]): Promise<string> {
+  let stdout = "";
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`${Path.basename(command)} exited with code ${code}: ${stderr.trim()}`));
+      }
+    });
   });
+  return stdout;
+}
+
+async function removeUpdatePath(path: string): Promise<void> {
+  try {
+    await FSPromises.rm(path, {
+      recursive: true,
+      force: true,
+      maxRetries: REMOVE_RETRY_COUNT,
+      retryDelay: REMOVE_RETRY_DELAY_MS,
+    });
+  } catch (nodeError) {
+    if (process.platform === "darwin" || process.platform === "linux") {
+      try {
+        await runCommand("/bin/rm", ["-rf", path]);
+        return;
+      } catch {
+        // Fall through to rethrow original error
+      }
+    }
+    throw nodeError;
+  }
 }
 
 export async function createMacPreviewStageDirectory(
@@ -237,31 +274,6 @@ async function fetchRequired(
   return response;
 }
 
-async function runCommand(command: string, args: readonly string[]): Promise<string> {
-  let stdout = "";
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk: string) => {
-      stderr += chunk;
-    });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${Path.basename(command)} exited with code ${code}: ${stderr.trim()}`));
-      }
-    });
-  });
-  return stdout;
-}
-
 async function validateBundle(bundlePath: string, expectedVersion: string): Promise<void> {
   const plistPath = Path.join(bundlePath, "Contents", "Info.plist");
   const readPlistValue = async (key: string): Promise<string> => {
@@ -391,7 +403,19 @@ export class MacPreviewUpdater {
       );
     }
     const installDirectory = Path.dirname(this.#options.appBundlePath);
-    await FSPromises.access(installDirectory, FS.constants.W_OK);
+    try {
+      await FSPromises.access(installDirectory, FS.constants.W_OK);
+      const appExists = await FSPromises.stat(this.#options.appBundlePath)
+        .then(() => true)
+        .catch(() => false);
+      if (appExists) {
+        await FSPromises.access(this.#options.appBundlePath, FS.constants.W_OK);
+      }
+    } catch {
+      throw new Error(
+        `The application folder and app bundle must be writable to install updates: ${this.#options.appBundlePath}`,
+      );
+    }
     const stageRoot = await createMacPreviewStageDirectory(
       installDirectory,
       downloaded.manifest.version,
