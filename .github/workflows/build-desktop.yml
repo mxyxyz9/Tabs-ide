@@ -101,6 +101,9 @@ jobs:
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
         run: |
           npm install --ignore-scripts
+          # The workbench gulp tasks import dependencies from build/package.json.
+          # Those are not installed by the root package install.
+          npm --prefix build install --ignore-scripts
           # Download electron.d.ts types required for workbench compilation.
           # GitHub release assets can intermittently return 5xx responses.
           for attempt in 1 2 3 4 5; do
