@@ -37,6 +37,8 @@ export function describeDesktopUpdate(state: DesktopUpdateState): string {
       return `Version ${
         state.downloadedVersion ?? state.availableVersion ?? ""
       } is ready. Restart to install.${previewNotice}`.trim();
+    case "installing":
+      return `Preparing to restart and install the update…${previewNotice}`;
     case "error":
       return state.message ?? "The last update attempt failed.";
     default:
@@ -68,7 +70,7 @@ export function shouldShowDesktopUpdateButton(state: DesktopUpdateState | null):
   if (!state || !state.enabled) {
     return false;
   }
-  if (state.status === "downloading") {
+  if (state.status === "downloading" || state.status === "installing") {
     return true;
   }
   return resolveDesktopUpdateButtonAction(state) !== "none";
@@ -79,7 +81,7 @@ export function shouldShowArm64IntelBuildWarning(state: DesktopUpdateState | nul
 }
 
 export function isDesktopUpdateButtonDisabled(state: DesktopUpdateState | null): boolean {
-  return state?.status === "downloading";
+  return state?.status === "downloading" || state?.status === "installing";
 }
 
 export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState): string {
@@ -108,6 +110,9 @@ export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string
   }
   if (state.status === "downloaded") {
     return `Update ${state.downloadedVersion ?? state.availableVersion ?? "ready"} downloaded. Click to restart and install.`;
+  }
+  if (state.status === "installing") {
+    return "Preparing to restart and install the update";
   }
   if (state.status === "error") {
     if (state.errorContext === "download" && state.availableVersion) {

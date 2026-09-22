@@ -2,7 +2,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import rootPackageJson from "../package.json" with { type: "json" };
@@ -12,6 +12,7 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 import { BRAND_LOGO_SVG_PATHS } from "./lib/brand-assets.ts";
 import { renderSvgToIcoFile, renderSvgToPngFile } from "./lib/icon-assets.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
+import { updateMacUpdateMetadata } from "./lib/mac-update-artifact.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -730,11 +731,84 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     );
   }
 
+  yield* Effect.log("[desktop-artifact] Verifying the final macOS app signature...");
+  yield* runCommand(
+    ChildProcess.make({
+      ...commandOutputOptions(input.verbose),
+    })`codesign --verify --deep --strict ${appPath}`,
+  );
+
   yield* assertRequiredPaths(
     dmgRoot,
     getRequiredMacArtifactPaths(input.productName, input.thin),
     "Extracted mac ZIP",
   );
+
+  // electron-builder creates its ZIP before the unsigned build's final repair
+  // and ad-hoc signing above. The preview updater consumes the ZIP, not the DMG,
+  // so regenerate it from the exact verified app that will be shipped in the
+  // DMG and update the channel metadata to match the new bytes.
+  const updaterZipName = `Tabs-${input.version}-${input.arch}.zip`;
+  const updaterZipPath = path.join(input.stageDistDir, updaterZipName);
+  yield* Effect.log("[desktop-artifact] Regenerating verified macOS updater ZIP...");
+  yield* fs.remove(updaterZipPath, { force: true }).pipe(Effect.ignore({ log: true }));
+  yield* runCommand(
+    ChildProcess.make({
+      ...commandOutputOptions(input.verbose),
+    })`ditto -c -k --keepParent ${appPath} ${updaterZipPath}`,
+  );
+
+  const zipValidationRoot = yield* fs.makeTempDirectoryScoped({
+    prefix: "tabs-updater-zip-validation-",
+  });
+  yield* runCommand(
+    ChildProcess.make({
+      ...commandOutputOptions(input.verbose),
+    })`ditto -x -k ${updaterZipPath} ${zipValidationRoot}`,
+  );
+  const validatedZipApp = path.join(zipValidationRoot, `${input.productName}.app`);
+  yield* runCommand(
+    ChildProcess.make({
+      ...commandOutputOptions(input.verbose),
+    })`codesign --verify --deep --strict ${validatedZipApp}`,
+  );
+  yield* assertRequiredPaths(
+    zipValidationRoot,
+    getRequiredMacArtifactPaths(input.productName, input.thin),
+    "Regenerated macOS updater ZIP",
+  );
+
+  const updaterZipSha512 = yield* Effect.tryPromise({
+    try: () =>
+      new Promise<string>((resolve, reject) => {
+        const hash = createHash("sha512");
+        const stream = createReadStream(updaterZipPath);
+        stream.on("data", (chunk) => hash.update(chunk));
+        stream.once("error", reject);
+        stream.once("end", () => resolve(hash.digest("base64")));
+      }),
+    catch: (cause) =>
+      new BuildScriptError({
+        message: `Failed to hash regenerated macOS updater ZIP: ${String(cause)}`,
+      }),
+  });
+  const updaterZipStat = yield* fs.stat(updaterZipPath);
+  const macUpdateMetadataPath = path.join(input.stageDistDir, "latest-mac.yml");
+  if (yield* fs.exists(macUpdateMetadataPath)) {
+    const metadata = yield* fs.readFileString(macUpdateMetadataPath);
+    yield* fs.writeFileString(
+      macUpdateMetadataPath,
+      updateMacUpdateMetadata(
+        metadata,
+        updaterZipName,
+        updaterZipSha512,
+        Number(updaterZipStat.size),
+      ),
+    );
+  }
+  yield* fs
+    .remove(`${updaterZipPath}.blockmap`, { force: true })
+    .pipe(Effect.ignore({ log: true }));
 
   // Add the familiar drag-to-install layout: a symlink to /Applications next to
   // the app, so the mounted DMG shows "Tabs.app  ->  Applications" and the user

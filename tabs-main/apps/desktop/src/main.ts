@@ -61,11 +61,22 @@ import {
   reduceDesktopUpdateStateOnDownloadProgress,
   reduceDesktopUpdateStateOnDownloadStart,
   reduceDesktopUpdateStateOnInstallFailure,
+  reduceDesktopUpdateStateOnInstallStart,
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
 import { MacPreviewUpdater } from "./macPreviewUpdater";
+import {
+  assertUpdateInstallEnvironment,
+  assertWindowsInstallerReady,
+  downloadNativeUpdateWithFallback,
+  handOffNativeUpdateAfterCleanup,
+} from "./desktopUpdaterRuntime";
+import {
+  prepareLinuxAppImageUpdate,
+  type PreparedLinuxAppImageUpdate,
+} from "./linuxAppImageUpdater";
 import { CodeHostManager, resolveCodeHostConfig } from "./codeHostManager";
 import { BrowserHostManager } from "./browserHostManager";
 import { resolveUserDataPathWithFs } from "./userDataPath";
@@ -682,14 +693,45 @@ let updatePollTimer: ReturnType<typeof setInterval> | null = null;
 let updateStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let updateCheckInFlight = false;
 let updateDownloadInFlight = false;
+let updateInstallInFlight = false;
+let nativeUpdateInstallPending = false;
+let linuxDownloadedUpdatePath: string | null = null;
+let windowsDownloadedUpdatePath: string | null = null;
+let preparedLinuxUpdate: PreparedLinuxAppImageUpdate | null = null;
+let updateInstallHandoffTimer: ReturnType<typeof setTimeout> | null = null;
 let updaterConfigured = false;
 let updateState: DesktopUpdateState = initialUpdateState();
 let macPreviewUpdater: MacPreviewUpdater | null = null;
 
 function resolveUpdaterErrorContext(): DesktopUpdateErrorContext {
+  if (updateInstallInFlight) return "install";
   if (updateDownloadInFlight) return "download";
   if (updateCheckInFlight) return "check";
   return updateState.errorContext;
+}
+
+function clearUpdateInstallHandoffTimer(): void {
+  if (!updateInstallHandoffTimer) return;
+  clearTimeout(updateInstallHandoffTimer);
+  updateInstallHandoffTimer = null;
+}
+
+function recoverFailedUpdateInstall(message: string): void {
+  clearUpdateInstallHandoffTimer();
+  isQuitting = false;
+  isQuittingConfirmed = false;
+  updateInstallInFlight = false;
+  nativeUpdateInstallPending = false;
+  const stagedLinuxUpdate = preparedLinuxUpdate;
+  preparedLinuxUpdate = null;
+  if (stagedLinuxUpdate) {
+    void stagedLinuxUpdate
+      .dispose()
+      .catch((error) =>
+        console.warn(`[desktop-updater] Could not clean up Linux update staging: ${String(error)}`),
+      );
+  }
+  setUpdateState(reduceDesktopUpdateStateOnInstallFailure(updateState, message));
 }
 
 function registerPrivilegedSchemes(): void {
@@ -1372,7 +1414,11 @@ function shouldEnableAutoUpdates(): boolean {
 
 async function checkForUpdates(reason: string): Promise<void> {
   if (isQuitting || !updaterConfigured || updateCheckInFlight) return;
-  if (updateState.status === "downloading" || updateState.status === "downloaded") {
+  if (
+    updateState.status === "downloading" ||
+    updateState.status === "downloaded" ||
+    updateState.status === "installing"
+  ) {
     console.info(
       `[desktop-updater] Skipping update check (${reason}) while status=${updateState.status}.`,
     );
@@ -1419,6 +1465,8 @@ async function downloadAvailableUpdate(): Promise<{
     return { accepted: false, completed: false };
   }
   updateDownloadInFlight = true;
+  linuxDownloadedUpdatePath = null;
+  windowsDownloadedUpdatePath = null;
   setUpdateState(reduceDesktopUpdateStateOnDownloadStart(updateState));
   autoUpdater.disableDifferentialDownload = isArm64HostRunningIntelBuild(desktopRuntimeInfo);
   console.info("[desktop-updater] Downloading update...");
@@ -1432,7 +1480,25 @@ async function downloadAvailableUpdate(): Promise<{
       });
       setUpdateState(reduceDesktopUpdateStateOnDownloadComplete(updateState, version));
     } else {
-      await autoUpdater.downloadUpdate();
+      const downloadedFiles = await downloadNativeUpdateWithFallback({
+        isDifferentialDownloadDisabled: () => autoUpdater.disableDifferentialDownload,
+        setDifferentialDownloadDisabled: (disabled) => {
+          autoUpdater.disableDifferentialDownload = disabled;
+        },
+        download: () => autoUpdater.downloadUpdate(),
+        log: (message) => console.warn(`[desktop-updater] ${message}`),
+      });
+      if (process.platform === "linux") {
+        linuxDownloadedUpdatePath =
+          downloadedFiles.find((file) => file.toLowerCase().endsWith(".appimage")) ?? null;
+        if (!linuxDownloadedUpdatePath) {
+          throw new Error("The updater did not provide a downloaded AppImage file.");
+        }
+      } else if (process.platform === "win32") {
+        windowsDownloadedUpdatePath =
+          downloadedFiles.find((file) => file.toLowerCase().endsWith(".exe")) ?? null;
+        assertWindowsInstallerReady(windowsDownloadedUpdatePath);
+      }
     }
     return { accepted: true, completed: true };
   } catch (error: unknown) {
@@ -1454,48 +1520,51 @@ async function installDownloadedUpdate(): Promise<{
   }
 
   isQuitting = true;
-  clearUpdatePollTimer();
+  updateInstallInFlight = true;
+  setUpdateState(reduceDesktopUpdateStateOnInstallStart(updateState));
   try {
     if (macPreviewUpdater) {
       await macPreviewUpdater.stageUpdate();
-    }
-    try {
-      writeDesktopLogHeader("flushing Browser session storage before update...");
-      await browserHostManager.flushAndShutdownSessions();
-    } catch (err: any) {
-      writeDesktopLogHeader(`Browser session flush failed: ${err?.message}`);
-    }
-    try {
-      writeDesktopLogHeader("flushing Code-OSS session storage before update...");
-      await codeHostManager.flushAndShutdownSessions();
-    } catch (err: any) {
-      writeDesktopLogHeader(`Code-OSS session flush failed: ${err?.message}`);
-    }
-    await Effect.runPromise(resolvedShutdown.request);
-    await Promise.race([
-      (async () => {
-        await shutdownPromise;
-        await Effect.runPromise(resolvedShutdown.awaitComplete);
-      })(),
-      new Promise<void>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Update install shutdown timed out after 10 seconds")),
-          10000,
-        ),
-      ),
-    ]);
-    isQuittingConfirmed = true;
-    if (macPreviewUpdater) {
-      macPreviewUpdater.quitAndInstall(process.pid);
-      app.exit(0);
+      await macPreviewUpdater.quitAndInstall(process.pid);
     } else {
-      autoUpdater.quitAndInstall();
+      assertUpdateInstallEnvironment({
+        platform: process.platform,
+        appImagePath: process.env.APPIMAGE,
+      });
+      if (process.platform === "linux") {
+        if (!linuxDownloadedUpdatePath || !process.env.APPIMAGE) {
+          throw new Error("The downloaded AppImage is unavailable; download the update again.");
+        }
+        preparedLinuxUpdate = await prepareLinuxAppImageUpdate({
+          currentAppImagePath: process.env.APPIMAGE,
+          downloadedAppImagePath: linuxDownloadedUpdatePath,
+          logPath: Path.join(app.getPath("userData"), "appimage-update.log"),
+        });
+      } else {
+        assertWindowsInstallerReady(windowsDownloadedUpdatePath);
+        nativeUpdateInstallPending = true;
+      }
     }
+
+    // From here onward the regular before-quit path owns session flushing and
+    // backend shutdown. A refused native install must leave the app usable.
+    isQuittingConfirmed = true;
+    updateInstallHandoffTimer = setTimeout(() => {
+      updateInstallHandoffTimer = null;
+      if (!updateInstallInFlight || isCleaningUp) return;
+      const message = "The update installer did not begin shutdown. Try installing again.";
+      recoverFailedUpdateInstall(message);
+      console.error(`[desktop-updater] ${message}`);
+    }, 15_000);
+    updateInstallHandoffTimer.unref();
+    // Native quitAndInstall starts the installer before Electron emits
+    // before-quit. Begin a normal quit instead, then hand off to the installer
+    // after the shared async cleanup path has flushed every session.
+    app.quit();
     return { accepted: true, completed: true };
   } catch (error: unknown) {
     const message = formatErrorMessage(error);
-    isQuitting = false;
-    setUpdateState(reduceDesktopUpdateStateOnInstallFailure(updateState, message));
+    recoverFailedUpdateInstall(message);
     console.error(`[desktop-updater] Failed to install update: ${message}`);
     return { accepted: true, completed: false };
   }
@@ -1606,6 +1675,11 @@ function configureAutoUpdater(): void {
           "[desktop-updater] Differential download failed, falling back to full download",
         );
         autoUpdater.disableDifferentialDownload = true;
+      }
+      if (updateInstallInFlight && !isCleaningUp) {
+        recoverFailedUpdateInstall(message);
+        console.error(`[desktop-updater] Native installer failed to start: ${message}`);
+        return;
       }
       if (!updateCheckInFlight && !updateDownloadInFlight) {
         setUpdateState({
@@ -3780,6 +3854,7 @@ function requestQuitConfirmation(): void {
 }
 
 app.on("before-quit", (event) => {
+  clearUpdateInstallHandoffTimer();
   if (
     !isCleanupFinished &&
     !isQuittingConfirmed &&
@@ -3916,7 +3991,32 @@ app.on("before-quit", (event) => {
         writeDesktopLogHeader(`flush storage failed: ${err.message}`);
       }
 
-      app.quit();
+      if (preparedLinuxUpdate) {
+        const prepared = preparedLinuxUpdate;
+        preparedLinuxUpdate = null;
+        writeDesktopLogHeader("cleanup finished, starting Linux AppImage update helper");
+        app.releaseSingleInstanceLock();
+        void prepared
+          .launch(process.pid)
+          .catch((error) => {
+            writeDesktopLogHeader(
+              `Linux update helper failed to start: ${formatErrorMessage(error)}`,
+            );
+            void prepared.dispose();
+          })
+          .finally(() => app.quit());
+      } else if (nativeUpdateInstallPending) {
+        // Release the lock before Windows launches the updated app.
+        nativeUpdateInstallPending = false;
+        writeDesktopLogHeader("cleanup finished, starting native update installer");
+        handOffNativeUpdateAfterCleanup({
+          releaseSingleInstanceLock: () => app.releaseSingleInstanceLock(),
+          updater: autoUpdater,
+          quit: () => app.quit(),
+        });
+      } else {
+        app.quit();
+      }
     }
   })();
 });

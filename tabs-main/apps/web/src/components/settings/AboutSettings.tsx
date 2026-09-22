@@ -85,12 +85,14 @@ function DesktopUpdateControl({
     return (
       <div className="flex items-center gap-1">
         <DesktopUpdateReleaseNotes state={state} />
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
           {state.status === "checking"
             ? "Checking…"
             : state.status === "downloading"
               ? "Downloading…"
-              : "Up to date"}
+              : state.status === "installing"
+                ? "Preparing to restart…"
+                : "Up to date"}
         </span>
       </div>
     );

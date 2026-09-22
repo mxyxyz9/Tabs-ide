@@ -9,6 +9,7 @@ import {
   reduceDesktopUpdateStateOnDownloadProgress,
   reduceDesktopUpdateStateOnDownloadStart,
   reduceDesktopUpdateStateOnInstallFailure,
+  reduceDesktopUpdateStateOnInstallStart,
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
@@ -83,13 +84,16 @@ describe("updateMachine", () => {
       },
       "1.1.0",
     );
+    const installing = reduceDesktopUpdateStateOnInstallStart(downloaded);
     const failedInstall = reduceDesktopUpdateStateOnInstallFailure(
-      downloaded,
+      installing,
       "backend shutdown timed out",
     );
 
     expect(downloaded.status).toBe("downloaded");
     expect(downloaded.downloadedVersion).toBe("1.1.0");
+    expect(installing.status).toBe("installing");
+    expect(installing.canRetry).toBe(false);
     expect(failedInstall.status).toBe("downloaded");
     expect(failedInstall.errorContext).toBe("install");
     expect(failedInstall.canRetry).toBe(true);

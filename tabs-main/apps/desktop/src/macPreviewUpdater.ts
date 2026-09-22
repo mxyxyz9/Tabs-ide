@@ -2,7 +2,7 @@ import { createHash, verify } from "node:crypto";
 import * as FS from "node:fs";
 import * as FSPromises from "node:fs/promises";
 import * as Path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 const MANIFEST_NAME = "tabs-mac-preview-update.json";
@@ -10,6 +10,41 @@ const UPDATE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAhDgnyPlvyYHwvS9U5TV6PXtVi0Du03HWviLL6cCxSsg=
 -----END PUBLIC KEY-----`;
 const EXPECTED_BUNDLE_IDENTIFIER = "com.tabs.app";
+const STAGE_DIRECTORY_PREFIX = ".Tabs.preview-update-";
+const REMOVE_RETRY_COUNT = 6;
+const REMOVE_RETRY_DELAY_MS = 250;
+
+export const MAC_PREVIEW_INSTALL_SCRIPT = `set -eu
+target="$1"
+staged="$2"
+backup="$3"
+pid="$4"
+stage_root="$5"
+log="$6"
+open_command="$7"
+exec >>"$log" 2>&1
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) waiting for Tabs process $pid"
+while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
+/bin/mv "$target" "$backup"
+if /bin/mv "$staged" "$target"; then
+  if "$open_command" "$target"; then
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) installed and relaunched update"
+    /bin/rm -rf "$backup"
+    /bin/rm -rf "$stage_root"
+  else
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) relaunch failed; restoring previous app"
+    /bin/rm -rf "$target"
+    /bin/mv "$backup" "$target"
+    "$open_command" "$target"
+    exit 1
+  fi
+else
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) install move failed; restoring previous app"
+  /bin/mv "$backup" "$target"
+  "$open_command" "$target"
+  exit 1
+fi
+`;
 
 export interface MacPreviewUpdateAsset {
   readonly name: string;
@@ -32,6 +67,38 @@ export interface MacPreviewUpdateManifest {
 interface DownloadedUpdate {
   readonly manifest: MacPreviewUpdateManifest;
   readonly archivePath: string;
+}
+
+async function removeUpdatePath(path: string): Promise<void> {
+  await FSPromises.rm(path, {
+    recursive: true,
+    force: true,
+    maxRetries: REMOVE_RETRY_COUNT,
+    retryDelay: REMOVE_RETRY_DELAY_MS,
+  });
+}
+
+export async function createMacPreviewStageDirectory(
+  installDirectory: string,
+  version: string,
+): Promise<string> {
+  const entries = await FSPromises.readdir(installDirectory, { withFileTypes: true });
+  const staleStageDirectories = entries
+    // A leftover backup may be the only recoverable copy after an interrupted
+    // swap. Never delete it automatically while preparing another update.
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith(STAGE_DIRECTORY_PREFIX))
+    .map((entry) => Path.join(installDirectory, entry.name));
+
+  const cleanupResults = await Promise.allSettled(staleStageDirectories.map(removeUpdatePath));
+  for (const [index, result] of cleanupResults.entries()) {
+    if (result.status === "rejected") {
+      console.warn(
+        `[desktop-updater] Could not remove stale macOS update staging directory ${staleStageDirectories[index]}: ${String(result.reason)}`,
+      );
+    }
+  }
+
+  return FSPromises.mkdtemp(Path.join(installDirectory, `${STAGE_DIRECTORY_PREFIX}${version}-`));
 }
 
 export interface MacPreviewUpdaterOptions {
@@ -145,6 +212,20 @@ function releaseAssetUrl(repository: string, assetName: string): string {
   return `https://github.com/${repository}/releases/latest/download/${encodeURIComponent(assetName)}`;
 }
 
+export async function reuseVerifiedMacPreviewStage(
+  stagedBundlePath: string | null,
+  expectedVersion: string,
+  validate: (bundlePath: string, version: string) => Promise<void> = validateBundle,
+): Promise<string | null> {
+  if (!stagedBundlePath) return null;
+  try {
+    await validate(stagedBundlePath, expectedVersion);
+    return stagedBundlePath;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchRequired(
   url: string,
   headers: Readonly<Record<string, string>>,
@@ -156,25 +237,51 @@ async function fetchRequired(
   return response;
 }
 
-function validateBundle(bundlePath: string, expectedVersion: string): void {
-  const plistPath = Path.join(bundlePath, "Contents", "Info.plist");
-  const readPlistValue = (key: string): string => {
-    const result = spawnSync("/usr/bin/plutil", ["-extract", key, "raw", "-o", "-", plistPath], {
-      encoding: "utf8",
+async function runCommand(command: string, args: readonly string[]): Promise<string> {
+  let stdout = "";
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
     });
-    if (result.status !== 0) {
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`${Path.basename(command)} exited with code ${code}: ${stderr.trim()}`));
+      }
+    });
+  });
+  return stdout;
+}
+
+async function validateBundle(bundlePath: string, expectedVersion: string): Promise<void> {
+  const plistPath = Path.join(bundlePath, "Contents", "Info.plist");
+  const readPlistValue = async (key: string): Promise<string> => {
+    try {
+      return (
+        await runCommand("/usr/bin/plutil", ["-extract", key, "raw", "-o", "-", plistPath])
+      ).trim();
+    } catch {
       throw new Error(`The downloaded update is missing ${key}.`);
     }
-    return result.stdout.trim();
   };
-  if (readPlistValue("CFBundleIdentifier") !== EXPECTED_BUNDLE_IDENTIFIER) {
+  if ((await readPlistValue("CFBundleIdentifier")) !== EXPECTED_BUNDLE_IDENTIFIER) {
     throw new Error("The downloaded update has an unexpected bundle identifier.");
   }
-  if (readPlistValue("CFBundleShortVersionString") !== expectedVersion) {
+  if ((await readPlistValue("CFBundleShortVersionString")) !== expectedVersion) {
     throw new Error("The downloaded update version does not match its signed manifest.");
   }
-  const signature = spawnSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", bundlePath]);
-  if (signature.status !== 0) {
+  try {
+    await runCommand("/usr/bin/codesign", ["--verify", "--deep", "--strict", bundlePath]);
+  } catch {
     throw new Error("The downloaded update has an invalid ad-hoc code signature.");
   }
 }
@@ -221,42 +328,47 @@ export class MacPreviewUpdater {
     );
     const archivePath = Path.join(downloadDirectory, asset.name);
     const temporaryPath = `${archivePath}.download`;
-    const response = await fetchRequired(
-      releaseAssetUrl(this.#options.repository, asset.name),
-      this.#options.requestHeaders ?? {},
-    );
-    if (!response.body) throw new Error("The update server returned an empty download.");
-
-    const hash = createHash("sha512");
-    const handle = await FSPromises.open(temporaryPath, "w", 0o600);
-    let received = 0;
     try {
+      const response = await fetchRequired(
+        releaseAssetUrl(this.#options.repository, asset.name),
+        this.#options.requestHeaders ?? {},
+      );
+      if (!response.body) throw new Error("The update server returned an empty download.");
+
+      const hash = createHash("sha512");
+      const handle = await FSPromises.open(temporaryPath, "w", 0o600);
+      let received = 0;
       try {
-        const reader = (response.body as NodeReadableStream<Uint8Array>).getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          hash.update(value);
-          await handle.write(value);
-          received += value.byteLength;
-          if (received > asset.size) {
-            await reader.cancel();
-            throw new Error("The update download exceeded its signed size.");
+        try {
+          const reader = (response.body as NodeReadableStream<Uint8Array>).getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            hash.update(value);
+            await handle.write(value);
+            received += value.byteLength;
+            if (received > asset.size) {
+              await reader.cancel();
+              throw new Error("The update download exceeded its signed size.");
+            }
+            onProgress(Math.min(99, (received / asset.size) * 100));
           }
-          onProgress(Math.min(99, (received / asset.size) * 100));
+        } finally {
+          await handle.close();
         }
-      } finally {
-        await handle.close();
+      } catch (error) {
+        await FSPromises.rm(temporaryPath, { force: true });
+        throw error;
       }
+      if (received !== asset.size || hash.digest("base64") !== asset.sha512) {
+        await FSPromises.rm(temporaryPath, { force: true });
+        throw new Error("The downloaded update did not match its signed checksum.");
+      }
+      await FSPromises.rename(temporaryPath, archivePath);
     } catch (error) {
-      await FSPromises.rm(temporaryPath, { force: true });
+      await removeUpdatePath(downloadDirectory).catch(() => undefined);
       throw error;
     }
-    if (received !== asset.size || hash.digest("base64") !== asset.sha512) {
-      await FSPromises.rm(temporaryPath, { force: true });
-      throw new Error("The downloaded update did not match its signed checksum.");
-    }
-    await FSPromises.rename(temporaryPath, archivePath);
     this.#downloadedUpdate = { manifest, archivePath };
     onProgress(100);
     return manifest.version;
@@ -265,60 +377,69 @@ export class MacPreviewUpdater {
   async stageUpdate(): Promise<string> {
     const downloaded = this.#downloadedUpdate;
     if (!downloaded) throw new Error("No verified macOS update has been downloaded.");
+    const reusableStage = await reuseVerifiedMacPreviewStage(
+      this.#stagedBundlePath,
+      downloaded.manifest.version,
+    );
+    if (reusableStage) return reusableStage;
+    this.#stagedBundlePath = null;
+    try {
+      await FSPromises.access(downloaded.archivePath, FS.constants.R_OK);
+    } catch {
+      throw new Error(
+        "The staged update and downloaded ZIP are unavailable; download the update again.",
+      );
+    }
     const installDirectory = Path.dirname(this.#options.appBundlePath);
     await FSPromises.access(installDirectory, FS.constants.W_OK);
-    const stageRoot = Path.join(
+    const stageRoot = await createMacPreviewStageDirectory(
       installDirectory,
-      `.Tabs.preview-update-${downloaded.manifest.version}`,
+      downloaded.manifest.version,
     );
     const stagedBundlePath = Path.join(stageRoot, "Tabs.app");
-    await FSPromises.rm(stageRoot, { recursive: true, force: true });
-    await FSPromises.mkdir(stageRoot, { recursive: true });
-    const extraction = spawnSync("/usr/bin/ditto", ["-x", "-k", downloaded.archivePath, stageRoot]);
-    if (extraction.status !== 0) {
-      throw new Error("The verified macOS update could not be extracted.");
+    try {
+      try {
+        await runCommand("/usr/bin/ditto", ["-x", "-k", downloaded.archivePath, stageRoot]);
+      } catch {
+        throw new Error("The verified macOS update could not be extracted.");
+      }
+      await validateBundle(stagedBundlePath, downloaded.manifest.version);
+    } catch (error) {
+      await removeUpdatePath(stageRoot).catch(() => undefined);
+      throw error;
     }
-    validateBundle(stagedBundlePath, downloaded.manifest.version);
-    await FSPromises.rm(Path.dirname(downloaded.archivePath), { recursive: true, force: true });
+    await removeUpdatePath(Path.dirname(downloaded.archivePath));
     this.#stagedBundlePath = stagedBundlePath;
     return stagedBundlePath;
   }
 
-  quitAndInstall(processId: number): void {
+  async quitAndInstall(processId: number): Promise<void> {
     const stagedBundlePath = this.#stagedBundlePath;
     if (!stagedBundlePath) throw new Error("The macOS update has not been staged.");
     const targetPath = this.#options.appBundlePath;
-    const backupPath = `${targetPath}.preview-update-backup`;
-    const script = `set -eu
-target="$1"
-staged="$2"
-backup="$3"
-pid="$4"
-while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
-if [ -e "$backup" ]; then /bin/rm -rf "$backup"; fi
-/bin/mv "$target" "$backup"
-if /bin/mv "$staged" "$target"; then
-  /usr/bin/open "$target"
-  /bin/rm -rf "$backup"
-else
-  /bin/mv "$backup" "$target"
-  /usr/bin/open "$target"
-  exit 1
-fi
-`;
+    const backupPath = `${targetPath}.preview-update-backup-${processId}`;
+    const stageRoot = Path.dirname(stagedBundlePath);
+    const logPath = Path.join(Path.dirname(targetPath), ".Tabs.preview-update.log");
     const child = spawn(
       "/bin/sh",
       [
         "-c",
-        script,
+        MAC_PREVIEW_INSTALL_SCRIPT,
         "tabs-preview-updater",
         targetPath,
         stagedBundlePath,
         backupPath,
         String(processId),
+        stageRoot,
+        logPath,
+        "/usr/bin/open",
       ],
       { detached: true, stdio: "ignore" },
     );
+    await new Promise<void>((resolve, reject) => {
+      child.once("spawn", resolve);
+      child.once("error", reject);
+    });
     child.unref();
   }
 }

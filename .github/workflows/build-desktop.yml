@@ -251,6 +251,57 @@ jobs:
 
           bun run dist:desktop:artifact -- "${args[@]}"
 
+      - name: Verify native update artifact and metadata
+        if: matrix.platform == 'linux' || matrix.platform == 'win'
+        shell: bash
+        run: |
+          version="${{ inputs.version }}"
+          if [[ -z "$version" ]]; then
+            version="$(node -p "require('./tabs-main/apps/desktop/package.json').version")"
+          fi
+          node --experimental-strip-types tabs-main/scripts/verify-desktop-update-artifact.ts tabs-main/release "${{ matrix.platform }}" "${version#v}"
+
+      - name: Inspect Linux AppImage update payload
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="$(find tabs-main/release -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          [[ -n "$appimage" ]]
+          extract_root="$RUNNER_TEMP/tabs-appimage"
+          mkdir -p "$extract_root"
+          (
+            cd "$extract_root"
+            "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null
+          )
+          test -s "$extract_root/squashfs-root/resources/app.asar"
+          test -s "$extract_root/squashfs-root/resources/app-update.yml"
+          grep -Eq '^provider:[[:space:]]*github[[:space:]]*$' "$extract_root/squashfs-root/resources/app-update.yml"
+
+      - name: Inspect Windows NSIS update payload
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Get-ChildItem tabs-main/release -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not generated." }
+          $extractRoot = Join-Path $env:RUNNER_TEMP "tabs-nsis"
+          New-Item $extractRoot -ItemType Directory -Force | Out-Null
+          & 7z x $installer.FullName "-o$extractRoot" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract the NSIS installer." }
+          $appArchive = Get-ChildItem $extractRoot -Recurse -Filter "app-*.7z" | Select-Object -First 1
+          if (-not $appArchive) { throw "NSIS installer does not contain an application archive." }
+          $appRoot = Join-Path $env:RUNNER_TEMP "tabs-nsis-app"
+          New-Item $appRoot -ItemType Directory -Force | Out-Null
+          & 7z x $appArchive.FullName "-o$appRoot" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract the NSIS application archive." }
+          if (-not (Test-Path (Join-Path $appRoot "resources/app.asar") -PathType Leaf)) { throw "Packaged app.asar is missing." }
+          $updateConfig = Join-Path $appRoot "resources/app-update.yml"
+          if (-not (Test-Path $updateConfig -PathType Leaf)) { throw "Packaged app-update.yml is missing." }
+          if (-not (Select-String $updateConfig -Pattern '^provider:\s*github\s*$' -Quiet)) { throw "Packaged updater is not configured for GitHub." }
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne "NotSigned" -and $signature.Status -ne "Valid") { throw "Invalid installer signature: $($signature.Status)" }
+
       - name: Collect artifacts
         shell: bash
         run: |

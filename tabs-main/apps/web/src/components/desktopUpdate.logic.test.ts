@@ -94,6 +94,20 @@ describe("desktop update button state", () => {
     expect(isDesktopUpdateButtonDisabled(state)).toBe(true);
     expect(getDesktopUpdateButtonTooltip(state)).toContain("42%");
   });
+
+  it("shows a disabled status while preparing the install", () => {
+    const state: DesktopUpdateState = {
+      ...baseState,
+      status: "installing",
+      availableVersion: "1.1.0",
+      downloadedVersion: "1.1.0",
+    };
+    expect(shouldShowDesktopUpdateButton(state)).toBe(true);
+    expect(resolveDesktopUpdateButtonAction(state)).toBe("none");
+    expect(isDesktopUpdateButtonDisabled(state)).toBe(true);
+    expect(describeDesktopUpdate(state)).toContain("Preparing to restart");
+    expect(getDesktopUpdateButtonTooltip(state)).toContain("Preparing to restart");
+  });
 });
 
 describe("getDesktopUpdateActionError", () => {
