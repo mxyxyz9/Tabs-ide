@@ -22,8 +22,8 @@ New-Item $unrelatedDir -ItemType Directory -Force | Out-Null
 $holder = $null
 $unrelated = $null
 try {
-  & $initialInstaller /S "/D=$installDir"
-  if ($LASTEXITCODE -ne 0) { throw "Initial NSIS install failed: $LASTEXITCODE" }
+  $initialInstall = Start-Process -FilePath $initialInstaller -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+  if ($initialInstall.ExitCode -ne 0) { throw "Initial NSIS install failed: $($initialInstall.ExitCode)" }
   if (-not (Test-Path (Join-Path $installDir "Tabs.exe"))) { throw "Tabs.exe was not installed." }
 
   $holderExe = Join-Path $installDir "TabsSmokeHold.exe"
@@ -35,8 +35,8 @@ try {
   Start-Sleep -Seconds 2
   if ($holder.HasExited -or $unrelated.HasExited) { throw "Smoke-test process exited before upgrade." }
 
-  & $installer /S "/D=$installDir"
-  if ($LASTEXITCODE -ne 0) { throw "NSIS upgrade failed: $LASTEXITCODE" }
+  $upgrade = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+  if ($upgrade.ExitCode -ne 0) { throw "NSIS upgrade failed: $($upgrade.ExitCode)" }
   $holder.Refresh()
   $unrelated.Refresh()
   if (-not $holder.HasExited) { throw "Installer did not close a process running from its installation." }
