@@ -1872,14 +1872,20 @@ async function stopBackendProcessAndWait(
     child.once("exit", onExit);
 
     if (process.platform === "win32" && typeof child.pid === "number") {
-      try {
-        ChildProcess.spawn("taskkill", ["/F", "/T", "/PID", String(child.pid)], {
-          stdio: "ignore",
-          windowsHide: true,
-        });
-      } catch {
-        child.kill("SIGKILL");
-      }
+      const killer = ChildProcess.spawn("taskkill", ["/F", "/T", "/PID", String(child.pid)], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      killer.once("error", (error) => {
+        writeDesktopLogHeader(`Could not stop backend process tree: ${error.message}`);
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      });
+      killer.once("close", (code) => {
+        if (code !== 0 && child.exitCode === null && child.signalCode === null) {
+          writeDesktopLogHeader(`taskkill exited with code ${code}; stopping backend directly`);
+          child.kill("SIGKILL");
+        }
+      });
     } else {
       child.kill("SIGTERM");
       forceKillTimer = setTimeout(() => {

@@ -1417,17 +1417,21 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // actually in place, so a missing hook can never become an electron-builder
   // "cannot resolve ./build/afterPack.cjs" failure.
   const afterPackSource = path.join(repoRoot, "scripts", "desktop-afterpack.cjs");
+  const symlinkSanitizerSource = path.join(repoRoot, "scripts", "lib", "mac-symlink-sanitizer.cjs");
   let afterPackHookStaged = false;
-  if (yield* fs.exists(afterPackSource)) {
+  if ((yield* fs.exists(afterPackSource)) && (yield* fs.exists(symlinkSanitizerSource))) {
     const afterPackDestDir = path.join(stageAppDir, "build");
     yield* fs.makeDirectory(afterPackDestDir, { recursive: true });
     yield* fs.copyFile(afterPackSource, path.join(afterPackDestDir, "afterPack.cjs"));
+    yield* fs.copyFile(
+      symlinkSanitizerSource,
+      path.join(afterPackDestDir, "mac-symlink-sanitizer.cjs"),
+    );
     afterPackHookStaged = true;
   } else {
-    yield* Effect.logWarning(
-      `[desktop-artifact] afterPack hook not found at ${afterPackSource}; ` +
-        "packaged Code-OSS node_modules will not be restored on Windows/Linux.",
-    );
+    return yield* new BuildScriptError({
+      message: "Desktop afterPack hook or macOS symlink sanitizer is missing.",
+    });
   }
 
   const installerNshSource = path.join(repoRoot, "scripts", "installer.nsh");

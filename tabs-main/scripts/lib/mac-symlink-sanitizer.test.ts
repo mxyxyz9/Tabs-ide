@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:net";
 import { describe, expect, it } from "vitest";
 
 import { sanitizeMacAppSymlinks } from "./mac-symlink-sanitizer.ts";
@@ -73,6 +74,29 @@ describe("mac app symlink sanitization", () => {
 
     // Clean up
     rmSync(root, { recursive: true, force: true });
+  });
+
+  const testUnixSocket = process.platform === "win32" ? it.skip : it;
+  testUnixSocket("preserves a required link when its target cannot be copied", async () => {
+    const root = mkdtempSync(join(tmpdir(), "tabs-symlink-failure-"));
+    const appDir = join(root, "Tabs.app");
+    const resourcesDir = join(appDir, "Contents", "Resources");
+    const socketPath = join(root, "service.sock");
+    const linkPath = join(resourcesDir, "service.sock");
+    mkdirSync(resourcesDir, { recursive: true });
+    const server = createServer();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(socketPath, resolve);
+      });
+      symlinkSync(socketPath, linkPath);
+      expect(() => sanitizeMacAppSymlinks(appDir)).toThrow("symlink");
+      expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   const testOnDarwin = process.platform === "darwin" ? it : it.skip;

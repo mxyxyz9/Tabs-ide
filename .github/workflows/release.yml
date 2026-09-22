@@ -434,6 +434,11 @@ jobs:
           $signature = Get-AuthenticodeSignature $installer.FullName
           if ($signature.Status -ne "NotSigned" -and $signature.Status -ne "Valid") { throw "Invalid installer signature: $($signature.Status)" }
 
+      - name: Smoke-test Windows install and locked-process upgrade
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: ./tabs-main/scripts/smoke-windows-installer.ps1
+
       - name: Collect release assets
         shell: bash
         run: |
@@ -550,6 +555,18 @@ jobs:
             "$RELEASE_VERSION" \
             "../.github/release-notes/v$RELEASE_VERSION.md"
 
+      - name: Refuse to replace a published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          if release_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$release_draft" != "true" ]; then
+              echo "::error::Release $TAG is already published; use a new version instead."
+              exit 1
+            fi
+          fi
+
       - name: Create draft release and upload assets
         uses: softprops/action-gh-release@v3
         with:
@@ -579,12 +596,45 @@ jobs:
         run: |
           set -euo pipefail
           echo "Verifying assets attached to draft release $TAG..."
-          asset_count=$(gh release view "$TAG" --json assets --jq '.assets | length')
-          echo "Attached assets count: $asset_count"
-          if [ "$asset_count" -lt 6 ]; then
-            echo "::error::Release $TAG has only $asset_count assets; aborting publication."
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
+            echo "::error::Release $TAG must remain a draft until verification finishes."
             exit 1
           fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '.assets[] | [.name, (.size | tostring), .digest] | @tsv' > attached-assets.tsv
+
+          shopt -s nullglob
+          expected_files=(
+            release-assets/*.dmg
+            release-assets/*.zip
+            release-assets/*.AppImage
+            release-assets/*.AppImage.blockmap
+            release-assets/*.exe
+            release-assets/*.exe.blockmap
+            release-assets/latest.yml
+            release-assets/latest-linux.yml
+            release-assets/tabs-mac-preview-update.json
+            release-assets/tabs-mac-preview-update.json.sig
+          )
+          if [ "${#expected_files[@]}" -ne "$(wc -l < attached-assets.tsv)" ]; then
+            echo "::error::The draft release asset count differs from the verified local asset set."
+            exit 1
+          fi
+          for file in "${expected_files[@]}"; do
+            name="${file##*/}"
+            attached=$(awk -F '\t' -v name="$name" '$1 == name { print $0 }' attached-assets.tsv)
+            if [ -z "$attached" ]; then
+              echo "::error::Release $TAG is missing $name."
+              exit 1
+            fi
+            expected_size=$(stat -c%s "$file")
+            expected_digest="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+            IFS=$'\t' read -r attached_name attached_size attached_digest <<< "$attached"
+            if [ "$attached_size" != "$expected_size" ] || [ "$attached_digest" != "$expected_digest" ]; then
+              echo "::error::Release $TAG has incorrect bytes for $name."
+              exit 1
+            fi
+          done
 
           echo "Publishing release $TAG atomically (draft: false)..."
           if [ "$MAKE_LATEST" = "true" ]; then

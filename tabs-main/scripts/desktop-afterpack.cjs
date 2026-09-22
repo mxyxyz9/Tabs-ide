@@ -18,63 +18,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-
-function sanitizeMacAppSymlinks(appPath) {
-  const resolvedAppPath = path.resolve(appPath);
-  const queue = [resolvedAppPath];
-
-  while (queue.length > 0) {
-    const currentDir = queue.shift();
-    let entries;
-    try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
-
-      if (entry.isSymbolicLink()) {
-        try {
-          const target = fs.readlinkSync(fullPath);
-          const resolvedTarget = path.resolve(currentDir, target);
-
-          if (!fs.existsSync(resolvedTarget)) {
-            console.log(`[afterPack] Removing dangling symlink: ${fullPath} -> ${target}`);
-            fs.unlinkSync(fullPath);
-            continue;
-          }
-
-          const isInside =
-            resolvedTarget === resolvedAppPath ||
-            resolvedTarget.startsWith(resolvedAppPath + path.sep);
-
-          if (!isInside) {
-            console.log(
-              `[afterPack] Dereferencing external symlink: ${fullPath} -> ${resolvedTarget}`,
-            );
-            const stat = fs.statSync(resolvedTarget);
-            fs.unlinkSync(fullPath);
-            if (stat.isDirectory()) {
-              fs.cpSync(resolvedTarget, fullPath, { recursive: true, dereference: true });
-              queue.push(fullPath);
-            } else {
-              fs.copyFileSync(resolvedTarget, fullPath);
-            }
-          }
-        } catch (err) {
-          console.warn(`[afterPack] Failed to sanitize symlink ${fullPath}:`, err);
-          try {
-            fs.unlinkSync(fullPath);
-          } catch {}
-        }
-      } else if (entry.isDirectory()) {
-        queue.push(fullPath);
-      }
-    }
-  }
-}
+const { sanitizeMacAppSymlinks } = require("./mac-symlink-sanitizer.cjs");
 
 /** @param {{ appOutDir: string, electronPlatformName: string, packager: any }} context */
 module.exports = async function afterPack(context) {
