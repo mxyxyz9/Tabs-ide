@@ -31,6 +31,11 @@ on:
         required: false
         default: false
         type: boolean
+      diagnose_short_temp:
+        description: "Windows uninstall diagnosis only: give the old uninstaller a short temp path"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -442,6 +447,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TABS_SMOKE_PREVIOUS_VERSION: ${{ inputs.previous_version }}
           TABS_SMOKE_DIAGNOSE_UNINSTALL: ${{ inputs.diagnose_uninstall }}
+          TABS_SMOKE_DIAGNOSE_SHORT_TEMP: ${{ inputs.diagnose_short_temp }}
         run: ./tabs-main/scripts/smoke-windows-installer.ps1
       - name: Upload Windows installer and app logs on failure
         if: failure()

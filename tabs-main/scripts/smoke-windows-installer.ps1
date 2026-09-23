@@ -243,6 +243,11 @@ try {
     $oldUninstaller = Join-Path $env:RUNNER_TEMP 'old-uninstaller.exe'
     Copy-Item (Join-Path $installDir 'Uninstall Tabs.exe') $oldUninstaller
     $uninstallArgs = @('/S', '/KEEP_APP_DATA', '/currentuser', '--keep-shortcuts', '--updated', "_?=$installDir")
+    if ($env:TABS_SMOKE_DIAGNOSE_SHORT_TEMP -eq 'true') {
+      $env:TEMP = $env:RUNNER_TEMP
+      $env:TMP = $env:RUNNER_TEMP
+      Write-Host "Using short old-uninstaller temp path: $env:TEMP"
+    }
     Write-Host "Running the previous version's uninstaller directly: $oldUninstaller $($uninstallArgs -join ' ')"
     $old = Start-Process $oldUninstaller -ArgumentList $uninstallArgs -PassThru
     if (-not $old.WaitForExit(300000)) {
