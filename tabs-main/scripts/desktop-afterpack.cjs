@@ -55,7 +55,12 @@ module.exports = async function afterPack(context) {
   const requiredDependencies = [
     ["node_modules", "minimist/index.js"],
     ["extensions/node_modules", "typescript/lib/typescript.js"],
-    ["extensions/git/node_modules", "@vscode/fs-copyfile/build/Release/vscode_fs.node"],
+    [
+      "extensions/git/node_modules",
+      platform === "darwin" || platform === "mas"
+        ? "@vscode/fs-copyfile/build/Release/vscode_fs.node"
+        : "@vscode/fs-copyfile/lib/native.js",
+    ],
     ["extensions/copilot/node_modules", "@anthropic-ai/sdk/package.json"],
   ];
   for (const [directory, marker] of requiredDependencies) {

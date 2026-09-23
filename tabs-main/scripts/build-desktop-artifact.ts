@@ -968,6 +968,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
 const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   repoRoot: string,
   stageResourcesDir: string,
+  platform: typeof BuildPlatform.Type,
   thinRequested = false,
 ) {
   const path = yield* Path.Path;
@@ -1042,10 +1043,9 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
       }
     }
   }
-  // git's native fs helper (@vscode/fs-copyfile) must be built for the target —
-  // missing it throws "Cannot find module .../build/Debug/vscode_fs.node" and
-  // takes down git (and anything depending on it, e.g. CodeRabbit).
-  compiledMarkers.push("extensions/git/node_modules/@vscode/fs-copyfile/build");
+  // fs-copyfile loads its native binding on macOS only; Linux and Windows use
+  // its JavaScript fallback. Keep the source package available for packaging.
+  compiledMarkers.push("extensions/git/node_modules/@vscode/fs-copyfile/lib/native.js");
   // Marketplace signature verification runs in the shared process. The
   // verifier lives in build/node_modules in a source checkout and is copied
   // into the packaged runtime below before build/ is removed.
@@ -1064,6 +1064,16 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
         `${missingMarkers.join(", ")}. Compile the core AND the built-in extensions before ` +
         "building (in tabs-code-main run `npm run compile`, which runs the gulp `compile-extensions` " +
         "task), then point TABS_CODE_OSS_BUILD_DIR at the fully compiled tree.",
+    });
+  }
+
+  const packagedFsCopyfile = path.join(packagedExtensionsDir, "git", "node_modules", "@vscode", "fs-copyfile");
+  const packagedFsCopyfileMarker = platform === "mac"
+    ? path.join(packagedFsCopyfile, "build", "Release", "vscode_fs.node")
+    : path.join(packagedFsCopyfile, "lib", "native.js");
+  if (!(yield* fs.exists(packagedFsCopyfileMarker))) {
+    return yield* new BuildScriptError({
+      message: `The packaged git extension is missing ${packagedFsCopyfileMarker}.`,
     });
   }
 
@@ -1385,7 +1395,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
   yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
 
-  const runtimeStaged = yield* stageVsCodeRuntime(repoRoot, stageResourcesDir, options.thin);
+  const runtimeStaged = yield* stageVsCodeRuntime(repoRoot, stageResourcesDir, options.platform, options.thin);
   yield* assertPlatformBuildResources(options.platform, stageResourcesDir, options.verbose);
 
   if (!options.thin && !runtimeStaged) {
