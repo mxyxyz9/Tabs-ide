@@ -234,6 +234,32 @@ try {
   if ($holder.HasExited -or $unrelated.HasExited) { throw "Smoke-test process exited before upgrade." }
 
   Write-Host "Upgrading with an in-installation lock holder and unrelated rg.exe running..."
+  if ($env:TABS_SMOKE_DIAGNOSE_UNINSTALL -eq 'true') {
+    & ./tabs-main/scripts/close-windows-install-processes.ps1 $installDir
+    if ($LASTEXITCODE -ne 0) { throw "Process closer returned $LASTEXITCODE." }
+    $holder.Refresh()
+    if (-not $holder.HasExited) { throw "Process closer did not stop the lock holder." }
+
+    $oldUninstaller = Join-Path $env:RUNNER_TEMP 'old-uninstaller.exe'
+    Copy-Item (Join-Path $installDir 'Uninstall Tabs.exe') $oldUninstaller
+    $uninstallArgs = @('/S', '/KEEP_APP_DATA', '/currentuser', '--keep-shortcuts', '--updated', "_?=$installDir")
+    Write-Host "Running the previous version's uninstaller directly: $oldUninstaller $($uninstallArgs -join ' ')"
+    $old = Start-Process $oldUninstaller -ArgumentList $uninstallArgs -PassThru
+    if (-not $old.WaitForExit(300000)) {
+      Stop-Process -Id $old.Id -Force -ErrorAction SilentlyContinue
+      throw "Old uninstaller did not exit within 300 seconds."
+    }
+    $old.Refresh()
+    Write-Host "Old uninstaller exit code: $($old.ExitCode)"
+    if ($old.ExitCode -ne 0) { throw "Old uninstaller failed with exit code $($old.ExitCode)." }
+    if (Test-Path $installDir) {
+      $remaining = @(Get-ChildItem $installDir -Recurse -ErrorAction SilentlyContinue)
+      Write-Host "Old uninstall left $($remaining.Count) entries in the install directory."
+      $remaining | Select-Object -First 30 FullName | Format-Table | Out-String | Write-Host
+    }
+    Write-Host "Direct old-version uninstall passed."
+    return
+  }
   Invoke-SilentInstaller -Path $installer -InstallDir $installDir -Label "NSIS upgrade" -LockHolder $holder -TimeoutSeconds 1200
   $holder.Refresh()
   $unrelated.Refresh()
