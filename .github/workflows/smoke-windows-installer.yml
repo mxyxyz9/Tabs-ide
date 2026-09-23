@@ -35,3 +35,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TABS_SMOKE_PREVIOUS_VERSION: ${{ inputs.previous_version }}
         run: ./tabs-main/scripts/smoke-windows-installer.ps1
+
+      - name: Upload Windows installer process log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer-process-log
+          path: |
+            ${{ runner.temp }}/tabs-installer-processes.log
+            ${{ runner.temp }}/TabsLaunchSmoke/userdata/logs/desktop-main.log
+            ${{ runner.temp }}/TabsLaunchSmoke/userdata/logs/server-child.log
+          if-no-files-found: ignore
+          retention-days: 14

@@ -132,6 +132,7 @@ $unrelatedDir = Join-Path $env:RUNNER_TEMP "TabsUnrelatedProcess"
 New-Item $unrelatedDir -ItemType Directory -Force | Out-Null
 $holder = $null
 $unrelated = $null
+$installedApp = $null
 try {
   Write-Host "Installing previous version into $installDir..."
   Invoke-SilentInstaller -Path $initialInstaller -InstallDir $installDir -Label "Initial NSIS install" -TimeoutSeconds 1200
@@ -154,14 +155,35 @@ try {
   if (-not $holder.HasExited) { throw "Installer did not close a process running from its installation." }
   if ($unrelated.HasExited) { throw "Installer killed an unrelated rg.exe process." }
   if (-not (Test-Path (Join-Path $installDir "Tabs.exe"))) { throw "Tabs.exe is missing after upgrade." }
+  if (-not (Test-Path (Join-Path $installDir "resources/tabs-code-main/out/vs/code/electron-browser/workbench/workbench-dev.html") -PathType Leaf)) { throw "Upgrade is missing the bundled editor." }
+  if (-not (Test-Path (Join-Path $installDir "resources/tabs-code-main/node_modules/minimist/index.js") -PathType Leaf)) { throw "Upgrade is missing editor runtime dependencies." }
   Write-Host "Windows legacy upgrade and process-scope checks passed."
+
+  $smokeHome = Join-Path $env:RUNNER_TEMP "TabsLaunchSmoke"
+  $desktopLog = Join-Path $smokeHome "userdata/logs/desktop-main.log"
+  $env:TABS_HOME = $smokeHome
+  $env:TABS_DISABLE_AUTO_UPDATE = "1"
+  Write-Host "Launching upgraded Tabs with isolated state..."
+  $installedApp = Start-Process (Join-Path $installDir "Tabs.exe") -PassThru
+  $ready = $false
+  for ($attempt = 1; $attempt -le 24; $attempt++) {
+    Start-Sleep -Seconds 5
+    $installedApp.Refresh()
+    if ($installedApp.HasExited) { break }
+    if ((Test-Path $desktopLog) -and (Select-String $desktopLog -Pattern "bootstrap native Code-OSS main-process backend started" -Quiet)) {
+      $ready = $true
+      break
+    }
+  }
+  if (-not $ready) {
+    if (Test-Path $desktopLog) { Get-Content $desktopLog -Tail 100 | Write-Host }
+    throw "The upgraded app did not start its bundled editor backend within 120 seconds."
+  }
+  Write-Host "Upgraded Tabs launched with its bundled editor backend."
 } finally {
-  foreach ($process in @($holder, $unrelated)) {
+  foreach ($process in @($holder, $unrelated, $installedApp)) {
     if ($process -and -not $process.HasExited) {
-      Get-CimInstance Win32_Process |
-        Where-Object { $_.ParentProcessId -eq $process.Id } |
-        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      & taskkill.exe /F /T /PID $process.Id 2>$null | Out-Null
     }
   }
 }

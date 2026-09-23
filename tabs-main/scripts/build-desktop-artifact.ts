@@ -548,6 +548,7 @@ function getRequiredMacArtifactPaths(productName: string, thin = false): readonl
     // Native main-process services and built-in extensions resolve runtime
     // dependencies from the checkout's root node_modules.
     join(codeOss, "node_modules"),
+    join(codeOss, "node_modules", "minimist", "index.js"),
   ];
 }
 

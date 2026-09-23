@@ -43,7 +43,11 @@ module.exports = async function afterPack(context) {
   }
 
   const target = path.join(runtimeDir, "node_modules");
+  const requiredModule = path.join("minimist", "index.js");
   if (fs.existsSync(target)) {
+    if (!fs.existsSync(path.join(target, requiredModule))) {
+      throw new Error(`[afterPack] Bundled Code OSS runtime is missing node_modules/${requiredModule}.`);
+    }
     // Already present (e.g. electron-builder kept it) — still sanitize symlinks on mac.
     if (platform === "darwin" || platform === "mas") {
       const appPath = path.join(context.appOutDir, `${productFilename}.app`);
@@ -67,18 +71,10 @@ module.exports = async function afterPack(context) {
   );
 
   if (!fs.existsSync(source)) {
-    console.warn(
-      `[afterPack] Runtime node_modules source not found at ${source}; ` +
-        "skipping tabs-code-main/node_modules restore. Native Code-OSS services " +
-        "may fail to start.",
-    );
-    if (platform === "darwin" || platform === "mas") {
-      const appPath = path.join(context.appOutDir, `${productFilename}.app`);
-      if (fs.existsSync(appPath)) {
-        sanitizeMacAppSymlinks(appPath);
-      }
-    }
-    return;
+    throw new Error(`[afterPack] Bundled Code OSS runtime node_modules source not found at ${source}.`);
+  }
+  if (!fs.existsSync(path.join(source, requiredModule))) {
+    throw new Error(`[afterPack] Bundled Code OSS runtime source is missing node_modules/${requiredModule}.`);
   }
 
   console.log(
@@ -87,6 +83,9 @@ module.exports = async function afterPack(context) {
   );
   // Copy symlinks as-is (no dereference) to avoid failing on dangling links.
   fs.cpSync(source, target, { recursive: true });
+  if (!fs.existsSync(path.join(target, requiredModule))) {
+    throw new Error(`[afterPack] Bundled Code OSS runtime copy is missing node_modules/${requiredModule}.`);
+  }
 
   if (platform === "darwin" || platform === "mas") {
     const appPath = path.join(context.appOutDir, `${productFilename}.app`);
