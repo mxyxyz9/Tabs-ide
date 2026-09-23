@@ -30,7 +30,7 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
 - **User Data & Session Continuity**: New production installs use `$XDG_CONFIG_HOME/tabs` (defaulting to `~/.config/tabs`), with development mode isolated to `~/.config/tabs-dev`.
 - **Legacy Path Compatibility**: Existing `Tabs (Alpha)` profiles retain the precedence used by prior releases. The resolver can also reuse Electron's historical `Tabs` default when no established canonical or alpha profile exists. It never merges or deletes profile directories automatically.
 - **Native Verification**: AppImage launch and install-over-existing behavior must be verified on a Linux CI runner or release machine; macOS unit tests cover path selection only.
-  - The root `Smoke-test Linux AppImage artifact` workflow accepts an existing build run ID and launches its packaged AppImage under a virtual display. It uses AppImage extract-and-run because GitHub runners may restrict FUSE mounts. This checks that the bundled editor backend starts without rebuilding the installer; a normal direct launch on a Linux desktop is still a separate release check.
+  - The root `Smoke-test desktop installer artifacts` workflow accepts an existing build run ID and launches its packaged AppImage under a virtual display when `platforms` includes `linux-x64`. It uses AppImage extract-and-run because GitHub runners may restrict FUSE mounts. This checks that the bundled editor backend starts without rebuilding the installer; a normal direct launch on a Linux desktop is still a separate release check.
 
 ### 2. Windows (`.exe` NSIS Installer) - Release Configuration
 
@@ -53,6 +53,7 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
   - Public macOS release distribution requires Apple Developer ID Application code signing and Apple Notarization to pass Gatekeeper without user security overrides.
   - Because an Apple Developer account is not currently active, **Apple Developer ID signing and notarization are an explicitly deferred production-release requirement**.
   - Local macOS packaging and non-macOS release jobs (Windows and Linux) must never be blocked or failed due to the absence of Apple Developer credentials.
+  - The root `Smoke-test desktop installer artifacts` workflow reuses existing arm64 and x64 artifacts on matching native runners when `platforms` includes `mac`. It checks signature, architecture, and editor backend startup after copying the app out of the DMG. It does not establish Gatekeeper approval for a quarantined download.
 
 ### 4. Browser-Partition Shutdown & Updater Flushing
 
@@ -98,7 +99,7 @@ Run the repository-root `Build Desktop Installers` workflow with all four
 platforms selected. It uploads installers as workflow artifacts and runs the
 Windows upgrade smoke test without publishing a GitHub Release.
 
-The root `Smoke-test Windows installer artifact` and `Smoke-test Linux AppImage artifact` workflows can reuse one platform artifact from an existing build run. Use these for focused native checks after a script-only test change instead of rebuilding all four platforms. The Windows smoke installs a previous release, upgrades it with a process holding an installation file, and launches the upgraded app. Failed Windows runs upload installer and startup logs.
+The root `Smoke-test desktop installer artifacts` workflow reuses platform artifacts from an existing build run. Set `platforms` to `win-x64`, `linux-x64`, `mac`, or a comma-separated combination. Dispatch the existing workflow on `codex/windows-release-repair` with the artifact run ID for focused native checks after a script-only test change instead of rebuilding all four platforms. The Windows smoke installs a previous release, upgrades it with a process holding an installation file, and launches the upgraded app. Failed Windows runs upload installer and startup logs.
 
 After all four jobs pass, the repository-root `Release Desktop` workflow can
 reuse that exact successful run through its `artifact_run_id` input. Its
