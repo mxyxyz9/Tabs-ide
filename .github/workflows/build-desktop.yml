@@ -268,9 +268,13 @@ jobs:
           # distributions instead of shipping source and dev dependencies.
           npm run gulp compile-extensions-build
           npm run gulp compile-copilot-extension-build
-          if [[ "${{ matrix.platform }}" == "mac" ]]; then
-            test -f .build/extensions/git/node_modules/@vscode/fs-copyfile/build/Release/vscode_fs.node
-          fi
+          # The packaged git/package.json omits dependencies, so rebuild the
+          # native package itself in the production tree used by the artifact.
+          native_runtime_dir=".build/extensions/git/node_modules/@vscode/fs-copyfile"
+          test -f "$native_runtime_dir/package.json"
+          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" \
+            --module-dir "$native_runtime_dir"
+          test -f "$native_runtime_dir/build/Release/vscode_fs.node"
           test -f .build/extensions/copilot/package.json
 
       - name: Build desktop artifact
