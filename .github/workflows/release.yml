@@ -598,6 +598,8 @@ jobs:
           name: windows-installer-process-log
           path: |
             ${{ runner.temp }}/tabs-installer-processes.log
+            ${{ runner.temp }}/tabs-installer-diagnostics/installer-*.txt
+            ${{ runner.temp }}/tabs-installer-diagnostics/installer-*.dmp
             ${{ runner.temp }}/TabsLaunchSmoke/userdata/logs/desktop-main.log
             ${{ runner.temp }}/TabsLaunchSmoke/userdata/logs/server-child.log
           if-no-files-found: ignore

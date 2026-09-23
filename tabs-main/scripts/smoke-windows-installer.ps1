@@ -1,6 +1,72 @@
 $ErrorActionPreference = "Stop"
 $processLogPath = Join-Path $env:RUNNER_TEMP "tabs-installer-processes.log"
 $env:TABS_INSTALLER_PROCESS_LOG = $processLogPath
+$diagnosticDir = Join-Path $env:RUNNER_TEMP "tabs-installer-diagnostics"
+
+function Save-InstallerDiagnostics {
+  param(
+    [Diagnostics.Process]$Installer,
+    [string]$InstallDir,
+    [int]$ElapsedSeconds,
+    [switch]$CaptureDump
+  )
+
+  New-Item $diagnosticDir -ItemType Directory -Force | Out-Null
+  $snapshot = Join-Path $diagnosticDir "installer-$ElapsedSeconds.txt"
+  "Elapsed: $ElapsedSeconds seconds; UTC: $([DateTime]::UtcNow.ToString('o'))" | Set-Content $snapshot
+  "Installer PID: $($Installer.Id)" | Add-Content $snapshot
+
+  Get-CimInstance Win32_Process -Filter "ProcessId = $($Installer.Id)" |
+    Select-Object ProcessId, ParentProcessId, Name, CommandLine, ExecutablePath, CreationDate, KernelModeTime, UserModeTime, ReadTransferCount, WriteTransferCount, ReadOperationCount, WriteOperationCount |
+    Format-List | Out-String | Add-Content $snapshot
+
+  try {
+    $Installer.Refresh()
+    $Installer.Threads |
+      Select-Object Id, ThreadState, WaitReason, StartAddress |
+      Format-Table -AutoSize | Out-String | Add-Content $snapshot
+  } catch {
+    "Thread snapshot failed: $_" | Add-Content $snapshot
+  }
+
+  $drives = @((Get-Item $env:RUNNER_TEMP).PSDrive) + @((Get-Item $InstallDir).PSDrive)
+  foreach ($drive in $drives) {
+    if ($drive -and $drive.Free -ne $null) {
+      "Drive $($drive.Name): free $($drive.Free) bytes" | Add-Content $snapshot
+    }
+  }
+
+  "NSIS temporary directories:" | Add-Content $snapshot
+  Get-ChildItem $env:RUNNER_TEMP, $env:TEMP -Directory -Filter 'ns*.tmp' -ErrorAction SilentlyContinue |
+    Sort-Object FullName -Unique |
+    ForEach-Object {
+      "  $($_.FullName) modified $($_.LastWriteTimeUtc.ToString('o'))" | Add-Content $snapshot
+      Get-ChildItem $_.FullName -Force -ErrorAction SilentlyContinue |
+        Select-Object -First 30 FullName, Length, LastWriteTimeUtc |
+        Format-Table -AutoSize | Out-String | Add-Content $snapshot
+    }
+
+  if ($CaptureDump) {
+    $procDump = Join-Path $diagnosticDir 'procdump64.exe'
+    if (-not (Test-Path $procDump)) {
+      try {
+        $zip = Join-Path $diagnosticDir 'procdump.zip'
+        Invoke-WebRequest 'https://download.sysinternals.com/files/Procdump.zip' -OutFile $zip
+        Expand-Archive $zip -DestinationPath $diagnosticDir -Force
+        Remove-Item $zip
+      } catch {
+        "ProcDump download failed: $_" | Add-Content $snapshot
+      }
+    }
+    if (Test-Path $procDump) {
+      & $procDump -accepteula -mt $Installer.Id (Join-Path $diagnosticDir "installer-$ElapsedSeconds.dmp") 2>&1 |
+        Out-String | Add-Content $snapshot
+    }
+  }
+
+  Write-Host "Installer diagnostic snapshot: $snapshot"
+}
+
 function Invoke-SilentInstaller {
   param(
     [Parameter(Mandatory)] [string]$Path,
@@ -31,12 +97,26 @@ function Invoke-SilentInstaller {
 
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $lastReport = 0
+  $diagnosedAt = @{}
 
   try {
     while (-not $process.HasExited) {
       Start-Sleep -Seconds 5
       $process.Refresh()
       $elapsed = [int]$sw.Elapsed.TotalSeconds
+
+      if ($Label -eq 'NSIS upgrade') {
+        foreach ($checkpoint in @(300, 900)) {
+          if ($elapsed -ge $checkpoint -and -not $diagnosedAt.ContainsKey($checkpoint)) {
+            $diagnosedAt[$checkpoint] = $true
+            try {
+              Save-InstallerDiagnostics -Installer $process -InstallDir $InstallDir -ElapsedSeconds $elapsed -CaptureDump
+            } catch {
+              Write-Warning "Could not capture installer diagnostics: $_"
+            }
+          }
+        }
+      }
 
       if ($LockHolder -and $elapsed -ge 180) {
         $LockHolder.Refresh()
@@ -56,6 +136,11 @@ function Invoke-SilentInstaller {
       }
 
       if ($elapsed -ge $TimeoutSeconds) {
+        try {
+          Save-InstallerDiagnostics -Installer $process -InstallDir $InstallDir -ElapsedSeconds $elapsed
+        } catch {
+          Write-Warning "Could not capture installer diagnostics: $_"
+        }
         $childProcesses = Get-CimInstance Win32_Process |
           Where-Object { $_.ParentProcessId -eq $process.Id } |
           Select-Object ProcessId, Name, CommandLine
