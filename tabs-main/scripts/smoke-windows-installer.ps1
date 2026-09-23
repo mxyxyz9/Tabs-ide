@@ -1,12 +1,63 @@
 $ErrorActionPreference = "Stop"
 function Invoke-SilentInstaller {
-  param([string]$Path, [string]$InstallDir, [string]$Label)
-  $process = Start-Process -FilePath $Path -ArgumentList @('/S', "/D=$InstallDir") -PassThru
-  if (-not $process.WaitForExit(300000)) {
-    Stop-Process -Id $process.Id -Force
-    throw "$Label did not exit within five minutes."
+  param(
+    [Parameter(Mandatory)] [string]$Path,
+    [Parameter(Mandatory)] [string]$InstallDir,
+    [Parameter(Mandatory)] [string]$Label,
+    [int]$TimeoutSeconds = 900
+  )
+
+  if (-not (Test-Path $Path -PathType Leaf)) {
+    throw "$Label installer was not found: $Path"
   }
-  if ($process.ExitCode -ne 0) { throw "$Label failed: $($process.ExitCode)" }
+
+  Write-Host "$Label`: $Path"
+  Write-Host "Install directory: $InstallDir"
+
+  # NSIS requires /D= to be the final installer argument.
+  $arguments = @(
+    '/S',
+    "/D=$InstallDir"
+  )
+
+  $process = Start-Process `
+    -FilePath $Path `
+    -ArgumentList $arguments `
+    -PassThru `
+    -WorkingDirectory (Split-Path -Parent $Path)
+
+  try {
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+      $process.Refresh()
+      $childProcesses = Get-CimInstance Win32_Process |
+        Where-Object { $_.ParentProcessId -eq $process.Id } |
+        Select-Object ProcessId, Name, CommandLine
+
+      Write-Error "$Label did not exit within $TimeoutSeconds seconds."
+      Write-Error "Installer PID: $($process.Id)"
+      $childProcesses | Format-List | Out-String | Write-Error
+
+      # Kill descendants first, then the installer.
+      Get-CimInstance Win32_Process |
+        Where-Object { $_.ParentProcessId -eq $process.Id } |
+        ForEach-Object {
+          Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+
+      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      throw "$Label timed out."
+    }
+
+    $process.Refresh()
+    if ($process.ExitCode -ne 0) {
+      throw "$Label failed with exit code $($process.ExitCode)."
+    }
+  }
+  finally {
+    if ($process -and -not $process.HasExited) {
+      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
+  }
 }
 
 $installer = (Get-ChildItem tabs-main/release -Filter *.exe | Select-Object -First 1).FullName
@@ -35,7 +86,7 @@ $holder = $null
 $unrelated = $null
 try {
   Write-Host "Installing previous version into $installDir..."
-  Invoke-SilentInstaller -Path $initialInstaller -InstallDir $installDir -Label "Initial NSIS install"
+  Invoke-SilentInstaller -Path $initialInstaller -InstallDir $installDir -Label "Initial NSIS install" -TimeoutSeconds 900
   if (-not (Test-Path (Join-Path $installDir "Tabs.exe"))) { throw "Tabs.exe was not installed." }
   Write-Host "Initial install completed."
 
@@ -49,7 +100,7 @@ try {
   if ($holder.HasExited -or $unrelated.HasExited) { throw "Smoke-test process exited before upgrade." }
 
   Write-Host "Upgrading with an in-installation lock holder and unrelated rg.exe running..."
-  Invoke-SilentInstaller -Path $installer -InstallDir $installDir -Label "NSIS upgrade"
+  Invoke-SilentInstaller -Path $installer -InstallDir $installDir -Label "NSIS upgrade" -TimeoutSeconds 900
   $holder.Refresh()
   $unrelated.Refresh()
   if (-not $holder.HasExited) { throw "Installer did not close a process running from its installation." }
