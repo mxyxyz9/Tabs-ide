@@ -549,6 +549,9 @@ function getRequiredMacArtifactPaths(productName: string, thin = false): readonl
     // dependencies from the checkout's root node_modules.
     join(codeOss, "node_modules"),
     join(codeOss, "node_modules", "minimist", "index.js"),
+    join(codeOss, "extensions", "node_modules", "typescript", "lib", "typescript.js"),
+    join(codeOss, "extensions", "git", "node_modules", "@vscode", "fs-copyfile", "build", "Release", "vscode_fs.node"),
+    join(codeOss, "extensions", "copilot", "node_modules", "@anthropic-ai", "sdk", "package.json"),
   ];
 }
 

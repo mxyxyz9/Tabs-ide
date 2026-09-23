@@ -324,6 +324,9 @@ jobs:
           test -s "$extract_root/squashfs-root/resources/tabs-code-main/out/vs/code/electron-browser/workbench/workbench-dev.html"
           test -s "$extract_root/squashfs-root/resources/tabs-code-main/out-build/nls.messages.json"
           test -s "$extract_root/squashfs-root/resources/tabs-code-main/node_modules/minimist/index.js"
+          test -s "$extract_root/squashfs-root/resources/tabs-code-main/extensions/node_modules/typescript/lib/typescript.js"
+          test -s "$extract_root/squashfs-root/resources/tabs-code-main/extensions/git/node_modules/@vscode/fs-copyfile/build/Release/vscode_fs.node"
+          test -s "$extract_root/squashfs-root/resources/tabs-code-main/extensions/copilot/node_modules/@anthropic-ai/sdk/package.json"
           grep -Eq '^provider:[[:space:]]*github[[:space:]]*$' "$extract_root/squashfs-root/resources/app-update.yml"
 
       - name: Inspect Windows NSIS update payload
@@ -348,6 +351,9 @@ jobs:
           if (-not (Test-Path (Join-Path $runtimeRoot "out/vs/code/electron-browser/workbench/workbench-dev.html") -PathType Leaf)) { throw "The full Code OSS runtime is missing from Windows installer." }
           if (-not (Test-Path (Join-Path $runtimeRoot "out-build/nls.messages.json") -PathType Leaf)) { throw "Code OSS localization data is missing from Windows installer." }
           if (-not (Test-Path (Join-Path $runtimeRoot "node_modules/minimist/index.js") -PathType Leaf)) { throw "Code OSS runtime dependencies are missing from Windows installer." }
+          if (-not (Test-Path (Join-Path $runtimeRoot "extensions/node_modules/typescript/lib/typescript.js") -PathType Leaf)) { throw "TypeScript extension runtime is missing from Windows installer." }
+          if (-not (Test-Path (Join-Path $runtimeRoot "extensions/git/node_modules/@vscode/fs-copyfile/build/Release/vscode_fs.node") -PathType Leaf)) { throw "Git extension native runtime is missing from Windows installer." }
+          if (-not (Test-Path (Join-Path $runtimeRoot "extensions/copilot/node_modules/@anthropic-ai/sdk/package.json") -PathType Leaf)) { throw "Copilot extension runtime is missing from Windows installer." }
           $updateConfig = Join-Path $appRoot "resources/app-update.yml"
           if (-not (Test-Path $updateConfig -PathType Leaf)) { throw "Packaged app-update.yml is missing." }
           if (-not (Select-String $updateConfig -Pattern '^provider:\s*github\s*$' -Quiet)) { throw "Packaged updater is not configured for GitHub." }

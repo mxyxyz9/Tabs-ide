@@ -42,49 +42,37 @@ module.exports = async function afterPack(context) {
     return;
   }
 
-  const target = path.join(runtimeDir, "node_modules");
-  const requiredModule = path.join("minimist", "index.js");
-  if (fs.existsSync(target)) {
-    if (!fs.existsSync(path.join(target, requiredModule))) {
-      throw new Error(`[afterPack] Bundled Code OSS runtime is missing node_modules/${requiredModule}.`);
-    }
-    // Already present (e.g. electron-builder kept it) — still sanitize symlinks on mac.
-    if (platform === "darwin" || platform === "mas") {
-      const appPath = path.join(context.appOutDir, `${productFilename}.app`);
-      if (fs.existsSync(appPath)) {
-        sanitizeMacAppSymlinks(appPath);
-      }
-    }
-    return;
-  }
-
   const projectDir =
     (context.packager && context.packager.info && context.packager.info.projectDir) ||
     process.cwd();
-  const source = path.join(
+  const sourceRuntimeDir = path.join(
     projectDir,
     "apps",
     "desktop",
     "resources",
     "tabs-code-main",
-    "node_modules",
   );
-
-  if (!fs.existsSync(source)) {
-    throw new Error(`[afterPack] Bundled Code OSS runtime node_modules source not found at ${source}.`);
-  }
-  if (!fs.existsSync(path.join(source, requiredModule))) {
-    throw new Error(`[afterPack] Bundled Code OSS runtime source is missing node_modules/${requiredModule}.`);
-  }
-
-  console.log(
-    "[afterPack] Restoring tabs-code-main/node_modules into packaged resources " +
-      "(dropped by electron-builder extraFiles)...",
-  );
-  // Copy symlinks as-is (no dereference) to avoid failing on dangling links.
-  fs.cpSync(source, target, { recursive: true });
-  if (!fs.existsSync(path.join(target, requiredModule))) {
-    throw new Error(`[afterPack] Bundled Code OSS runtime copy is missing node_modules/${requiredModule}.`);
+  const requiredDependencies = [
+    ["node_modules", "minimist/index.js"],
+    ["extensions/node_modules", "typescript/lib/typescript.js"],
+    ["extensions/git/node_modules", "@vscode/fs-copyfile/build/Release/vscode_fs.node"],
+    ["extensions/copilot/node_modules", "@anthropic-ai/sdk/package.json"],
+  ];
+  for (const [directory, marker] of requiredDependencies) {
+    const source = path.join(sourceRuntimeDir, directory);
+    const target = path.join(runtimeDir, directory);
+    const relativeMarker = path.join(directory, marker);
+    if (!fs.existsSync(path.join(source, marker))) {
+      throw new Error(`[afterPack] Staged Code OSS runtime is missing ${relativeMarker}.`);
+    }
+    if (!fs.existsSync(path.join(target, marker))) {
+      console.log(`[afterPack] Restoring ${directory} into packaged Code OSS runtime...`);
+      // Copy symlinks as-is so native extension dependencies keep their layout.
+      fs.cpSync(source, target, { recursive: true });
+    }
+    if (!fs.existsSync(path.join(target, marker))) {
+      throw new Error(`[afterPack] Packaged Code OSS runtime is missing ${relativeMarker}.`);
+    }
   }
 
   if (platform === "darwin" || platform === "mas") {
