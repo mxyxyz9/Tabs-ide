@@ -26,32 +26,60 @@ function Invoke-SilentInstaller {
     -PassThru `
     -WorkingDirectory (Split-Path -Parent $Path)
 
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $lastReport = 0
+
   try {
-    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+    while (-not $process.HasExited) {
+      Start-Sleep -Seconds 5
       $process.Refresh()
-      $childProcesses = Get-CimInstance Win32_Process |
-        Where-Object { $_.ParentProcessId -eq $process.Id } |
-        Select-Object ProcessId, Name, CommandLine
+      $elapsed = [int]$sw.Elapsed.TotalSeconds
 
-      Write-Host "$Label did not exit within $TimeoutSeconds seconds."
-      Write-Host "Installer PID: $($process.Id)"
-      $childProcesses | Format-List | Out-String | Write-Host
+      if ($elapsed -ge $TimeoutSeconds) {
+        $childProcesses = Get-CimInstance Win32_Process |
+          Where-Object { $_.ParentProcessId -eq $process.Id } |
+          Select-Object ProcessId, Name, CommandLine
 
-      # Kill descendants first, then the installer.
-      Get-CimInstance Win32_Process |
-        Where-Object { $_.ParentProcessId -eq $process.Id } |
-        ForEach-Object {
-          Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-        }
+        Write-Host "$Label did not exit within $TimeoutSeconds seconds."
+        Write-Host "Installer PID: $($process.Id)"
+        $childProcesses | Format-List | Out-String | Write-Host
 
-      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-      throw "$Label timed out."
+        # Log system-wide Tabs and uninstaller processes
+        Write-Host "Active related processes on system:"
+        Get-CimInstance Win32_Process |
+          Where-Object { $_.Name -like "*Tabs*" -or $_.Name -like "*old-uninstaller*" -or $_.CommandLine -like "*$InstallDir*" } |
+          Select-Object ProcessId, Name, CommandLine |
+          Format-List | Out-String | Write-Host
+
+        # Log files in install directory
+        $installedFiles = @(Get-ChildItem $InstallDir -Recurse -ErrorAction SilentlyContinue)
+        Write-Host "Files in install dir ($($installedFiles.Count) total):"
+        $installedFiles | Select-Object -First 20 FullName | Format-Table | Out-String | Write-Host
+
+        # Kill descendants first, then the installer.
+        Get-CimInstance Win32_Process |
+          Where-Object { $_.ParentProcessId -eq $process.Id } |
+          ForEach-Object {
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
+
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        throw "$Label timed out."
+      }
+
+      # Report progress every 30 seconds
+      if ($elapsed - $lastReport -ge 30) {
+        $lastReport = $elapsed
+        $fileCount = @(Get-ChildItem $InstallDir -Recurse -ErrorAction SilentlyContinue).Count
+        Write-Host "  [$Label running: ${elapsed}s elapsed, files in install dir: $fileCount]"
+      }
     }
 
     $process.Refresh()
     if ($process.ExitCode -ne 0) {
       throw "$Label failed with exit code $($process.ExitCode)."
     }
+    Write-Host "  [$Label finished successfully in $([int]$sw.Elapsed.TotalSeconds)s]"
   }
   finally {
     if ($process -and -not $process.HasExited) {
@@ -109,6 +137,11 @@ try {
   Write-Host "Windows legacy upgrade and process-scope checks passed."
 } finally {
   foreach ($process in @($holder, $unrelated)) {
-    if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+    if ($process -and -not $process.HasExited) {
+      Get-CimInstance Win32_Process |
+        Where-Object { $_.ParentProcessId -eq $process.Id } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
   }
 }
