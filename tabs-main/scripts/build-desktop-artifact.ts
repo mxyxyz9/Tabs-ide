@@ -1087,7 +1087,9 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   // shadowing the exact dependencies the extension was packaged against.
   const stagedExtensionsDir = path.join(vsCodeDestDir, "extensions");
   yield* Effect.log("[desktop-artifact] Installing production-packaged Code-OSS extensions...");
-  yield* fs.remove(stagedExtensionsDir, { recursive: true });
+  if (yield* fs.exists(stagedExtensionsDir)) {
+    yield* fs.remove(stagedExtensionsDir, { recursive: true });
+  }
   yield* fs.copy(packagedExtensionsDir, stagedExtensionsDir);
 
   // The shared process verifies Marketplace signatures with @vscode/vsce-sign.
