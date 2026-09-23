@@ -21,16 +21,25 @@ cleanup() {
     wait "$app_pid" 2>/dev/null || true
   fi
   if [[ "$mounted" == 1 ]]; then hdiutil detach "$mount_point" -quiet || true; fi
-  rm -rf "$smoke_root"
+  # GitHub discards the runner after this job. Deleting the copied full runtime
+  # here can take longer than the smoke test itself and exceed the job timeout.
+  if [[ "${CI:-}" == "true" ]]; then
+    echo "Retaining macOS smoke files until runner teardown: $smoke_root"
+  else
+    rm -rf "$smoke_root"
+  fi
 }
 trap cleanup EXIT
 
 mkdir -p "$mount_point"
 hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$dmg" -quiet
 mounted=1
+echo "Mounted DMG at $mount_point"
 ditto "$mount_point/Tabs.app" "$app_path"
+echo "Copied Tabs.app to $app_path"
 hdiutil detach "$mount_point" -quiet
 mounted=0
+echo "Detached DMG"
 
 binary="$app_path/Contents/MacOS/Tabs"
 if [[ ! -x "$binary" ]]; then
@@ -42,6 +51,7 @@ if ! lipo -archs "$binary" | tr ' ' '\n' | grep -Fxq "$binary_arch"; then
   exit 1
 fi
 codesign --verify --deep --strict "$app_path"
+echo "Verified macOS app signature"
 
 export TABS_HOME="$smoke_root/home"
 export TABS_DISABLE_AUTO_UPDATE=1
@@ -49,6 +59,7 @@ log_file="$TABS_HOME/userdata/logs/desktop-main.log"
 launch_output="$smoke_root/launch-output.log"
 "$binary" >"$launch_output" 2>&1 &
 app_pid=$!
+echo "Launched Tabs PID $app_pid"
 
 for ((attempt = 1; attempt <= 24; attempt++)); do
   sleep 5

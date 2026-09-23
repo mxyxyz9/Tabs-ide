@@ -1592,6 +1592,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     delete buildEnv.APPLE_API_ISSUER;
   }
 
+  if (options.platform === "win" && options.target === "nsis") {
+    // electron-builder 26.15.3 can write BCJ2 streams that its bundled NSIS
+    // extractor cannot decode. BCJ keeps executable files installable.
+    buildEnv.ELECTRON_BUILDER_7Z_FILTER = "BCJ";
+  }
+
   if (process.platform === "win32") {
     const python = resolvePythonForNodeGyp();
     if (python) {
