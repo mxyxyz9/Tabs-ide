@@ -848,7 +848,6 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   signed: boolean,
   thin: boolean,
   afterPackHook: boolean,
-  installerNshStaged: boolean,
   releaseNotes: string | null,
 ) {
   const buildConfig: Record<string, unknown> = {
@@ -939,9 +938,6 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         perMachine: false,
         runAfterFinish: false,
       };
-      if (installerNshStaged) {
-        nsisConfig.include = "./build/installer.nsh";
-      }
       buildConfig.nsis = nsisConfig;
     }
   }
@@ -1064,7 +1060,22 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   }
 
   yield* Effect.log("[desktop-artifact] Staging VS Code runtime...");
-  yield* fs.copy(vsCodeSourceDir, vsCodeDestDir);
+  yield* fs.makeDirectory(vsCodeDestDir, { recursive: true });
+  const excludedSourceEntries = new Set([
+    "extensions", ".build", "src", "test", ".git", ".github", ".vscode",
+    ".devcontainer", ".eslint-plugin-local", "build", "cli", ".claude", ".gitignore",
+  ]);
+  for (const entry of yield* fs.readDirectory(vsCodeSourceDir)) {
+    if (excludedSourceEntries.has(entry)) continue;
+    const source = path.join(vsCodeSourceDir, entry);
+    const destination = path.join(vsCodeDestDir, entry);
+    const stat = yield* fs.stat(source);
+    if (stat.type === "Directory") {
+      yield* fs.copy(source, destination);
+    } else if (stat.type === "File") {
+      yield* fs.copyFile(source, destination);
+    }
+  }
 
   // The source extensions tree is a development checkout and can exceed 3 GB:
   // it contains TypeScript sources, tests and complete dev dependency trees.
@@ -1083,7 +1094,7 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   // Upstream installs that package under build/node_modules, but build/ is not
   // part of the runtime artifact. Preserve only the verifier and its matching
   // platform package in the runtime dependency tree before removing build/.
-  const buildVscodeModules = path.join(vsCodeDestDir, "build", "node_modules", "@vscode");
+  const buildVscodeModules = path.join(vsCodeSourceDir, "build", "node_modules", "@vscode");
   const runtimeVscodeModules = path.join(vsCodeDestDir, "node_modules", "@vscode");
   if (yield* fs.exists(buildVscodeModules)) {
     for (const entry of yield* fs.readDirectory(buildVscodeModules)) {
@@ -1438,15 +1449,6 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     });
   }
 
-  const installerNshSource = path.join(repoRoot, "scripts", "installer.nsh");
-  let installerNshStaged = false;
-  if (yield* fs.exists(installerNshSource)) {
-    const buildDestDir = path.join(stageAppDir, "build");
-    yield* fs.makeDirectory(buildDestDir, { recursive: true });
-    yield* fs.copyFile(installerNshSource, path.join(buildDestDir, "installer.nsh"));
-    installerNshStaged = true;
-  }
-
   const stagePackageJson: StagePackageJson = {
     name: "tabs-desktop",
     version: appVersion,
@@ -1463,7 +1465,6 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.signed,
       effectiveThin,
       afterPackHookStaged,
-      installerNshStaged,
       (() => {
         const releaseNotesPath = path.join(
           repoRoot,
@@ -1577,7 +1578,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       ...commandOutputOptions(options.verbose),
       // Windows needs shell mode to resolve .cmd shims.
       shell: process.platform === "win32",
-    })`bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --publish never`,
+    })`bunx electron-builder@26.15.3 ${platformConfig.cliFlag} --${options.arch} --publish never`,
     { label: "electron-builder" },
   );
 
