@@ -2,6 +2,14 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.16] - 2026-09-23
+
+### More recoverable desktop updates
+
+- **macOS update recovery**: If replacing the app fails, Tabs restores the previous app from its backup.
+- **Linux AppImage recovery**: Tabs keeps the previous AppImage until the replacement starts successfully and restores it if the update fails.
+- **Windows upgrades**: The installer closes processes running from the existing Tabs installation before replacing its files, without closing unrelated processes elsewhere.
+
 ## [v1.3.15] - 2026-09-22
 
 ### Centered release notes dialog with dedicated close control

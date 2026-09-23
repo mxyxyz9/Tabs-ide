@@ -35,6 +35,8 @@ jobs:
       - id: matrix
         name: Build matrix from input
         uses: actions/github-script@v7
+        env:
+          REQUESTED_PLATFORMS: ${{ inputs.platforms }}
         with:
           script: |
             const allTargets = {
@@ -44,7 +46,7 @@ jobs:
               'win-x64':    { label: 'Windows x64',  runner: 'windows-2022',   platform: 'win',   target: 'nsis',     arch: 'x64'   },
             };
 
-            const input = '${{ inputs.platforms }}'.trim();
+            const input = (process.env.REQUESTED_PLATFORMS || '').trim();
             const keys = input ? input.split(',').map(k => k.trim()).filter(Boolean) : Object.keys(allTargets);
 
             const include = [];
@@ -243,6 +245,8 @@ jobs:
       - name: Build desktop artifact
         working-directory: tabs-main
         shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
           args=(
             --platform "${{ matrix.platform }}"
@@ -251,7 +255,7 @@ jobs:
             --verbose
           )
 
-          version="${{ inputs.version }}"
+          version="$REQUESTED_VERSION"
           if [[ -n "$version" ]]; then
             version="${version#v}"
             args+=(--build-version "$version")
@@ -262,8 +266,10 @@ jobs:
       - name: Verify native update artifact and metadata
         if: matrix.platform == 'linux' || matrix.platform == 'win'
         shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          version="${{ inputs.version }}"
+          version="$REQUESTED_VERSION"
           if [[ -z "$version" ]]; then
             version="$(node -p "require('./tabs-main/apps/desktop/package.json').version")"
           fi
