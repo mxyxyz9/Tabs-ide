@@ -30,6 +30,7 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
 - **User Data & Session Continuity**: New production installs use `$XDG_CONFIG_HOME/tabs` (defaulting to `~/.config/tabs`), with development mode isolated to `~/.config/tabs-dev`.
 - **Legacy Path Compatibility**: Existing `Tabs (Alpha)` profiles retain the precedence used by prior releases. The resolver can also reuse Electron's historical `Tabs` default when no established canonical or alpha profile exists. It never merges or deletes profile directories automatically.
 - **Native Verification**: AppImage launch and install-over-existing behavior must be verified on a Linux CI runner or release machine; macOS unit tests cover path selection only.
+  - The root `Smoke-test Linux AppImage artifact` workflow accepts an existing build run ID and launches its packaged AppImage under a virtual display. It uses AppImage extract-and-run because GitHub runners may restrict FUSE mounts. This checks that the bundled editor backend starts without rebuilding the installer; a normal direct launch on a Linux desktop is still a separate release check.
 
 ### 2. Windows (`.exe` NSIS Installer) - Release Configuration
 
@@ -96,6 +97,8 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
 Run the repository-root `Build Desktop Installers` workflow with all four
 platforms selected. It uploads installers as workflow artifacts and runs the
 Windows upgrade smoke test without publishing a GitHub Release.
+
+The root `Smoke-test Windows installer artifact` and `Smoke-test Linux AppImage artifact` workflows can reuse one platform artifact from an existing build run. Use these for focused native checks after a script-only test change instead of rebuilding all four platforms. The Windows smoke installs a previous release, upgrades it with a process holding an installation file, and launches the upgraded app. Failed Windows runs upload installer and startup logs.
 
 After all four jobs pass, the repository-root `Release Desktop` workflow can
 reuse that exact successful run through its `artifact_run_id` input. Its
