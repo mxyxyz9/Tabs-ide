@@ -17,7 +17,7 @@ app_pid=""
 mounted=0
 cleanup() {
   if [[ -n "$app_pid" ]]; then
-    kill "$app_pid" 2>/dev/null || true
+    kill -KILL "$app_pid" 2>/dev/null || true
     wait "$app_pid" 2>/dev/null || true
   fi
   if [[ "$mounted" == 1 ]]; then hdiutil detach "$mount_point" -quiet || true; fi
