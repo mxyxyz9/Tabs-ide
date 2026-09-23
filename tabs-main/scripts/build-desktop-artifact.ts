@@ -848,6 +848,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   signed: boolean,
   thin: boolean,
   afterPackHook: boolean,
+  installerNshStaged: boolean,
   releaseNotes: string | null,
 ) {
   const buildConfig: Record<string, unknown> = {
@@ -938,6 +939,9 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         perMachine: false,
         runAfterFinish: false,
       };
+      if (installerNshStaged) {
+        nsisConfig.include = "./build/installer.nsh";
+      }
       buildConfig.nsis = nsisConfig;
     }
   }
@@ -1451,6 +1455,19 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     });
   }
 
+  const installerNshSource = path.join(repoRoot, "scripts", "installer.nsh");
+  let installerNshStaged = false;
+  if (yield* fs.exists(installerNshSource)) {
+    const buildDestDir = path.join(stageAppDir, "build");
+    yield* fs.makeDirectory(buildDestDir, { recursive: true });
+    yield* fs.copyFile(installerNshSource, path.join(buildDestDir, "installer.nsh"));
+    yield* fs.copyFile(
+      path.join(repoRoot, "scripts", "close-windows-install-processes.ps1"),
+      path.join(buildDestDir, "close-windows-install-processes.ps1"),
+    );
+    installerNshStaged = true;
+  }
+
   const stagePackageJson: StagePackageJson = {
     name: "tabs-desktop",
     version: appVersion,
@@ -1467,6 +1484,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.signed,
       effectiveThin,
       afterPackHookStaged,
+      installerNshStaged,
       (() => {
         const releaseNotesPath = path.join(
           repoRoot,
