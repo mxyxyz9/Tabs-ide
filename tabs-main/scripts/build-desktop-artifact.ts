@@ -932,13 +932,17 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       winConfig.azureSignOptions = yield* AzureTrustedSigningOptionsConfig;
     }
     buildConfig.win = winConfig;
-    if (target === "nsis" && installerNshStaged) {
-      buildConfig.nsis = {
-        include: "./build/installer.nsh",
+    if (target === "nsis") {
+      const nsisConfig: Record<string, unknown> = {
         differentialPackage: true,
         oneClick: true,
         perMachine: false,
+        runAfterFinish: false,
       };
+      if (installerNshStaged) {
+        nsisConfig.include = "./build/installer.nsh";
+      }
+      buildConfig.nsis = nsisConfig;
     }
   }
 

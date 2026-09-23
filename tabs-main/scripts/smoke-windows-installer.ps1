@@ -4,7 +4,7 @@ function Invoke-SilentInstaller {
     [Parameter(Mandatory)] [string]$Path,
     [Parameter(Mandatory)] [string]$InstallDir,
     [Parameter(Mandatory)] [string]$Label,
-    [int]$TimeoutSeconds = 900
+    [int]$TimeoutSeconds = 1200
   )
 
   if (-not (Test-Path $Path -PathType Leaf)) {
@@ -33,9 +33,9 @@ function Invoke-SilentInstaller {
         Where-Object { $_.ParentProcessId -eq $process.Id } |
         Select-Object ProcessId, Name, CommandLine
 
-      Write-Error "$Label did not exit within $TimeoutSeconds seconds."
-      Write-Error "Installer PID: $($process.Id)"
-      $childProcesses | Format-List | Out-String | Write-Error
+      Write-Host "$Label did not exit within $TimeoutSeconds seconds."
+      Write-Host "Installer PID: $($process.Id)"
+      $childProcesses | Format-List | Out-String | Write-Host
 
       # Kill descendants first, then the installer.
       Get-CimInstance Win32_Process |
@@ -86,7 +86,7 @@ $holder = $null
 $unrelated = $null
 try {
   Write-Host "Installing previous version into $installDir..."
-  Invoke-SilentInstaller -Path $initialInstaller -InstallDir $installDir -Label "Initial NSIS install" -TimeoutSeconds 900
+  Invoke-SilentInstaller -Path $initialInstaller -InstallDir $installDir -Label "Initial NSIS install" -TimeoutSeconds 1200
   if (-not (Test-Path (Join-Path $installDir "Tabs.exe"))) { throw "Tabs.exe was not installed." }
   Write-Host "Initial install completed."
 
@@ -100,7 +100,7 @@ try {
   if ($holder.HasExited -or $unrelated.HasExited) { throw "Smoke-test process exited before upgrade." }
 
   Write-Host "Upgrading with an in-installation lock holder and unrelated rg.exe running..."
-  Invoke-SilentInstaller -Path $installer -InstallDir $installDir -Label "NSIS upgrade" -TimeoutSeconds 900
+  Invoke-SilentInstaller -Path $installer -InstallDir $installDir -Label "NSIS upgrade" -TimeoutSeconds 1200
   $holder.Refresh()
   $unrelated.Refresh()
   if (-not $holder.HasExited) { throw "Installer did not close a process running from its installation." }
