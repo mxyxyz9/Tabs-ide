@@ -235,7 +235,11 @@ try {
 
   Write-Host "Upgrading with an in-installation lock holder and unrelated rg.exe running..."
   if ($env:TABS_SMOKE_DIAGNOSE_UNINSTALL -eq 'true') {
-    & ./tabs-main/scripts/close-windows-install-processes.ps1 $installDir
+    $tempDriveOutputPath = $null
+    if ($env:TABS_SMOKE_DIAGNOSE_SUBST_TEMP -eq 'true') {
+      $tempDriveOutputPath = Join-Path $env:RUNNER_TEMP 'tabs-temp-drive.txt'
+    }
+    & ./tabs-main/scripts/close-windows-install-processes.ps1 $installDir -TempDriveOutputPath $tempDriveOutputPath
     if ($LASTEXITCODE -ne 0) { throw "Process closer returned $LASTEXITCODE." }
     $holder.Refresh()
     if (-not $holder.HasExited) { throw "Process closer did not stop the lock holder." }
@@ -248,13 +252,26 @@ try {
       $env:TMP = $env:RUNNER_TEMP
       Write-Host "Using short old-uninstaller temp path: $env:TEMP"
     }
-    Write-Host "Running the previous version's uninstaller directly: $oldUninstaller $($uninstallArgs -join ' ')"
-    $old = Start-Process $oldUninstaller -ArgumentList $uninstallArgs -PassThru
-    if (-not $old.WaitForExit(300000)) {
-      Stop-Process -Id $old.Id -Force -ErrorAction SilentlyContinue
-      throw "Old uninstaller did not exit within 300 seconds."
+    $tempDrive = $null
+    if ($tempDriveOutputPath) {
+      $tempDrive = Get-Content $tempDriveOutputPath -Raw
+      $env:TEMP = $tempDrive
+      $env:TMP = $tempDrive
+      Write-Host "Using mapped old-uninstaller temp path: $tempDrive"
     }
-    $old.Refresh()
+    Write-Host "Running the previous version's uninstaller directly: $oldUninstaller $($uninstallArgs -join ' ')"
+    try {
+      $old = Start-Process $oldUninstaller -ArgumentList $uninstallArgs -PassThru
+      if (-not $old.WaitForExit(300000)) {
+        Stop-Process -Id $old.Id -Force -ErrorAction SilentlyContinue
+        throw "Old uninstaller did not exit within 300 seconds."
+      }
+      $old.Refresh()
+    } finally {
+      if ($tempDrive) {
+        & ./tabs-main/scripts/close-windows-install-processes.ps1 $installDir -CleanupTempDrive $tempDrive.Substring(0, 2)
+      }
+    }
     Write-Host "Old uninstaller exit code: $($old.ExitCode)"
     if ($old.ExitCode -ne 0) { throw "Old uninstaller failed with exit code $($old.ExitCode)." }
     if (Test-Path $installDir) {
