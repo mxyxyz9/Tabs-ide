@@ -28,6 +28,7 @@ jobs:
       tag: ${{ steps.release_meta.outputs.tag }}
       is_prerelease: ${{ steps.release_meta.outputs.is_prerelease }}
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
+      previous_version: ${{ steps.validate_release.outputs.previous_version }}
       ref: ${{ github.sha }}
     steps:
       - name: Checkout
@@ -71,6 +72,39 @@ jobs:
             exit 1
           fi
           node scripts/validate-release-notes.mjs "$notes_file"
+
+      - id: validate_release
+        name: Verify release version and tag availability
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const expected = process.env.RELEASE_VERSION;
+          for (const file of [
+            'tabs-main/apps/desktop/package.json',
+            'tabs-main/apps/server/package.json',
+            'tabs-main/apps/web/package.json',
+            'tabs-main/packages/contracts/package.json',
+          ]) {
+            const actual = JSON.parse(fs.readFileSync(file, 'utf8')).version;
+            if (actual !== expected) {
+              console.error(`::error::${file} has version ${actual}; expected ${expected}.`);
+              process.exitCode = 1;
+            }
+          }
+          NODE
+          if release_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$release_draft" != "true" ]; then
+              echo "::error::Release $RELEASE_TAG is already published; use a new version."
+              exit 1
+            fi
+          fi
+          previous_tag=$(gh release view --json tagName --jq .tagName)
+          echo "previous_version=${previous_tag#v}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -468,7 +502,7 @@ jobs:
           # existence check is false (a bare `[ -e ] && cp` as the script's
           # last command would propagate its non-zero status and fail the job
           # on platforms whose last pattern — latest-linux.yml — is absent).
-          echo "Collected $(ls -1 release-publish | wc -l) asset(s)."
+          echo "Collected $(find release-publish -maxdepth 1 -type f | wc -l) asset(s)."
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -478,18 +512,33 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+  windows_smoke:
+    name: Smoke-test Windows upgrade
+    needs: [preflight, build]
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-win-x64
+          path: tabs-main/release
+
       - name: Smoke-test Windows install and locked-process upgrade
-        if: matrix.platform == 'win'
         shell: pwsh
-        timeout-minutes: 30
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TABS_SMOKE_PREVIOUS_VERSION: 1.3.10
+          TABS_SMOKE_PREVIOUS_VERSION: ${{ needs.preflight.outputs.previous_version }}
         run: ./tabs-main/scripts/smoke-windows-installer.ps1
 
   release:
     name: Publish GitHub Release
-    needs: [preflight, build]
+    needs: [preflight, build, windows_smoke]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -633,7 +682,7 @@ jobs:
             fi
             expected_size=$(stat -c%s "$file")
             expected_digest="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
-            IFS=$'\t' read -r attached_name attached_size attached_digest <<< "$attached"
+            IFS=$'\t' read -r _ attached_size attached_digest <<< "$attached"
             if [ "$attached_size" != "$expected_size" ] || [ "$attached_digest" != "$expected_digest" ]; then
               echo "::error::Release $TAG has incorrect bytes for $name."
               exit 1

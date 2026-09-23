@@ -4,6 +4,7 @@ function Invoke-SilentInstaller {
     [Parameter(Mandatory)] [string]$Path,
     [Parameter(Mandatory)] [string]$InstallDir,
     [Parameter(Mandatory)] [string]$Label,
+    [Diagnostics.Process]$LockHolder,
     [int]$TimeoutSeconds = 1200
   )
 
@@ -34,6 +35,14 @@ function Invoke-SilentInstaller {
       Start-Sleep -Seconds 5
       $process.Refresh()
       $elapsed = [int]$sw.Elapsed.TotalSeconds
+
+      if ($LockHolder -and $elapsed -ge 180) {
+        $LockHolder.Refresh()
+        if (-not $LockHolder.HasExited) {
+          Write-Host "Installer has not closed lock holder PID $($LockHolder.Id) after ${elapsed}s."
+          throw "$Label did not close the installation's running process."
+        }
+      }
 
       if ($elapsed -ge $TimeoutSeconds) {
         $childProcesses = Get-CimInstance Win32_Process |
@@ -128,7 +137,7 @@ try {
   if ($holder.HasExited -or $unrelated.HasExited) { throw "Smoke-test process exited before upgrade." }
 
   Write-Host "Upgrading with an in-installation lock holder and unrelated rg.exe running..."
-  Invoke-SilentInstaller -Path $installer -InstallDir $installDir -Label "NSIS upgrade" -TimeoutSeconds 1200
+  Invoke-SilentInstaller -Path $installer -InstallDir $installDir -Label "NSIS upgrade" -LockHolder $holder -TimeoutSeconds 1200
   $holder.Refresh()
   $unrelated.Refresh()
   if (-not $holder.HasExited) { throw "Installer did not close a process running from its installation." }

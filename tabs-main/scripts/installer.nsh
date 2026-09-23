@@ -1,7 +1,7 @@
 # Close processes launched from this installation before NSIS replaces files.
 !macro customCheckAppRunning
   InitPluginsDir
-  File /oname=$PLUGINSDIR\close-tabs-processes.ps1 "${__FILEDIR__}\close-windows-install-processes.ps1"
+  File /oname=$PLUGINSDIR\close-tabs-processes.ps1 "${PROJECT_DIR}\build\close-windows-install-processes.ps1"
   nsExec::ExecToLog /TIMEOUT=60000 `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\close-tabs-processes.ps1" "$INSTDIR"`
   Pop $0
   StrCmp $0 0 checkDone
