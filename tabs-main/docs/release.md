@@ -1,6 +1,8 @@
 # Release Checklist
 
-This document covers how to run desktop releases from one tag, first without signing, then with signing.
+This document covers desktop releases from the repository root workflows. The
+desktop installers contain the complete Code OSS runtime and do not download it
+after installation.
 
 ## What the workflow does
 
@@ -15,8 +17,8 @@ This document covers how to run desktop releases from one tag, first without sig
   - Versions with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
   - Only plain `X.Y.Z` releases are marked as the repository's latest release.
 - Includes Electron auto-update metadata (for example `latest*.yml` and `*.blockmap`) in release assets.
-- Publishes the CLI package (`apps/server`, npm package `tabs`) with OIDC trusted publishing.
 - Signing is optional and auto-detected per platform from secrets.
+- Runs a Windows install and locked-process upgrade smoke test before publishing.
 
 ## Platform Readiness & Distribution Tiers
 
@@ -89,36 +91,15 @@ Tabs desktop releases distinguish between fully production-ready platforms, inte
   - Every platform uses `.github/release-notes/vX.Y.Z.md` as its source.
   - The workflow verifies that `latest.yml` and `latest-linux.yml` contain the exact notes before publishing, while the macOS notes are covered by the Ed25519 manifest signature.
 
-## 0) npm OIDC trusted publishing setup (CLI)
+## 1) Validate installers without publishing
 
-The workflow publishes the CLI with `bun publish` from `apps/server` after bumping
-the package version to the release tag version.
+Run the repository-root `Build Desktop Installers` workflow with all four
+platforms selected. It uploads installers as workflow artifacts and runs the
+Windows upgrade smoke test without publishing a GitHub Release.
 
-Checklist:
-
-1. Confirm npm org/user owns package `tabs` (or rename package first if needed).
-2. In npm package settings, configure Trusted Publisher:
-   - Provider: GitHub Actions
-   - Repository: this repo
-   - Workflow file: `.github/workflows/release.yml`
-   - Environment (if used): match your npm trusted publishing config
-3. Ensure npm account and org policies allow trusted publishing for the package.
-4. Create release tag `vX.Y.Z` and push; workflow will:
-   - set `apps/server/package.json` version to `X.Y.Z`
-   - build web + server
-   - run `bun publish --access public`
-
-## 1) Dry-run release without signing
-
-Use this first to validate the release pipeline.
-
-1. Confirm no signing secrets are required for this test.
-2. Create a test tag:
-   - `git tag v0.0.0-test.1`
-   - `git push origin v0.0.0-test.1`
-3. Wait for `.github/workflows/release.yml` to finish.
-4. Verify the GitHub Release contains all platform artifacts.
-5. Download each artifact and sanity-check installation on each OS.
+After all four jobs pass, the repository-root `Release Desktop` workflow can
+reuse that exact successful run through its `artifact_run_id` input. Its
+preflight checks the commit and asset set before publication.
 
 ## 2) Apple signing + notarization setup (macOS)
 
@@ -143,7 +124,7 @@ Checklist:
    - `APPLE_API_KEY`: contents of the downloaded `.p8`
    - `APPLE_API_KEY_ID`: Key ID
    - `APPLE_API_ISSUER`: Issuer ID
-8. Re-run a tag release and confirm macOS artifacts are signed/notarized.
+8. Run a new version release and confirm macOS artifacts are signed/notarized.
 
 Notes:
 
@@ -174,7 +155,7 @@ Checklist:
 4. Grant service principal permissions required by Trusted Signing.
 5. Create a client secret for the service principal.
 6. Add Azure secrets listed above in GitHub Actions secrets.
-7. Re-run a tag release and confirm Windows installer is signed.
+7. Run a new version release and confirm Windows installer is signed.
 
 ## 4) Ongoing release checklist
 
@@ -185,6 +166,7 @@ Checklist:
 5. Verify workflow steps:
    - preflight passes
    - all matrix builds pass
+   - Windows installation and upgrade smoke passes
    - release job uploads expected files
 6. Smoke test downloaded artifacts.
 

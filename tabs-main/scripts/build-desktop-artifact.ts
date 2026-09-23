@@ -881,7 +881,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       : [
           {
             from: "apps/desktop/resources/tabs-code-main",
-            to: "Resources/tabs-code-main",
+            to: platform === "mac" ? "Resources/tabs-code-main" : "resources/tabs-code-main",
             filter: ["!**/*.ts", "!**/.git"],
           },
         ],

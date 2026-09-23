@@ -1,4 +1,6 @@
 $ErrorActionPreference = "Stop"
+$processLogPath = Join-Path $env:RUNNER_TEMP "tabs-installer-processes.log"
+$env:TABS_INSTALLER_PROCESS_LOG = $processLogPath
 function Invoke-SilentInstaller {
   param(
     [Parameter(Mandatory)] [string]$Path,
@@ -40,6 +42,15 @@ function Invoke-SilentInstaller {
         $LockHolder.Refresh()
         if (-not $LockHolder.HasExited) {
           Write-Host "Installer has not closed lock holder PID $($LockHolder.Id) after ${elapsed}s."
+          if (Test-Path $processLogPath) {
+            Get-Content $processLogPath | Write-Host
+          } else {
+            Write-Host "The installer process-closer did not write a log."
+          }
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.ParentProcessId -eq $process.Id -or $_.ProcessId -eq $process.Id } |
+            Select-Object ProcessId, ParentProcessId, Name, CommandLine |
+            Format-List | Out-String | Write-Host
           throw "$Label did not close the installation's running process."
         }
       }

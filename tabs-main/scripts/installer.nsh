@@ -13,6 +13,7 @@
     Pop $0
     StrCmp $0 0 checkDone
   cancelInstall:
+    SetErrorLevel 1
     Quit
   checkDone:
 !macroend

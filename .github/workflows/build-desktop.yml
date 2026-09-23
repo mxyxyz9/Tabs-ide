@@ -90,6 +90,11 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Check Windows installer process closer
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: ./tabs-main/scripts/test-windows-install-processes.ps1
+
       - name: Install dependencies
         working-directory: tabs-main
         run: bun install --frozen-lockfile
@@ -290,6 +295,8 @@ jobs:
           )
           test -s "$extract_root/squashfs-root/resources/app.asar"
           test -s "$extract_root/squashfs-root/resources/app-update.yml"
+          test -s "$extract_root/squashfs-root/resources/tabs-code-main/out/vs/code/electron-browser/workbench/workbench-dev.html"
+          test -s "$extract_root/squashfs-root/resources/tabs-code-main/out-build/nls.messages.json"
           grep -Eq '^provider:[[:space:]]*github[[:space:]]*$' "$extract_root/squashfs-root/resources/app-update.yml"
 
       - name: Inspect Windows NSIS update payload
@@ -310,6 +317,9 @@ jobs:
           & 7z x $appArchive.FullName "-o$appRoot" -y | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "Could not extract the NSIS application archive." }
           if (-not (Test-Path (Join-Path $appRoot "resources/app.asar") -PathType Leaf)) { throw "Packaged app.asar is missing." }
+          $runtimeRoot = Join-Path $appRoot "resources/tabs-code-main"
+          if (-not (Test-Path (Join-Path $runtimeRoot "out/vs/code/electron-browser/workbench/workbench-dev.html") -PathType Leaf)) { throw "The full Code OSS runtime is missing from Windows installer." }
+          if (-not (Test-Path (Join-Path $runtimeRoot "out-build/nls.messages.json") -PathType Leaf)) { throw "Code OSS localization data is missing from Windows installer." }
           $updateConfig = Join-Path $appRoot "resources/app-update.yml"
           if (-not (Test-Path $updateConfig -PathType Leaf)) { throw "Packaged app-update.yml is missing." }
           if (-not (Select-String $updateConfig -Pattern '^provider:\s*github\s*$' -Quiet)) { throw "Packaged updater is not configured for GitHub." }
