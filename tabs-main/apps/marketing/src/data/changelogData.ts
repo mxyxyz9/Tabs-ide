@@ -21,15 +21,50 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 162;
+export const TOTAL_TAGS_COUNT = 163;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.20",
+    title: "Expanded external editor integration and refined workspace controls",
+    date: "September 24, 2026",
+    shortDate: "Sep 24",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs expands external editor discovery with automatic path detection and branded icons for JetBrains, Trae, Kiro, and VSCodium, alongside streamlined split-button headers and sidebar thread actions.",
+    highlights: [
+      "Added automatic executable detection for JetBrains IDEs, Trae, Kiro, VS Code Insiders, and VSCodium across macOS, Windows, and Linux.",
+      "Integrated official brand iconography for all supported external editors and system file managers in the Open In menu.",
+      "Replaced standard button groupings in the chat header and Git actions toolbar with cohesive split-button controls featuring descriptive tooltips and smooth dropdown menus.",
+      "Added quick-access floating actions to sidebar thread items for pinning, settling, and snoozing threads without opening full context menus.",
+      "Updated sidebar filter tabs to display dynamic match counts for active, settled, snoozed, and archived threads when searching.",
+    ],
+    categories: [
+      {
+        title: "External Editors",
+        items: [
+          "Automatic application detection for JetBrains suite (IntelliJ IDEA, WebStorm, PyCharm, GoLand, CLion, Rider, RustRover, PhpStorm, DataGrip, DataSpell, Aqua, RubyMine).",
+          "Detection for Trae, Kiro, VS Code Insiders, and VSCodium across macOS, Windows, and Linux.",
+          "Branded icons for all editors and platform file managers.",
+        ],
+      },
+      {
+        title: "Workspace UI",
+        items: [
+          "Split-button controls with tooltips for Git quick actions and Open In editor selection.",
+          "Thread hover action bar for quick pin, settle, and snooze.",
+          "Dynamic search counters across sidebar thread status tabs.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.19",
     title: "Improved user message readability and layout in chat",
     date: "September 24, 2026",
     shortDate: "Sep 24",
-    isLatest: true,
+    isLatest: false,
     type: "patch",
     summary:
       "Tabs refines user message formatting in the conversation timeline so multi-line text, bulleted lists, and structured notes read naturally.",

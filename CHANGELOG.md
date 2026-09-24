@@ -2,6 +2,16 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.20] - 2026-09-24
+
+### Expanded external editor integration and refined workspace controls
+
+- **Expanded external editor discovery**: Added automatic executable detection for JetBrains IDEs (IntelliJ IDEA, WebStorm, PyCharm, GoLand, CLion, Rider, RustRover, PhpStorm, DataGrip, DataSpell, Aqua, RubyMine), Trae, Kiro, VS Code Insiders, and VSCodium across macOS, Windows, and Linux.
+- **Dedicated editor brand icons**: Integrated official brand iconography for all supported external editors and system file managers in the Open In menu.
+- **Refined split-button header controls**: Replaced standard button groupings in the chat header and Git actions toolbar with cohesive split-button controls featuring descriptive tooltips and smooth dropdown menus.
+- **Thread hover action bar**: Added quick-access floating actions to sidebar thread items for pinning, settling, and snoozing threads without opening full context menus.
+- **Thread search counters**: Updated sidebar filter tabs to display dynamic match counts for active, settled, snoozed, and archived threads when searching.
+
 ## [v1.3.19] - 2026-09-24
 
 ### Improved user message readability and layout in chat
