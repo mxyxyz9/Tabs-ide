@@ -567,10 +567,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     ))}
                   </div>
                 )}
-                {/* Main message text — large, right-aligned, right-border accent */}
+                {/* Main message text — left-aligned, right-border accent */}
                 {(displayedUserMessage.visibleText.trim().length > 0 ||
                   terminalContexts.length > 0) && (
-                  <div className="border-r-2 border-foreground/80 pr-4 text-right text-lg font-sans leading-tight tracking-tight text-foreground">
+                  <div className="border-r-2 border-foreground/80 pr-4 text-left text-base font-sans leading-relaxed text-foreground">
                     <UserMessageBody
                       text={displayedUserMessage.visibleText}
                       terminalContexts={terminalContexts}
@@ -975,7 +975,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
             segment.text.trim().length > 0 ? (
               <div
                 key={segment.id}
-                className="wrap-break-word whitespace-pre-wrap font-sans text-lg leading-tight text-foreground"
+                className="wrap-break-word whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground"
               >
                 {segment.text.trim()}
               </div>
@@ -1038,7 +1038,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
         }
 
         return (
-          <div className="wrap-break-word whitespace-pre-wrap font-sans text-lg leading-tight text-foreground">
+          <div className="wrap-break-word whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground">
             {inlineNodes}
           </div>
         );
@@ -1066,7 +1066,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
     }
 
     return (
-      <div className="wrap-break-word whitespace-pre-wrap font-sans text-lg leading-tight text-foreground">
+      <div className="wrap-break-word whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground">
         {inlineNodes}
       </div>
     );
@@ -1077,7 +1077,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
   }
 
   return (
-    <p className="whitespace-pre-wrap wrap-break-word font-sans text-lg leading-tight text-foreground">
+    <p className="whitespace-pre-wrap wrap-break-word font-sans text-base leading-relaxed text-foreground">
       {props.text}
     </p>
   );
