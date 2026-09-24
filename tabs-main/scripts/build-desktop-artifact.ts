@@ -1527,6 +1527,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       effect:
         (rootPackageJson.workspaces?.catalog as Record<string, string> | undefined)?.effect ??
         "4.0.0-beta.78",
+      // Pin to a version confirmed to exist on registry.npmjs.org.
+      "undici-types": "8.11.0",
     },
   };
 
@@ -1534,13 +1536,18 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.writeFileString(path.join(stageAppDir, "package.json"), `${stagePackageJsonString}\n`);
 
   yield* Effect.log("[desktop-artifact] Installing staged production dependencies...");
-  yield* runCommand(
+  yield* runCommandWithRetry(
     ChildProcess.make({
       cwd: stageAppDir,
       ...commandOutputOptions(options.verbose),
       // Windows needs shell mode to resolve .cmd shims (e.g. bun.cmd).
       shell: process.platform === "win32",
-    })`bun install --production`,
+    })`bun install --production --no-progress`,
+    {
+      attempts: 3,
+      baseDelaySeconds: 20,
+      label: "staged production dependency install",
+    },
   );
 
   // Validate Effect transitive dependencies to prevent version mismatch crashes (e.g. ByteSize import)
