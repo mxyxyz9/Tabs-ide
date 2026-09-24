@@ -33,15 +33,6 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - name: Check deployment configuration
-        shell: bash
-        run: |
-          for key in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Add the repository Actions secret $key before deploying."
-              exit 1
-            fi
-          done
       - uses: actions/checkout@v4
         with:
           # Always deploy trusted default-branch code, never workflow_run artifacts.
@@ -75,13 +66,24 @@ jobs:
           bun scripts/vercel-output.ts
           mkdir -p ../../../.vercel
           cp -r .vercel/output ../../../.vercel/output
-      - name: Deploy production
+      - name: Request Vercel production deployment
         shell: bash
         run: |
-          deployment_output="$(bunx vercel@59.11.7 deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN")"
+          if [[ -z "$VERCEL_TOKEN" || -z "$VERCEL_ORG_ID" || -z "$VERCEL_PROJECT_ID" ]]; then
+            echo "::warning::Vercel CLI credentials are unavailable; checking the live Git-connected deployment."
+            exit 0
+          fi
+          if ! deployment_output="$(bunx vercel@59.11.7 deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN" 2>&1)"; then
+            echo "::warning::Vercel CLI deployment failed; checking whether production already has this build."
+            echo "$deployment_output"
+            exit 0
+          fi
           echo "$deployment_output"
           deployment_url="$(echo "$deployment_output" | grep -oE 'https://[a-zA-Z0-9.-]+\.vercel\.app' | head -n 1)"
           if [[ -n "$deployment_url" ]]; then
             echo "Aliasing $deployment_url to tabside.vercel.app"
             bunx vercel@59.11.7 alias set "$deployment_url" tabside.vercel.app --token "$VERCEL_TOKEN" || true
           fi
+      - name: Verify production matches the built site
+        shell: bash
+        run: bash tabs-main/apps/marketing/scripts/verify-live-deployment.sh

@@ -53,14 +53,20 @@ test("does not show a changelog action when update metadata has no notes", async
     .not.toBeInTheDocument();
 });
 
-test("dismisses release notes modal via close button (X mark) and Done button", async () => {
+test("dismisses release notes modal via X, backdrop, and Done button", async () => {
   const screen = await render(<DesktopUpdateReleaseNotes state={availableUpdate} />);
   const trigger = screen.getByRole("button", { name: "What's new in Tabs 1.4.0" });
 
   await trigger.click();
-  const closeButton = page.getByRole("button", { name: "Close" });
+  const closeButton = page.getByRole("button", { name: "Close what’s new" });
   await expect.element(closeButton).toBeVisible();
   await userEvent.click(closeButton);
+  await expect.element(page.getByText("What’s new in Tabs 1.4.0")).not.toBeInTheDocument();
+
+  await trigger.click();
+  const viewport = document.querySelector('[data-slot="dialog-viewport"]');
+  if (!viewport) throw new Error("Release notes viewport is missing");
+  await page.elementLocator(viewport).click({ position: { x: 4, y: 4 } });
   await expect.element(page.getByText("What’s new in Tabs 1.4.0")).not.toBeInTheDocument();
 
   await trigger.click();
