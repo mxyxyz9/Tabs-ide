@@ -21,15 +21,40 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 161;
+export const TOTAL_TAGS_COUNT = 162;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.19",
+    title: "Improved user message readability and layout in chat",
+    date: "September 24, 2026",
+    shortDate: "Sep 24",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs refines user message formatting in the conversation timeline so multi-line text, bulleted lists, and structured notes read naturally.",
+    highlights: [
+      "User message text is now aligned to the left within its right-docked message block, ensuring list items, headers, and wrapped lines start cleanly from the margin.",
+      "Upgraded prompt line height to relaxed spacing, matching the composer and providing visual breathing room for multi-line prompts and code snippets.",
+      "Maintained the signature right-side vertical accent border and docked placement while eliminating awkward jagged right-aligned line wrapping.",
+    ],
+    categories: [
+      {
+        title: "Chat & Workspace UI",
+        items: [
+          "Left-aligned prompt text inside right-docked user message container.",
+          "Relaxed typography line height for multi-line prompts, code snippets, and lists.",
+          "Preserved right-side vertical accent border.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.18",
     title: "Faster and more reliable desktop update installation",
     date: "September 24, 2026",
     shortDate: "Sep 24",
-    isLatest: true,
+    isLatest: false,
     type: "patch",
     summary:
       "Tabs speeds up desktop updates across macOS and Linux by pre-staging downloaded releases in the background and eliminating lengthy installation stalls.",

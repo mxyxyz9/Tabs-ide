@@ -2,6 +2,14 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.19] - 2026-09-24
+
+### Improved user message readability and layout in chat
+
+- **Left-aligned message text**: User message text is now aligned to the left within its right-docked message block, ensuring list items, headers, and wrapped lines start cleanly from the margin.
+- **Relaxed line spacing**: Upgraded prompt line height to relaxed spacing, matching the composer and providing visual breathing room for multi-line prompts and code snippets.
+- **Preserved right-side accent framing**: Maintained the signature right-side vertical accent border and docked placement while eliminating awkward jagged right-aligned line wrapping.
+
 ## [v1.3.18] - 2026-09-24
 
 ### Faster and more reliable desktop update installation
