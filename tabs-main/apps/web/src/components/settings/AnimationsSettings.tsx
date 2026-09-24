@@ -389,7 +389,7 @@ export function AnimationsSettings() {
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
               </h3>
-              <div className="flex bg-muted p-1 rounded-lg gap-1">
+              <div className="tabs-segmented flex" role="group" aria-label="Animation preview">
                 <button
                   type="button"
                   aria-pressed={animationTab === "startup"}
@@ -499,7 +499,7 @@ export function AnimationsSettings() {
               title="Style"
               description={`Choose the visual aesthetic for the ${animationTab} animation.`}
               control={
-                <div className="flex bg-muted p-1 rounded-lg gap-1">
+                <div className="tabs-segmented flex" role="group" aria-label="Animation style">
                   {[
                     { value: "glass", label: "Molten Glass" },
                     { value: "solari", label: "Solari Grid" },
@@ -508,6 +508,7 @@ export function AnimationsSettings() {
                       key={option.value}
                       type="button"
                       onClick={() => setActiveStyle(option.value as any)}
+                      aria-pressed={activeStyle === option.value}
                       className={cn(
                         "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap cursor-pointer",
                         activeStyle === option.value
@@ -526,7 +527,7 @@ export function AnimationsSettings() {
               title="Color palette"
               description={`Choose the color palette for the ${animationTab} animation.`}
               control={
-                <div className="flex bg-muted p-1 rounded-lg gap-1">
+                <div className="tabs-segmented flex" role="group" aria-label="Animation palette">
                   {[
                     { value: "block", label: "Solid Block" },
                     { value: "mono", label: "Monochrome" },
@@ -535,6 +536,7 @@ export function AnimationsSettings() {
                       key={option.value}
                       type="button"
                       onClick={() => setActivePalette(option.value as any)}
+                      aria-pressed={activePalette === option.value}
                       className={cn(
                         "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap cursor-pointer",
                         activePalette === option.value

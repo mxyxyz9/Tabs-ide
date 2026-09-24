@@ -1211,14 +1211,15 @@ export function ProjectWorkspaceSettingsSection() {
                       in an isolated sandbox, or connects to a named profile.
                     </div>
                   </div>
-                  <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1 shrink-0 self-start sm:self-auto">
+                  <div className="tabs-segmented flex shrink-0 self-start sm:self-auto" role="group" aria-label="Project browser session isolation">
                     <button
                       type="button"
                       onClick={() => setBrowserPartitionModeDraft("shared")}
+                      aria-pressed={browserPartitionModeDraft === "shared"}
                       className={cn(
                         "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                         browserPartitionModeDraft === "shared"
-                          ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                          ? "font-semibold"
                           : "text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -1227,10 +1228,11 @@ export function ProjectWorkspaceSettingsSection() {
                     <button
                       type="button"
                       onClick={() => setBrowserPartitionModeDraft("isolated")}
+                      aria-pressed={browserPartitionModeDraft === "isolated"}
                       className={cn(
                         "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                         browserPartitionModeDraft === "isolated"
-                          ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                          ? "font-semibold"
                           : "text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -1239,10 +1241,11 @@ export function ProjectWorkspaceSettingsSection() {
                     <button
                       type="button"
                       onClick={() => setBrowserPartitionModeDraft("profile")}
+                      aria-pressed={browserPartitionModeDraft === "profile"}
                       className={cn(
                         "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                         browserPartitionModeDraft === "profile"
-                          ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                          ? "font-semibold"
                           : "text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -1476,16 +1479,17 @@ export function ProjectWorkspaceSettingsSection() {
                                         project, stays isolated, or links to a named profile.
                                       </div>
                                     </div>
-                                    <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1 shrink-0 self-start sm:self-auto">
+                                    <div className="tabs-segmented flex shrink-0 self-start sm:self-auto" role="group" aria-label="Tab browser session isolation">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           saveCustomEmbedPartition(activeDraft.id, "shared")
                                         }
+                                        aria-pressed={(activeDraft.partitionMode ?? "shared") === "shared"}
                                         className={cn(
                                           "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                                           (activeDraft.partitionMode ?? "shared") === "shared"
-                                            ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                                            ? "font-semibold"
                                             : "text-muted-foreground hover:text-foreground",
                                         )}
                                       >
@@ -1496,10 +1500,11 @@ export function ProjectWorkspaceSettingsSection() {
                                         onClick={() =>
                                           saveCustomEmbedPartition(activeDraft.id, "isolated")
                                         }
+                                        aria-pressed={activeDraft.partitionMode === "isolated"}
                                         className={cn(
                                           "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                                           activeDraft.partitionMode === "isolated"
-                                            ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                                            ? "font-semibold"
                                             : "text-muted-foreground hover:text-foreground",
                                         )}
                                       >
@@ -1510,10 +1515,11 @@ export function ProjectWorkspaceSettingsSection() {
                                         onClick={() =>
                                           saveCustomEmbedPartition(activeDraft.id, "profile")
                                         }
+                                        aria-pressed={activeDraft.partitionMode === "profile"}
                                         className={cn(
                                           "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                                           activeDraft.partitionMode === "profile"
-                                            ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                                            ? "font-semibold"
                                             : "text-muted-foreground hover:text-foreground",
                                         )}
                                       >

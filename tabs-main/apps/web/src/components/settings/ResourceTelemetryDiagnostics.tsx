@@ -446,12 +446,13 @@ export function HistoryWindowSelector({
   onSelect: (windowMs: number) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-1 border border-border/40 select-none">
+    <div className="tabs-segmented inline-flex items-center select-none" role="group" aria-label="History window">
       {HISTORY_WINDOWS.map((option) => (
         <button
           key={option.windowMs}
           type="button"
           onClick={() => onSelect(option.windowMs)}
+          aria-pressed={selectedWindowMs === option.windowMs}
           className={cn(
             "font-semibold rounded-md transition-all px-2.5 py-1 text-xs cursor-pointer",
             selectedWindowMs === option.windowMs

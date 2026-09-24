@@ -77,13 +77,14 @@ export function PullRequestEditForm({
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Description
             </span>
-            <div className="flex items-center gap-1 rounded-md border border-border/80 bg-muted/40 p-0.5">
+            <div className="tabs-segmented flex items-center" role="group" aria-label="Description editor mode">
               <Button
                 type="button"
                 size="sm"
                 variant={activeTab === "write" ? "secondary" : "ghost"}
                 className="h-6 px-2 text-xs gap-1"
                 onClick={() => setActiveTab("write")}
+                aria-pressed={activeTab === "write"}
               >
                 <Edit3 className="size-3" />
                 <span>Write</span>
@@ -94,6 +95,7 @@ export function PullRequestEditForm({
                 variant={activeTab === "preview" ? "secondary" : "ghost"}
                 className="h-6 px-2 text-xs gap-1"
                 onClick={() => setActiveTab("preview")}
+                aria-pressed={activeTab === "preview"}
               >
                 <Eye className="size-3" />
                 <span>Preview</span>

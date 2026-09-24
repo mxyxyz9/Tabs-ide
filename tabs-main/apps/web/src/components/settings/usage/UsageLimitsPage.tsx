@@ -101,35 +101,36 @@ export function UsageLimitsPage() {
 
       {/* Sub-tab Navigation (Usage / Limits) */}
       <div className="flex items-center gap-2 border-b border-border/60 pb-3">
-        <button
-          type="button"
-          onClick={() => setSubTab("usage")}
-          aria-pressed={activeSubTab === "usage"}
-          className={cn(
-            "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all",
-            activeSubTab === "usage"
-              ? "bg-primary/10 text-primary border border-primary/20 shadow-xs"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-          )}
-        >
-          <BarChart3Icon className="size-4" />
-          <span>Usage</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSubTab("limits")}
-          aria-pressed={activeSubTab === "limits"}
-          className={cn(
-            "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all",
-            activeSubTab === "limits"
-              ? "bg-primary/10 text-primary border border-primary/20 shadow-xs"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-          )}
-        >
-          <GaugeIcon className="size-4" />
-          <span>Limits</span>
-        </button>
+        <div className="tabs-segmented flex items-center" role="group" aria-label="Usage settings section">
+          <button
+            type="button"
+            onClick={() => setSubTab("usage")}
+            aria-pressed={activeSubTab === "usage"}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all",
+              activeSubTab === "usage"
+                ? "bg-primary/10 text-primary border border-primary/20 shadow-xs"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            )}
+          >
+            <BarChart3Icon className="size-4" />
+            <span>Usage</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubTab("limits")}
+            aria-pressed={activeSubTab === "limits"}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all",
+              activeSubTab === "limits"
+                ? "bg-primary/10 text-primary border border-primary/20 shadow-xs"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            )}
+          >
+            <GaugeIcon className="size-4" />
+            <span>Limits</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Tab Content */}

@@ -30,11 +30,11 @@ export function SegmentedControl<T extends string>({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-lg bg-muted p-1 border border-border/40 select-none",
+        "tabs-segmented inline-flex items-center select-none",
         className,
       )}
     >
-      {options.map((opt) => {
+      {options.map((opt, index) => {
         const isSelected = opt.value === value;
         return (
           <button
@@ -43,13 +43,34 @@ export function SegmentedControl<T extends string>({
             role="radio"
             aria-checked={isSelected}
             aria-label={opt.ariaLabel}
+            tabIndex={isSelected ? 0 : -1}
             disabled={opt.disabled}
             onClick={() => onValueChange(opt.value)}
+            onKeyDown={(event) => {
+              const direction =
+                event.key === "ArrowRight" || event.key === "ArrowDown"
+                  ? 1
+                  : event.key === "ArrowLeft" || event.key === "ArrowUp"
+                    ? -1
+                    : 0;
+              if (!direction && event.key !== "Home" && event.key !== "End") return;
+              event.preventDefault();
+              let next = event.key === "Home" ? -1 : event.key === "End" ? options.length : index;
+              const step = event.key === "Home" ? 1 : event.key === "End" ? -1 : direction;
+              for (let attempt = 0; attempt < options.length; attempt += 1) {
+                next = (next + step + options.length) % options.length;
+                const target = options[next];
+                if (!target || target.disabled) continue;
+                onValueChange(target.value);
+                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button[role="radio"]')[next]?.focus();
+                break;
+              }
+            }}
             className={cn(
               "font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5",
               size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-xs",
               isSelected
-                ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
+                ? "font-semibold"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
               opt.disabled && "opacity-50 cursor-not-allowed",
               itemClassName,

@@ -256,7 +256,7 @@ export function ServerPresetFormFields(props: {
 
             <div className="flex items-center justify-between gap-4">
               <div className="text-sm font-medium text-foreground">Target Browser</div>
-              <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1">
+              <div className="tabs-segmented flex" role="group" aria-label="Target browser">
                 <button
                   type="button"
                   onClick={() =>
@@ -265,10 +265,11 @@ export function ServerPresetFormFields(props: {
                       previewOpenTarget: "in-app",
                     }))
                   }
+                  aria-pressed={preset.previewOpenTarget !== "external"}
                   className={cn(
                     "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                     preset.previewOpenTarget !== "external"
-                      ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                      ? "font-semibold"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -282,10 +283,11 @@ export function ServerPresetFormFields(props: {
                       previewOpenTarget: "external",
                     }))
                   }
+                  aria-pressed={preset.previewOpenTarget === "external"}
                   className={cn(
                     "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                     preset.previewOpenTarget === "external"
-                      ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                      ? "font-semibold"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >

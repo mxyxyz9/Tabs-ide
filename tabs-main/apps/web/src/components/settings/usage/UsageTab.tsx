@@ -154,7 +154,7 @@ export function UsageTab() {
     <div className="space-y-8">
       {/* Date Range Selector & Metric Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1 border border-border/40">
+        <div className="tabs-segmented flex items-center" role="group" aria-label="Usage date range">
           {WINDOW_PRESETS.map((preset) => (
             <button
               key={preset.id}
@@ -174,7 +174,7 @@ export function UsageTab() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1 border border-border/40">
+          <div className="tabs-segmented flex items-center" role="group" aria-label="Usage metric">
             <button
               type="button"
               onClick={() => setMetric("cost")}
@@ -467,7 +467,7 @@ export function UsageTab() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Model Breakdown</h3>
-              <div className="flex items-center gap-1 rounded-md bg-muted/60 p-0.5 border border-border/40 text-[11px]">
+              <div className="tabs-segmented flex items-center text-[11px]" role="group" aria-label="Model breakdown">
                 <button
                   type="button"
                   onClick={() => setBreakdownView("model")}

@@ -760,14 +760,15 @@ export function ConnectionsSettings() {
                   <DialogPanel className="space-y-6 pt-2 pb-3">
                     <>
                       {/* Connection Type Toggle */}
-                      <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1 rounded-lg border border-border/60">
+                      <div className="tabs-segmented grid grid-cols-2" role="group" aria-label="Connection type">
                         <button
                           type="button"
                           onClick={() => setAddMode("remote")}
+                          aria-pressed={addMode === "remote"}
                           className={cn(
                             "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
                             addMode === "remote"
-                              ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                              ? "font-semibold"
                               : "text-muted-foreground hover:text-foreground",
                           )}
                         >
@@ -777,10 +778,11 @@ export function ConnectionsSettings() {
                         <button
                           type="button"
                           onClick={() => setAddMode("ssh")}
+                          aria-pressed={addMode === "ssh"}
                           className={cn(
                             "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
                             addMode === "ssh"
-                              ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                              ? "font-semibold"
                               : "text-muted-foreground hover:text-foreground",
                           )}
                         >

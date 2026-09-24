@@ -55,12 +55,28 @@ export const RightPanelTabs = memo(function RightPanelTabs({
         )}
       >
         {/* Tab switcher buttons */}
-        <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
+        <div
+          className="tabs-segmented flex items-center [-webkit-app-region:no-drag]"
+          role="tablist"
+          aria-label="Side panel views"
+          onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]')];
+            const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+            if (current < 0 || tabs.length === 0) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+              : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+            tabs[next]?.focus();
+            tabs[next]?.click();
+          }}
+        >
           {/* Diffs tab */}
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === "diff"}
+            tabIndex={activeTab === "diff" ? 0 : -1}
             onClick={() => handleSelectTab("diff")}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",
@@ -78,6 +94,7 @@ export const RightPanelTabs = memo(function RightPanelTabs({
             type="button"
             role="tab"
             aria-selected={activeTab === "stash"}
+            tabIndex={activeTab === "stash" ? 0 : -1}
             onClick={() => handleSelectTab("stash")}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",
@@ -107,6 +124,7 @@ export const RightPanelTabs = memo(function RightPanelTabs({
             type="button"
             role="tab"
             aria-selected={activeTab === "queue"}
+            tabIndex={activeTab === "queue" ? 0 : -1}
             onClick={() => handleSelectTab("queue")}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",

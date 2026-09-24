@@ -502,39 +502,43 @@ function PinModelCommandPalette({
 
               {/* Provider Filter Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-border/40 bg-muted/10 [&::-webkit-scrollbar]:hidden">
-                <button
-                  type="button"
-                  onClick={() => setActiveProviderFilter(null)}
-                  className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-full transition-all whitespace-nowrap cursor-pointer",
-                    activeProviderFilter === null
-                      ? "bg-foreground text-background font-semibold shadow-xs"
-                      : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
-                  )}
-                >
-                  All Providers
-                </button>
-                {providerCards.map((card) => {
-                  const providerName =
-                    PROVIDER_DISPLAY_NAMES[card.provider as keyof typeof PROVIDER_DISPLAY_NAMES] ??
-                    card.title;
-                  const isSelected = activeProviderFilter === card.provider;
-                  return (
-                    <button
-                      key={card.provider}
-                      type="button"
-                      onClick={() => setActiveProviderFilter(isSelected ? null : card.provider)}
-                      className={cn(
-                        "px-2.5 py-1 text-xs font-medium rounded-full transition-all whitespace-nowrap cursor-pointer",
-                        isSelected
-                          ? "bg-foreground text-background font-semibold shadow-xs"
-                          : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
-                      )}
-                    >
-                      {providerName}
-                    </button>
-                  );
-                })}
+                <div className="tabs-segmented inline-flex items-center shrink-0" role="group" aria-label="Provider filter">
+                  <button
+                    type="button"
+                    onClick={() => setActiveProviderFilter(null)}
+                    aria-pressed={activeProviderFilter === null}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-medium rounded-full transition-all whitespace-nowrap cursor-pointer",
+                      activeProviderFilter === null
+                        ? "bg-foreground text-background font-semibold shadow-xs"
+                        : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
+                    )}
+                  >
+                    All Providers
+                  </button>
+                  {providerCards.map((card) => {
+                    const providerName =
+                      PROVIDER_DISPLAY_NAMES[card.provider as keyof typeof PROVIDER_DISPLAY_NAMES] ??
+                      card.title;
+                    const isSelected = activeProviderFilter === card.provider;
+                    return (
+                      <button
+                        key={card.provider}
+                        type="button"
+                        onClick={() => setActiveProviderFilter(isSelected ? null : card.provider)}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-full transition-all whitespace-nowrap cursor-pointer",
+                          isSelected
+                            ? "bg-foreground text-background font-semibold shadow-xs"
+                            : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
+                        )}
+                      >
+                        {providerName}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Model Results List */}

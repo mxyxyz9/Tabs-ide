@@ -1810,7 +1810,7 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                               capture. Deleting the page never changes repository files.
                             </p>
                             <div
-                              className="mt-4 flex flex-wrap gap-1"
+                              className="tabs-segmented mt-4 flex flex-wrap"
                               role="tablist"
                               aria-label="Page Object details"
                             >

@@ -763,10 +763,11 @@ export const AppleTimePicker = memo(function AppleTimePicker({
       </div>
 
       {/* Day Selector Chips */}
-      <div className="mt-3 flex items-center justify-between gap-1 rounded-xl bg-muted/60 p-1">
+      <div className="tabs-segmented mt-3 flex items-center justify-between" role="group" aria-label="Day preset">
         <button
           type="button"
           onClick={() => setDayPreset("today")}
+          aria-pressed={dayMode === "today"}
           className={cn(
             "flex-1 rounded-lg py-1 text-xs font-medium transition-all cursor-pointer",
             dayMode === "today"
@@ -779,6 +780,7 @@ export const AppleTimePicker = memo(function AppleTimePicker({
         <button
           type="button"
           onClick={() => setDayPreset("tomorrow")}
+          aria-pressed={dayMode === "tomorrow"}
           className={cn(
             "flex-1 rounded-lg py-1 text-xs font-medium transition-all cursor-pointer",
             dayMode === "tomorrow"

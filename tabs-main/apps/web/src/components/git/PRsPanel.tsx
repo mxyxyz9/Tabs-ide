@@ -414,14 +414,14 @@ export function PRsPanel({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card/60 p-3 rounded-xl border border-border/60">
         {/* Segmented Scope Control */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="grid grid-cols-2 p-1 rounded-xl bg-muted/40 border border-border/80 text-xs shrink-0 sm:w-auto">
+          <div className="tabs-segmented grid grid-cols-2 text-xs shrink-0 sm:w-auto" role="group" aria-label="Pull request scope">
             <button
               type="button"
               aria-pressed={viewMode === "branch"}
               onClick={() => setViewMode("branch")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 viewMode === "branch"
-                  ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                  ? "font-semibold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -433,7 +433,7 @@ export function PRsPanel({
               onClick={() => setViewMode("all")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 viewMode === "all"
-                  ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                  ? "font-semibold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -443,7 +443,7 @@ export function PRsPanel({
 
           {/* State Filter Buttons (Active when viewing Repository PRs) */}
           {viewMode === "all" && (
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/20 border border-border/60 text-[11px]">
+            <div className="tabs-segmented flex items-center text-[11px]" role="group" aria-label="Pull request state">
               {(["all", "open", "merged", "closed"] as const).map((st) => (
                 <button
                   key={st}
@@ -804,7 +804,7 @@ export function PRsPanel({
                         role="tablist"
                         aria-label={`Pull request #${pr.n} details`}
                         onKeyDown={handleTabListKeyDown}
-                        className="flex flex-wrap gap-1"
+                        className="tabs-segmented flex flex-wrap"
                       >
                         {(
                           [

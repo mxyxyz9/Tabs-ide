@@ -46,8 +46,21 @@ export function TabsList({
 }) {
   return (
     <div
+      role="tablist"
+      onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]')]
+          .filter((tab) => !tab.disabled);
+        const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+        if (current < 0 || tabs.length === 0) return;
+        event.preventDefault();
+        const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+          : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+        tabs[next]?.focus();
+        tabs[next]?.click();
+      }}
       className={cn(
-        "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
+        "tabs-segmented inline-flex h-9 items-center justify-center text-muted-foreground",
         className,
       )}
     >
@@ -75,11 +88,12 @@ export function TabsTrigger({
       type="button"
       role="tab"
       aria-selected={isSelected}
+      tabIndex={isSelected ? 0 : -1}
       onClick={() => context.onValueChange(value)}
       className={cn(
         "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
         isSelected
-          ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
+          ? "font-semibold"
           : "hover:bg-muted/80 hover:text-foreground border border-transparent",
         className,
       )}

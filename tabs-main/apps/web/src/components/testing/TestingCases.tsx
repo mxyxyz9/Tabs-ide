@@ -416,7 +416,7 @@ export const TestingCases = memo(function TestingCases({
                   className={cn(
                     "group relative flex flex-col items-start gap-1.5 rounded-xl p-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring select-none",
                     isSelected
-                      ? "border border-foreground/30 bg-background text-foreground shadow-sm ring-1 ring-foreground/20 dark:border-foreground/40 dark:bg-accent dark:shadow-[0_0_14px_rgba(255,255,255,0.12)]"
+                      ? "border border-foreground/30 bg-background text-foreground shadow-sm ring-1 ring-foreground/15 dark:border-foreground/35 dark:bg-accent dark:shadow-[0_0_5px_rgba(255,255,255,0.08)]"
                       : "border border-transparent text-muted-foreground hover:border-border/40 hover:bg-background/50 hover:text-foreground",
                   )}
                 >

@@ -85,10 +85,11 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
     <div className="space-y-3 select-none w-full">
       {/* Surface Showcase Mode Switcher Deck */}
       <div className="flex items-center justify-center py-1">
-        <div className="flex items-center justify-center gap-1 rounded-full bg-muted/60 p-1 border border-border/80 shadow-inner max-w-md w-full">
+        <div className="tabs-segmented flex items-center justify-center max-w-md w-full" role="group" aria-label="Preview surface">
           <button
             type="button"
             onClick={() => setSurfaceMode("ide")}
+            aria-pressed={surfaceMode === "ide"}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap ${
               surfaceMode === "ide"
                 ? "bg-card text-foreground shadow-xs border border-border/60"
@@ -102,6 +103,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
           <button
             type="button"
             onClick={() => setSurfaceMode("chat")}
+            aria-pressed={surfaceMode === "chat"}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap ${
               surfaceMode === "chat"
                 ? "bg-card text-foreground shadow-xs border border-border/60"
@@ -115,6 +117,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
           <button
             type="button"
             onClick={() => setSurfaceMode("tokens")}
+            aria-pressed={surfaceMode === "tokens"}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap ${
               surfaceMode === "tokens"
                 ? "bg-card text-foreground shadow-xs border border-border/60"

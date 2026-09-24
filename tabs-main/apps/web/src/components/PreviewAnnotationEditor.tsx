@@ -111,25 +111,27 @@ export function PreviewAnnotationEditor(props: {
                 <p className="truncate font-medium">{pageLabel}</p>
                 <p className="truncate font-mono text-muted-foreground">{selectedSummary}</p>
               </div>
-              <div className="flex gap-1" aria-label="Annotation tool">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={tool === "region" ? "secondary" : "outline"}
-                  onClick={() => setTool("region")}
-                  aria-pressed={tool === "region"}
-                >
-                  <SquareDashedIcon /> Region
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={tool === "ink" ? "secondary" : "outline"}
-                  onClick={() => setTool("ink")}
-                  aria-pressed={tool === "ink"}
-                >
-                  <PencilIcon /> Draw
-                </Button>
+              <div className="flex items-center gap-2" aria-label="Annotation tool">
+                <div className="tabs-segmented flex" role="group" aria-label="Annotation tool">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={tool === "region" ? "secondary" : "outline"}
+                    onClick={() => setTool("region")}
+                    aria-pressed={tool === "region"}
+                  >
+                    <SquareDashedIcon /> Region
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={tool === "ink" ? "secondary" : "outline"}
+                    onClick={() => setTool("ink")}
+                    aria-pressed={tool === "ink"}
+                  >
+                    <PencilIcon /> Draw
+                  </Button>
+                </div>
                 <Button
                   type="button"
                   size="sm"

@@ -407,10 +407,11 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                   Titlebar &amp; window frame chrome theme
                 </span>
               </div>
-              <div className="flex rounded-xl bg-muted p-1 border border-border/50">
+              <div className="tabs-segmented flex" role="group" aria-label="Base window variant">
                 <button
                   type="button"
                   onClick={() => updateDraft({ ...draftConfig, baseVariant: "dark" })}
+                  aria-pressed={draftConfig.baseVariant === "dark"}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                     draftConfig.baseVariant === "dark"
                       ? "bg-background text-foreground font-bold shadow-xs border border-border/50"
@@ -423,6 +424,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                 <button
                   type="button"
                   onClick={() => updateDraft({ ...draftConfig, baseVariant: "light" })}
+                  aria-pressed={draftConfig.baseVariant === "light"}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                     draftConfig.baseVariant === "light"
                       ? "bg-background text-foreground font-bold shadow-xs border border-border/50"

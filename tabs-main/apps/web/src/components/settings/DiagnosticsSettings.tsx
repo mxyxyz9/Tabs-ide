@@ -1374,22 +1374,29 @@ export function DiagnosticsSettings() {
           </div>
 
           {/* Sub-bar: Trae-style Tab Switcher */}
-          <div className="no-drag flex items-center gap-1 px-3 py-1.5 border-t border-border/40 bg-muted/15 overflow-x-auto">
-            {PRIMARY_POPOUT_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleTabChange(tab.id)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-[11px] font-medium transition-all cursor-pointer",
-                  activeTab === tab.id
-                    ? "bg-card text-foreground shadow-2xs border border-border/70"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div
+            className="no-drag flex items-center gap-1 px-3 py-1.5 border-t border-border/40 bg-muted/15 overflow-x-auto"
+            role="group"
+            aria-label="Diagnostics section"
+          >
+            <div className="tabs-segmented flex items-center">
+              {PRIMARY_POPOUT_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => handleTabChange(tab.id)}
+                  aria-pressed={activeTab === tab.id}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-[11px] font-medium transition-all cursor-pointer",
+                    activeTab === tab.id
+                      ? "bg-card text-foreground shadow-2xs border border-border/70"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </header>
       ) : null}
@@ -1617,12 +1624,13 @@ export function DiagnosticsSettings() {
               description="Multi-metric CPU average, I/O read throughput, and I/O write throughput history."
               headerAction={
                 <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 p-0.5 text-xs">
+                  <div className="tabs-segmented flex items-center text-xs" role="group" aria-label="Resource timeline window">
                     {HISTORY_WINDOWS.map((win, idx) => (
                       <button
                         key={win.label}
                         type="button"
                         onClick={() => setHistoryWindowIndex(idx)}
+                        aria-pressed={historyWindowIndex === idx}
                         className={cn(
                           "rounded px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
                           historyWindowIndex === idx

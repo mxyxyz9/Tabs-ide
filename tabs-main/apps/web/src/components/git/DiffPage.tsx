@@ -323,7 +323,7 @@ export function DiffPage({
   return (
     <div>
       <div
-        className="flex items-center gap-1 mb-4 bg-muted/50 border border-border rounded-lg p-1 w-fit"
+        className="tabs-segmented flex items-center mb-4 w-fit"
         role="group"
         aria-label="Diff source"
       >

@@ -1699,7 +1699,7 @@ function AgentsThreadList(props: {
             </button>
 
             {/* Lifecycle is the primary navigation; archive remains secondary history. */}
-            <div className="mt-2.5 flex items-center gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
+            <div className="tabs-segmented mt-2.5 flex items-center" role="group" aria-label="Task view">
               <button
                 type="button"
                 onClick={() => {
@@ -1707,6 +1707,7 @@ function AgentsThreadList(props: {
                   setShowSettledView(false);
                   setShowSnoozedView(false);
                 }}
+                aria-pressed={view === "current" && !showSettledView && !showSnoozedView}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-sans font-medium transition-all",
                   view === "current" && !showSettledView && !showSnoozedView
@@ -1723,6 +1724,7 @@ function AgentsThreadList(props: {
                   setShowSettledView(true);
                   setShowSnoozedView(false);
                 }}
+                aria-pressed={view === "current" && showSettledView}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-sans font-medium transition-all",
                   view === "current" && showSettledView

@@ -367,7 +367,7 @@ export function DivergencePanel({
         <div className="flex items-center gap-2 shrink-0">
           {/* View Switcher — three tabs: Spotlight | Active | Archived */}
           <div
-            className="flex items-center bg-muted/50 border border-border rounded-lg p-0.5"
+            className="tabs-segmented flex items-center"
             role="group"
             aria-label="Branch view"
           >
@@ -380,14 +380,6 @@ export function DivergencePanel({
                   ? "font-semibold shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
-              style={
-                activeView === "spotlight"
-                  ? {
-                      backgroundColor: "var(--primary)",
-                      color: "var(--primary-foreground)",
-                    }
-                  : undefined
-              }
             >
               <Telescope size={11} />
               Spotlight ({spotlightBranchList.length})

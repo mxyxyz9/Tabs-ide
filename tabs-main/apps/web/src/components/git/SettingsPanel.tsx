@@ -557,10 +557,11 @@ export function SettingsPanel({
                 Choose how AI models are routed for diff summaries and reviews
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
+            <div className="tabs-segmented flex items-center" role="group" aria-label="Model source mode">
               <button
                 type="button"
                 onClick={() => setModelSourceMode("connected")}
+                aria-pressed={modelSourceMode === "connected"}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer",
                   modelSourceMode === "connected"
@@ -573,6 +574,7 @@ export function SettingsPanel({
               <button
                 type="button"
                 onClick={() => setModelSourceMode("direct_gemini")}
+                aria-pressed={modelSourceMode === "direct_gemini"}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer",
                   modelSourceMode === "direct_gemini"
@@ -688,10 +690,11 @@ export function SettingsPanel({
                       <span className="text-muted-foreground/70 font-medium">Not Configured</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded border border-border/50">
+                  <div className="tabs-segmented flex items-center" role="group" aria-label="API key scope">
                     <button
                       type="button"
                       onClick={() => setKeyScope("global")}
+                      aria-pressed={keyScope === "global"}
                       className={cn(
                         "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer",
                         keyScope === "global"
@@ -705,6 +708,7 @@ export function SettingsPanel({
                     <button
                       type="button"
                       onClick={() => setKeyScope("project")}
+                      aria-pressed={keyScope === "project"}
                       className={cn(
                         "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer",
                         keyScope === "project"
