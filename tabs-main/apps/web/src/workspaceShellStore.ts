@@ -571,6 +571,26 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
   let toDecode = input;
 
   if (
+    toDecode !== null &&
+    typeof toDecode === "object" &&
+    "tools" in toDecode &&
+    Array.isArray((toDecode as any).tools)
+  ) {
+    const rawTools = (toDecode as any).tools;
+    const migratedTools = rawTools.map((tool: any) => {
+      if (
+        tool &&
+        tool.kind === "server" &&
+        (tool.label === "Server" || tool.label === "Run" || tool.label === "Terminal")
+      ) {
+        return { ...tool, label: "Launchpad" };
+      }
+      return tool;
+    });
+    toDecode = { ...toDecode, tools: migratedTools };
+  }
+
+  if (
     input !== null &&
     typeof input === "object" &&
     "serverProcesses" in input &&
@@ -625,6 +645,7 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
     };
 
     if (process.command) result.command = process.command;
+    if (process.icon !== undefined) result.icon = process.icon;
     if (process.previewUrl !== undefined) result.previewUrl = process.previewUrl;
     if (process.autoOpenPreview !== undefined) result.autoOpenPreview = process.autoOpenPreview;
     if (process.previewOpenTarget !== undefined)

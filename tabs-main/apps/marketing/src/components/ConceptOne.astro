@@ -55,7 +55,7 @@ const projects = [
     </div>
   </section>
 
-  <div class="hs-tools-strip hs-wrap"><span>Built in. Ready when you are.</span><div>{([["Code2", "Code"], ["Bot", "Agents"], ["Terminal", "Server"], ["GitBranch", "Git"], ["Globe", "Browser"]] as const).map(([icon, name]) => <span><Icon name={icon} size={16} />{name}</span>)}</div></div>
+  <div class="hs-tools-strip hs-wrap"><span>Built in. Ready when you are.</span><div>{([["Code2", "Code"], ["Bot", "Agents"], ["Rocket", "Launchpad"], ["GitBranch", "Git"], ["Globe", "Browser"]] as const).map(([icon, name]) => <span><Icon name={icon} size={16} />{name}</span>)}</div></div>
 
   <section class="hs-room hs-wrap">
     <div class="hs-room-heading"><p class="hs-eyebrow">PROJECT TABS. TOOLBAR TOOLS.</p><h2>Switch projects.<br /><span>Keep your<br />workspace.</span></h2></div>
@@ -63,11 +63,11 @@ const projects = [
     <div class="hs-principles">
       <div><span class="hs-principle-icon"><Icon name="Layers" size={26} /></span><h3>01. Choose a project.</h3><p>Client work, side project, next experiment. Move between codebases without taking your workspace apart.</p></div>
       <div><span class="hs-principle-icon"><Icon name="Code2" size={26} /></span><h3>02. Switch your tool.</h3><p>Write in Code OSS. Talk to an agent. Review a diff. Each tool has its own view, so your workflow can grow without squeezing everything into side panels.</p></div>
-      <div><span class="hs-principle-icon"><Icon name="Globe" size={26} /></span><h3>03. Make it yours.</h3><p>Add a design page, your team’s docs, or a command-line tool. Save a server preset. Arrange the toolbar around the way this project works.</p></div>
+      <div><span class="hs-principle-icon"><Icon name="Globe" size={26} /></span><h3>03. Make it yours.</h3><p>Add a design page, your team’s docs, or a command-line tool. Save a Launchpad preset. Arrange the toolbar around the way this project works.</p></div>
     </div>
   </section>
 
-  <section class="hs-work" id="hs-workspace"><div class="hs-wrap"><p class="hs-eyebrow">BUILT-IN TOOLS. A VIEW FOR EACH.</p><div class="hs-work-heading"><h2>From first edit<br /><span>to running app.</span></h2><p>Code, Agents, Server, Git, and Browser work together inside your project. Explore each view below. Testing is optional, in early access, and disabled by default.</p></div><Workspace instance="concept-1" variant="light" /></div></section>
+  <section class="hs-work" id="hs-workspace"><div class="hs-wrap"><p class="hs-eyebrow">BUILT-IN TOOLS. A VIEW FOR EACH.</p><div class="hs-work-heading"><h2>From first edit<br /><span>to running app.</span></h2><p>Code, Agents, Launchpad, Git, and Browser work together inside your project. Explore each view below. Testing is optional, in early access, and disabled by default.</p></div><Workspace instance="concept-1" variant="light" /></div></section>
   <ConceptOneWorkflow />
   <div class="hs-agents hs-wrap"><AgentRoster eyebrow="YOUR AGENTS. YOUR CHOICE." title="Choose who you build with." description="Choose a supported agent for your project conversations. Keep the discussion, code, and tools in the same workspace, with native connections and Agent Client Protocol (ACP) integrations." /></div>
   <div class="hs-release hs-wrap"><ReleaseLog /></div>

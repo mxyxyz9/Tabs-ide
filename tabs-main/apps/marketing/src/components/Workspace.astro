@@ -5,14 +5,14 @@ const { variant = "light", instance = "default" } = Astro.props;
 const tools = [
   ["code",    "Code",    "Edit in Code OSS with native file access and real VS Code extensions.",               "Code2",      ["Code OSS Core", "VS Code Extensions", "Native FS"]],
   ["agents",  "Agents",  "Project conversations with your agents. Start a thread, choose a model, work through changes.", "Bot",  ["Conversations", "Provider Choice", "ACP Integrations"]],
-  ["server",  "Server",  "Save frontend and backend commands. Run a preset, auto-open its preview in Browser.", "Terminal",   ["Command Presets", "Preview URLs", "Port Status"]],
+  ["server",  "Launchpad",  "Save frontend and backend presets or open terminal sessions. Auto-open previews in Browser.", "Rocket",   ["Launchpad Presets", "Dedicated Terminals", "Port Status"]],
   ["git",     "Git",     "Review diffs, manage branches, and work with Git through a visual interface.",         "GitBranch",  ["Staged Diffs", "Branch & PR Sync", "Commit Graphs"]],
   ["browser", "Browser", "Open any URL, preview local apps, inspect the DOM beside your code.",                  "Globe",      ["Browser Tabs", "App Previews", "DevTools"]],
   ["testing", "Testing", "Early access. Recorded journeys and repeatable checks. Enable in Workspace settings.", "CheckCircle",["Disabled by Default", "Journeys", "Screenshots"]],
 ] as const;
 const headlines: Record<string, string> = {
   code: "Your editor. Fully at home.", agents: "A conversation that stays with the project.",
-  server: "From saved commands to a running app.", git: "See the change before you ship it.",
+  server: "From saved presets to running terminals and apps.", git: "See the change before you ship it.",
   browser: "Your app, ready for a closer look.", testing: "Turn a journey into a repeatable check.",
 };
 ---
@@ -649,7 +649,7 @@ const headlines: Record<string, string> = {
 
 <script>
 const toolNames: Record<string, string> = {
-  code: "Code", agents: "Agents", server: "Server",
+  code: "Code", agents: "Agents", server: "Launchpad",
   git: "Git", browser: "Browser", testing: "Testing",
 };
 

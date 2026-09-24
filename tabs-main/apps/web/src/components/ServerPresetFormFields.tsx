@@ -5,9 +5,102 @@ import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import { ScrollArea } from "./ui/scroll-area";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "./ui/collapsible";
-import { ChevronUpIcon, ChevronDownIcon, XIcon, PlusIcon } from "lucide-react";
+import {
+  ChevronUpIcon,
+  ChevronDownIcon,
+  XIcon,
+  PlusIcon,
+  GlobeIcon,
+  ServerIcon,
+  DatabaseIcon,
+  TerminalSquareIcon,
+  RocketIcon,
+  CodeIcon,
+  CpuIcon,
+  ZapIcon,
+  LayersIcon,
+  PlayIcon,
+  WrenchIcon,
+  WorkflowIcon,
+} from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ServerProcessDraft } from "./ProjectWorkspaceSettingsSection";
+
+export const PRESET_ICON_OPTIONS = [
+  { id: "globe", label: "Web / Frontend", icon: GlobeIcon },
+  { id: "server", label: "Server / Backend", icon: ServerIcon },
+  { id: "database", label: "Database", icon: DatabaseIcon },
+  { id: "terminal", label: "Terminal", icon: TerminalSquareIcon },
+  { id: "rocket", label: "Rocket", icon: RocketIcon },
+  { id: "code", label: "Code", icon: CodeIcon },
+  { id: "cpu", label: "Worker / CPU", icon: CpuIcon },
+  { id: "zap", label: "Fast / Zap", icon: ZapIcon },
+  { id: "layers", label: "Layers", icon: LayersIcon },
+  { id: "play", label: "Play", icon: PlayIcon },
+  { id: "wrench", label: "Build / Wrench", icon: WrenchIcon },
+  { id: "workflow", label: "Workflow", icon: WorkflowIcon },
+] as const;
+
+export function resolveDefaultPresetIconId(label: string): string {
+  const lower = (label || "").toLowerCase();
+  if (
+    lower.includes("front") ||
+    lower.includes("web") ||
+    lower.includes("ui") ||
+    lower.includes("client") ||
+    lower.includes("app") ||
+    lower.includes("vite") ||
+    lower.includes("next")
+  ) {
+    return "globe";
+  }
+  if (
+    lower.includes("back") ||
+    lower.includes("api") ||
+    lower.includes("server") ||
+    lower.includes("srv") ||
+    lower.includes("node")
+  ) {
+    return "server";
+  }
+  if (
+    lower.includes("db") ||
+    lower.includes("data") ||
+    lower.includes("sql") ||
+    lower.includes("redis") ||
+    lower.includes("postgres") ||
+    lower.includes("mongo")
+  ) {
+    return "database";
+  }
+  if (
+    lower.includes("worker") ||
+    lower.includes("queue") ||
+    lower.includes("job") ||
+    lower.includes("cron")
+  ) {
+    return "cpu";
+  }
+  if (
+    lower.includes("build") ||
+    lower.includes("bundle") ||
+    lower.includes("compile") ||
+    lower.includes("watch")
+  ) {
+    return "wrench";
+  }
+  return "terminal";
+}
+
+export function resolvePresetIconElement(
+  preset: { label?: string | undefined; icon?: string | null | undefined },
+  className = "size-3.5",
+): React.ReactElement {
+  const iconId = preset.icon || resolveDefaultPresetIconId(preset.label || "");
+  const found = PRESET_ICON_OPTIONS.find((opt) => opt.id === iconId);
+  const IconComponent = found ? found.icon : TerminalSquareIcon;
+  return <IconComponent className={className} />;
+}
 
 export function ServerPresetFormFields(props: {
   preset: ServerProcessDraft;
@@ -103,18 +196,71 @@ export function ServerPresetFormFields(props: {
         </div>
       )}
 
-      <div className="space-y-2">
-        <div className="text-sm font-medium text-foreground">Label</div>
-        <Input
-          value={preset.label}
-          onChange={(event) =>
-            updatePresetRow(preset.id, (current) => ({
-              ...current,
-              label: event.target.value,
-            }))
-          }
-          placeholder="Frontend"
-        />
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium text-foreground">Label</div>
+          <Input
+            value={preset.label}
+            onChange={(event) =>
+              updatePresetRow(preset.id, (current) => ({
+                ...current,
+                label: event.target.value,
+              }))
+            }
+            placeholder="Frontend"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Icon</span>
+            {preset.icon ? (
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+                onClick={() =>
+                  updatePresetRow(preset.id, (current) => {
+                    const { icon: _, ...rest } = current;
+                    return rest;
+                  })
+                }
+              >
+                Reset to auto-detect
+              </button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground/70">Auto-detected from label</span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border/60 bg-muted/20 p-1.5">
+            {PRESET_ICON_OPTIONS.map((opt) => {
+              const IconComp = opt.icon;
+              const isSelected =
+                preset.icon === opt.id ||
+                (!preset.icon && resolveDefaultPresetIconId(preset.label) === opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  title={opt.label}
+                  onClick={() =>
+                    updatePresetRow(preset.id, (current) => ({
+                      ...current,
+                      icon: opt.id,
+                    }))
+                  }
+                  className={cn(
+                    "flex size-7 items-center justify-center rounded-lg border text-xs transition-all cursor-pointer",
+                    isSelected
+                      ? "border-primary/50 bg-primary/15 text-primary shadow-xs"
+                      : "border-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                  )}
+                >
+                  <IconComp className="size-3.5" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -205,7 +351,7 @@ export function ServerPresetFormFields(props: {
         <div>
           <div className="text-sm font-medium text-foreground">Auto-start</div>
           <div className="text-xs text-muted-foreground">
-            Launch this preset automatically when the Server tab opens.
+            Launch this preset automatically when the Launchpad tab opens.
           </div>
         </div>
         <Switch
@@ -300,7 +446,7 @@ export function ServerPresetFormFields(props: {
               <div>
                 <div className="text-sm font-medium text-foreground">Auto-switch to browser</div>
                 <div className="text-xs text-muted-foreground">
-                  Open the browser tool tab automatically when the server starts.
+                  Open the browser tool tab automatically when the preset starts.
                 </div>
               </div>
               <Switch

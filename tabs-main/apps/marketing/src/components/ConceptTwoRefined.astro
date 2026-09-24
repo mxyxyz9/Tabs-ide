@@ -18,7 +18,7 @@ const projects = [
 const workflows = [
   {id:"web",number:"01",title:"Your web, within reach.",label:"Browser tabs",copy:"A design file, your team’s docs, the issue board. Save a URL in Workspace settings and give it a place in this project’s toolbar.",detail:"Choose shared or isolated browser sessions. Resume the page you left open."},
   {id:"terminal",number:"02",title:"A home for your commands.",label:"Terminal tabs",copy:"Claude Code, Codex CLI, a database console, your own scripts. Save the command and working folder, then open a dedicated terminal from the toolbar.",detail:"Keep the command-line tools you know, one click from your code."},
-  {id:"server",number:"03",title:"One click. Up and running.",label:"Server presets",copy:"Save the steps that start your app. Link frontend and backend presets, set a preview URL, and switch automatically to Browser when it opens.",detail:"Commands, dependencies, and a preview URL. Your setup, ready to repeat."},
+  {id:"server",number:"03",title:"One click. Up and running.",label:"Launchpad presets",copy:"Save the steps that start your app. Link frontend and backend presets, set a preview URL, and switch automatically to Browser when it opens.",detail:"Commands, dependencies, and a preview URL. Your setup, ready to repeat."},
 ];
 ---
 <article data-concept="2" class="headspace edition-two">
@@ -59,23 +59,23 @@ const workflows = [
       </div>)}
       <div class="e2-stage-caption"><span>INTERACTIVE WORKSPACE SKETCH</span><span>Try Code → Agents → Browser</span></div>
     </div>
-    <div class="e2-tool-index"><span>ALREADY AT HOME</span>{([['Code2','Code'],['Bot','Agents'],['Terminal','Server'],['GitBranch','Git'],['Globe','Browser']] as const).map(([icon,name])=><span><Icon name={icon} size={18}/>{name}</span>)}</div>
+    <div class="e2-tool-index"><span>ALREADY AT HOME</span>{([['Code2','Code'],['Bot','Agents'],['Rocket','Launchpad'],['GitBranch','Git'],['Globe','Browser']] as const).map(([icon,name])=><span><Icon name={icon} size={18}/>{name}</span>)}</div>
   </section>
 
   <section class="e2-manifesto">
     <div class="hs-wrap e2-manifesto-grid"><div><p class="e2-eyebrow">01 / THE BIG IDEA</p><h2>Keep the work.<br/><em>Lose the<br/>window shuffle.</em></h2><p class="e2-manifesto-intro">An idea becomes a conversation, code, a running app, a review. Tabs gives that whole journey a home.</p><span class="e2-cross" aria-hidden="true">✳</span></div>
-      <div class="e2-principles">{[["01","Projects across the top.","Client work, your own app, the next experiment. Move between codebases by choosing a project tab."],["02","Tools with room to breathe.","Your editor, agent conversations, servers, Git, and browser each get their own view. Choose the tool you need from the toolbar."],["03","A workspace that fits you.","Add your web tools and command-line tools. Save server presets. Arrange each project around how you actually work."]].map(([n,title,copy])=><div class="e2-principle"><span>{n}</span><div><h3>{title}</h3><p>{copy}</p></div></div>)}</div>
+      <div class="e2-principles">{[["01","Projects across the top.","Client work, your own app, the next experiment. Move between codebases by choosing a project tab."],["02","Tools with room to breathe.","Your editor, agent conversations, launchpad presets, Git, and browser each get their own view. Choose the tool you need from the toolbar."],["03","A workspace that fits you.","Add your web tools and command-line tools. Save launchpad presets. Arrange each project around how you actually work."]].map(([n,title,copy])=><div class="e2-principle"><span>{n}</span><div><h3>{title}</h3><p>{copy}</p></div></div>)}</div>
     </div>
   </section>
 
   <section class="e2-tools hs-wrap" id="v2-workspace">
-    <div class="e2-section-heading"><p class="e2-eyebrow">02 / BUILT IN, NOT BOLTED ON</p><div><h2>Get into the work.<br/><em>Stay in your element.</em></h2><p>A Code OSS editor. Project conversations with your agents. Saved server commands, visual Git, and an integrated browser. Follow the process, one view at a time.</p></div></div>
+    <div class="e2-section-heading"><p class="e2-eyebrow">02 / BUILT IN, NOT BOLTED ON</p><div><h2>Get into the work.<br/><em>Stay in your element.</em></h2><p>A Code OSS editor. Project conversations with your agents. Saved launchpad presets, visual Git, and an integrated browser. Follow the process, one view at a time.</p></div></div>
     <Workspace instance="edition-two" variant="light"/>
     <p class="e2-footnote"><span>EARLY ACCESS</span> Testing is optional and disabled by default. Enable it in Workspace settings to try recorded journeys and repeatable checks.</p>
   </section>
 
   <section class="e2-workflows hs-wrap">
-    <div class="e2-section-heading"><p class="e2-eyebrow">03 / ADD YOUR OWN TOOLS</p><div><h2>A URL. A CLI. A preset.<br/><em>Make it part of Tabs.</em></h2><p>Open Workspace settings, add a website or terminal command, and save. It gets its own place in your project’s toolbar. Save server presets to start your app and open its preview.</p></div></div>
+    <div class="e2-section-heading"><p class="e2-eyebrow">03 / ADD YOUR OWN TOOLS</p><div><h2>A URL. A CLI. A preset.<br/><em>Make it part of Tabs.</em></h2><p>Open Workspace settings, add a website or terminal command, and save. It gets its own place in your project’s toolbar. Save Launchpad presets to start your app and open its preview.</p></div></div>
     <ToolSetupPaths />
     <div class="e2-workflow-studio" data-e2-workflows>
       <div class="e2-workflow-options" role="tablist" aria-label="Ways to customize Tabs" aria-orientation="vertical">{workflows.map((flow,i)=><button type="button" role="tab" id={`e2-flow-${flow.id}`} aria-controls={`e2-flow-panel-${flow.id}`} aria-selected={i===0} tabindex={i===0?0:-1} data-e2-flow={flow.id}><span>{flow.number}</span><strong>{flow.label}</strong><span aria-hidden="true">↗</span></button>)}</div>

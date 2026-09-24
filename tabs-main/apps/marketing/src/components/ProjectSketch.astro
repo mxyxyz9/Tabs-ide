@@ -2,7 +2,7 @@
 import Icon from "./Icon.astro";
 interface Props { project: { id: string; file: string; task: string; branch: string; port: string; label: string }; }
 const { project } = Astro.props;
-const tools = [["code", "Code", "Code2"], ["agents", "Agents", "Bot"], ["server", "Server", "Terminal"], ["git", "Git", "GitBranch"], ["browser", "Browser", "Globe"]] as const;
+const tools = [["code", "Code", "Code2"], ["agents", "Agents", "Bot"], ["server", "Launchpad", "Rocket"], ["git", "Git", "GitBranch"], ["browser", "Browser", "Globe"]] as const;
 ---
 <div class="sketch" data-project-sketch>
   <div class="sketch-toolbar" role="tablist" aria-label={`Tools for ${project.id} example project`}>
@@ -11,7 +11,7 @@ const tools = [["code", "Code", "Code2"], ["agents", "Agents", "Bot"], ["server"
   {tools.map(([id, ,], i) => <div class="sketch-panel" role="tabpanel" id={`sketch-panel-${project.id}-${id}`} aria-labelledby={`sketch-tab-${project.id}-${id}`} hidden={i !== 0} data-sketch-view={id} tabindex="0">
     {id === "code" && <><div class="sketch-file"><span>{project.file}</span><small>CODE OSS</small></div><div class="sketch-code"><span><i>01</i><b>const</b> workspace = {"{"}</span><span><i>02</i>  project: <em>"{project.id}"</em>,</span><span><i>03</i>  tools: <em>"your choice"</em>,</span><span><i>04</i>  roomToMake: <b>true</b></span><span><i>05</i>{"};"}<span class="sketch-caret" aria-hidden="true"></span></span></div></>}
     {id === "agents" && <><div class="sketch-file"><span>A new conversation</span><small>AGENTS</small></div><div class="sketch-conversation"><p>{project.task}</p><div><img src="/providers/claude.svg" width="22" height="22" alt=""/><span>Let's work through it.<small>Your conversation stays with this project.</small></span></div></div></>}
-    {id === "server" && <><div class="sketch-file"><span>Saved server preset</span><small>SERVER</small></div><div class="sketch-commands"><span><i>01</i> npm install</span><span><i>02</i> npm run dev</span><div><span class="sketch-dot"></span> Preview URL <b>{project.port}</b></div><p>Save the steps. Run them together.</p></div></>}
+    {id === "server" && <><div class="sketch-file"><span>Saved launchpad preset</span><small>LAUNCHPAD</small></div><div class="sketch-commands"><span><i>01</i> npm install</span><span><i>02</i> npm run dev</span><div><span class="sketch-dot"></span> Preview URL <b>{project.port}</b></div><p>Save the steps. Run them together.</p></div></>}
     {id === "git" && <><div class="sketch-file"><span>{project.file}</span><small>GIT / CHANGES</small></div><div class="sketch-diff"><p>− workspace: "somewhere else"</p><p>+ workspace: "all right here"</p><div><Icon name="GitBranch" size={14}/>{project.branch}</div><small>See the change before you commit.</small></div></>}
     {id === "browser" && <><div class="sketch-file"><span><span class="sketch-dot"></span>{project.port}</span><small>BROWSER</small></div><div class="sketch-site"><span class="sketch-site-star" aria-hidden="true">✳</span><small>YOUR APP, IN VIEW</small><h3>{project.label}</h3><div class="sketch-site-lines" aria-hidden="true"><i></i><i></i></div></div></>}
   </div>)}

@@ -53,6 +53,7 @@ export function MasterDetailContent({
 
 interface MasterDetailItemProps extends React.HTMLAttributes<HTMLDivElement> {
   label: string;
+  icon?: React.ReactNode;
   isActive: boolean;
   isUnsaved?: boolean;
   onSelect: () => void;
@@ -70,6 +71,7 @@ export const MasterDetailItem = forwardRef<HTMLDivElement, MasterDetailItemProps
   (
     {
       label,
+      icon,
       isActive,
       isUnsaved,
       onSelect,
@@ -91,6 +93,7 @@ export const MasterDetailItem = forwardRef<HTMLDivElement, MasterDetailItemProps
           className="flex-1 justify-start truncate font-normal relative pr-6 text-left"
           onClick={onSelect}
         >
+          {icon ? <span className="mr-2 shrink-0 text-muted-foreground">{icon}</span> : null}
           <span className="truncate">{label}</span>
           {isUnsaved ? (
             <span

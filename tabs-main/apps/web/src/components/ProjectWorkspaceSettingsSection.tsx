@@ -35,7 +35,7 @@ import {
   MasterDetailSidebar,
 } from "./ui/master-detail";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
-import { ServerPresetFormFields } from "./ServerPresetFormFields";
+import { ServerPresetFormFields, resolvePresetIconElement } from "./ServerPresetFormFields";
 
 import { projectsAtom } from "../state/threads";
 import { useAtomValue } from "@effect/atom-react";
@@ -1136,8 +1136,8 @@ export function ProjectWorkspaceSettingsSection() {
             <CardTitle>Browser Default URL</CardTitle>
             <CardDescription>
               The Browser tool loads this URL by default for the active project. Note: If you run a
-              Server Preset that has a Preview URL configured, it will automatically override this
-              default and navigate to the preset's preview.
+              Launchpad Preset that has a Preview URL configured, it will automatically override
+              this default and navigate to the preset's preview.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1177,8 +1177,8 @@ export function ProjectWorkspaceSettingsSection() {
                   <Alert variant="default" className="bg-muted/50 py-3">
                     <InfoIcon className="size-4 mt-0" />
                     <AlertDescription className="text-muted-foreground ml-2">
-                      A Server Preset is configured to open a preview in the Internal Browser. When
-                      you run that preset, its preview URL will override this default.
+                      A Launchpad Preset is configured to open a preview in the Internal Browser.
+                      When you run that preset, its preview URL will override this default.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -1211,7 +1211,11 @@ export function ProjectWorkspaceSettingsSection() {
                       in an isolated sandbox, or connects to a named profile.
                     </div>
                   </div>
-                  <div className="tabs-segmented flex shrink-0 self-start sm:self-auto" role="group" aria-label="Project browser session isolation">
+                  <div
+                    className="tabs-segmented flex shrink-0 self-start sm:self-auto"
+                    role="group"
+                    aria-label="Project browser session isolation"
+                  >
                     <button
                       type="button"
                       onClick={() => setBrowserPartitionModeDraft("shared")}
@@ -1299,7 +1303,7 @@ export function ProjectWorkspaceSettingsSection() {
           <CardHeader>
             <CardTitle>Project Tools</CardTitle>
             <CardDescription>
-              Manage your project-specific browser tabs, background terminals, or server presets.
+              Manage your project-specific browser tabs, background terminals, or launchpad presets.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1307,7 +1311,7 @@ export function ProjectWorkspaceSettingsSection() {
               <TabsList className="mb-4">
                 <TabsTrigger value="browser">Browser Tabs</TabsTrigger>
                 <TabsTrigger value="terminal">Terminal Tabs</TabsTrigger>
-                <TabsTrigger value="preset">Server Presets</TabsTrigger>
+                <TabsTrigger value="preset">Launchpad Presets</TabsTrigger>
               </TabsList>
 
               <TabsContent value="browser" className="mt-0">
@@ -1479,13 +1483,19 @@ export function ProjectWorkspaceSettingsSection() {
                                         project, stays isolated, or links to a named profile.
                                       </div>
                                     </div>
-                                    <div className="tabs-segmented flex shrink-0 self-start sm:self-auto" role="group" aria-label="Tab browser session isolation">
+                                    <div
+                                      className="tabs-segmented flex shrink-0 self-start sm:self-auto"
+                                      role="group"
+                                      aria-label="Tab browser session isolation"
+                                    >
                                       <button
                                         type="button"
                                         onClick={() =>
                                           saveCustomEmbedPartition(activeDraft.id, "shared")
                                         }
-                                        aria-pressed={(activeDraft.partitionMode ?? "shared") === "shared"}
+                                        aria-pressed={
+                                          (activeDraft.partitionMode ?? "shared") === "shared"
+                                        }
                                         className={cn(
                                           "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                                           (activeDraft.partitionMode ?? "shared") === "shared"
@@ -1897,6 +1907,7 @@ export function ProjectWorkspaceSettingsSection() {
                             <MasterDetailItem
                               key={draft.id}
                               label={draft.label.trim() || "Untitled"}
+                              icon={resolvePresetIconElement(draft, "size-4")}
                               isActive={activeServerPresetId === draft.id}
                               isUnsaved={isServerProcessDraftDirty(draft)}
                               onSelect={() => setActiveServerPresetId(draft.id)}

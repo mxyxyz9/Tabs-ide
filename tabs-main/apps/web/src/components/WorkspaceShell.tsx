@@ -123,6 +123,12 @@ import {
   Volume2Icon,
   VolumeXIcon,
   WrenchIcon,
+  CodeIcon,
+  CpuIcon,
+  DatabaseIcon,
+  LayersIcon,
+  SparklesIcon,
+  ZapIcon,
 } from "lucide-react";
 import {
   Fragment,
@@ -202,7 +208,7 @@ const isWindowsDesktop =
   isElectron && typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform);
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
-import { ServerPresetFormFields } from "./ServerPresetFormFields";
+import { ServerPresetFormFields, resolvePresetIconElement } from "./ServerPresetFormFields";
 import {
   AntigravityIcon,
   ClaudeAI,
@@ -554,7 +560,7 @@ function toolIcon(tool: ProjectToolKind) {
     case "agents":
       return <BotIcon className="size-3.5" />;
     case "server":
-      return <ServerIcon className="size-3.5" />;
+      return <RocketIcon className="size-3.5" />;
     case "git":
       return <GitBranchIcon className="size-3.5" />;
     case "browser":
@@ -8731,8 +8737,8 @@ function DesktopBrowserTool(props: {
                 onClick={() => workspaceShellActions.setActiveTool(props.project.id, "server")}
                 className="gap-2 cursor-pointer font-medium"
               >
-                <TerminalSquareIcon className="size-3.5" />
-                Open Server Tab
+                <RocketIcon className="size-3.5" />
+                Open Launchpad Tab
               </Button>
             </div>
           </div>
@@ -9085,7 +9091,7 @@ function UniversalDevServerOfflineNotice(props: {
         {/* Header section with clean unboxed icon and subtle monotone pill */}
         <div className="flex items-center justify-between border-b border-border/60 pb-3.5">
           <div className="flex items-center gap-2.5">
-            <ServerIcon className="size-4 text-muted-foreground shrink-0" />
+            <RocketIcon className="size-4 text-muted-foreground shrink-0" />
             <div>
               <h2 className="text-xs font-semibold text-foreground tracking-tight">
                 Server Offline
@@ -9100,7 +9106,7 @@ function UniversalDevServerOfflineNotice(props: {
         </div>
 
         <p className="text-xs text-muted-foreground leading-relaxed">
-          The local development server is not running. Switch to the Server tab to start server
+          The local development server is not running. Switch to the Launchpad tab to start server
           presets and view live terminal logs.
         </p>
 
@@ -9114,8 +9120,8 @@ function UniversalDevServerOfflineNotice(props: {
               className="gap-2 cursor-pointer font-medium"
               onClick={props.onOpenServerTab}
             >
-              <TerminalSquareIcon className="size-4" />
-              Open Server Tab
+              <RocketIcon className="size-4" />
+              Open Launchpad Tab
             </Button>
           ) : (
             <div />
@@ -9926,6 +9932,7 @@ function ServerTool(props: {
     presets: Array<{
       id: string;
       label: string;
+      icon?: string;
       commands: string[];
       cwd: string;
       autoStart: boolean;
@@ -9969,6 +9976,7 @@ function ServerTool(props: {
     (preset: {
       id: string;
       label: string;
+      icon?: string;
       commands: string[];
       cwd: string;
       autoStart: boolean;
@@ -9981,6 +9989,7 @@ function ServerTool(props: {
       const res: {
         id: string;
         label: string;
+        icon?: string;
         commands: string[];
         cwd: string;
         autoStart: boolean;
@@ -9999,6 +10008,9 @@ function ServerTool(props: {
         autoStart: preset.autoStart,
       };
 
+      if (preset.icon !== undefined) {
+        res.icon = preset.icon;
+      }
       const trimmedUrl = preset.previewUrl?.trim();
       if (trimmedUrl) {
         res.previewUrl = trimmedUrl;
@@ -10027,6 +10039,7 @@ function ServerTool(props: {
     () => ({
       id: `process-${randomUUID()}`,
       label: "",
+      icon: "terminal",
       commands: [""],
       cwd: props.project.cwd,
       autoStart: false,
@@ -10043,6 +10056,7 @@ function ServerTool(props: {
     Array<{
       id: string;
       label: string;
+      icon?: string;
       commands: string[];
       cwd: string;
       autoStart: boolean;
@@ -10073,6 +10087,7 @@ function ServerTool(props: {
     const drafts = processes.map((process: any) => ({
       id: process.id,
       label: process.label,
+      icon: process.icon,
       commands: process.commands.length > 0 ? [...process.commands] : [""],
       cwd: process.cwd,
       autoStart: process.autoStart,
@@ -10278,150 +10293,239 @@ function ServerTool(props: {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="border-b border-border/70 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {props.hasTerminalWorkspace ? (
+      {/* Header section */}
+      <div className="border-b border-border/60 px-5 py-3.5 flex flex-col gap-3 bg-card/30">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0 shadow-2xs">
+              <RocketIcon className="size-4.5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-foreground leading-tight tracking-tight">
+                  Launchpad
+                </h2>
+                {props.runningProcessIds.length > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-medium border-emerald-500/30 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 gap-1.5 py-0 px-2 h-4.5"
+                  >
+                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {props.runningProcessIds.length} running
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground leading-snug truncate">
+                {processes.length === 0
+                  ? "Launch terminals or save one-click presets for your dev workflow."
+                  : "One-click launch your configured presets, or open a fresh terminal."}
+              </p>
+            </div>
+          </div>
+
+          {/* Unified Primary action toolbar right in front of user */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {props.hasTerminalWorkspace && (
+              <Button
+                type="button"
+                size="sm"
+                variant={props.terminalVisible ? "outline" : "secondary"}
+                className="h-8 gap-1.5 text-xs font-medium"
+                onClick={props.terminalVisible ? props.onHideTerminal : props.onRevealTerminal}
+              >
+                {props.terminalVisible ? (
+                  <>
+                    <PanelTopCloseIcon className="size-3.5 text-muted-foreground" />
+                    <span>Hide Terminal</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelTopOpenIcon className="size-3.5 text-muted-foreground" />
+                    <span>Show Terminal</span>
+                  </>
+                )}
+              </Button>
+            )}
+
             <Button
               type="button"
               size="sm"
               variant="outline"
-              onClick={props.terminalVisible ? props.onHideTerminal : props.onRevealTerminal}
+              className="h-8 gap-1.5 text-xs font-medium"
+              onClick={() => {
+                props.onRevealTerminal();
+                props.onNewTerminal();
+              }}
             >
               <TerminalSquareIcon className="size-3.5" />
-              {props.terminalVisible ? "Hide Terminal" : "Show Terminal"}
+              <span>New Terminal</span>
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              props.onRevealTerminal();
-              props.onNewTerminal();
-            }}
-          >
-            <PlusIcon className="size-3.5" />
-            New Terminal
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setPresetDialogMode("add");
-              setEditingPresetId(null);
-              setIsPresetDialogOpen(true);
-            }}
-          >
-            <PlusIcon className="size-3.5" />
-            Add Preset
-          </Button>
-          {processes.length > 0 ? (
+
             <Button
               type="button"
               size="sm"
               variant="outline"
+              className="h-8 gap-1.5 text-xs font-medium"
+              onClick={() => {
+                setPresetDialogMode("add");
+                setEditingPresetId(null);
+                setIsPresetDialogOpen(true);
+              }}
+            >
+              <PlusIcon className="size-3.5" />
+              <span>Add Preset</span>
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground font-medium"
               onClick={() => {
                 setPresetDialogMode("manage");
                 setEditingPresetId(null);
                 setIsPresetDialogOpen(true);
               }}
             >
-              <PanelTopOpenIcon className="size-3.5" />
-              View all presets
+              <SlidersHorizontalIcon className="size-3.5" />
+              <span>Manage</span>
             </Button>
-          ) : null}
-          {props.hasTerminalWorkspace ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive-outline"
-              onClick={async () => {
-                const confirmed = await confirm(
-                  "Are you sure you want to close all servers and terminals?",
-                );
-                if (confirmed) {
-                  props.onCloseAllTerminals();
-                }
-              }}
-            >
-              <XIcon className="size-3.5" />
-              Close All
-            </Button>
-          ) : null}
-        </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          {processes.length === 0
-            ? "Start with a clean terminal or add named presets for one-click server workflows."
-            : "Use the same terminal UI as Agents. The buttons above launch your configured server presets and run each preset's steps in order."}
-        </div>
-        {processes.length > 0 ? (
-          <ScrollArea className="mt-4 w-full">
-            <div className="flex items-start gap-3 pb-1">
-              {processes.map((process: any) => {
-                const status = resolveServerPresetRuntimeStatus({
-                  processId: process.id,
-                  runningProcessIds: runningProcessIdSet,
-                  terminalIds: terminalIdSet,
-                });
-                const isActive = props.activeTerminalId === process.id;
 
-                return (
-                  <div
-                    key={process.id}
-                    className={cn(
-                      "flex shrink-0 items-center overflow-hidden rounded-full border border-input bg-popover shadow-xs/5",
-                      isActive && "border-primary/35 bg-accent/60",
-                    )}
-                  >
-                    <Button
+            {props.hasTerminalWorkspace && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs text-red-500 hover:text-red-400 hover:bg-red-500/10 font-medium"
+                onClick={async () => {
+                  const confirmed = await confirm("Are you sure you want to close all terminals?");
+                  if (confirmed) {
+                    props.onCloseAllTerminals();
+                  }
+                }}
+              >
+                <XIcon className="size-3.5" />
+                <span>Close All</span>
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Dedicated Presets strip with Lucide React icons */}
+        <div className="flex items-center gap-2.5 pt-1.5 border-t border-border/40 min-w-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 shrink-0 select-none">
+            Presets
+          </span>
+          {processes.length > 0 ? (
+            <ScrollArea className="flex-1 min-w-0">
+              <div className="flex w-max items-center gap-2 py-0.5 pr-2">
+                {processes.map((process: any) => {
+                  const status = resolveServerPresetRuntimeStatus({
+                    processId: process.id,
+                    runningProcessIds: runningProcessIdSet,
+                    terminalIds: terminalIdSet,
+                  });
+                  const isActive = props.activeTerminalId === process.id;
+                  const isRunning = status === "running";
+                  const hasTerminal = terminalIdSet.has(process.id);
+
+                  return (
+                    <button
+                      key={process.id}
                       type="button"
-                      size="sm"
-                      variant="ghost"
                       disabled={!hasRunnableCommands(process.commands)}
                       onClick={() =>
-                        terminalIdSet.has(process.id)
+                        hasTerminal
                           ? props.onOpenProcessTerminal(process.id)
                           : handleRunProcessWithDependencies(process.id)
                       }
+                      title={
+                        isRunning
+                          ? `${process.label} is running — click to view terminal`
+                          : hasTerminal
+                            ? `${process.label} terminal open — click to switch`
+                            : `Launch ${process.label}`
+                      }
                       className={cn(
-                        "max-w-[14rem] rounded-none border-0 bg-transparent px-3 shadow-none hover:bg-transparent",
-                        isActive && "text-foreground",
+                        "group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-full border px-3 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50",
+                        isActive
+                          ? "border-primary/50 bg-primary/10 text-primary shadow-2xs ring-1 ring-primary/25"
+                          : isRunning
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-2xs"
+                            : "border-border/70 bg-card text-foreground/90 hover:bg-accent hover:text-accent-foreground hover:border-border",
                       )}
                     >
                       <span
                         className={cn(
-                          "inline-block size-2 rounded-full mr-2",
-                          status === "running"
-                            ? "bg-success"
-                            : terminalIdSet.has(process.id)
-                              ? "bg-sky-400"
-                              : "bg-muted-foreground/30",
+                          "size-1.5 rounded-full shrink-0 transition-transform group-hover:scale-125",
+                          isRunning
+                            ? "bg-emerald-500 animate-pulse"
+                            : hasTerminal
+                              ? "bg-sky-500"
+                              : "bg-muted-foreground/40",
                         )}
                       />
-                      <span className="truncate">{process.label}</span>
-                    </Button>
-                  </div>
-                );
-              })}
+                      <span className="text-muted-foreground group-hover:text-foreground shrink-0">
+                        {resolvePresetIconElement(process, "size-3.5")}
+                      </span>
+                      <span className="truncate max-w-[12rem]">{process.label}</span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresetDialogMode("add");
+                    setEditingPresetId(null);
+                    setIsPresetDialogOpen(true);
+                  }}
+                  title="Add Preset"
+                  aria-label="Add Preset"
+                  className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-dashed border-border/80 text-muted-foreground transition-all hover:border-foreground/50 hover:bg-accent hover:text-foreground"
+                >
+                  <PlusIcon className="size-3.5" />
+                </button>
+              </div>
+            </ScrollArea>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-0.5">
+              <span>No presets configured yet.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPresetDialogMode("add");
+                  setEditingPresetId(null);
+                  setIsPresetDialogOpen(true);
+                }}
+                className="text-primary hover:underline font-medium inline-flex items-center gap-1"
+              >
+                <PlusIcon className="size-3" />
+                Add your first preset
+              </button>
             </div>
-          </ScrollArea>
-        ) : null}
+          )}
+        </div>
       </div>
       <div className="min-h-0 flex-1">
         {props.terminalVisible ? (
           props.terminalContent
         ) : (
-          <div className="flex h-full items-center justify-center p-6">
-            <Card className="w-full max-w-2xl border-border/70 bg-card/60 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle>Server Workspace</CardTitle>
-                <CardDescription>
-                  Open a terminal for manual work or save presets like `Frontend` and `Backend` that
-                  run in one click.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-3">
+          <div className="flex h-full items-center justify-center p-8">
+            <div className="w-full max-w-md flex flex-col items-center text-center gap-5">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 border border-border/60">
+                <RocketIcon className="size-6 text-muted-foreground" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-semibold text-foreground">Launchpad</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                  Open a terminal for manual work, or save presets like{" "}
+                  <span className="font-medium text-foreground/80">Frontend</span> and{" "}
+                  <span className="font-medium text-foreground/80">Backend</span> that launch in one
+                  click.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <Button type="button" onClick={props.onRevealTerminal}>
                   <TerminalSquareIcon className="size-3.5" />
                   Open Terminal
@@ -10438,25 +10542,8 @@ function ServerTool(props: {
                   <PlusIcon className="size-3.5" />
                   Add Preset
                 </Button>
-                {props.hasTerminalWorkspace ? (
-                  <Button
-                    type="button"
-                    variant="destructive-outline"
-                    onClick={async () => {
-                      const confirmed = await confirm(
-                        "Are you sure you want to close all servers and terminals?",
-                      );
-                      if (confirmed) {
-                        props.onCloseAllTerminals();
-                      }
-                    }}
-                  >
-                    <XIcon className="size-3.5" />
-                    Close All
-                  </Button>
-                ) : null}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -10475,7 +10562,7 @@ function ServerTool(props: {
           <DialogHeader className="p-5 border-b border-border/60 shrink-0 relative flex flex-row items-start justify-between bg-muted/20">
             <div className="text-left">
               <DialogTitle className="text-lg font-bold text-foreground">
-                Server Presets
+                Launchpad Presets
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-1">
                 Create and manage one-click presets like 'Frontend' or 'Backend', each with ordered
@@ -10524,9 +10611,14 @@ function ServerTool(props: {
                           draggedPresetId === preset.id && "opacity-40 border-dashed border-border",
                         )}
                       >
-                        <span className="truncate mr-2">{preset.label || "Untitled Preset"}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-muted-foreground shrink-0">
+                            {resolvePresetIconElement(preset, "size-4")}
+                          </span>
+                          <span className="truncate">{preset.label || "Untitled Preset"}</span>
+                        </div>
                         {status === "running" && (
-                          <span className="size-1.5 bg-success rounded-full shrink-0" />
+                          <span className="size-2 bg-emerald-500 rounded-full shrink-0 animate-pulse" />
                         )}
                       </button>
                     );
@@ -10581,35 +10673,42 @@ function ServerTool(props: {
                   <div className="space-y-6">
                     <div>
                       <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-bold text-foreground">
-                          {selectedPreset.label || "Untitled Preset"}
-                        </h2>
-                        {selectedPresetStatus === "running" ? (
-                          <Badge
-                            variant="success"
-                            className="text-[10px] uppercase tracking-wider font-semibold"
-                          >
-                            Running
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] uppercase tracking-wider font-semibold"
-                          >
-                            Idle
-                          </Badge>
-                        )}
-                        {selectedPreset.autoOpenPreview && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 border-blue-500/30"
-                          >
-                            Auto-opens
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-xs font-mono text-muted-foreground mt-2 truncate">
-                        {selectedPreset.cwd || props.project.cwd}
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-muted/60 border border-border/60 shrink-0 text-foreground">
+                          {resolvePresetIconElement(selectedPreset, "size-5")}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2.5">
+                            <h2 className="text-2xl font-bold text-foreground truncate">
+                              {selectedPreset.label || "Untitled Preset"}
+                            </h2>
+                            {selectedPresetStatus === "running" ? (
+                              <Badge
+                                variant="success"
+                                className="text-[10px] uppercase tracking-wider font-semibold"
+                              >
+                                Running
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] uppercase tracking-wider font-semibold"
+                              >
+                                Idle
+                              </Badge>
+                            )}
+                            {selectedPreset.autoOpenPreview && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 border-blue-500/30"
+                              >
+                                Auto-opens
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs font-mono text-muted-foreground mt-1 truncate">
+                            {selectedPreset.cwd || props.project.cwd}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -10707,7 +10806,9 @@ function ServerTool(props: {
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2 py-16">
                     <TerminalSquareIcon className="size-8 stroke-1 text-muted-foreground/60" />
-                    <span className="text-sm">Select or create a server preset to get started</span>
+                    <span className="text-sm">
+                      Select or create a launchpad preset to get started
+                    </span>
                   </div>
                 )}
               </DialogPanel>
@@ -10801,7 +10902,7 @@ function ServerTool(props: {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Preset?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this server preset? This action cannot be undone.
+              Are you sure you want to delete this preset? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -12421,6 +12522,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                   env: {},
                   autoStart: preset.autoStart,
                 };
+                if (preset.icon !== undefined) res.icon = preset.icon;
                 if (preset.previewUrl !== undefined) res.previewUrl = preset.previewUrl;
                 if (preset.autoOpenPreview !== undefined)
                   res.autoOpenPreview = preset.autoOpenPreview;

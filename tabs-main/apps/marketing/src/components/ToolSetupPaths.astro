@@ -5,7 +5,7 @@ import Icon from "./Icon.astro";
   {([
     ["Globe", "Paste a URL", "figma.com/your-design", "A browser tab in your toolbar"],
     ["Terminal", "Add a CLI command", "claude · codex · your script", "A terminal tab for your tool"],
-    ["Layers", "Save a server preset", "Install → start → preview", "Run your app from one button"],
+    ["Rocket", "Save a Launchpad preset", "Install → start → preview", "Run your app from one button"],
   ] as const).map(([icon, title, example, result]) => <div class="tool-setup-path"><span class="setup-icon"><Icon name={icon} size={21}/></span><h3>{title}</h3><code>{example}</code><span class="setup-arrow" aria-hidden="true">↓</span><p>{result}</p></div>)}
 </div>
 <style>

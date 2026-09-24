@@ -32,12 +32,14 @@ export interface CustomEmbedDraft {
 export interface ServerProcessDraft {
   id: string;
   label: string;
+  icon?: string | undefined;
   commands: string[];
   cwd: string;
   autoStart: boolean;
   visible: boolean;
   isNew: boolean;
   originalLabel: string;
+  originalIcon?: string | undefined;
   originalCommands: string[];
   originalCwd: string;
   originalAutoStart: boolean;
@@ -70,6 +72,7 @@ export function isServerProcessDraftDirty(draft: ServerProcessDraft): boolean {
   return (
     draft.isNew ||
     draft.label !== draft.originalLabel ||
+    draft.icon !== draft.originalIcon ||
     draft.cwd !== draft.originalCwd ||
     draft.autoStart !== draft.originalAutoStart ||
     draft.visible !== draft.originalVisible ||
@@ -165,12 +168,14 @@ export function createServerPresetDrafts(
     return {
       id: process.id,
       label: process.label,
+      icon: process.icon,
       commands: process.commands.length > 0 ? [...process.commands] : [""],
       cwd: process.cwd,
       autoStart: process.autoStart,
       visible: true,
       isNew: false,
       originalLabel: process.label,
+      originalIcon: process.icon,
       originalCommands: process.commands.length > 0 ? [...process.commands] : [""],
       originalCwd: process.cwd,
       originalAutoStart: process.autoStart,
@@ -654,6 +659,7 @@ export function commitServerPresetDrafts(drafts: ServerProcessDraft[]): ServerPr
       label,
       isNew: false,
       originalLabel: label,
+      originalIcon: draft.icon,
       originalCommands: [...draft.commands],
       originalCwd: draft.cwd,
       originalAutoStart: draft.autoStart,
@@ -883,6 +889,7 @@ export function savePersistedServerPreset(
     cwd: draft.cwd,
     env: {},
     autoStart: draft.autoStart,
+    ...(draft.icon ? { icon: draft.icon } : {}),
     ...(draft.previewUrl ? { previewUrl: draft.previewUrl } : {}),
     ...(draft.autoOpenPreview !== undefined ? { autoOpenPreview: draft.autoOpenPreview } : {}),
     ...(draft.previewOpenTarget ? { previewOpenTarget: draft.previewOpenTarget } : {}),
@@ -915,6 +922,7 @@ export function commitSingleServerPresetDraft(
       label,
       isNew: false,
       originalLabel: label,
+      originalIcon: draft.icon,
       originalCommands: [...draft.commands],
       originalCwd: draft.cwd,
       originalAutoStart: draft.autoStart,

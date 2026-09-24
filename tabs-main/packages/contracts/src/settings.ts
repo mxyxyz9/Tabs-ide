@@ -1430,6 +1430,7 @@ export type ProjectServerProcessDefinition = typeof ProjectServerProcessDefiniti
 export const ProjectServerPresetDefinition = Schema.Struct({
   id: ProjectSettingId,
   label: TrimmedNonEmptyString,
+  icon: Schema.optionalKey(TrimmedString),
   command: Schema.optionalKey(TrimmedString),
   commands: Schema.Array(TrimmedString).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   cwd: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -1458,7 +1459,7 @@ export const ProjectWorkspaceSettings = Schema.Struct({
               : kind === "agents"
                 ? "Agents"
                 : kind === "server"
-                  ? "Server"
+                  ? "Launchpad"
                   : kind === "git"
                     ? "Git"
                     : kind === "browser"
