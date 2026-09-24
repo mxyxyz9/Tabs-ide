@@ -2,6 +2,15 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.18] - 2026-09-24
+
+### Faster and more reliable desktop update installation
+
+- **Near-instant restart to install**: Downloaded updates are now pre-staged in the background while you continue working, making the restart-to-install action nearly instantaneous.
+- **Eliminated update stalls**: Removed redundant multi-gigabyte re-verification steps during installation that previously caused desktop updates on macOS and Linux to freeze or take tens of minutes.
+- **Actionable error reporting**: Staging and preparation failures now surface as clear, retryable error messages before restarting, preventing the app from getting stuck in an indefinite restart loop.
+- **Smooth macOS relaunch**: Automatically clears macOS download quarantine attributes during update staging to prevent launch interruptions after installing.
+
 ## [v1.3.17] - 2026-09-24
 
 ### Polished update release notes dialog

@@ -21,15 +21,41 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 160;
+export const TOTAL_TAGS_COUNT = 161;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.18",
+    title: "Faster and more reliable desktop update installation",
+    date: "September 24, 2026",
+    shortDate: "Sep 24",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs speeds up desktop updates across macOS and Linux by pre-staging downloaded releases in the background and eliminating lengthy installation stalls.",
+    highlights: [
+      "Downloaded updates are now pre-staged in the background while you continue working, making the restart-to-install action nearly instantaneous.",
+      "Removed redundant multi-gigabyte re-verification steps during installation that previously caused desktop updates on macOS and Linux to freeze or take tens of minutes.",
+      "Staging and preparation failures now surface as clear, retryable error messages before restarting, preventing the app from getting stuck in an indefinite restart loop.",
+      "Automatically clears macOS download quarantine attributes during update staging to prevent launch interruptions after installing.",
+    ],
+    categories: [
+      {
+        title: "Desktop Experience",
+        items: [
+          "Pre-staged background update extraction for macOS and Linux.",
+          "Eliminated deep codesign and SHA-512 verification bottlenecks during update restart.",
+          "Surface actionable error reporting prior to quitting on update failure.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.17",
     title: "Polished update release notes dialog",
     date: "September 24, 2026",
     shortDate: "Sep 24",
-    isLatest: true,
+    isLatest: false,
     type: "patch",
     summary:
       "Tabs brings a redesigned software update notes dialog with cleaner formatting and dedicated dismiss controls.",
