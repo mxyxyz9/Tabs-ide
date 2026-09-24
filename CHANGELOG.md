@@ -2,6 +2,14 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.17] - 2026-09-24
+
+### Polished update release notes dialog
+
+- **Dedicated dialog close control**: Added a clear close button to the update notes window alongside escape and backdrop dismiss options.
+- **Enhanced release notes presentation**: Centered the update dialog with larger readable typography, a version badge, and a blurred backdrop.
+- **Reliable release data delivery**: Switched download manifests and release notes caching to prevent rate limits and ensure update details are immediately visible.
+
 ## [v1.3.16] - 2026-09-23
 
 ### More recoverable desktop updates

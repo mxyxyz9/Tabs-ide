@@ -21,15 +21,39 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 159;
+export const TOTAL_TAGS_COUNT = 160;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.17",
+    title: "Polished update release notes dialog",
+    date: "September 24, 2026",
+    shortDate: "Sep 24",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs brings a redesigned software update notes dialog with cleaner formatting and dedicated dismiss controls.",
+    highlights: [
+      "Added a clear close button to the update notes window alongside escape and backdrop dismiss options.",
+      "Centered the update dialog with larger readable typography, a version badge, and a blurred backdrop.",
+      "Switched download manifests and release notes caching to prevent rate limits and ensure update details are immediately visible.",
+    ],
+    categories: [
+      {
+        title: "Desktop Experience",
+        items: [
+          "Redesigned release notes modal with dedicated dismiss action.",
+          "Clearer typography and layout for update details.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.16",
     title: "More recoverable desktop updates",
     date: "September 23, 2026",
     shortDate: "Sep 23",
-    isLatest: true,
+    isLatest: false,
     type: "patch",
     summary:
       "Tabs protects your existing installation during desktop updates and retries a full download when a smaller differential download fails.",
