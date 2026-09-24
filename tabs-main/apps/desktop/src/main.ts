@@ -693,6 +693,8 @@ let updatePollTimer: ReturnType<typeof setInterval> | null = null;
 let updateStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let updateCheckInFlight = false;
 let updateDownloadInFlight = false;
+let updateStagingInFlight = false;
+let updatePreparingLinuxInFlight = false;
 let updateInstallInFlight = false;
 let nativeUpdateInstallPending = false;
 let linuxDownloadedUpdatePath: string | null = null;
@@ -1210,14 +1212,16 @@ function configureApplicationMenu(): void {
     {
       label: "Tools",
       submenu: [
-        ...([
-          ["Code", "code"],
-          ["Agents", "agents"],
-          ["Server", "server"],
-          ["Git", "git"],
-          ["Browser", "browser"],
-          ["Testing", "testing"],
-        ] as const).map(([label, kind]) => ({
+        ...(
+          [
+            ["Code", "code"],
+            ["Agents", "agents"],
+            ["Server", "server"],
+            ["Git", "git"],
+            ["Browser", "browser"],
+            ["Testing", "testing"],
+          ] as const
+        ).map(([label, kind]) => ({
           label,
           click: () => dispatchMenuAction(`tool-kind-${kind}`),
         })),
@@ -1505,6 +1509,26 @@ async function downloadAvailableUpdate(): Promise<{
         }
       });
       setUpdateState(reduceDesktopUpdateStateOnDownloadComplete(updateState, version));
+      // Pre-stage the update in the background immediately after download.
+      // ditto extraction no longer takes 20-30 minutes (codesign verify was
+      // removed), so this completes in seconds. When the user clicks
+      // "Restart to Install", stageUpdate() fast-paths via the reuse check.
+      void (async () => {
+        if (updateStagingInFlight || isQuitting) return;
+        updateStagingInFlight = true;
+        console.info("[desktop-updater] Pre-staging macOS update in background...");
+        try {
+          await macPreviewUpdater!.stageUpdate();
+          console.info("[desktop-updater] macOS update pre-staged successfully.");
+        } catch (err) {
+          // Non-fatal: installDownloadedUpdate() will retry staging on demand.
+          console.warn(
+            `[desktop-updater] Background pre-staging failed: ${formatErrorMessage(err)}`,
+          );
+        } finally {
+          updateStagingInFlight = false;
+        }
+      })();
     } else {
       const downloadedFiles = await downloadNativeUpdateWithFallback({
         isDifferentialDownloadDisabled: () => autoUpdater.disableDifferentialDownload,
@@ -1520,6 +1544,31 @@ async function downloadAvailableUpdate(): Promise<{
         if (!linuxDownloadedUpdatePath) {
           throw new Error("The updater did not provide a downloaded AppImage file.");
         }
+        // Pre-prepare the AppImage in the background immediately after download.
+        // copyFile on a 3.3 GB file can take several seconds; doing it here
+        // (while the user is still in the UI) means "Restart to Install" is
+        // near-instant when they click it.
+        const capturedPath = linuxDownloadedUpdatePath;
+        void (async () => {
+          if (updatePreparingLinuxInFlight || isQuitting || !process.env.APPIMAGE) return;
+          updatePreparingLinuxInFlight = true;
+          console.info("[desktop-updater] Pre-preparing Linux AppImage update in background...");
+          try {
+            preparedLinuxUpdate = await prepareLinuxAppImageUpdate({
+              currentAppImagePath: process.env.APPIMAGE,
+              downloadedAppImagePath: capturedPath,
+              logPath: Path.join(app.getPath("userData"), "appimage-update.log"),
+            });
+            console.info("[desktop-updater] Linux AppImage update pre-prepared successfully.");
+          } catch (err) {
+            // Non-fatal: installDownloadedUpdate() will prepare on demand.
+            console.warn(
+              `[desktop-updater] Background Linux pre-prepare failed: ${formatErrorMessage(err)}`,
+            );
+          } finally {
+            updatePreparingLinuxInFlight = false;
+          }
+        })();
       } else if (process.platform === "win32") {
         windowsDownloadedUpdatePath =
           downloadedFiles.find((file) => file.toLowerCase().endsWith(".exe")) ?? null;
@@ -1541,8 +1590,69 @@ async function installDownloadedUpdate(): Promise<{
   accepted: boolean;
   completed: boolean;
 }> {
-  if (isQuitting || !updaterConfigured || updateState.status !== "downloaded") {
+  if (
+    isQuitting ||
+    updateStagingInFlight ||
+    updatePreparingLinuxInFlight ||
+    !updaterConfigured ||
+    updateState.status !== "downloaded"
+  ) {
     return { accepted: false, completed: false };
+  }
+
+  // For the macOS preview updater, stageUpdate() runs `ditto` (ZIP extraction).
+  // Previously this also ran `codesign --verify --deep --strict`, which took
+  // 20–30 minutes on a 3+ GB bundle. That check is now skipped (the SHA-512
+  // hash against the Ed25519-signed manifest already guarantees integrity).
+  // Run staging BEFORE isQuitting=true so that failures surface as actionable
+  // errors rather than an indefinite "Preparing to restart..." with no retry.
+  //
+  // Pre-staging: stageUpdate() may have already run in the background right
+  // after the download completed. In that case stageUpdate() fast-paths via
+  // reuseVerifiedMacPreviewStage() and returns in milliseconds.
+  if (macPreviewUpdater) {
+    updateStagingInFlight = true;
+    console.info("[desktop-updater] Staging macOS update (extracting ZIP)...");
+    try {
+      await macPreviewUpdater.stageUpdate();
+      console.info("[desktop-updater] macOS update staged successfully.");
+    } catch (error: unknown) {
+      const message = formatErrorMessage(error);
+      console.error(`[desktop-updater] Failed to stage update: ${message}`);
+      // State is still "downloaded" — surface a proper error so the user can retry.
+      setUpdateState(reduceDesktopUpdateStateOnInstallFailure(updateState, message));
+      return { accepted: true, completed: false };
+    } finally {
+      updateStagingInFlight = false;
+    }
+  }
+
+  // For Linux, prepareLinuxAppImageUpdate() copies the 3.3 GB AppImage to a
+  // staging directory. Run it BEFORE isQuitting=true so failures surface as
+  // retryable errors. Pre-preparation may have already run in the background
+  // right after download; in that case preparedLinuxUpdate is already set and
+  // we skip the copy entirely.
+  if (!macPreviewUpdater && process.platform === "linux" && !preparedLinuxUpdate) {
+    updatePreparingLinuxInFlight = true;
+    console.info("[desktop-updater] Preparing Linux AppImage update (copying AppImage)...");
+    try {
+      if (!linuxDownloadedUpdatePath || !process.env.APPIMAGE) {
+        throw new Error("The downloaded AppImage is unavailable; download the update again.");
+      }
+      preparedLinuxUpdate = await prepareLinuxAppImageUpdate({
+        currentAppImagePath: process.env.APPIMAGE,
+        downloadedAppImagePath: linuxDownloadedUpdatePath,
+        logPath: Path.join(app.getPath("userData"), "appimage-update.log"),
+      });
+      console.info("[desktop-updater] Linux AppImage update prepared successfully.");
+    } catch (error: unknown) {
+      const message = formatErrorMessage(error);
+      console.error(`[desktop-updater] Failed to prepare Linux update: ${message}`);
+      setUpdateState(reduceDesktopUpdateStateOnInstallFailure(updateState, message));
+      return { accepted: true, completed: false };
+    } finally {
+      updatePreparingLinuxInFlight = false;
+    }
   }
 
   isQuitting = true;
@@ -1550,7 +1660,7 @@ async function installDownloadedUpdate(): Promise<{
   setUpdateState(reduceDesktopUpdateStateOnInstallStart(updateState));
   try {
     if (macPreviewUpdater) {
-      await macPreviewUpdater.stageUpdate();
+      // stageUpdate() already completed above; just hand off to the installer.
       await macPreviewUpdater.quitAndInstall(process.pid);
     } else {
       assertUpdateInstallEnvironment({
@@ -1558,14 +1668,10 @@ async function installDownloadedUpdate(): Promise<{
         appImagePath: process.env.APPIMAGE,
       });
       if (process.platform === "linux") {
-        if (!linuxDownloadedUpdatePath || !process.env.APPIMAGE) {
-          throw new Error("The downloaded AppImage is unavailable; download the update again.");
+        // prepareLinuxAppImageUpdate() already ran above (or via background pre-prepare).
+        if (!preparedLinuxUpdate) {
+          throw new Error("The Linux update was not prepared; try installing again.");
         }
-        preparedLinuxUpdate = await prepareLinuxAppImageUpdate({
-          currentAppImagePath: process.env.APPIMAGE,
-          downloadedAppImagePath: linuxDownloadedUpdatePath,
-          logPath: Path.join(app.getPath("userData"), "appimage-update.log"),
-        });
       } else {
         assertWindowsInstallerReady(windowsDownloadedUpdatePath);
         nativeUpdateInstallPending = true;

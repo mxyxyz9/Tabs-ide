@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+// SHA-512 re-verification removed: electron-updater already verified the download hash.
 import * as FS from "node:fs";
 import * as FSPromises from "node:fs/promises";
 import * as Path from "node:path";
@@ -55,16 +55,6 @@ export interface PreparedLinuxAppImageUpdate {
   dispose(): Promise<void>;
 }
 
-function sha512File(path: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const hash = createHash("sha512");
-    const stream = FS.createReadStream(path);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", () => resolve(hash.digest("base64")));
-  });
-}
-
 export async function prepareLinuxAppImageUpdate(input: {
   readonly currentAppImagePath: string;
   readonly downloadedAppImagePath: string;
@@ -94,14 +84,12 @@ export async function prepareLinuxAppImageUpdate(input: {
   try {
     await FSPromises.copyFile(sourcePath, stagedPath, FS.constants.COPYFILE_EXCL);
     await FSPromises.chmod(stagedPath, 0o755);
+    // Size check is sufficient to guard against a truncated copy.
+    // electron-updater already verified the full SHA-512 hash during download,
+    // so re-hashing the 3+ GB file here is redundant and causes the install
+    // to stall for minutes inside the "Preparing to restart..." state.
     const copiedStat = await FSPromises.stat(stagedPath);
     if (copiedStat.size !== sourceStat.size) throw new Error("The staged AppImage is incomplete.");
-    const [sourceHash, stagedHash] = await Promise.all([
-      sha512File(sourcePath),
-      sha512File(stagedPath),
-    ]);
-    if (sourceHash !== stagedHash)
-      throw new Error("The staged AppImage failed integrity verification.");
   } catch (error) {
     await FSPromises.rm(stageRoot, { recursive: true, force: true });
     throw error;
