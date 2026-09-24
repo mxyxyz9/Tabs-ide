@@ -2,6 +2,15 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.21] - 2026-09-24
+
+### Launchpad command dashboard and preset icon customization
+
+- **Launchpad command hub**: Rebranded the Server tool to Launchpad to better reflect running development servers, background tasks, worker processes, and database consoles in one place.
+- **Preset icon picker**: Added 12 curated icon choices for Launchpad presets, including frontend, backend, database, worker, terminal, and build workflows.
+- **Automatic icon detection**: Presets intelligently suggest matching icons as you type their label, such as frontend web, backend API, database, worker queue, or build tasks.
+- **Backward-compatible settings migration**: Project configurations automatically map existing server presets and tool labels to Launchpad while preserving commands, working folders, and preview URLs.
+
 ## [v1.3.20] - 2026-09-24
 
 ### Expanded external editor integration and refined workspace controls

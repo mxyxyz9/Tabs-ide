@@ -21,15 +21,41 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 163;
+export const TOTAL_TAGS_COUNT = 164;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.21",
+    title: "Launchpad command dashboard and preset icon customization",
+    date: "September 24, 2026",
+    shortDate: "Sep 24",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs replaces the Server tab with Launchpad, introducing visual icon customization for development presets and automatic category detection for project workflows.",
+    highlights: [
+      "Rebranded the Server tool to Launchpad to better reflect running development servers, background tasks, worker processes, and database consoles in one place.",
+      "Added 12 curated icon choices for Launchpad presets, including frontend, backend, database, worker, terminal, and build workflows.",
+      "Presets intelligently suggest matching icons as you type their label, such as frontend web, backend API, database, worker queue, or build tasks.",
+      "Project configurations automatically map existing server presets and tool labels to Launchpad while preserving commands, working folders, and preview URLs.",
+    ],
+    categories: [
+      {
+        title: "Launchpad",
+        items: [
+          "Replaced Server tool with Launchpad command hub across the workspace and product experience.",
+          "Visual icon picker with 12 preset iconography options.",
+          "Real-time icon suggestion auto-detecting preset roles from labels.",
+          "Automatic migration for existing project workspace settings and tool configurations.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.20",
     title: "Expanded external editor integration and refined workspace controls",
     date: "September 24, 2026",
     shortDate: "Sep 24",
-    isLatest: true,
     type: "patch",
     summary:
       "Tabs expands external editor discovery with automatic path detection and branded icons for JetBrains, Trae, Kiro, and VSCodium, alongside streamlined split-button headers and sidebar thread actions.",
