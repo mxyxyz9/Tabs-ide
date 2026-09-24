@@ -768,7 +768,8 @@ jobs:
             echo "::error::Release $TAG must remain a draft until verification finishes."
             exit 1
           fi
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+          release_id=$(gh release view "$TAG" --json databaseId --jq .databaseId)
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" \
             --jq '.assets[] | [.name, (.size | tostring), .digest] | @tsv' > attached-assets.tsv
 
           shopt -s nullglob
