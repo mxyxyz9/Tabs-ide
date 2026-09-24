@@ -34,7 +34,7 @@ jobs:
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
       previous_version: ${{ steps.validate_release.outputs.previous_version }}
       artifact_run_id: ${{ steps.validate_release.outputs.artifact_run_id }}
-      ref: ${{ github.sha }}
+      ref: ${{ steps.validate_release.outputs.source_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -121,8 +121,26 @@ jobs:
             fi
             run_info=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$artifact_run_id" --jq '[.name, .head_sha, .conclusion] | @tsv')
             IFS=$'\t' read -r run_name run_sha run_conclusion <<< "$run_info"
-            if [ "$run_name" != "Build Desktop Installers" ] || [ "$run_sha" != "$GITHUB_SHA" ] || [ "$run_conclusion" != "success" ]; then
-              echo "::error::Artifact run must be a successful four-platform installer build of this exact commit."
+            if [ "$run_name" = "Build Desktop Installers" ]; then
+              if [ "$run_sha" != "$GITHUB_SHA" ] || [ "$run_conclusion" != "success" ]; then
+                echo "::error::Installer artifacts must come from a successful build of this exact commit."
+                exit 1
+              fi
+            elif [ "$run_name" = "Release Desktop" ]; then
+              tag_sha=$(git ls-remote origin "refs/tags/$RELEASE_TAG^{}" | awk '{print $1}')
+              if [ -z "$tag_sha" ] || [ "$run_sha" != "$tag_sha" ] || [ "$run_conclusion" != "failure" ]; then
+                echo "::error::Release artifacts must come from the existing tag's failed publication run."
+                exit 1
+              fi
+              jobs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$artifact_run_id/jobs" --jq '.jobs[] | [.name, .conclusion] | @tsv')
+              for name in "Build macOS arm64" "Build macOS x64" "Build Linux x64" "Build Windows x64" "Smoke-test Windows upgrade"; do
+                if ! grep -Fxq "$name"$'\t'success <<< "$jobs"; then
+                  echo "::error::Source release run lacks a successful $name job."
+                  exit 1
+                fi
+              done
+            else
+              echo "::error::Unsupported artifact source workflow: $run_name"
               exit 1
             fi
             artifact_names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$artifact_run_id/artifacts" --jq '.artifacts[] | select(.expired == false) | .name')
@@ -134,6 +152,7 @@ jobs:
             done
           fi
           echo "artifact_run_id=$artifact_run_id" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${run_sha:-$GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -675,6 +694,8 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
         run: |
+          # GitHub artifact downloads do not preserve Unix executable bits.
+          chmod +x release-assets/*.AppImage
           node --experimental-strip-types tabs-main/scripts/verify-desktop-update-artifact.ts release-assets win "$RELEASE_VERSION"
           node --experimental-strip-types tabs-main/scripts/verify-desktop-update-artifact.ts release-assets linux "$RELEASE_VERSION"
 
