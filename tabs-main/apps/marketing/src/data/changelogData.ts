@@ -21,15 +21,39 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 158;
+export const TOTAL_TAGS_COUNT = 159;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.16",
+    title: "More recoverable desktop updates",
+    date: "September 23, 2026",
+    shortDate: "Sep 23",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs protects your existing installation during desktop updates and retries a full download when a smaller differential download fails.",
+    highlights: [
+      "macOS restores the previous app if replacing it fails.",
+      "Linux keeps the previous AppImage until the replacement starts successfully.",
+      "Windows closes processes running from the existing Tabs installation before replacing its files, while leaving unrelated processes open.",
+    ],
+    categories: [
+      {
+        title: "Desktop Updates",
+        items: [
+          "Recovery for interrupted macOS and Linux updates.",
+          "Safer Windows upgrades when the existing installation has files in use.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.15",
     title: "Centered release notes dialog with dedicated close control",
     date: "September 22, 2026",
     shortDate: "Sep 22",
-    isLatest: true,
+    isLatest: false,
     type: "feature",
     summary:
       "Tabs now opens software update release notes in a centered modal dialog with an accessible top-right close button, blurred backdrop scrim, and smooth scrolling.",
