@@ -737,6 +737,7 @@ jobs:
       - name: Create draft release and upload assets
         uses: softprops/action-gh-release@v3
         with:
+          token: ${{ secrets.TABS_RELEASE_TOKEN }}
           tag_name: ${{ needs.preflight.outputs.tag }}
           target_commitish: ${{ needs.preflight.outputs.ref }}
           name: Tabs v${{ needs.preflight.outputs.version }}
@@ -757,7 +758,7 @@ jobs:
 
       - name: Verify release assets and publish atomically
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.TABS_RELEASE_TOKEN }}
           TAG: ${{ needs.preflight.outputs.tag }}
           MAKE_LATEST: ${{ needs.preflight.outputs.make_latest }}
         run: |
