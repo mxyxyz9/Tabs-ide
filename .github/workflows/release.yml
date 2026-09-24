@@ -80,6 +80,15 @@ jobs:
           fi
           node scripts/validate-release-notes.mjs "$notes_file"
 
+      - name: Verify release publishing credential
+        env:
+          TABS_RELEASE_TOKEN: ${{ secrets.TABS_RELEASE_TOKEN }}
+        run: |
+          if [ -z "$TABS_RELEASE_TOKEN" ]; then
+            echo "::error::Configure the repository secret TABS_RELEASE_TOKEN with release write access before starting a release."
+            exit 1
+          fi
+
       - id: validate_release
         name: Verify release version and tag availability
         env:

@@ -20,6 +20,10 @@ after installation.
 - Signing is optional and auto-detected per platform from secrets.
 - Runs a Windows install and locked-process upgrade smoke test before publishing.
 
+Before starting a release, configure `TABS_RELEASE_TOKEN` as a repository Actions secret with permission to create, upload to, and publish releases in this repository. The workflow checks for it during preflight so a missing credential cannot waste a full build. Use a dedicated, narrowly scoped token and rotate it according to your account policy. The built-in `GITHUB_TOKEN` currently receives a 403 from this repository's release API even when Actions reports `contents: write`.
+
+The website deploy requires a valid `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`. A published desktop release remains available on GitHub if website deployment fails; refresh the Vercel secret and rerun `Deploy Tabs website` to update the site.
+
 ## Platform Readiness & Distribution Tiers
 
 Tabs desktop releases distinguish between fully production-ready platforms, internal/beta builds, and deferred distribution requirements:
@@ -110,6 +114,8 @@ gh workflow run build-desktop.yml --ref codex/windows-release-repair -f artifact
 After all four jobs pass, the repository-root `Release Desktop` workflow can
 reuse that exact successful run through its `artifact_run_id` input. Its
 preflight checks the commit and asset set before publication.
+
+If only publication fails after the four build jobs and Windows smoke pass, the workflow can also reuse that failed `Release Desktop` run's artifact ID. Preflight requires the source run's commit to match the existing release tag and checks that all four builds and the Windows smoke succeeded. This skips another full build and smoke test.
 
 ## 2) Apple signing + notarization setup (macOS)
 
