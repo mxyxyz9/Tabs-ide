@@ -1,7 +1,7 @@
 export const REPO = "mxyxyz9/Tabs-ide";
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 export const GITHUB_API_URL = `https://api.github.com/repos/${REPO}/releases`;
-export const API_URL = "/api/releases";
+export const API_URL = "/releases.json";
 const CACHE_KEY = "tabs-ide-releases-v1";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 export interface ReleaseAsset {
@@ -85,7 +85,7 @@ export async function fetchAllReleases(perPage = 10): Promise<Release[]> {
         Array.isArray(entry.data) &&
         typeof entry.timestamp === "number" &&
         Date.now() - entry.timestamp < CACHE_TTL_MS &&
-        entry.data.length >= Math.min(requestedCount, 10)
+        entry.data.length > 0
       ) {
         return entry.data.slice(0, requestedCount).map(validateRelease);
       }
@@ -94,11 +94,11 @@ export async function fetchAllReleases(perPage = 10): Promise<Release[]> {
     sessionStorage.removeItem(CACHE_KEY);
   }
 
-  const response = await fetch(`${API_URL}?per_page=${requestedCount}`, {
+  const response = await fetch(API_URL, {
     signal: AbortSignal.timeout(8000),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Release proxy lookup failed: ${response.status}`);
+  if (!response.ok) throw new Error(`Release lookup failed: ${response.status}`);
 
   const payload = await response.json();
   if (!Array.isArray(payload)) throw new Error("Invalid release proxy response");
@@ -107,5 +107,5 @@ export async function fetchAllReleases(perPage = 10): Promise<Release[]> {
     CACHE_KEY,
     JSON.stringify({ data: releases, timestamp: Date.now() } satisfies ReleaseCache),
   );
-  return releases;
+  return releases.slice(0, requestedCount);
 }

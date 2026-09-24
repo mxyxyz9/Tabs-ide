@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import {
   GITHUB_API_URL,
   RELEASES_URL,
@@ -48,10 +48,13 @@ const sanitized = [latest, ...history].map((r) => ({
   html_url: r.html_url,
   assets: r.assets.map((a) => ({ name: a.name, browser_download_url: a.browser_download_url })),
 }));
-await writeFile(
-  new URL("../src/data/releases.json", import.meta.url),
-  JSON.stringify(sanitized, null, 2) + "\n",
-);
+const releaseData = JSON.stringify(sanitized, null, 2) + "\n";
+const publicData = new URL("../public/releases.json", import.meta.url);
+await mkdir(new URL("../public/", import.meta.url), { recursive: true });
+await Promise.all([
+  writeFile(new URL("../src/data/releases.json", import.meta.url), releaseData),
+  writeFile(publicData, releaseData),
+]);
 console.log(
   `Synced ${latest.tag_name} from ${RELEASES_URL}; all four installers and Windows/Linux manifests verified.`,
 );
