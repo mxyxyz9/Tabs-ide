@@ -11570,6 +11570,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     const bridge = window.desktopBridge;
     if (!bridge) return;
     return bridge.onMenuAction((action) => {
+      const kindMatch = /^tool-kind-(code|agents|server|git|browser|testing)$/.exec(action);
+      if (kindMatch) {
+        const { availableTools: tools, switchTool } = toolShortcutRef.current;
+        const target = tools.find((tool) => tool.kind === kindMatch[1]);
+        if (target) void switchTool(target.id);
+        return;
+      }
       const match = /^tool-go-([1-9])$/.exec(action);
       if (!match) return;
       const { availableTools: tools, switchTool } = toolShortcutRef.current;

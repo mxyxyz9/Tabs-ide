@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { MonitorPlayIcon, RotateCcwIcon, SaveIcon } from "lucide-react";
+import { createPortal } from "react-dom";
+import { MonitorPlayIcon, RotateCcwIcon, SaveIcon, XIcon } from "lucide-react";
 import { DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useTheme } from "../../hooks/useTheme";
@@ -26,7 +27,14 @@ function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont
   const previewExitMs = 1_000;
   const [isExiting, setIsExiting] = useState(false);
   const onCloseRef = useRef(onClose);
+  const overlayRef = useRef<HTMLDivElement>(null);
   onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    overlayRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, []);
 
   useEffect(() => {
     const exitTimer = setTimeout(() => {
@@ -47,12 +55,32 @@ function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont
 
   return (
     <div
+      ref={overlayRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Startup animation preview"
+      tabIndex={-1}
       className={cn(
         "fixed inset-0 z-[99999] cursor-pointer will-change-transform transition-transform duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]",
         isExiting ? "-translate-y-full" : "translate-y-0",
       )}
       onClick={() => setIsExiting(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setIsExiting(true);
+        if (event.key === "Tab") {
+          event.preventDefault();
+          event.currentTarget.querySelector("button")?.focus();
+        }
+      }}
     >
+      <button
+        type="button"
+        aria-label="Close startup animation preview"
+        className="absolute right-5 top-5 z-10 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        onClick={() => setIsExiting(true)}
+      >
+        <XIcon className="size-5" aria-hidden="true" />
+      </button>
       <SplashScreen
         loader={loader}
         palette={palette}
@@ -68,7 +96,14 @@ function ClosePreviewOverlay({ loader, palette, theme, fontComboId, customFont, 
   const [phase, setPhase] = useState<any>("idle");
   const [isExiting, setIsExiting] = useState(false);
   const onCloseRef = useRef(onClose);
+  const overlayRef = useRef<HTMLDivElement>(null);
   onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    overlayRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -77,21 +112,42 @@ function ClosePreviewOverlay({ loader, palette, theme, fontComboId, customFont, 
     return () => clearTimeout(t);
   }, []);
 
-  const handleIntroEnd = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onCloseRef.current();
-    }, 700);
-  };
+  useEffect(() => {
+    if (!isExiting) return;
+    const closeTimer = setTimeout(() => onCloseRef.current(), 700);
+    return () => clearTimeout(closeTimer);
+  }, [isExiting]);
+
+  const handleIntroEnd = () => setIsExiting(true);
 
   return (
     <div
+      ref={overlayRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Close animation preview"
+      tabIndex={-1}
       className={cn(
         "fixed inset-0 z-[99999] cursor-pointer will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
         isExiting ? "-translate-y-full" : "translate-y-0",
       )}
       onClick={() => setIsExiting(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setIsExiting(true);
+        if (event.key === "Tab") {
+          event.preventDefault();
+          event.currentTarget.querySelector("button")?.focus();
+        }
+      }}
     >
+      <button
+        type="button"
+        aria-label="Close animation preview"
+        className="absolute right-5 top-5 z-10 rounded-full bg-black/40 p-2 text-white hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        onClick={() => setIsExiting(true)}
+      >
+        <XIcon className="size-5" aria-hidden="true" />
+      </button>
       <CloseScreen
         loader={loader}
         palette={palette}
@@ -273,7 +329,7 @@ export function AnimationsSettings() {
 
   return (
     <div className="space-y-6">
-      {fullscreenStartupPreview && (
+      {fullscreenStartupPreview && createPortal(
         <StartupPreviewOverlay
           key={startupReplayKey}
           loader={previewStyle}
@@ -282,9 +338,10 @@ export function AnimationsSettings() {
           fontComboId={previewStartupAnimationFontComboId}
           customFont={previewStartupCustomAnimationFont}
           onClose={() => setFullscreenStartupPreview(false)}
-        />
+        />,
+        document.body,
       )}
-      {fullscreenClosePreview && (
+      {fullscreenClosePreview && createPortal(
         <ClosePreviewOverlay
           key={closeReplayKey}
           loader={closePreviewStyle}
@@ -293,7 +350,8 @@ export function AnimationsSettings() {
           fontComboId={previewCloseAnimationFontComboId}
           customFont={previewCloseCustomAnimationFont}
           onClose={() => setFullscreenClosePreview(false)}
-        />
+        />,
+        document.body,
       )}
 
       <SettingsSectionHeader

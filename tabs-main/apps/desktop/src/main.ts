@@ -1138,8 +1138,13 @@ function configureApplicationMenu(): void {
 
   template.push(
     {
-      label: "File",
+      label: "Workspace",
       submenu: [
+        {
+          label: "New Tab",
+          accelerator: getActiveAccelerator("tab.new") ?? "CmdOrCtrl+Shift+N",
+          click: () => dispatchMenuAction("tab-new"),
+        },
         ...(process.platform === "darwin"
           ? []
           : [
@@ -1150,6 +1155,7 @@ function configureApplicationMenu(): void {
               },
               { type: "separator" as const },
             ]),
+        { type: "separator" as const },
         process.platform === "darwin"
           ? // cmd+W closes the active tab (see Tabs menu); window close moves to
             // cmd+shift+W, matching the browser convention.
@@ -1199,9 +1205,25 @@ function configureApplicationMenu(): void {
           accelerator: `Alt+${index + 1}`,
           click: () => dispatchMenuAction(`tab-go-${index + 1}`),
         })),
+      ],
+    },
+    {
+      label: "Tools",
+      submenu: [
+        ...([
+          ["Code", "code"],
+          ["Agents", "agents"],
+          ["Server", "server"],
+          ["Git", "git"],
+          ["Browser", "browser"],
+          ["Testing", "testing"],
+        ] as const).map(([label, kind]) => ({
+          label,
+          click: () => dispatchMenuAction(`tool-kind-${kind}`),
+        })),
         { type: "separator" },
         {
-          label: "Switch Tool",
+          label: "Switch Tool by Position",
           submenu: Array.from({ length: 9 }, (_, index) => ({
             label: `Tool ${index + 1}`,
             accelerator: `CmdOrCtrl+${index + 1}`,
@@ -1213,10 +1235,14 @@ function configureApplicationMenu(): void {
     {
       label: "View",
       submenu: [
-        { role: "reload" },
-        { role: "forceReload" },
-        { role: "toggleDevTools" },
-        { type: "separator" },
+        ...(isDevelopment
+          ? ([
+              { role: "reload" },
+              { role: "forceReload" },
+              { role: "toggleDevTools" },
+              { type: "separator" },
+            ] as MenuItemConstructorOptions[])
+          : []),
         { role: "resetZoom" },
         { role: "zoomIn", accelerator: "CmdOrCtrl+=" },
         { role: "zoomIn", accelerator: "CmdOrCtrl+Plus", visible: false },
