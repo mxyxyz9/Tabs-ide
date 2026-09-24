@@ -534,3 +534,249 @@ export const GoogleGemini: Icon = (props) => (
     />
   </svg>
 );
+
+export const FinderIcon: Icon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <rect x="2" y="2" width="20" height="20" rx="4" fill="#36A9F5" />
+    <path
+      d="M13 2h5a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4h-6c-1-4-1-7 0-10H9c0-4 2-8 4-10Z"
+      fill="#D9F1FF"
+    />
+    <path
+      d="M7 7v2m10-2v2M6 15c3 3 9 3 12 0"
+      stroke="#163A59"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const FileExplorerIcon: Icon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path
+      d="M2 5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2Z"
+      fill="#D99A16"
+    />
+    <path
+      d="M2 10a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2Z"
+      fill="#F5BC38"
+    />
+  </svg>
+);
+
+export const TraeIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 24 24" fill="currentColor">
+    <rect x="1" y="4" width="3" height="14" />
+    <rect x="4" y="18" width="18" height="3" />
+    <rect x="4" y="4" width="18" height="3" />
+    <rect x="19" y="7" width="3" height="11" />
+    <path d="M11 10L13 12L11 14L9 12Z" />
+    <path d="M16 10L18 12L16 14L14 12Z" />
+  </svg>
+);
+
+export const KiroIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 1200 1200" fill="none">
+    <rect width="1200" height="1200" rx="260" fill="#9046FF" />
+    <path
+      d="M398.554 818.914C316.315 1001.03 491.477 1046.74 620.672 940.156C658.687 1059.66 801.052 970.473 852.234 877.795C964.787 673.567 919.318 465.357 907.64 422.374C827.637 129.443 427.623 128.946 358.8 423.865C342.651 475.544 342.402 534.18 333.458 595.051C328.986 625.86 325.507 645.488 313.83 677.785C306.873 696.424 297.68 712.819 282.773 740.645C259.915 783.881 269.604 867.113 387.87 823.883L399.051 818.914H398.554Z"
+      fill="#fff"
+    />
+    <path
+      d="M636.123 549.353C603.328 549.353 598.359 510.097 598.359 486.742C598.359 465.623 602.086 448.977 609.293 438.293C615.504 428.852 624.697 424.131 636.123 424.131C647.555 424.131 657.492 428.852 664.447 438.541C672.398 449.474 676.623 466.12 676.623 486.742C676.623 525.998 661.471 549.353 636.375 549.353H636.123Z"
+      fill="#000"
+    />
+    <path
+      d="M771.24 549.353C738.445 549.353 733.477 510.097 733.477 486.742C733.477 465.623 737.203 448.977 744.41 438.293C750.621 428.852 759.814 424.131 771.24 424.131C782.672 424.131 792.609 428.852 799.564 438.541C807.516 449.474 811.74 466.12 811.74 486.742C811.74 525.998 796.588 549.353 771.492 549.353H771.24Z"
+      fill="#000"
+    />
+  </svg>
+);
+
+export const VisualStudioCodeInsiders: Icon = (props) => {
+  const id = useId();
+  const maskId = `${id}-vscode-insiders-a`;
+  const topShadowFilterId = `${id}-vscode-insiders-b`;
+  const sideShadowFilterId = `${id}-vscode-insiders-c`;
+  const overlayGradientId = `${id}-vscode-insiders-d`;
+
+  return (
+    <svg {...props} fill="none" viewBox="0 0 100 100">
+      <mask id={maskId} width="100" height="100" x="0" y="0" maskUnits="userSpaceOnUse">
+        <path
+          fill="#fff"
+          fillRule="evenodd"
+          d="M70.912 99.317a6.223 6.223 0 0 0 4.96-.19l20.589-9.907A6.25 6.25 0 0 0 100 83.587V16.413a6.25 6.25 0 0 0-3.54-5.632L75.874.874a6.226 6.226 0 0 0-7.104 1.21L29.355 38.04 12.187 25.01a4.162 4.162 0 0 0-5.318.236l-5.506 5.009a4.168 4.168 0 0 0-.004 6.162L16.247 50 1.36 63.583a4.168 4.168 0 0 0 .004 6.162l5.506 5.01a4.162 4.162 0 0 0 5.318.236l17.168-13.032L68.77 97.917a6.217 6.217 0 0 0 2.143 1.4ZM75.015 27.3 45.11 50l29.906 22.701V27.3Z"
+          clipRule="evenodd"
+        />
+      </mask>
+      <g mask={`url(#${maskId})`}>
+        <path
+          fill="#009a7c"
+          d="M96.461 10.796 75.857.876a6.23 6.23 0 0 0-7.107 1.207l-67.451 61.5a4.167 4.167 0 0 0 .004 6.162l5.51 5.009a4.167 4.167 0 0 0 5.32.236l81.228-61.62c2.725-2.067 6.639-.124 6.639 3.297v-.24a6.25 6.25 0 0 0-3.539-5.63Z"
+        />
+        <g filter={`url(#${topShadowFilterId})`}>
+          <path
+            fill="#00b294"
+            d="m96.461 89.204-20.604 9.92a6.229 6.229 0 0 1-7.107-1.207l-67.451-61.5a4.167 4.167 0 0 1 .004-6.162l5.51-5.009a4.167 4.167 0 0 1 5.32-.236l81.228 61.62c2.725 2.067 6.639.124 6.639-3.297v.24a6.25 6.25 0 0 1-3.539 5.63Z"
+          />
+        </g>
+        <g filter={`url(#${sideShadowFilterId})`}>
+          <path
+            fill="#24bfa5"
+            d="M75.858 99.126a6.232 6.232 0 0 1-7.108-1.21c2.306 2.307 6.25.674 6.25-2.588V4.672c0-3.262-3.944-4.895-6.25-2.589a6.232 6.232 0 0 1 7.108-1.21l20.6 9.908A6.25 6.25 0 0 1 100 16.413v67.174a6.25 6.25 0 0 1-3.541 5.633l-20.601 9.906Z"
+          />
+        </g>
+        <path
+          fill={`url(#${overlayGradientId})`}
+          fillRule="evenodd"
+          d="M70.851 99.317a6.224 6.224 0 0 0 4.96-.19L96.4 89.22a6.25 6.25 0 0 0 3.54-5.633V16.413a6.25 6.25 0 0 0-3.54-5.632L75.812.874a6.226 6.226 0 0 0-7.104 1.21L29.294 38.04 12.126 25.01a4.162 4.162 0 0 0-5.317.236l-5.507 5.009a4.168 4.168 0 0 0-.004 6.162L16.186 50 1.298 63.583a4.168 4.168 0 0 0 .004 6.162l5.507 5.009a4.162 4.162 0 0 0 5.317.236L29.294 61.96l39.414 35.958a6.218 6.218 0 0 0 2.143 1.4ZM74.954 27.3 45.048 50l29.906 22.701V27.3Z"
+          clipRule="evenodd"
+          opacity=".25"
+          style={{ mixBlendMode: "overlay" }}
+        />
+      </g>
+      <defs>
+        <filter
+          id={topShadowFilterId}
+          width="116.727"
+          height="92.246"
+          x="-8.394"
+          y="15.829"
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
+          <feOffset />
+          <feGaussianBlur stdDeviation="4.167" />
+          <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+          <feBlend in2="BackgroundImageFix" mode="overlay" result="effect1_dropShadow" />
+          <feBlend in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+        </filter>
+        <filter
+          id={sideShadowFilterId}
+          width="47.917"
+          height="116.151"
+          x="60.417"
+          y="-8.076"
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
+          <feOffset />
+          <feGaussianBlur stdDeviation="4.167" />
+          <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+          <feBlend in2="BackgroundImageFix" mode="overlay" result="effect1_dropShadow" />
+          <feBlend in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+        </filter>
+        <linearGradient
+          id={overlayGradientId}
+          x1="49.939"
+          x2="49.939"
+          y1=".258"
+          y2="99.742"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#fff" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+};
+
+export const VSCodium: Icon = (props) => {
+  const id = useId();
+  const maskId = `${id}-vscodium-a`;
+  const topShadowFilterId = `${id}-vscodium-b`;
+  const sideShadowFilterId = `${id}-vscodium-c`;
+  const overlayGradientId = `${id}-vscodium-d`;
+
+  return (
+    <svg {...props} fill="none" viewBox="0 0 100 100">
+      <mask id={maskId} width="100" height="100" x="0" y="0" maskUnits="userSpaceOnUse">
+        <path
+          fill="#fff"
+          fillRule="evenodd"
+          d="M70.912 99.317a6.223 6.223 0 0 0 4.96-.19l20.589-9.907A6.25 6.25 0 0 0 100 83.587V16.413a6.25 6.25 0 0 0-3.54-5.632L75.874.874a6.226 6.226 0 0 0-7.104 1.21L29.355 38.04 12.187 25.01a4.162 4.162 0 0 0-5.318.236l-5.506 5.009a4.168 4.168 0 0 0-.004 6.162L16.247 50 1.36 63.583a4.168 4.168 0 0 0 .004 6.162l5.506 5.01a4.162 4.162 0 0 0 5.318.236l17.168-13.032L68.77 97.917a6.217 6.217 0 0 0 2.143 1.4ZM75.015 27.3 45.11 50l29.906 22.701V27.3Z"
+          clipRule="evenodd"
+        />
+      </mask>
+      <g mask={`url(#${maskId})`}>
+        <path
+          fill="#1f98d1"
+          d="M96.461 10.796 75.857.876a6.23 6.23 0 0 0-7.107 1.207l-67.451 61.5a4.167 4.167 0 0 0 .004 6.162l5.51 5.009a4.167 4.167 0 0 0 5.32.236l81.228-61.62c2.725-2.067 6.639-.124 6.639 3.297v-.24a6.25 6.25 0 0 0-3.539-5.63Z"
+        />
+        <g filter={`url(#${topShadowFilterId})`}>
+          <path
+            fill="#2ba8e2"
+            d="m96.461 89.204-20.604 9.92a6.229 6.229 0 0 1-7.107-1.207l-67.451-61.5a4.167 4.167 0 0 1 .004-6.162l5.51-5.009a4.167 4.167 0 0 1 5.32-.236l81.228 61.62c2.725 2.067 6.639.124 6.639-3.297v.24a6.25 6.25 0 0 1-3.539 5.63Z"
+          />
+        </g>
+        <g filter={`url(#${sideShadowFilterId})`}>
+          <path
+            fill="#42b9ee"
+            d="M75.858 99.126a6.232 6.232 0 0 1-7.108-1.21c2.306 2.307 6.25.674 6.25-2.588V4.672c0-3.262-3.944-4.895-6.25-2.589a6.232 6.232 0 0 1 7.108-1.21l20.6 9.908A6.25 6.25 0 0 1 100 16.413v67.174a6.25 6.25 0 0 1-3.541 5.633l-20.601 9.906Z"
+          />
+        </g>
+        <path
+          fill={`url(#${overlayGradientId})`}
+          fillRule="evenodd"
+          d="M70.851 99.317a6.224 6.224 0 0 0 4.96-.19L96.4 89.22a6.25 6.25 0 0 0 3.54-5.633V16.413a6.25 6.25 0 0 0-3.54-5.632L75.812.874a6.226 6.226 0 0 0-7.104 1.21L29.294 38.04 12.126 25.01a4.162 4.162 0 0 0-5.317.236l-5.507 5.009a4.168 4.168 0 0 0-.004 6.162L16.186 50 1.298 63.583a4.168 4.168 0 0 0 .004 6.162l5.507 5.009a4.162 4.162 0 0 0 5.317.236L29.294 61.96l39.414 35.958a6.218 6.218 0 0 0 2.143 1.4ZM74.954 27.3 45.048 50l29.906 22.701V27.3Z"
+          clipRule="evenodd"
+          opacity=".25"
+          style={{ mixBlendMode: "overlay" }}
+        />
+      </g>
+      <defs>
+        <filter
+          id={topShadowFilterId}
+          width="116.727"
+          height="92.246"
+          x="-8.394"
+          y="15.829"
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
+          <feOffset />
+          <feGaussianBlur stdDeviation="4.167" />
+          <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+          <feBlend in2="BackgroundImageFix" mode="overlay" result="effect1_dropShadow" />
+          <feBlend in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+        </filter>
+        <filter
+          id={sideShadowFilterId}
+          width="47.917"
+          height="116.151"
+          x="60.417"
+          y="-8.076"
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
+          <feOffset />
+          <feGaussianBlur stdDeviation="4.167" />
+          <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+          <feBlend in2="BackgroundImageFix" mode="overlay" result="effect1_dropShadow" />
+          <feBlend in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+        </filter>
+        <linearGradient
+          id={overlayGradientId}
+          x1="49.939"
+          x2="49.939"
+          y1=".258"
+          y2="99.742"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#fff" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+};

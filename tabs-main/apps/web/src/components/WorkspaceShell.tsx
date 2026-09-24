@@ -1512,8 +1512,8 @@ function AgentsThreadList(props: {
       thread.title,
       thread.branch,
       thread.worktreePath,
-      thread.modelSelection.instanceId,
-      thread.modelSelection.model,
+      thread.modelSelection?.instanceId,
+      thread.modelSelection?.model,
       thread.session?.provider,
       thread.runtimeMode,
       props.project.name,
@@ -1599,6 +1599,15 @@ function AgentsThreadList(props: {
   ).length;
   const snoozedCount = activeThreads.filter((thread) => isSnoozed(thread, lifecycleNow)).length;
   const actionableCount = activeThreads.length - settledCount - snoozedCount;
+  const searchedSettledCount = searchedActiveThreads.filter((thread) =>
+    isSettled(thread, thread.updatedAt ?? thread.createdAt),
+  ).length;
+  const searchedSnoozedCount = searchedActiveThreads.filter((thread) =>
+    isSnoozed(thread, lifecycleNow),
+  ).length;
+  const searchedActionableCount =
+    searchedActiveThreads.length - searchedSettledCount - searchedSnoozedCount;
+  const searchedArchivedCount = searchedArchivedThreads.length;
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1">
@@ -1676,7 +1685,7 @@ function AgentsThreadList(props: {
                       type="button"
                       aria-label="Collapse sidebar"
                       onClick={toggleCollapsed}
-                      className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-muted/20 text-muted-foreground/70 transition-all hover:border-border/70 hover:bg-accent hover:text-foreground"
+                      className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none"
                     />
                   }
                 >
@@ -1688,78 +1697,144 @@ function AgentsThreadList(props: {
               </Tooltip>
             </div>
 
-            {/* Prominent full-width New Thread button */}
+            {/* Machined-aluminum inspired New Thread button */}
             <button
               type="button"
               onClick={props.onCreateThread}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border/70 bg-accent/60 py-2.5 text-sm font-semibold text-foreground shadow-sm transition-all hover:border-border hover:bg-accent hover:shadow"
+              className="group relative flex h-10 w-full items-center justify-center rounded-[14px] p-[1.5px] transition-all duration-200 active:scale-[0.985] active:translate-y-[0.5px] bg-gradient-to-b from-slate-300 via-slate-400/60 to-slate-500/70 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.04)] hover:from-slate-200 hover:via-slate-300 hover:to-slate-400 dark:from-[#e2e8f0]/75 dark:via-[#94a3b8]/30 dark:to-[#475569]/35 dark:shadow-[0_2px_12px_-2px_rgba(0,0,0,0.5),0_1px_2px_rgba(0,0,0,0.3)] dark:hover:from-white/95 dark:hover:via-[#cbd5e1]/45 dark:hover:to-[#64748b]/45 dark:hover:shadow-[0_4px_18px_-2px_rgba(0,0,0,0.65),0_0_12px_rgba(226,232,240,0.12)]"
             >
-              <PlusIcon className="size-4 text-foreground/80" />
-              New Thread
+              <div className="relative flex h-full w-full items-center justify-center gap-2 rounded-[12.5px] px-3 transition-colors duration-200 bg-gradient-to-b from-white via-slate-50 to-slate-100/90 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.95),inset_0_-1px_0_0_rgba(0,0,0,0.05)] group-hover:from-white group-hover:to-slate-50 dark:from-[#18191f] dark:via-[#131417] dark:to-[#0f1013] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_-1px_0_0_rgba(0,0,0,0.6)] dark:group-hover:from-[#1e2027] dark:group-hover:via-[#16171c] dark:group-hover:to-[#111215]">
+                {/* Brushed metallic reflection sheen */}
+                <div className="pointer-events-none absolute inset-0 rounded-[12.5px] bg-gradient-to-r from-transparent via-white/[0.04] to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:via-white/[0.07]" />
+
+                <PlusIcon className="size-3.5 stroke-[2.25] text-foreground/80 transition-all duration-200 group-hover:scale-110 group-hover:text-foreground" />
+                <span className="text-[13px] font-semibold tracking-tight text-foreground/90 transition-colors group-hover:text-foreground">
+                  New Thread
+                </span>
+
+                <kbd className="pointer-events-none absolute right-3 hidden items-center rounded-md border border-foreground/[0.08] bg-foreground/[0.03] px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground/50 transition-colors group-hover:border-foreground/15 group-hover:text-muted-foreground/80 sm:inline-flex">
+                  ⌘N
+                </kbd>
+              </div>
             </button>
 
-            {/* Lifecycle is the primary navigation; archive remains secondary history. */}
-            <div className="tabs-segmented mt-2.5 flex items-center" role="group" aria-label="Task view">
-              <button
-                type="button"
-                onClick={() => {
-                  setView("current");
-                  setShowSettledView(false);
-                  setShowSnoozedView(false);
-                }}
-                aria-pressed={view === "current" && !showSettledView && !showSnoozedView}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-sans font-medium transition-all",
-                  view === "current" && !showSettledView && !showSnoozedView
-                    ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
-                    : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
-                )}
-              >
-                Active <span className="font-normal opacity-60">{actionableCount}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setView("current");
-                  setShowSettledView(true);
-                  setShowSnoozedView(false);
-                }}
-                aria-pressed={view === "current" && showSettledView}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-sans font-medium transition-all",
-                  view === "current" && showSettledView
-                    ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
-                    : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
-                )}
-              >
-                Settled <span className="font-normal opacity-60">{settledCount}</span>
-              </button>
+            {/* Task navigation: Active | Settled | Archive with underline indicator */}
+            <div
+              className="mt-3 flex items-center justify-between border-b border-border/40 px-2"
+              role="tablist"
+              aria-label="Task view"
+            >
+              <div className="flex items-center gap-5">
+                <button
+                  type="button"
+                  role="tab"
+                  id="tab-active"
+                  aria-selected={view === "current" && !showSettledView && !showSnoozedView}
+                  onClick={() => {
+                    setView("current");
+                    setShowSettledView(false);
+                    setShowSnoozedView(false);
+                  }}
+                  className={cn(
+                    "group relative flex items-center pb-2 text-xs font-sans transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-xs",
+                    view === "current" && !showSettledView && !showSnoozedView
+                      ? "font-semibold text-foreground"
+                      : "font-medium text-muted-foreground/75 hover:text-foreground",
+                  )}
+                >
+                  <span className="relative inline-flex items-center">
+                    <span>Active</span>
+                    {view === "current" && !showSettledView && !showSnoozedView && (
+                      <span className="absolute -bottom-2 -left-2 -right-2 -mb-px h-0.5 rounded-full bg-foreground" />
+                    )}
+                  </span>
+                  <span className="inline-block max-w-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:max-w-8 group-hover:ml-1.5 group-hover:opacity-70 text-[11px] font-normal text-muted-foreground align-baseline">
+                    {actionableCount}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  id="tab-settled"
+                  aria-selected={view === "current" && showSettledView && !showSnoozedView}
+                  onClick={() => {
+                    setView("current");
+                    setShowSettledView(true);
+                    setShowSnoozedView(false);
+                  }}
+                  className={cn(
+                    "group relative flex items-center pb-2 text-xs font-sans transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-xs",
+                    view === "current" && showSettledView && !showSnoozedView
+                      ? "font-semibold text-foreground"
+                      : "font-medium text-muted-foreground/75 hover:text-foreground",
+                  )}
+                >
+                  <span className="relative inline-flex items-center">
+                    <span>Settled</span>
+                    {view === "current" && showSettledView && !showSnoozedView && (
+                      <span className="absolute -bottom-2 -left-2 -right-2 -mb-px h-0.5 rounded-full bg-foreground" />
+                    )}
+                  </span>
+                  <span className="inline-block max-w-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:max-w-8 group-hover:ml-1.5 group-hover:opacity-70 text-[11px] font-normal text-muted-foreground align-baseline">
+                    {settledCount}
+                  </span>
+                </button>
+              </div>
+              <div className="flex items-center">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        role="tab"
+                        id="tab-archive"
+                        aria-label={
+                          view === "archived"
+                            ? "Return to active threads"
+                            : `Archive (${archivedThreads.length})`
+                        }
+                        aria-selected={view === "archived"}
+                        onClick={() => {
+                          setView((prev) => (prev === "archived" ? "current" : "archived"));
+                          setShowSettledView(false);
+                          setShowSnoozedView(false);
+                        }}
+                        className={cn(
+                          "group relative flex items-center justify-center pb-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-xs",
+                          view === "archived"
+                            ? "text-foreground font-semibold"
+                            : "text-muted-foreground/60 hover:text-foreground",
+                        )}
+                      />
+                    }
+                  >
+                    <span className="relative inline-flex items-center justify-center">
+                      <ArchiveIcon aria-hidden="true" className="size-4" />
+                      {view === "archived" && (
+                        <span className="absolute -bottom-2 -left-2 -right-2 -mb-px h-0.5 rounded-full bg-foreground" />
+                      )}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipPopup side="bottom" align="end">
+                    {view === "archived"
+                      ? "Return to threads"
+                      : `Archive (${archivedThreads.length})`}
+                  </TooltipPopup>
+                </Tooltip>
+              </div>
             </div>
-            {archivedThreads.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setView(view === "archived" ? "current" : "archived");
-                  setShowSnoozedView(false);
-                }}
-                className={cn(
-                  "mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-1 text-[11px] transition-colors",
-                  view === "archived"
-                    ? "bg-accent/50 text-foreground"
-                    : "text-muted-foreground/55 hover:bg-accent/30 hover:text-foreground",
-                )}
-              >
-                <ArchiveIcon aria-hidden="true" className="size-3" />
-                {view === "archived" ? "Return to threads" : `Archive (${archivedThreads.length})`}
-              </button>
-            )}
-            <div className="relative mt-2">
+
+            {/* Redesigned Search */}
+            <div className="group relative mt-2.5">
               <SearchIcon
                 aria-hidden="true"
-                className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground z-10"
+                className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/55 transition-colors group-focus-within:text-foreground/75 z-10"
               />
               <input
-                type="search"
+                type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck="false"
                 value={threadSearch}
                 onChange={(event) => setThreadSearch(event.currentTarget.value)}
                 onKeyDown={(event) => {
@@ -1769,19 +1844,19 @@ function AgentsThreadList(props: {
                   }
                 }}
                 aria-label="Search tasks"
-                placeholder="Search tasks, branches, models…"
-                className="h-8 w-full rounded-lg border border-border/50 bg-background/55 pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/45 hover:border-border focus:border-ring focus:ring-2 focus:ring-ring/20"
+                placeholder="Search tasks…"
+                className="h-8 w-full rounded-xl border border-border/50 bg-muted/25 pl-8 pr-7 text-xs font-sans text-foreground placeholder:text-muted-foreground/50 shadow-2xs outline-none transition-all hover:border-border/80 hover:bg-muted/40 focus:border-border/90 focus:bg-background focus:ring-2 focus:ring-foreground/10"
               />
-              {threadSearch && (
+              {threadSearch ? (
                 <button
                   type="button"
                   aria-label="Clear task search"
                   onClick={() => setThreadSearch("")}
-                  className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/55 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <XIcon aria-hidden="true" className="size-3" />
                 </button>
-              )}
+              ) : null}
               <span className="sr-only" aria-live="polite">
                 {normalizedThreadSearch
                   ? `${visibleThreads.length} matching task${visibleThreads.length === 1 ? "" : "s"}`
@@ -1810,8 +1885,62 @@ function AgentsThreadList(props: {
               </div>
             )}
             {normalizedThreadSearch && visibleThreads.length === 0 && !collapsed && (
-              <div className="rounded-xl border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground/65">
-                No tasks match “{threadSearch.trim()}”.
+              <div className="rounded-xl border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground/75 space-y-2.5">
+                <p>
+                  No tasks match “{threadSearch.trim()}” in{" "}
+                  <span className="font-medium text-foreground">
+                    {view === "archived" ? "Archive" : showSettledView ? "Settled" : "Active"}
+                  </span>
+                  .
+                </p>
+                {(view !== "current" || showSettledView) && searchedActionableCount > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setView("current");
+                        setShowSettledView(false);
+                        setShowSnoozedView(false);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-background/80 px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent"
+                    >
+                      <span>View {searchedActionableCount} matching in Active</span>
+                      <ArrowRightIcon className="size-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
+                {(!showSettledView || view === "archived") && searchedSettledCount > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setView("current");
+                        setShowSettledView(true);
+                        setShowSnoozedView(false);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-background/80 px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent"
+                    >
+                      <span>View {searchedSettledCount} matching in Settled</span>
+                      <ArrowRightIcon className="size-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
+                {view !== "archived" && searchedArchivedCount > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setView("archived");
+                        setShowSettledView(false);
+                        setShowSnoozedView(false);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-background/80 px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent"
+                    >
+                      <span>View {searchedArchivedCount} matching in Archive</span>
+                      <ArrowRightIcon className="size-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             {(view === "archived"
@@ -2134,7 +2263,7 @@ function AgentsThreadList(props: {
                               })()}
                               <div
                                 className={cn(
-                                  "truncate text-sm font-semibold tracking-tight transition-colors flex-1",
+                                  "truncate text-sm font-semibold tracking-tight transition-colors flex-1 pr-2 group-hover:pr-[170px] group-focus-within:pr-[170px]",
                                   active
                                     ? "text-foreground font-semibold"
                                     : isArchived
@@ -2160,7 +2289,7 @@ function AgentsThreadList(props: {
                               )}
                             </div>
                             {section !== "settled" && (
-                              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/55">
+                              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/55 pr-2 group-hover:pr-[170px] group-focus-within:pr-[170px] transition-all">
                                 {section === "snoozed" ? (
                                   <Clock3Icon className="size-3 shrink-0 text-muted-foreground/60" />
                                 ) : thread.branch ? (
@@ -2260,195 +2389,205 @@ function AgentsThreadList(props: {
                             </div>
                           </TooltipPopup>
                         </Tooltip>
-                        {!isArchived && (
-                          <div className="pointer-events-none absolute right-7 top-1/2 z-10 flex h-7 -translate-y-1/2 items-center gap-0.5 rounded-l-xl border border-r-0 border-border/80 bg-card px-1 opacity-0 shadow-lg shadow-black/25 transition-[opacity,background-color] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 dark:border-zinc-700/80 dark:bg-zinc-800 dark:shadow-black/60">
-                            {/* Left subtle gradient fade so thread title blends out gracefully */}
-                            <div className="pointer-events-none absolute -left-5 top-0 bottom-0 w-5 bg-gradient-to-r from-transparent to-card dark:to-zinc-800" />
-                            <Tooltip>
-                              <TooltipTrigger
-                                render={
-                                  <button
-                                    type="button"
-                                    aria-label={
-                                      lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"
-                                    }
-                                    aria-pressed={lifecycleEntry.pinnedAt !== null}
-                                    className={cn(
-                                      "flex size-6 items-center justify-center rounded-lg text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors",
-                                      lifecycleEntry.pinnedAt &&
-                                        "bg-primary/15 text-primary hover:text-primary",
-                                    )}
-                                    onClick={() => void dispatchLifecycle(thread, "pin")}
-                                  />
-                                }
-                              >
-                                <PinIcon className="size-3.5" />
-                              </TooltipTrigger>
-                              <TooltipPopup side="top">
-                                {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
-                              </TooltipPopup>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger
-                                render={
-                                  <button
-                                    type="button"
-                                    aria-label={
-                                      section === "settled"
-                                        ? "Return thread to active"
-                                        : "Settle thread"
-                                    }
-                                    className="flex h-6 items-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold text-foreground/90 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                                    onClick={() => void dispatchLifecycle(thread, "settle")}
-                                  />
-                                }
-                              >
-                                <CircleCheckIcon className="size-3.5 shrink-0" />
-                                <span>{section === "settled" ? "Unsettle" : "Settle"}</span>
-                              </TooltipTrigger>
-                              <TooltipPopup side="top">
-                                {section === "settled" ? "Return to active" : "Settle thread"}
-                              </TooltipPopup>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger
-                                render={
-                                  <button
-                                    type="button"
-                                    aria-label={
-                                      threadIsSnoozed ? "Wake thread now" : "Snooze thread"
-                                    }
-                                    className="flex size-6 items-center justify-center rounded-lg text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                                    onClick={() => void dispatchLifecycle(thread, "snooze")}
-                                  />
-                                }
-                              >
-                                <Clock3Icon className="size-3.5" />
-                              </TooltipTrigger>
-                              <TooltipPopup side="top">
-                                {threadIsSnoozed ? "Wake now" : "Snooze for 1 hour"}
-                              </TooltipPopup>
-                            </Tooltip>
-                          </div>
-                        )}
-                        <Menu
-                          open={openThreadMenuId === thread.id}
-                          onOpenChange={(open) => setOpenThreadMenuId(open ? thread.id : null)}
+                        <div
+                          className={cn(
+                            "absolute right-1.5 top-1/2 z-10 flex h-7 -translate-y-1/2 items-center gap-0.5 rounded-lg border border-border/80 bg-card/95 px-1 py-0.5 shadow-md shadow-black/15 backdrop-blur-md transition-all duration-150 dark:border-zinc-700/80 dark:bg-zinc-800/95 dark:shadow-black/50",
+                            openThreadMenuId === thread.id
+                              ? "pointer-events-auto opacity-100"
+                              : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                          )}
                         >
-                          <MenuTrigger
-                            render={
-                              <button
-                                type="button"
-                                aria-label={`Thread actions for ${thread.title}`}
-                                className="pointer-events-none absolute right-1 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-border/80 bg-card text-foreground/80 opacity-0 shadow-lg shadow-black/25 transition-[opacity,background-color] hover:bg-accent hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:bg-accent data-[popup-open]:text-foreground data-[popup-open]:opacity-100 dark:border-zinc-700/80 dark:bg-zinc-800 dark:shadow-black/60"
-                              />
-                            }
-                          >
-                            <MoreHorizontalIcon className="size-4" />
-                          </MenuTrigger>
-                          <MenuPopup
-                            align="end"
-                            side="bottom"
-                            onPointerLeave={(event) => {
-                              if (event.pointerType !== "mouse") return;
-                              setOpenThreadMenuId(null);
-                              if (document.activeElement instanceof HTMLElement) {
-                                document.activeElement.blur();
-                              }
-                            }}
-                            className="min-w-48 rounded-xl border border-white/20 bg-popover/75 p-1.5 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.55)] ring-1 ring-black/5 backdrop-blur-2xl supports-[backdrop-filter]:bg-popover/65 dark:border-white/10 dark:ring-white/5"
-                          >
-                            {!isArchived && (
-                              <>
-                                <MenuItem onClick={() => props.onOpenThreadToSide?.(thread.id)}>
-                                  <Columns2Icon className="size-3.5" />
-                                  Open to the side
-                                </MenuItem>
-                                <MenuItem onClick={() => void dispatchLifecycle(thread, "pin")}>
+                          {!isArchived && (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      aria-label={
+                                        lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"
+                                      }
+                                      aria-pressed={lifecycleEntry.pinnedAt !== null}
+                                      className={cn(
+                                        "flex size-6 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors",
+                                        lifecycleEntry.pinnedAt &&
+                                          "bg-primary/15 text-primary hover:text-primary",
+                                      )}
+                                      onClick={() => void dispatchLifecycle(thread, "pin")}
+                                    />
+                                  }
+                                >
                                   <PinIcon className="size-3.5" />
+                                </TooltipTrigger>
+                                <TooltipPopup side="top">
                                   {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
-                                </MenuItem>
-                                {lifecycleEntry.pinnedAt && (
-                                  <>
-                                    <MenuItem onClick={() => void movePinnedThread(thread, "up")}>
-                                      <ArrowUpIcon className="size-3.5" />
-                                      Move pinned thread up
-                                    </MenuItem>
-                                    <MenuItem onClick={() => void movePinnedThread(thread, "down")}>
-                                      <ArrowDownIcon className="size-3.5" />
-                                      Move pinned thread down
-                                    </MenuItem>
-                                  </>
-                                )}
-                                {section === "settled" ? (
-                                  <MenuItem
-                                    onClick={() => void dispatchLifecycle(thread, "settle")}
-                                  >
-                                    <CircleCheckIcon className="size-3.5" />
-                                    Return to active
-                                  </MenuItem>
-                                ) : (
-                                  <MenuItem
-                                    onClick={() => void dispatchLifecycle(thread, "settle")}
-                                  >
-                                    <CircleCheckIcon className="size-3.5" />
-                                    Settle thread
-                                  </MenuItem>
-                                )}
-                                {threadIsSnoozed ? (
-                                  <MenuItem
-                                    onClick={() => void dispatchLifecycle(thread, "snooze")}
-                                  >
-                                    <Clock3Icon className="size-3.5" />
-                                    Wake now
-                                  </MenuItem>
-                                ) : (
-                                  <MenuSub>
-                                    <MenuSubTrigger>
-                                      <Clock3Icon className="size-3.5" />
-                                      Snooze
-                                    </MenuSubTrigger>
-                                    <MenuSubPopup>
-                                      {resolveSnoozePresets().map((preset) => (
-                                        <MenuItem
-                                          key={preset.id}
-                                          onClick={() =>
-                                            void dispatchLifecycle(
-                                              thread,
-                                              "snooze",
-                                              preset.snoozedUntil,
-                                            )
-                                          }
-                                        >
-                                          {preset.label} ({preset.whenLabel})
-                                        </MenuItem>
-                                      ))}
-                                    </MenuSubPopup>
-                                  </MenuSub>
-                                )}
-                                <MenuSeparator />
-                              </>
-                            )}
-                            {isArchived ? (
-                              <MenuItem onClick={() => void props.onUnarchiveThread(thread)}>
-                                <ArchiveRestoreIcon className="size-3.5" />
-                                Unarchive thread
-                              </MenuItem>
-                            ) : (
-                              <MenuItem onClick={() => void props.onArchiveThread(thread)}>
-                                <ArchiveIcon className="size-3.5" />
-                                Archive thread
-                              </MenuItem>
-                            )}
-                            <MenuItem
-                              variant="destructive"
-                              onClick={() => setThreadPendingDelete(thread)}
+                                </TooltipPopup>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      aria-label={
+                                        section === "settled"
+                                          ? "Return thread to active"
+                                          : "Settle thread"
+                                      }
+                                      className="flex h-6 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-foreground/90 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+                                      onClick={() => void dispatchLifecycle(thread, "settle")}
+                                    />
+                                  }
+                                >
+                                  <CircleCheckIcon className="size-3.5 shrink-0" />
+                                  <span>{section === "settled" ? "Unsettle" : "Settle"}</span>
+                                </TooltipTrigger>
+                                <TooltipPopup side="top">
+                                  {section === "settled" ? "Return to active" : "Settle thread"}
+                                </TooltipPopup>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      aria-label={
+                                        threadIsSnoozed ? "Wake thread now" : "Snooze thread"
+                                      }
+                                      className="flex size-6 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+                                      onClick={() => void dispatchLifecycle(thread, "snooze")}
+                                    />
+                                  }
+                                >
+                                  <Clock3Icon className="size-3.5" />
+                                </TooltipTrigger>
+                                <TooltipPopup side="top">
+                                  {threadIsSnoozed ? "Wake now" : "Snooze for 1 hour"}
+                                </TooltipPopup>
+                              </Tooltip>
+                              <div className="mx-0.5 h-3.5 w-px bg-border/60" />
+                            </>
+                          )}
+                          <Menu
+                            open={openThreadMenuId === thread.id}
+                            onOpenChange={(open) => setOpenThreadMenuId(open ? thread.id : null)}
+                          >
+                            <MenuTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  aria-label={`Thread actions for ${thread.title}`}
+                                  className="flex size-6 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors data-[popup-open]:bg-accent data-[popup-open]:text-foreground"
+                                />
+                              }
                             >
-                              <Trash2Icon className="size-3.5" />
-                              Delete thread
-                            </MenuItem>
-                          </MenuPopup>
-                        </Menu>
+                              <MoreHorizontalIcon className="size-3.5" />
+                            </MenuTrigger>
+                            <MenuPopup
+                              align="end"
+                              side="bottom"
+                              onPointerLeave={(event) => {
+                                if (event.pointerType !== "mouse") return;
+                                setOpenThreadMenuId(null);
+                                if (document.activeElement instanceof HTMLElement) {
+                                  document.activeElement.blur();
+                                }
+                              }}
+                              className="min-w-48 rounded-xl border border-white/20 bg-popover/75 p-1.5 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.55)] ring-1 ring-black/5 backdrop-blur-2xl supports-[backdrop-filter]:bg-popover/65 dark:border-white/10 dark:ring-white/5"
+                            >
+                              {!isArchived && (
+                                <>
+                                  <MenuItem onClick={() => props.onOpenThreadToSide?.(thread.id)}>
+                                    <Columns2Icon className="size-3.5" />
+                                    Open to the side
+                                  </MenuItem>
+                                  <MenuItem onClick={() => void dispatchLifecycle(thread, "pin")}>
+                                    <PinIcon className="size-3.5" />
+                                    {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
+                                  </MenuItem>
+                                  {lifecycleEntry.pinnedAt && (
+                                    <>
+                                      <MenuItem onClick={() => void movePinnedThread(thread, "up")}>
+                                        <ArrowUpIcon className="size-3.5" />
+                                        Move pinned thread up
+                                      </MenuItem>
+                                      <MenuItem
+                                        onClick={() => void movePinnedThread(thread, "down")}
+                                      >
+                                        <ArrowDownIcon className="size-3.5" />
+                                        Move pinned thread down
+                                      </MenuItem>
+                                    </>
+                                  )}
+                                  {section === "settled" ? (
+                                    <MenuItem
+                                      onClick={() => void dispatchLifecycle(thread, "settle")}
+                                    >
+                                      <CircleCheckIcon className="size-3.5" />
+                                      Return to active
+                                    </MenuItem>
+                                  ) : (
+                                    <MenuItem
+                                      onClick={() => void dispatchLifecycle(thread, "settle")}
+                                    >
+                                      <CircleCheckIcon className="size-3.5" />
+                                      Settle thread
+                                    </MenuItem>
+                                  )}
+                                  {threadIsSnoozed ? (
+                                    <MenuItem
+                                      onClick={() => void dispatchLifecycle(thread, "snooze")}
+                                    >
+                                      <Clock3Icon className="size-3.5" />
+                                      Wake now
+                                    </MenuItem>
+                                  ) : (
+                                    <MenuSub>
+                                      <MenuSubTrigger>
+                                        <Clock3Icon className="size-3.5" />
+                                        Snooze
+                                      </MenuSubTrigger>
+                                      <MenuSubPopup>
+                                        {resolveSnoozePresets().map((preset) => (
+                                          <MenuItem
+                                            key={preset.id}
+                                            onClick={() =>
+                                              void dispatchLifecycle(
+                                                thread,
+                                                "snooze",
+                                                preset.snoozedUntil,
+                                              )
+                                            }
+                                          >
+                                            {preset.label} ({preset.whenLabel})
+                                          </MenuItem>
+                                        ))}
+                                      </MenuSubPopup>
+                                    </MenuSub>
+                                  )}
+                                  <MenuSeparator />
+                                </>
+                              )}
+                              {isArchived ? (
+                                <MenuItem onClick={() => void props.onUnarchiveThread(thread)}>
+                                  <ArchiveRestoreIcon className="size-3.5" />
+                                  Unarchive thread
+                                </MenuItem>
+                              ) : (
+                                <MenuItem onClick={() => void props.onArchiveThread(thread)}>
+                                  <ArchiveIcon className="size-3.5" />
+                                  Archive thread
+                                </MenuItem>
+                              )}
+                              <MenuItem
+                                variant="destructive"
+                                onClick={() => setThreadPendingDelete(thread)}
+                              >
+                                <Trash2Icon className="size-3.5" />
+                                Delete thread
+                              </MenuItem>
+                            </MenuPopup>
+                          </Menu>
+                        </div>
                       </>
                     )}
                   </div>

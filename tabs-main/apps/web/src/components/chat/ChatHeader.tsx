@@ -120,11 +120,10 @@ export const ChatHeader = memo(function ChatHeader({
           <TooltipTrigger
             render={
               <Toggle
-                className="shrink-0"
+                className="size-7 sm:size-7 rounded-lg border border-border/80 bg-background hover:bg-accent/40 hover:border-border text-foreground transition-colors shrink-0 p-0 shadow-2xs data-pressed:bg-accent data-pressed:text-accent-foreground data-pressed:border-border"
                 pressed={terminalOpen}
                 onPressedChange={onToggleTerminal}
                 aria-label="Toggle terminal drawer"
-                size="xs"
                 disabled={!terminalAvailable}
               >
                 <TerminalSquareIcon className="size-3.5" />
@@ -143,11 +142,10 @@ export const ChatHeader = memo(function ChatHeader({
           <TooltipTrigger
             render={
               <Toggle
-                className="shrink-0"
+                className="size-7 sm:size-7 rounded-lg border border-border/80 bg-background hover:bg-accent/40 hover:border-border text-foreground transition-colors shrink-0 p-0 shadow-2xs data-pressed:bg-accent data-pressed:text-accent-foreground data-pressed:border-border"
                 pressed={diffOpen}
                 onPressedChange={onToggleDiff}
                 aria-label="Toggle diff panel"
-                size="xs"
                 disabled={!isGitRepo}
               >
                 <DiffIcon className="size-3.5" />
@@ -173,7 +171,7 @@ export const ChatHeader = memo(function ChatHeader({
                       type="button"
                       aria-label={isMaximized ? "Restore split layout" : "Maximize pane"}
                       onClick={onToggleMaximize}
-                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                      className="flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                     >
                       {isMaximized ? (
                         <Minimize2Icon className="size-3.5" />
@@ -196,7 +194,7 @@ export const ChatHeader = memo(function ChatHeader({
                       type="button"
                       aria-label={`Close ${activeThreadTitle}`}
                       onClick={onClosePane}
-                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
+                      className="flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
                     >
                       <XIcon className="size-3.5" />
                     </button>

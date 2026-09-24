@@ -8,7 +8,7 @@ import * as Context from "effect/Context";
  * @module Open
  */
 import { spawn } from "node:child_process";
-import { accessSync, constants, statSync } from "node:fs";
+import { accessSync, constants, readdirSync, statSync } from "node:fs";
 import { extname, join } from "node:path";
 
 import { EDITORS, type EditorId } from "@tabs/contracts";
@@ -162,6 +162,151 @@ export function isCommandAvailable(
   return false;
 }
 
+const installNames: Partial<Record<EditorId, ReadonlyArray<string>>> = {
+  vscode: ["Visual Studio Code"],
+  "vscode-insiders": ["Visual Studio Code - Insiders"],
+  vscodium: ["VSCodium"],
+  cursor: ["Cursor"],
+  trae: ["Trae"],
+  kiro: ["Kiro"],
+  zed: ["Zed", "Zed Preview"],
+  antigravity: ["Antigravity", "Antigravity IDE"],
+  idea: ["IntelliJ IDEA", "IntelliJ IDEA CE", "IntelliJ IDEA Ultimate"],
+  pycharm: ["PyCharm", "PyCharm CE", "PyCharm Professional"],
+  webstorm: ["WebStorm"],
+  goland: ["GoLand"],
+  clion: ["CLion"],
+  rider: ["Rider", "JetBrains Rider"],
+  phpstorm: ["PhpStorm"],
+  rubymine: ["RubyMine"],
+  rustrover: ["RustRover"],
+  datagrip: ["DataGrip"],
+  dataspell: ["DataSpell"],
+  aqua: ["Aqua"],
+};
+
+export function resolveEditorExecutable(
+  editor: (typeof EDITORS)[number],
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): { command: string } | null {
+  if (editor.commands === null) return null;
+
+  // 1. Check PATH
+  for (const cmd of editor.commands) {
+    if (isCommandAvailable(cmd, { platform, env })) {
+      return { command: cmd };
+    }
+  }
+
+  // 2. Check platform-specific application directories
+  const home = env.HOME;
+  const names = installNames[editor.id] ?? [editor.label];
+  const command = editor.commands[0];
+  const jetbrains = editor.launchStyle === "line-column";
+  const candidates: string[] = [];
+  const windowsPathExtensions = platform === "win32" ? resolveWindowsPathExtensions(env) : [];
+
+  if (platform === "darwin") {
+    const roots = [...(home ? [join(home, "Applications")] : []), "/Applications"];
+    for (const root of roots) {
+      for (const name of names) {
+        const contents = join(root, `${name}.app`, "Contents");
+        if (jetbrains || editor.id === "zed") {
+          candidates.push(join(contents, "MacOS", editor.id === "zed" ? "cli" : command));
+          if (editor.id === "zed") candidates.push(join(contents, "MacOS", "zed"));
+        } else if (editor.id === "antigravity") {
+          candidates.push(
+            join(contents, "MacOS", "agy"),
+            join(contents, "Resources", "app", "bin", "agy"),
+            join(contents, "MacOS", "Antigravity"),
+            join(contents, "MacOS", "Electron"),
+          );
+        } else {
+          candidates.push(
+            join(contents, "Resources/app/bin", command),
+            join(contents, "Resources/app/bin/code"),
+            join(contents, "MacOS", command),
+            join(contents, "MacOS", name),
+          );
+        }
+      }
+    }
+    if (home) {
+      if (jetbrains) {
+        candidates.push(
+          join(home, "Library/Application Support/JetBrains/Toolbox/scripts", command),
+        );
+      }
+      if (editor.id === "antigravity") {
+        candidates.push(join(home, ".local/bin/agy"));
+      }
+    }
+  } else if (platform === "win32") {
+    const roots = [
+      ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, "Programs")] : []),
+      ...[env.ProgramFiles, env["ProgramFiles(x86)"], env.ProgramW6432].filter(
+        (root): root is string => !!root,
+      ),
+    ];
+    if (jetbrains) {
+      if (env.LOCALAPPDATA) {
+        candidates.push(join(env.LOCALAPPDATA, "JetBrains/Toolbox/scripts", `${command}.cmd`));
+      }
+      for (const directory of roots.flatMap((root) => [root, join(root, "JetBrains")])) {
+        try {
+          const entries = readdirSync(directory);
+          for (const entry of entries) {
+            if (names.some((name) => entry === name || entry.startsWith(`${name} `))) {
+              candidates.push(join(directory, entry, "bin", `${command}64.exe`));
+              candidates.push(join(directory, entry, "bin", `${command}.exe`));
+            }
+          }
+        } catch {
+          // ignore directory read errors
+        }
+      }
+    } else {
+      const name =
+        editor.id === "vscode"
+          ? "Microsoft VS Code"
+          : editor.id === "vscode-insiders"
+            ? "Microsoft VS Code Insiders"
+            : editor.label;
+      for (const root of roots) {
+        candidates.push(
+          join(root, name, "resources/app/bin", `${command}.cmd`),
+          join(root, name, "resources/app/bin/code.cmd"),
+          join(root, name, "bin", `${command}.cmd`),
+          join(root, name, "bin/code.cmd"),
+        );
+      }
+    }
+  } else if (platform === "linux") {
+    const dirs = [
+      ...(home ? [join(home, ".local/bin")] : []),
+      "/usr/local/bin",
+      "/usr/bin",
+      "/snap/bin",
+    ];
+    if (jetbrains) {
+      const dataHome = env.XDG_DATA_HOME || (home ? join(home, ".local/share") : undefined);
+      if (dataHome) dirs.push(join(dataHome, "JetBrains/Toolbox/scripts"));
+    }
+    for (const dir of dirs) {
+      for (const name of editor.commands) candidates.push(join(dir, name));
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (isExecutableFile(candidate, platform, windowsPathExtensions)) {
+      return { command: candidate };
+    }
+  }
+
+  return null;
+}
+
 export function resolveAvailableEditors(
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
@@ -177,8 +322,7 @@ export function resolveAvailableEditors(
       continue;
     }
 
-    const command = editor.commands.find((cmd) => isCommandAvailable(cmd, { platform, env }));
-    if (command !== undefined) {
+    if (resolveEditorExecutable(editor, platform, env) !== null) {
       available.push(editor.id);
     }
   }
@@ -223,12 +367,13 @@ export const resolveEditorLaunch = Effect.fnUntraced(function* (
 
   if (editorDef.commands) {
     const env = process.env;
-    const command =
-      editorDef.commands.find((cmd) => isCommandAvailable(cmd, { platform, env })) ??
-      editorDef.commands[0];
-    return shouldUseGotoFlag(editorDef.id, input.cwd)
-      ? { command, args: ["--goto", input.cwd] }
-      : { command, args: [input.cwd] };
+    const resolved = resolveEditorExecutable(editorDef, platform, env);
+    const command = resolved ? resolved.command : editorDef.commands[0];
+    const baseArgs = "baseArgs" in editorDef && editorDef.baseArgs ? editorDef.baseArgs : [];
+    const args = shouldUseGotoFlag(editorDef.id, input.cwd)
+      ? [...baseArgs, "--goto", input.cwd]
+      : [...baseArgs, input.cwd];
+    return { command, args };
   }
 
   if (editorDef.id !== "file-manager") {

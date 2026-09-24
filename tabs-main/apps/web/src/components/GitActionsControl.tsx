@@ -31,9 +31,9 @@ import {
   DialogPopup,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Group, GroupSeparator } from "~/components/ui/group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Textarea } from "~/components/ui/textarea";
 import { toastManager } from "~/components/ui/toast";
@@ -196,9 +196,9 @@ const COMMIT_DIALOG_DESCRIPTION =
   "Review and confirm your commit. Leave the message blank to auto-generate one.";
 
 function GitActionItemIcon({ icon }: { icon: GitActionIconName }) {
-  if (icon === "commit") return <GitCommitIcon />;
-  if (icon === "push") return <CloudUploadIcon />;
-  return <GitHubIcon />;
+  if (icon === "commit") return <GitCommitIcon className="size-4 shrink-0 text-foreground" />;
+  if (icon === "push") return <CloudUploadIcon className="size-4 shrink-0 text-foreground" />;
+  return <GitHubIcon className="size-4 shrink-0 text-foreground" />;
 }
 
 function GitQuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
@@ -762,64 +762,82 @@ export default function GitActionsControl({
   return (
     <>
       {!isRepo ? (
-        <Button
-          variant="outline"
-          size="xs"
+        <button
+          type="button"
           disabled={initMutation.isPending}
           onClick={() => initMutation.mutate()}
+          className="inline-flex h-7 items-center justify-center rounded-lg border border-border/80 bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent/40 hover:border-border transition-colors disabled:opacity-50 shadow-2xs shrink-0"
         >
           {initMutation.isPending ? "Initializing..." : "Initialize Git"}
-        </Button>
+        </button>
       ) : (
-        <Group aria-label="Git actions" className="shrink-0">
+        <div
+          role="group"
+          aria-label="Git actions"
+          className="inline-flex h-7 items-center rounded-lg border border-border/80 bg-background hover:bg-accent/40 hover:border-border transition-colors shadow-2xs shrink-0 text-foreground"
+        >
           {quickActionDisabledReason ? (
             <Popover>
               <PopoverTrigger
                 openOnHover
                 render={
-                  <Button
+                  <button
+                    type="button"
                     aria-disabled="true"
-                    className="cursor-not-allowed rounded-e-none border-e-0 opacity-64 before:rounded-e-none"
-                    size="xs"
-                    variant="outline"
+                    aria-label={`Git: ${quickAction.label}`}
+                    className="flex h-full items-center justify-center gap-1.5 rounded-l-[7px] px-2 text-xs font-medium text-muted-foreground/60 cursor-not-allowed opacity-60 focus-visible:outline-none"
                   />
                 }
               >
                 <GitQuickActionIcon quickAction={quickAction} />
-                <span className="sr-only @sm/header-actions:not-sr-only @sm/header-actions:ml-0.5">
-                  {quickAction.label}
-                </span>
+                <span className="text-xs font-medium">{quickAction.label}</span>
               </PopoverTrigger>
               <PopoverPopup tooltipStyle side="bottom" align="start">
                 {quickActionDisabledReason}
               </PopoverPopup>
             </Popover>
           ) : (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={isGitActionRunning || quickAction.disabled}
-              onClick={runQuickAction}
-            >
-              <GitQuickActionIcon quickAction={quickAction} />
-              <span className="sr-only @sm/header-actions:not-sr-only @sm/header-actions:ml-0.5">
-                {quickAction.label}
-              </span>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    disabled={isGitActionRunning || quickAction.disabled}
+                    onClick={runQuickAction}
+                    aria-label={`Git: ${quickAction.label}`}
+                    title={`Git: ${quickAction.label}`}
+                    className="flex h-full items-center justify-center gap-1.5 rounded-l-[7px] px-2 text-xs font-medium text-foreground hover:bg-accent/60 transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                }
+              >
+                <GitQuickActionIcon quickAction={quickAction} />
+                <span className="text-xs font-medium">{quickAction.label}</span>
+              </TooltipTrigger>
+              <TooltipPopup side="bottom">{`Git: ${quickAction.label}`}</TooltipPopup>
+            </Tooltip>
           )}
-          <GroupSeparator className="hidden @sm/header-actions:block" />
+          <div className="h-3.5 w-px bg-border/80 shrink-0" aria-hidden="true" />
           <Menu
             onOpenChange={(open) => {
               if (open) void invalidateGitQueries(queryClient);
             }}
           >
             <MenuTrigger
-              render={<Button aria-label="Git action options" size="icon-xs" variant="outline" />}
-              disabled={isGitActionRunning}
+              render={
+                <button
+                  type="button"
+                  aria-label="Git action options"
+                  disabled={isGitActionRunning}
+                  className="flex h-full w-5 items-center justify-center rounded-r-[7px] text-muted-foreground hover:bg-accent/40 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[popup-open]:bg-accent/40 data-[popup-open]:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+                />
+              }
             >
-              <ChevronDownIcon aria-hidden="true" className="size-4" />
+              <ChevronDownIcon
+                aria-hidden="true"
+                className="size-3 transition-transform duration-150"
+              />
             </MenuTrigger>
-            <MenuPopup align="end" className="w-full">
+            <MenuPopup align="end" className="w-56">
               {gitActionMenuItems.map((item) => {
                 const disabledReason = getMenuActionDisabledReason({
                   item,
@@ -884,7 +902,7 @@ export default function GitActionsControl({
               )}
             </MenuPopup>
           </Menu>
-        </Group>
+        </div>
       )}
 
       <Dialog

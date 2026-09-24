@@ -35,10 +35,8 @@ it.layer(NodeServices.layer)("resolveEditorLaunch", (it) => {
         { cwd: "/tmp/workspace", editor: "vscode" },
         "darwin",
       );
-      assert.deepEqual(vscodeLaunch, {
-        command: "code",
-        args: ["/tmp/workspace"],
-      });
+      assert.match(vscodeLaunch.command, /(^code$|\/code$)/);
+      assert.deepEqual(vscodeLaunch.args, ["/tmp/workspace"]);
 
       const zedLaunch = yield* resolveEditorLaunch(
         { cwd: "/tmp/workspace", editor: "zed" },
@@ -75,10 +73,8 @@ it.layer(NodeServices.layer)("resolveEditorLaunch", (it) => {
         { cwd: "/tmp/workspace/src/open.ts:71:5", editor: "vscode" },
         "darwin",
       );
-      assert.deepEqual(vscodeLineAndColumn, {
-        command: "code",
-        args: ["--goto", "/tmp/workspace/src/open.ts:71:5"],
-      });
+      assert.match(vscodeLineAndColumn.command, /(^code$|\/code$)/);
+      assert.deepEqual(vscodeLineAndColumn.args, ["--goto", "/tmp/workspace/src/open.ts:71:5"]);
 
       const zedLineAndColumn = yield* resolveEditorLaunch(
         { cwd: "/tmp/workspace/src/open.ts:71:5", editor: "zed" },

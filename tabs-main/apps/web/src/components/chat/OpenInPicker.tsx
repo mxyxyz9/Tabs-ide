@@ -3,46 +3,76 @@ import { memo, useCallback, useEffect, useMemo } from "react";
 import { isOpenFavoriteEditorShortcut, shortcutLabelForCommand } from "../../keybindings";
 import { usePreferredEditor } from "../../editorPreferences";
 import { ChevronDownIcon, FolderClosedIcon } from "lucide-react";
-import { Button } from "../ui/button";
-import { Group, GroupSeparator } from "../ui/group";
 import { Menu, MenuItem, MenuPopup, MenuShortcut, MenuTrigger } from "../ui/menu";
-import { AntigravityIcon, CursorIcon, Icon, VisualStudioCode, Zed } from "../Icons";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  AntigravityIcon,
+  CursorIcon,
+  FileExplorerIcon,
+  FinderIcon,
+  Icon,
+  KiroIcon,
+  TraeIcon,
+  VisualStudioCode,
+  VisualStudioCodeInsiders,
+  VSCodium,
+  Zed,
+} from "../Icons";
+import {
+  AquaIcon,
+  CLionIcon,
+  DataGripIcon,
+  DataSpellIcon,
+  GoLandIcon,
+  IntelliJIdeaIcon,
+  PhpStormIcon,
+  PyCharmIcon,
+  RiderIcon,
+  RubyMineIcon,
+  RustRoverIcon,
+  WebStormIcon,
+} from "../JetBrainsIcons";
 import { isMacPlatform, isWindowsPlatform } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 
 const resolveOptions = (platform: string, availableEditors: ReadonlyArray<EditorId>) => {
   const baseOptions: ReadonlyArray<{ label: string; Icon: Icon; value: EditorId }> = [
-    {
-      label: "Cursor",
-      Icon: CursorIcon,
-      value: "cursor",
-    },
-    {
-      label: "Code",
-      Icon: VisualStudioCode,
-      value: "vscode",
-    },
-    {
-      label: "Zed",
-      Icon: Zed,
-      value: "zed",
-    },
-    {
-      label: "Antigravity",
-      Icon: AntigravityIcon,
-      value: "antigravity",
-    },
+    { label: "Cursor", Icon: CursorIcon, value: "cursor" },
+    { label: "Trae", Icon: TraeIcon, value: "trae" },
+    { label: "Kiro", Icon: KiroIcon, value: "kiro" },
+    { label: "VS Code", Icon: VisualStudioCode, value: "vscode" },
+    { label: "VS Code Insiders", Icon: VisualStudioCodeInsiders, value: "vscode-insiders" },
+    { label: "VSCodium", Icon: VSCodium, value: "vscodium" },
+    { label: "Zed", Icon: Zed, value: "zed" },
+    { label: "Antigravity", Icon: AntigravityIcon, value: "antigravity" },
+    { label: "IntelliJ IDEA", Icon: IntelliJIdeaIcon, value: "idea" },
+    { label: "WebStorm", Icon: WebStormIcon, value: "webstorm" },
+    { label: "PyCharm", Icon: PyCharmIcon, value: "pycharm" },
+    { label: "GoLand", Icon: GoLandIcon, value: "goland" },
+    { label: "CLion", Icon: CLionIcon, value: "clion" },
+    { label: "Rider", Icon: RiderIcon, value: "rider" },
+    { label: "RustRover", Icon: RustRoverIcon, value: "rustrover" },
+    { label: "PhpStorm", Icon: PhpStormIcon, value: "phpstorm" },
+    { label: "DataGrip", Icon: DataGripIcon, value: "datagrip" },
+    { label: "DataSpell", Icon: DataSpellIcon, value: "dataspell" },
+    { label: "Aqua", Icon: AquaIcon, value: "aqua" },
+    { label: "RubyMine", Icon: RubyMineIcon, value: "rubymine" },
     {
       label: isMacPlatform(platform)
         ? "Finder"
         : isWindowsPlatform(platform)
           ? "Explorer"
           : "Files",
-      Icon: FolderClosedIcon as unknown as Icon,
+      Icon: isMacPlatform(platform)
+        ? FinderIcon
+        : isWindowsPlatform(platform)
+          ? FileExplorerIcon
+          : (FolderClosedIcon as unknown as Icon),
       value: "file-manager",
     },
   ];
-  return baseOptions.filter((option) => availableEditors.includes(option.value));
+  const availableSet = new Set(availableEditors);
+  return baseOptions.filter((option) => availableSet.has(option.value));
 };
 
 export const OpenInPicker = memo(function OpenInPicker({
@@ -93,29 +123,58 @@ export const OpenInPicker = memo(function OpenInPicker({
   }, [preferredEditor, keybindings, openInCwd]);
 
   return (
-    <Group aria-label="Subscription actions">
-      <Button
-        size="xs"
-        variant="outline"
-        disabled={!preferredEditor || !openInCwd}
-        onClick={() => openInEditor(preferredEditor)}
-      >
-        {primaryOption?.Icon && <primaryOption.Icon aria-hidden="true" className="size-3.5" />}
-        <span className="sr-only @sm/header-actions:not-sr-only @sm/header-actions:ml-0.5">
-          Open
-        </span>
-      </Button>
-      <GroupSeparator className="hidden @sm/header-actions:block" />
+    <div
+      role="group"
+      aria-label="Editor actions"
+      className="inline-flex h-7 items-center rounded-lg border border-border/80 bg-background hover:bg-accent/40 hover:border-border transition-colors shadow-2xs shrink-0 text-foreground"
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              disabled={!preferredEditor || !openInCwd}
+              onClick={() => openInEditor(preferredEditor)}
+              aria-label={primaryOption ? `Open in ${primaryOption.label}` : "Open in editor"}
+              className="flex h-full items-center justify-center gap-1.5 rounded-l-[7px] px-2 text-xs font-medium text-foreground hover:bg-accent/60 transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          }
+        >
+          {primaryOption?.Icon && (
+            <primaryOption.Icon aria-hidden="true" className="size-3.5 shrink-0" />
+          )}
+          <span className="text-xs font-medium">Open</span>
+        </TooltipTrigger>
+        <TooltipPopup side="bottom">
+          {primaryOption
+            ? openFavoriteEditorShortcutLabel
+              ? `Open in ${primaryOption.label} (${openFavoriteEditorShortcutLabel})`
+              : `Open in ${primaryOption.label}`
+            : "Open in editor"}
+        </TooltipPopup>
+      </Tooltip>
+      <div className="h-3.5 w-px bg-border/80 shrink-0" aria-hidden="true" />
       <Menu>
-        <MenuTrigger render={<Button aria-label="Copy options" size="icon-xs" variant="outline" />}>
-          <ChevronDownIcon aria-hidden="true" className="size-4" />
+        <MenuTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Choose editor"
+              className="flex h-full w-5 items-center justify-center rounded-r-[7px] text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[popup-open]:bg-accent/60 data-[popup-open]:text-foreground"
+            />
+          }
+        >
+          <ChevronDownIcon
+            aria-hidden="true"
+            className="size-3 transition-transform duration-150"
+          />
         </MenuTrigger>
-        <MenuPopup align="end">
+        <MenuPopup align="end" className="w-52">
           {options.length === 0 && <MenuItem disabled>No installed editors found</MenuItem>}
           {options.map(({ label, Icon, value }) => (
-            <MenuItem key={value} onClick={() => openInEditor(value)}>
-              <Icon aria-hidden="true" className="text-muted-foreground" />
-              {label}
+            <MenuItem key={value} onClick={() => openInEditor(value)} className="gap-2">
+              <Icon aria-hidden="true" className="size-4 shrink-0 text-foreground" />
+              <span className="truncate flex-1 text-left">{label}</span>
               {value === preferredEditor && openFavoriteEditorShortcutLabel && (
                 <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
               )}
@@ -123,6 +182,6 @@ export const OpenInPicker = memo(function OpenInPicker({
           ))}
         </MenuPopup>
       </Menu>
-    </Group>
+    </div>
   );
 });
