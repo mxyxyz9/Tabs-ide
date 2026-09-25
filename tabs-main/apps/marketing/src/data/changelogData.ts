@@ -21,15 +21,52 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 164;
+export const TOTAL_TAGS_COUNT = 165;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.22",
+    title: "Interactive onboarding sandbox, wallpaper gallery, and system icon theme",
+    date: "September 25, 2026",
+    shortDate: "Sep 25",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs introduces an interactive project prototype sandbox in the welcome wizard, a curated gallery of 30 aesthetic desktop wallpapers, and automatic system-matching application icons.",
+    highlights: [
+      "The welcome wizard now includes a hands-on prototype sandbox where you can explore project presets, inspect agent tools, and preview workspace capabilities before opening your first repository.",
+      "Added a gallery of 30 curated high-resolution wallpapers across scenic, pastel, and anime aesthetics with an interactive preview modal and custom wallpaper controls.",
+      "The application icon theme setting now includes a System option that automatically matches your operating system appearance alongside fixed light and dark icons.",
+      "Refined bundled runtime asset verification to ensure consistent Code-OSS runtime packaging across desktop platforms.",
+    ],
+    categories: [
+      {
+        title: "Onboarding",
+        items: [
+          "Interactive prototype sandbox in the welcome wizard.",
+          "Hands-on project preset selection and tool capability exploration.",
+        ],
+      },
+      {
+        title: "Customization",
+        items: [
+          "Curated gallery of 30 atmospheric high-resolution wallpapers.",
+          "System desktop icon theme automatically syncing with OS dark/light mode.",
+        ],
+      },
+      {
+        title: "Packaging",
+        items: [
+          "Refined bundled Code-OSS runtime staging and dependency asset verification.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.21",
     title: "Launchpad command dashboard and preset icon customization",
     date: "September 24, 2026",
     shortDate: "Sep 24",
-    isLatest: true,
     type: "patch",
     summary:
       "Tabs replaces the Server tab with Launchpad, introducing visual icon customization for development presets and automatic category detection for project workflows.",

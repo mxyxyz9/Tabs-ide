@@ -2,6 +2,15 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.22] - 2026-09-25
+
+### Interactive onboarding sandbox, wallpaper gallery, and system icon theme
+
+- **Interactive onboarding sandbox**: The welcome wizard now includes a hands-on prototype sandbox where you can explore project presets, inspect agent tools, and preview workspace capabilities before opening your first repository.
+- **Atmospheric wallpaper gallery**: Added a gallery of 30 curated high-resolution wallpapers across scenic, pastel, and anime aesthetics with an interactive preview modal and custom wallpaper controls.
+- **System desktop icon theme**: The application icon theme setting now includes a System option that automatically matches your operating system appearance alongside fixed light and dark icons.
+- **Streamlined desktop runtime staging**: Refined bundled runtime asset verification to ensure consistent Code-OSS runtime packaging across desktop platforms.
+
 ## [v1.3.21] - 2026-09-24
 
 ### Launchpad command dashboard and preset icon customization
