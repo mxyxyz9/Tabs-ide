@@ -1025,23 +1025,29 @@ export const TestingCases = memo(function TestingCases({
                       className={cn(
                         "flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-xs animate-in fade-in duration-200",
                         graphFeedback.type === "success" &&
-                          "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                          "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
                         graphFeedback.type === "info" &&
-                          "border-blue-500/30 bg-blue-500/10 text-blue-300",
+                          "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
                         graphFeedback.type === "error" &&
-                          "border-rose-500/30 bg-rose-500/10 text-rose-300",
+                          "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
                       )}
                     >
                       <div className="flex items-center gap-2">
                         {graphFeedback.type === "success" ? (
                           <CheckCircle2Icon
-                            className="h-4 w-4 shrink-0 text-emerald-400"
+                            className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
                             aria-hidden="true"
                           />
                         ) : graphFeedback.type === "info" ? (
-                          <InfoIcon className="h-4 w-4 shrink-0 text-blue-400" aria-hidden="true" />
+                          <InfoIcon
+                            className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400"
+                            aria-hidden="true"
+                          />
                         ) : (
-                          <InfoIcon className="h-4 w-4 shrink-0 text-rose-400" aria-hidden="true" />
+                          <InfoIcon
+                            className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400"
+                            aria-hidden="true"
+                          />
                         )}
                         <span>{graphFeedback.text}</span>
                       </div>

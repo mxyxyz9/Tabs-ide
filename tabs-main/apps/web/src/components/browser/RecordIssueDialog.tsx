@@ -604,7 +604,7 @@ export function RecordIssueDialog({
                 disabled={busy}
                 className="gap-1.5"
               >
-                <RadioIcon className="size-3.5 text-red-400" />
+                <RadioIcon className="size-3.5 text-red-600 dark:text-red-400" />
                 Start recording issue
               </Button>
             </div>
@@ -612,7 +612,7 @@ export function RecordIssueDialog({
 
           {phase === "recording" && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-red-500/30 bg-red-500/5 py-8 text-center">
-              <div className="flex items-center gap-2 text-sm font-semibold text-red-500">
+              <div className="flex items-center gap-2 text-sm font-semibold text-red-600 dark:text-red-400">
                 <span className="size-2.5 animate-ping rounded-full bg-red-500" />
                 Recording in progress…
               </div>
@@ -805,7 +805,7 @@ export function RecordIssueDialog({
                   </div>
 
                   {fragileLocatorsCount > 0 && (
-                    <div className="flex items-center gap-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-500">
+                    <div className="flex items-center gap-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
                       <AlertTriangleIcon className="size-4 shrink-0" />
                       <span>
                         {fragileLocatorsCount} step(s) use fragile positional locators. Consider

@@ -40,7 +40,7 @@ export const SidebarThreadPreviewCount = Schema.Int.check(
 export type SidebarThreadPreviewCount = typeof SidebarThreadPreviewCount.Type;
 export const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
 
-export const DesktopIconTheme = Schema.Literals(["dark", "light"]);
+export const DesktopIconTheme = Schema.Literals(["dark", "light", "system"]);
 export type DesktopIconTheme = typeof DesktopIconTheme.Type;
 export const DEFAULT_DESKTOP_ICON_THEME: DesktopIconTheme = "dark";
 

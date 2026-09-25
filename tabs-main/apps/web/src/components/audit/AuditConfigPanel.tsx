@@ -215,7 +215,7 @@ export function AuditConfigPanel({
                       </button>
                     </div>
                     {scopeError && (
-                      <div className="flex items-start gap-1.5 text-[11px] text-red-400">
+                      <div className="flex items-start gap-1.5 text-[11px] text-red-600 dark:text-red-400">
                         <ShieldAlert size={12} className="shrink-0 mt-px" />
                         <span>{scopeError}</span>
                       </div>

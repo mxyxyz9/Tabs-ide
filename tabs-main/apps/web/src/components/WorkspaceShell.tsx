@@ -486,7 +486,7 @@ function BrowserViewportHiddenNotice(props?: {
   return (
     <div className="pointer-events-none absolute left-1/2 top-5 z-40 w-[min(38rem,calc(100%-1.5rem))] -translate-x-1/2 px-3">
       <div className="flex items-start gap-3 rounded-2xl border border-border/80 bg-background/95 px-4 py-3 shadow-2xl shadow-black/40 ring-1 ring-white/5 backdrop-blur-xl animate-in fade-in duration-150">
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-500/12 text-sky-300">
+        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-500/12 text-sky-600 dark:text-sky-300">
           {props?.icon ?? <GlobeIcon className="size-4.5" />}
         </div>
         <div className="min-w-0">
@@ -2352,7 +2352,7 @@ function AgentsThreadList(props: {
                               {thread.branch &&
                                 projectGitStatusQuery.data?.branch &&
                                 thread.branch !== projectGitStatusQuery.data.branch && (
-                                  <p className="flex items-start gap-2 rounded-md bg-amber-500/10 p-2 text-amber-500">
+                                  <p className="flex items-start gap-2 rounded-md bg-amber-500/10 p-2 text-amber-700 dark:text-amber-400">
                                     <TriangleAlertIcon
                                       aria-hidden="true"
                                       className="mt-0.5 size-3.5 shrink-0"
@@ -5393,7 +5393,7 @@ function GitTool(props: {
                       </Badge>
                     )}
                     {stagedFiles.length > 0 && (
-                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
+                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                         {stagedFiles.length} staged
                       </span>
                     )}
@@ -8003,7 +8003,7 @@ function DesktopBrowserChrome(props: {
                         type="button"
                         size="xs"
                         variant="secondary"
-                        className="h-6 text-xs text-amber-500 hover:text-amber-400"
+                        className="h-6 text-xs text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
                         onClick={() => void bridge?.takeBrowserControl?.(sessionArg)}
                       >
                         Take control
@@ -8070,7 +8070,7 @@ function DesktopBrowserChrome(props: {
                 type="button"
                 size="xs"
                 variant="secondary"
-                className="h-6 text-xs text-amber-500 hover:text-amber-400"
+                className="h-6 text-xs text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
                 onClick={() => void bridge?.takeBrowserControl?.(sessionArg)}
               >
                 Take control
@@ -10396,7 +10396,7 @@ function ServerTool(props: {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-8 gap-1.5 text-xs text-red-500 hover:text-red-400 hover:bg-red-500/10 font-medium"
+                className="h-8 gap-1.5 text-xs text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 font-medium"
                 onClick={async () => {
                   const confirmed = await confirm("Are you sure you want to close all terminals?");
                   if (confirmed) {
@@ -10635,7 +10635,7 @@ function ServerTool(props: {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full flex items-center justify-start gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0"
+                  className="w-full flex items-center justify-start gap-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-500/10 shrink-0"
                   onClick={() => handleDeleteClick(selectedPreset.id)}
                 >
                   <Trash2Icon className="size-3.5" />
@@ -10664,7 +10664,7 @@ function ServerTool(props: {
                     {/* Validation notice */}
                     {(!editingPresetDraft.label?.trim() ||
                       !editingPresetDraft.commands?.some((c: string) => c.trim().length > 0)) && (
-                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-200/90 leading-normal">
+                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200/90 leading-normal">
                         Each preset needs a label and at least one command step before saving.
                       </div>
                     )}
@@ -10699,7 +10699,7 @@ function ServerTool(props: {
                             {selectedPreset.autoOpenPreview && (
                               <Badge
                                 variant="outline"
-                                className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 border-blue-500/30"
+                                className="text-[10px] uppercase tracking-wider font-semibold text-blue-600 dark:text-blue-400 border-blue-500/30"
                               >
                                 Auto-opens
                               </Badge>

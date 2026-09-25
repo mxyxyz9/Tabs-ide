@@ -366,11 +366,7 @@ export function DivergencePanel({
 
         <div className="flex items-center gap-2 shrink-0">
           {/* View Switcher — three tabs: Spotlight | Active | Archived */}
-          <div
-            className="tabs-segmented flex items-center"
-            role="group"
-            aria-label="Branch view"
-          >
+          <div className="tabs-segmented flex items-center" role="group" aria-label="Branch view">
             <button
               type="button"
               aria-pressed={activeView === "spotlight"}
@@ -425,7 +421,7 @@ export function DivergencePanel({
             <button
               type="button"
               onClick={exitSelectMode}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-sky-700 bg-sky-900/30 text-sky-300 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300 transition-colors"
             >
               <X size={13} />
               Done
@@ -436,22 +432,22 @@ export function DivergencePanel({
 
       {/* Bulk Operations Bar — only visible in selection mode with items selected */}
       {isSelectMode && selectedBranchNames.size > 0 && (
-        <div className="flex items-center justify-between bg-sky-950/40 border border-sky-800/50 rounded-lg px-3.5 py-2.5 mb-4">
+        <div className="flex items-center justify-between bg-sky-500/10 dark:bg-sky-950/40 border border-sky-500/20 dark:border-sky-800/50 rounded-lg px-3.5 py-2.5 mb-4">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleToggleSelectAll}
-              className="flex items-center gap-2 text-xs font-mono text-sky-200 cursor-pointer"
+              className="flex items-center gap-2 text-xs font-mono text-sky-800 dark:text-sky-200 cursor-pointer"
             >
               {selectedBranchNames.size === displayedBranches.length ? (
-                <CheckSquare size={15} className="text-sky-400" />
+                <CheckSquare size={15} className="text-sky-600 dark:text-sky-400" />
               ) : (
-                <Square size={15} className="text-sky-400/60" />
+                <Square size={15} className="text-sky-600/70 dark:text-sky-400/60" />
               )}
               <span>Select all ({displayedBranches.length})</span>
             </button>
             <span className="text-muted-foreground/70">|</span>
-            <span className="text-xs font-mono text-sky-300 font-medium">
+            <span className="text-xs font-mono text-sky-800 dark:text-sky-300 font-medium">
               {selectedBranchNames.size} selected
             </span>
           </div>
@@ -532,7 +528,7 @@ export function DivergencePanel({
               >
                 {selectedBranchNames.size > 0 &&
                 selectedBranchNames.size === displayedBranches.length ? (
-                  <CheckSquare size={14} className="text-sky-400" />
+                  <CheckSquare size={14} className="text-sky-600 dark:text-sky-400" />
                 ) : (
                   <Square size={14} className="text-muted-foreground/70" />
                 )}
@@ -576,7 +572,7 @@ export function DivergencePanel({
                         title={isSelected ? "Deselect" : "Select"}
                       >
                         {isSelected ? (
-                          <CheckSquare size={14} className="text-sky-400" />
+                          <CheckSquare size={14} className="text-sky-600 dark:text-sky-400" />
                         ) : (
                           <Square size={14} className="text-muted-foreground/70" />
                         )}
@@ -633,7 +629,7 @@ export function DivergencePanel({
                       onClick={() => handleToggleSpotlight(b.name)}
                       className={`p-1 rounded transition-colors cursor-pointer ${
                         isSpotlit
-                          ? "text-amber-400 hover:bg-muted/50"
+                          ? "text-amber-600 dark:text-amber-400 hover:bg-muted/50"
                           : "text-muted-foreground/70 hover:text-foreground hover:bg-muted/50"
                       }`}
                     >

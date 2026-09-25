@@ -442,6 +442,11 @@ if (persistedDesktopTheme) {
 }
 const browserHostManager = new BrowserHostManager(() => mainWindow, nativeViewCoordinator);
 const desktopCaptureCoordinator = new DesktopCaptureCoordinator();
+nativeTheme.on("updated", () => {
+  if (currentDesktopIconTheme === "system") {
+    applyDesktopIconTheme("system");
+  }
+});
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
 
 let destructiveMenuIconCache: Electron.NativeImage | null | undefined;
@@ -1288,7 +1293,7 @@ function resolveResourcePath(fileName: string): string | null {
 }
 
 function getSafeIconTheme(rawTheme: unknown): DesktopIconTheme | null {
-  return rawTheme === "light" || rawTheme === "dark" ? rawTheme : null;
+  return rawTheme === "light" || rawTheme === "dark" || rawTheme === "system" ? rawTheme : null;
 }
 
 function readDesktopPreferences(): DesktopPreferences {
@@ -1322,23 +1327,37 @@ function resolveIconPath(
   ext: "ico" | "icns" | "png",
   theme: DesktopIconTheme = currentDesktopIconTheme,
 ): string | null {
-  return resolveResourcePath(`icon-${theme}.${ext}`) ?? resolveResourcePath(`icon.${ext}`);
+  const resolved =
+    theme === "system" ? (nativeTheme.shouldUseDarkColors ? "dark" : "light") : theme;
+  return resolveResourcePath(`icon-${resolved}.${ext}`) ?? resolveResourcePath(`icon.${ext}`);
 }
 
 function applyDesktopIconTheme(theme: DesktopIconTheme): void {
   currentDesktopIconTheme = theme;
   writeDesktopPreferences({ ...readDesktopPreferences(), iconTheme: theme });
 
+  const effectiveTheme: "dark" | "light" =
+    theme === "system" ? (nativeTheme.shouldUseDarkColors ? "dark" : "light") : theme;
+
   if (process.platform === "darwin" && app.dock) {
-    const iconPath = resolveIconPath("png", theme);
+    const iconPath = resolveIconPath("png", effectiveTheme);
     if (iconPath) {
-      app.dock.setIcon(iconPath);
+      try {
+        const image = nativeImage.createFromPath(iconPath);
+        if (!image.isEmpty()) {
+          app.dock.setIcon(image);
+        } else {
+          app.dock.setIcon(iconPath);
+        }
+      } catch {
+        app.dock.setIcon(iconPath);
+      }
     }
     return;
   }
 
   const ext = process.platform === "win32" ? "ico" : "png";
-  const iconPath = resolveIconPath(ext, theme);
+  const iconPath = resolveIconPath(ext, effectiveTheme);
   if (!iconPath) {
     return;
   }

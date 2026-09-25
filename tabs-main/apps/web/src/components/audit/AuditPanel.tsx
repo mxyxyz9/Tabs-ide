@@ -108,7 +108,10 @@ export function AuditPanel({
                 {/* Error banner */}
                 {state.status === "error" && (
                   <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/5 flex items-start gap-3">
-                    <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                    <AlertCircle
+                      size={16}
+                      className="text-red-600 dark:text-red-400 shrink-0 mt-0.5"
+                    />
                     <div className="flex-1 min-w-0 space-y-1">
                       <p className="text-sm font-semibold text-foreground font-sans">
                         Review Failed

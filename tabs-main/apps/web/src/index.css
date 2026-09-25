@@ -15,23 +15,34 @@
   background: transparent;
   color: var(--muted-foreground);
   box-shadow: none;
-  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
-.tabs-segmented > :is(button[aria-pressed="true"], button[aria-checked="true"], button[aria-selected="true"]) {
+.tabs-segmented
+  > :is(button[aria-pressed="true"], button[aria-checked="true"], button[aria-selected="true"]) {
   border-color: color-mix(in oklab, var(--foreground) 28%, transparent);
   background: color-mix(in oklab, var(--background) 88%, var(--foreground) 12%);
   color: var(--foreground);
-  box-shadow: inset 0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent),
+  box-shadow:
+    inset 0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent),
     0 0 5px color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 
-.tabs-segmented > :is(button[aria-pressed="false"], button[aria-checked="false"], button[aria-selected="false"]):hover {
+.tabs-segmented
+  > :is(
+    button[aria-pressed="false"],
+    button[aria-checked="false"],
+    button[aria-selected="false"]
+  ):hover {
   background: color-mix(in oklab, var(--foreground) 6%, transparent);
   color: var(--foreground);
 }
 
-.tabs-segmented > :is(button[aria-pressed], button[aria-checked], button[aria-selected]):focus-visible {
+.tabs-segmented
+  > :is(button[aria-pressed], button[aria-checked], button[aria-selected]):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -216,6 +227,7 @@ svg[class*="lucide-loader"].animate-spin {
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --font-sans: var(
     --font-sans,
+    "Syne",
     "DM Sans Variable",
     "DM Sans",
     -apple-system,
@@ -226,8 +238,10 @@ svg[class*="lucide-loader"].animate-spin {
   );
   --font-display: var(
     --font-display,
+    "Newsreader",
     var(
       --font-sans,
+      "Syne",
       "DM Sans Variable",
       "DM Sans",
       -apple-system,
@@ -1817,4 +1831,45 @@ label:has(> select#reasoning-effort) select {
 .design-groove .nav-tab.active {
   color: var(--primary);
   text-shadow: 0 1px 2px color-mix(in srgb, var(--background) 50%, transparent);
+}
+
+/* Living Wallpaper Cinematic Drift (Ken Burns Breathing Motion) */
+@keyframes livingDrift {
+  0% {
+    transform: scale(1) translate(0%, 0%);
+  }
+  50% {
+    transform: scale(1.045) translate(-0.8%, -0.6%);
+  }
+  100% {
+    transform: scale(1) translate(0%, 0%);
+  }
+}
+
+.animate-living-drift {
+  animation: livingDrift 28s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Halftone Dot Matrix — Slow Breathing Opacity Pulse
+   The dot layer very gently pulses between 45% and 58% opacity on a 14-second
+   cycle, giving the impression that the halftone pattern is alive and breathing,
+   just like screen-printed dots shift as paper breathes.
+*/
+@keyframes halftoneBreath {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  40% {
+    opacity: 0.58;
+  }
+  70% {
+    opacity: 0.5;
+  }
+}
+
+.animate-halftone-breathe {
+  animation: halftoneBreath 14s ease-in-out infinite;
+  will-change: opacity;
 }

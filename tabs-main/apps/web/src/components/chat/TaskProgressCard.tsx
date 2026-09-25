@@ -55,9 +55,14 @@ const TaskRow = memo(function TaskRow({ task }: { task: TaskNode }) {
         {isRunning ? (
           <LoaderIcon className="size-3 animate-spin text-primary/70" />
         ) : isFailed || isStopped ? (
-          <XIcon className={cn("size-3", isFailed ? "text-red-400" : "text-amber-400")} />
+          <XIcon
+            className={cn(
+              "size-3",
+              isFailed ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400",
+            )}
+          />
         ) : isDone ? (
-          <CheckIcon className="size-3 text-emerald-400" />
+          <CheckIcon className="size-3 text-emerald-600 dark:text-emerald-400" />
         ) : (
           /* pending — empty circle */
           <svg viewBox="0 0 14 14" fill="none" className="size-3">
@@ -81,7 +86,7 @@ const TaskRow = memo(function TaskRow({ task }: { task: TaskNode }) {
           isDone
             ? "text-muted-foreground/40"
             : isFailed || isStopped
-              ? "text-red-400/80"
+              ? "text-red-600/90 dark:text-red-400/80"
               : "text-foreground/80",
         )}
         title={description}
@@ -143,7 +148,7 @@ export const TaskProgressCard = memo(function TaskProgressCard({
             {headerLabel}
           </span>
           {failedCount > 0 && (
-            <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-red-400">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-red-600 dark:text-red-400">
               · {failedCount} failed
             </span>
           )}

@@ -16,22 +16,22 @@ export function AuditReadinessDashboard({
   onRunScan,
 }: AuditReadinessProps) {
   return (
-    <div className="p-6 border border-zinc-800/80 bg-zinc-900/40 rounded-xl space-y-6">
+    <div className="p-6 border border-border bg-card rounded-xl space-y-6">
       {/* Welcome Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-zinc-100">
+            <h2 className="text-base font-bold text-foreground">
               Repository Code Audit & Security Engine
             </h2>
             <Badge
               variant="outline"
-              className="text-[10px] border-emerald-800 text-emerald-400 bg-emerald-950/40"
+              className="text-[10px] border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10"
             >
               System Ready
             </Badge>
           </div>
-          <p className="text-xs text-zinc-400 mt-1 max-w-xl leading-relaxed">
+          <p className="text-xs text-muted-foreground mt-1 max-w-xl leading-relaxed">
             Deterministic AST indexing, sandboxed static analysis, disproof verification, and
             token-budgeted context packing ready for automated repository reviews.
           </p>
@@ -39,7 +39,7 @@ export function AuditReadinessDashboard({
 
         <Button
           onClick={onRunScan}
-          className="bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs px-5 py-2.5 rounded-lg shadow-md transition-all"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs px-5 py-2.5 rounded-lg shadow-md transition-all"
         >
           Launch {activeMode.replace("_", " ")} Scan
         </Button>
@@ -47,33 +47,33 @@ export function AuditReadinessDashboard({
 
       {/* Subsystem Readiness Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="p-3.5 bg-zinc-950/60 border border-zinc-800 rounded-lg space-y-1.5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
-            <Cpu size={14} className="text-blue-400" />
+        <div className="p-3.5 bg-muted/50 border border-border rounded-lg space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+            <Cpu size={14} className="text-blue-600 dark:text-blue-400" />
             <span>AST Intelligence & Indexer</span>
           </div>
-          <p className="text-[11px] text-zinc-400 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
             Fast file enumeration with content-addressed SHA-256 caching and dependency graph
             extraction.
           </p>
         </div>
 
-        <div className="p-3.5 bg-zinc-950/60 border border-zinc-800 rounded-lg space-y-1.5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
-            <ShieldCheck size={14} className="text-emerald-400" />
+        <div className="p-3.5 bg-muted/50 border border-border rounded-lg space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+            <ShieldCheck size={14} className="text-emerald-600 dark:text-emerald-400" />
             <span>Sandboxed Analyzers</span>
           </div>
-          <p className="text-[11px] text-zinc-400 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
             Gitleaks, OpenGrep, and OSV-Scanner running in network-isolated process sandbox.
           </p>
         </div>
 
-        <div className="p-3.5 bg-zinc-950/60 border border-zinc-800 rounded-lg space-y-1.5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
-            <Zap size={14} className="text-purple-400" />
+        <div className="p-3.5 bg-muted/50 border border-border rounded-lg space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+            <Zap size={14} className="text-purple-600 dark:text-purple-400" />
             <span>Disproof Agent & FP Memory</span>
           </div>
-          <p className="text-[11px] text-zinc-400 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
             2nd-pass guard verification suppresses false positives and applies user feedback memory.
           </p>
         </div>
@@ -81,7 +81,7 @@ export function AuditReadinessDashboard({
 
       {/* Mode Preset Selector Shortcuts */}
       <div>
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Select Recommended Audit Mode
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -120,18 +120,18 @@ export function AuditReadinessDashboard({
                 onClick={() => onSelectMode(preset.id)}
                 className={`p-3.5 rounded-lg border text-xs cursor-pointer transition-all ${
                   isSelected
-                    ? "bg-blue-950/40 border-blue-600 text-zinc-100 shadow-md"
-                    : "bg-zinc-950/40 border-zinc-800/80 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/60"
+                    ? "bg-primary/10 border-primary text-foreground shadow-xs"
+                    : "bg-muted/40 border-border text-foreground hover:border-border/80 hover:bg-muted/70"
                 }`}
               >
-                <div className="flex items-center gap-2 font-semibold text-zinc-200 mb-1">
+                <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
                   <IconComponent
                     size={14}
-                    className={isSelected ? "text-blue-400" : "text-zinc-400"}
+                    className={isSelected ? "text-primary" : "text-muted-foreground"}
                   />
                   <span>{preset.title}</span>
                 </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">{preset.desc}</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">{preset.desc}</p>
               </div>
             );
           })}

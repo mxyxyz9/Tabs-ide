@@ -32,14 +32,14 @@ import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 function stepStatusIcon(status: string): React.ReactNode {
   if (status === "completed") {
     return (
-      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500">
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
         <CheckIcon className="size-3" />
       </span>
     );
   }
   if (status === "inProgress") {
     return (
-      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-400">
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400">
         <LoaderIcon className="size-3 animate-spin" />
       </span>
     );
@@ -127,7 +127,7 @@ const PlanSidebar = memo(function PlanSidebar({
         <div className="flex items-center gap-2">
           <Badge
             variant="secondary"
-            className="rounded-md bg-blue-500/10 px-1.5 py-0 text-[10px] font-semibold tracking-wide text-blue-400 uppercase"
+            className="rounded-md bg-blue-500/10 px-1.5 py-0 text-[10px] font-semibold tracking-wide text-blue-600 dark:text-blue-400 uppercase"
           >
             Plan
           </Badge>

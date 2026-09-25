@@ -327,7 +327,7 @@ export function GeneralSettings() {
                 onValueChange={(val) => {
                   if (val !== "dark" && val !== "light" && val !== "system") return;
                   updateSettings({
-                    desktopIconTheme: val as "dark" | "light",
+                    desktopIconTheme: val,
                   });
                 }}
                 options={DESKTOP_ICON_OPTIONS}

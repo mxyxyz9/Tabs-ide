@@ -1833,12 +1833,12 @@ export default function Sidebar() {
     : "hover:bg-accent hover:text-foreground";
   const desktopUpdateButtonClasses =
     desktopUpdateState?.status === "downloaded"
-      ? "text-emerald-500"
+      ? "text-emerald-600 dark:text-emerald-400"
       : desktopUpdateState?.status === "downloading"
-        ? "text-sky-400"
+        ? "text-sky-600 dark:text-sky-400"
         : shouldHighlightDesktopUpdateError(desktopUpdateState)
-          ? "text-rose-500 animate-pulse"
-          : "text-amber-500 animate-pulse";
+          ? "text-rose-600 dark:text-rose-500 animate-pulse"
+          : "text-amber-600 dark:text-amber-500 animate-pulse";
   const newThreadShortcutLabel =
     shortcutLabelForCommand(keybindings, "chat.newLocal") ??
     shortcutLabelForCommand(keybindings, "chat.new");
@@ -2102,7 +2102,7 @@ export default function Sidebar() {
                 </button>
               </div>
               {addProjectError && (
-                <p className="mt-1 px-0.5 text-[11px] leading-tight text-red-400">
+                <p className="mt-1 px-0.5 text-[11px] leading-tight text-red-600 dark:text-red-400">
                   {addProjectError}
                 </p>
               )}

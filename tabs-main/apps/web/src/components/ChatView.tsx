@@ -5662,11 +5662,11 @@ export default function ChatView({
                 ) : phase === "running" ? (
                   <div className="flex flex-col items-end gap-1.5">
                     {isStuck && activeThread && threadApi && (
-                      <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-400 dark:border-amber-400/20 dark:bg-amber-400/10">
+                      <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300 dark:border-amber-400/20 dark:bg-amber-400/10">
                         <span>Agent may be stuck.</span>
                         <button
                           type="button"
-                          className="font-medium underline underline-offset-2 cursor-pointer hover:text-amber-300 transition-colors"
+                          className="font-medium underline underline-offset-2 cursor-pointer hover:text-amber-950 dark:hover:text-amber-200 transition-colors"
                           onClick={async () => {
                             try {
                               await threadApi.orchestration.dispatchCommand({
@@ -5696,7 +5696,7 @@ export default function ChatView({
                         <span className="text-muted-foreground/50">|</span>
                         <button
                           type="button"
-                          className="font-medium underline underline-offset-2 cursor-pointer hover:text-amber-300 transition-colors"
+                          className="font-medium underline underline-offset-2 cursor-pointer hover:text-amber-950 dark:hover:text-amber-200 transition-colors"
                           onClick={async () => {
                             try {
                               await threadApi.orchestration.dispatchCommand({

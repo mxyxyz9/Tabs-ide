@@ -520,7 +520,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
           {/* WCAG Audit Badge */}
           <div className="flex items-center gap-2">
             {lowContrastCount > 0 ? (
-              <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 px-3.5 py-1.5 text-xs text-amber-500 font-medium">
+              <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 px-3.5 py-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium">
                 <AlertCircle className="size-4 shrink-0" />
                 <span>
                   {lowContrastCount} Low Contrast Pair{lowContrastCount > 1 ? "s" : ""}
@@ -528,7 +528,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAutoFixContrast}
-                  className="ms-1 underline font-bold hover:text-amber-400 cursor-pointer flex items-center gap-1 whitespace-nowrap"
+                  className="ms-1 underline font-bold hover:text-amber-900 dark:hover:text-amber-300 cursor-pointer flex items-center gap-1 whitespace-nowrap"
                 >
                   <Wand2 className="size-3" />
                   <span>Auto-Tune</span>
@@ -536,7 +536,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-2 rounded-xl bg-card border border-border/80 px-3.5 py-1.5 text-xs text-foreground font-medium shadow-2xs">
-                <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>
                   WCAG AA Contrast Compliant ({wcagResults.length}/{wcagResults.length} Pairs Pass)
                 </span>
@@ -553,7 +553,7 @@ export const CustomThemeStudioModal: React.FC<CustomThemeStudioModalProps> = ({
             )}
 
             {autoTuneFeedback && (
-              <span className="text-xs font-semibold text-emerald-400 animate-in fade-in duration-200 ms-1">
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200 ms-1">
                 {autoTuneFeedback}
               </span>
             )}

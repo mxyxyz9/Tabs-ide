@@ -43,9 +43,11 @@ export function AuditAskAIChat({ selectedFinding, isOpen, onClose }: AuditAskAIC
       {/* Header */}
       <div className="p-4 bg-purple-500/10 border-b border-purple-500/30 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-purple-400">Ask AI: Audit Context Assistant</h3>
+          <h3 className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+            Ask AI: Audit Context Assistant
+          </h3>
           {selectedFinding && (
-            <p className="text-xs text-purple-500 font-mono truncate max-w-xs mt-0.5">
+            <p className="text-xs text-purple-600 dark:text-purple-400 font-mono truncate max-w-xs mt-0.5">
               Target: {selectedFinding.title} ({selectedFinding.filePath})
             </p>
           )}

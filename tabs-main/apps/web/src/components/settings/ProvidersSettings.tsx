@@ -502,7 +502,11 @@ function PinModelCommandPalette({
 
               {/* Provider Filter Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-border/40 bg-muted/10 [&::-webkit-scrollbar]:hidden">
-                <div className="tabs-segmented inline-flex items-center shrink-0" role="group" aria-label="Provider filter">
+                <div
+                  className="tabs-segmented inline-flex items-center shrink-0"
+                  role="group"
+                  aria-label="Provider filter"
+                >
                   <button
                     type="button"
                     onClick={() => setActiveProviderFilter(null)}
@@ -518,8 +522,9 @@ function PinModelCommandPalette({
                   </button>
                   {providerCards.map((card) => {
                     const providerName =
-                      PROVIDER_DISPLAY_NAMES[card.provider as keyof typeof PROVIDER_DISPLAY_NAMES] ??
-                      card.title;
+                      PROVIDER_DISPLAY_NAMES[
+                        card.provider as keyof typeof PROVIDER_DISPLAY_NAMES
+                      ] ?? card.title;
                     const isSelected = activeProviderFilter === card.provider;
                     return (
                       <button
@@ -1281,7 +1286,7 @@ export default function ProvidersSettings(props: ProvidersSettingsProps) {
                                 <button
                                   type="button"
                                   aria-label={`${providerDisplayName} update available`}
-                                  className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-500 hover:text-amber-400"
+                                  className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
                                   onClick={() =>
                                     providerCard.updatePrompt?.command &&
                                     copyToClipboard(providerCard.updatePrompt.command, {

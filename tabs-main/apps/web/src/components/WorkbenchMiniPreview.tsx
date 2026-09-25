@@ -85,7 +85,11 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
     <div className="space-y-3 select-none w-full">
       {/* Surface Showcase Mode Switcher Deck */}
       <div className="flex items-center justify-center py-1">
-        <div className="tabs-segmented flex items-center justify-center max-w-md w-full" role="group" aria-label="Preview surface">
+        <div
+          className="tabs-segmented flex items-center justify-center max-w-md w-full"
+          role="group"
+          aria-label="Preview surface"
+        >
           <button
             type="button"
             onClick={() => setSurfaceMode("ide")}
@@ -224,7 +228,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                     style={{ color: sideFg }}
                   >
                     <ChevronDown className="size-3" style={{ color: sideFg, opacity: 0.7 }} />
-                    <Folder className="size-3 text-sky-400" />
+                    <Folder className="size-3 text-sky-600 dark:text-sky-400" />
                     <span style={{ color: sideFg }}>src</span>
                   </div>
                   <div
@@ -232,7 +236,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                     style={{ backgroundColor: listActiveBg, color: sideFg }}
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <FileCode className="size-3 text-sky-400" />
+                      <FileCode className="size-3 text-sky-600 dark:text-sky-400" />
                       <span className="truncate font-medium" style={{ color: sideFg }}>
                         App.tsx
                       </span>
@@ -247,7 +251,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                     style={{ color: sideFg }}
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <FileText className="size-3 text-amber-400" />
+                      <FileText className="size-3 text-amber-600 dark:text-amber-400" />
                       <span className="truncate" style={{ color: sideFg }}>
                         index.css
                       </span>
@@ -258,7 +262,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                     style={{ color: sideFg }}
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <FileCode className="size-3 text-emerald-400" />
+                      <FileCode className="size-3 text-emerald-600 dark:text-emerald-400" />
                       <span className="truncate" style={{ color: gitUntracked }}>
                         useTheme.ts
                       </span>
@@ -430,7 +434,9 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                         style={{ backgroundColor: suggestActiveBg, color: cardFg }}
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] font-bold text-sky-400">fn</span>
+                          <span className="text-[9px] font-bold text-sky-600 dark:text-sky-400">
+                            fn
+                          </span>
                           <span style={{ color: cardFg }}>renderTheme</span>
                         </div>
                         <span className="text-[9px]" style={{ color: cardFg, opacity: 0.6 }}>
@@ -442,7 +448,9 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                         style={{ color: cardFg }}
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] font-bold text-purple-400">v</span>
+                          <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">
+                            v
+                          </span>
                           <span style={{ color: cardFg }}>tokenMap</span>
                         </div>
                         <span className="text-[9px]" style={{ color: cardFg, opacity: 0.6 }}>
@@ -489,7 +497,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
             >
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1 font-semibold" style={{ color: statusFg }}>
-                  <GitBranch className="size-3 text-emerald-400" />
+                  <GitBranch className="size-3 text-emerald-600 dark:text-emerald-400" />
                   main*
                 </span>
                 <span style={{ color: statusFg, opacity: 0.75 }}>0 errors, 0 warnings</span>
@@ -610,7 +618,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
               >
                 Derived Token System ({wcagResults.length} Pairs Audited)
               </span>
-              <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                 <Check className="size-3 stroke-[3]" />
                 100% WCAG AA Compliant
               </span>
@@ -622,14 +630,17 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
                 const isAAA = res.ratio >= 7.0;
                 const isAA = res.ratio >= 4.5 && res.ratio < 7.0;
 
-                let badgeStyle = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                let badgeStyle =
+                  "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20";
                 let badgeLabel = `${res.ratio}:1 Fail`;
 
                 if (isAAA) {
-                  badgeStyle = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                  badgeStyle =
+                    "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20";
                   badgeLabel = `${res.ratio}:1 AAA`;
                 } else if (isAA) {
-                  badgeStyle = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
+                  badgeStyle =
+                    "bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20";
                   badgeLabel = `${res.ratio}:1 AA`;
                 }
 

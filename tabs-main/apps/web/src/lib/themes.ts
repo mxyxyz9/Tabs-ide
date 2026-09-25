@@ -630,8 +630,8 @@ export interface FontPreferences {
 }
 
 export const DEFAULT_FONT_PREFERENCES: FontPreferences = {
-  uiFont: "system-ui",
-  headingFont: "system-ui",
+  uiFont: "'Syne', sans-serif",
+  headingFont: "'Newsreader', serif",
   editorFont: "Menlo, Monaco, 'Courier New', monospace",
   fontSizeInterface: 13,
   fontSizeCode: 12,
@@ -639,10 +639,10 @@ export const DEFAULT_FONT_PREFERENCES: FontPreferences = {
 };
 
 export const UI_FONT_OPTIONS = [
-  { value: "system-ui", label: "System UI (Default)" },
+  { value: "'Syne', sans-serif", label: "Syne (Default)" },
+  { value: "system-ui", label: "System UI" },
   { value: "'Open Sans', sans-serif", label: "Open Sans" },
   { value: "'Inter Tight', sans-serif", label: "Inter Tight" },
-  { value: "'Syne', sans-serif", label: "Syne" },
   { value: "'Space Grotesk', sans-serif", label: "Space Grotesk" },
   { value: "'Bricolage Grotesque', sans-serif", label: "Bricolage Grotesque" },
   { value: "'Plus Jakarta Sans', sans-serif", label: "Plus Jakarta Sans" },
@@ -656,10 +656,10 @@ export const UI_FONT_OPTIONS = [
 ] as const;
 
 export const HEADING_FONT_OPTIONS = [
-  { value: "system-ui", label: "Match Interface Font (Default)" },
+  { value: "'Newsreader', serif", label: "Newsreader (Default)" },
+  { value: "system-ui", label: "Match Interface Font" },
   { value: "'Inter', system-ui, sans-serif", label: "Inter" },
   { value: "'Instrument Serif', serif", label: "Instrument Serif" },
-  { value: "'Newsreader', serif", label: "Newsreader" },
   { value: "'DotGothic16', sans-serif", label: "DotGothic16" },
   { value: "'Fraunces', serif", label: "Fraunces" },
   { value: "'Playfair Display', serif", label: "Playfair Display" },
@@ -711,7 +711,7 @@ export const FONT_COMBOS: FontCombo[] = [
     id: "system",
     name: "System UI",
     desc: "Your OS, no opinions",
-    tag: "DEFAULT",
+    tag: "SYSTEM",
     uiFont: "system-ui",
     headingFont: "system-ui",
     sansText: "sys",
