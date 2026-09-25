@@ -9,6 +9,8 @@ import {
   SlidersHorizontalIcon,
   Trash2Icon,
   UploadIcon,
+  DicesIcon,
+  LayoutGridIcon,
 } from "lucide-react";
 import {
   DEFAULT_CODE_FONT_SIZE,
@@ -39,8 +41,19 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { toastManager } from "../ui/toast";
+import { Switch } from "../ui/switch";
 import { CustomThemeStudioModal } from "../CustomThemeStudioModal";
 import { ThemeImportExportModal } from "../ThemeImportExportModal";
+import {
+  WALLPAPERS,
+  type WallpaperOption,
+  getInitialAgentWallpaper,
+  saveAgentWallpaperPreference,
+  getIsAgentWallpaperEnabled,
+  saveIsAgentWallpaperEnabled,
+  AGENT_WALLPAPER_CHANGE_EVENT,
+} from "../onboarding/wallpapers";
+import { WallpaperGalleryModal } from "../onboarding/WallpaperGalleryModal";
 import {
   DEFAULT_FONT_PREFERENCES,
   EDITOR_FONT_OPTIONS,
@@ -771,6 +784,201 @@ function ThemePickerGrid({
   );
 }
 
+function AgentWallpaperSettingsSection() {
+  const [enabled, setEnabled] = useState<boolean>(() => getIsAgentWallpaperEnabled());
+  const [wallpaper, setWallpaper] = useState<WallpaperOption>(() => getInitialAgentWallpaper());
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setEnabled(getIsAgentWallpaperEnabled());
+      setWallpaper(getInitialAgentWallpaper());
+    };
+    window.addEventListener(AGENT_WALLPAPER_CHANGE_EVENT, handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener(AGENT_WALLPAPER_CHANGE_EVENT, handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, []);
+
+  const handleToggle = (next: boolean) => {
+    saveIsAgentWallpaperEnabled(next);
+    setEnabled(next);
+    toastManager.add({
+      type: "success",
+      title: next ? "Agent Wallpaper Enabled" : "Agent Wallpaper Disabled",
+      description: next
+        ? "Animated background active in agent workspace."
+        : "Switched to clean solid dark theme. Wallpaper pill hidden.",
+    });
+  };
+
+  const handleSelectWallpaper = (wp: WallpaperOption) => {
+    setWallpaper(wp);
+    saveAgentWallpaperPreference(wp.url);
+  };
+
+  const handleShuffle = () => {
+    const others = WALLPAPERS.filter((w) => w.url !== wallpaper.url);
+    const random = others[Math.floor(Math.random() * others.length)] ?? WALLPAPERS[0]!;
+    handleSelectWallpaper(random);
+  };
+
+  const featured = useMemo(() => {
+    const ids = ["wp5076799", "wp5330661", "wp5125451", "wp5475488", "wp5250028", "wp4975005"];
+    return ids
+      .map((id) => WALLPAPERS.find((w) => w.id === id))
+      .filter((w): w is WallpaperOption => Boolean(w));
+  }, []);
+
+  return (
+    <SettingsSection
+      title="Agent Background Wallpaper"
+      description="Display animated anime landscapes with liquid ripple halftone grid behind conversation in the agent workspace."
+      headerAction={
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            {enabled ? "Enabled" : "Disabled"}
+          </span>
+          <Switch
+            checked={enabled}
+            onCheckedChange={handleToggle}
+            aria-label="Toggle agent background wallpaper"
+          />
+        </div>
+      }
+    >
+      {enabled ? (
+        <div className="space-y-4">
+          {/* Active Wallpaper Preview Card */}
+          <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-4 shadow-sm backdrop-blur-md">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-xl border border-white/20 shadow-md">
+                  <img
+                    src={wallpaper.url}
+                    alt={wallpaper.label}
+                    className="size-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <span className="absolute bottom-1 left-1.5 rounded bg-black/70 px-1 py-0.2 text-[8px] font-mono text-white/90">
+                    {wallpaper.category}
+                  </span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-foreground">
+                      {wallpaper.label}
+                    </h4>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary border border-primary/20">
+                      Active
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                    {wallpaper.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleShuffle}
+                  className="gap-1.5 rounded-xl cursor-pointer text-xs"
+                >
+                  <DicesIcon className="size-3.5 text-amber-400" />
+                  <span>Surprise Me</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => setIsGalleryOpen(true)}
+                  className="gap-1.5 rounded-xl cursor-pointer text-xs"
+                >
+                  <LayoutGridIcon className="size-3.5" />
+                  <span>Browse All ({WALLPAPERS.length})</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Preset Row */}
+          <div>
+            <div className="mb-2 text-xs font-medium text-muted-foreground">
+              Popular Scenes
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-6">
+              {featured.map((wp) => {
+                const isSelected = wp.url === wallpaper.url;
+                return (
+                  <button
+                    key={wp.id}
+                    type="button"
+                    onClick={() => handleSelectWallpaper(wp)}
+                    className={cn(
+                      "group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all cursor-pointer focus:outline-none",
+                      isSelected
+                        ? "border-primary ring-2 ring-primary/40 shadow-md scale-[1.02]"
+                        : "border-border/60 hover:border-border hover:scale-[1.01]",
+                    )}
+                  >
+                    <div className="relative aspect-video w-full overflow-hidden bg-neutral-900">
+                      <img
+                        src={wp.url}
+                        alt={wp.label}
+                        className="size-full object-cover transition-transform duration-200 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                      {isSelected && (
+                        <div className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-black">
+                          <CheckIcon className="size-2.5 stroke-[3]" />
+                        </div>
+                      )}
+                      <span className="absolute bottom-1 left-1.5 right-1.5 truncate text-[10px] font-semibold text-white drop-shadow">
+                        {wp.label}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-border/70 p-4 text-center">
+          <p className="text-xs text-muted-foreground">
+            Animated wallpaper is currently turned off. The agent workspace uses the clean solid dark IDE background with no floating controller pill.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleToggle(true)}
+            className="mt-3 rounded-xl text-xs cursor-pointer"
+          >
+            Turn On Wallpaper
+          </Button>
+        </div>
+      )}
+
+      <WallpaperGalleryModal
+        isOpen={isGalleryOpen}
+        activeWallpaperUrl={wallpaper.url}
+        onSelectWallpaper={(wp) => {
+          handleSelectWallpaper(wp);
+          setIsGalleryOpen(false);
+        }}
+        onDisableWallpaper={() => {
+          handleToggle(false);
+        }}
+        onClose={() => setIsGalleryOpen(false)}
+        wallpapers={WALLPAPERS}
+      />
+    </SettingsSection>
+  );
+}
+
 export function ThemesSettings() {
   const { confirm } = useConfirm();
   const {
@@ -990,6 +1198,8 @@ export function ThemesSettings() {
           }}
         />
       </SettingsSection>
+
+      <AgentWallpaperSettingsSection />
 
       <SettingsSection
         title="Typography & Fonts"

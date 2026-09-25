@@ -45,7 +45,7 @@ import { APP_VERSION } from "../../branding";
 import { ClaudeAI, GoogleGemini, OpenAI, OpenCodeIcon } from "../Icons";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { WALLPAPERS, getInitialWallpaper, saveWallpaperPreference } from "./wallpapers";
+import { BRIGHT_WALLPAPERS, WALLPAPERS, getInitialWallpaper, saveWallpaperPreference } from "./wallpapers";
 import { WallpaperTopBar } from "./WallpaperTopBar";
 import { WallpaperGalleryModal } from "./WallpaperGalleryModal";
 
@@ -1382,10 +1382,11 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
       {/* Fullscreen Hyperspace Warp Speed Canvas Transition */}
       <HalftoneDissolveOverlay active={isLaunching} />
 
-      {/* Full Visual Wallpaper Gallery Modal */}
+      {/* Full Visual Wallpaper Gallery Modal — bright/light scenes only for wizard */}
       <WallpaperGalleryModal
         isOpen={isGalleryOpen}
         activeWallpaperUrl={selectedWallpaper}
+        wallpapers={BRIGHT_WALLPAPERS}
         onSelectWallpaper={(wp) => {
           setSelectedWallpaper(wp.url);
           saveWallpaperPreference(wp.url);
@@ -1496,9 +1497,10 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
             )}
           </button>
 
-          {/* Top Wallpaper Controller */}
+          {/* Top Wallpaper Controller — bright scenes only */}
           <WallpaperTopBar
             activeWallpaperUrl={selectedWallpaper}
+            wallpapers={BRIGHT_WALLPAPERS}
             onSelectWallpaper={(wp) => {
               setSelectedWallpaper(wp.url);
               saveWallpaperPreference(wp.url);
@@ -1507,6 +1509,7 @@ export function WelcomeWizard({ onDone }: WelcomeWizardProps) {
             onPlaySound={() => {
               void playClick();
             }}
+            showFilmstrip={true}
             disabled={isLaunching || isSkipping}
           />
 

@@ -12,6 +12,7 @@ import {
   FingerprintIcon,
   FolderIcon,
   GitBranchIcon,
+  ImageIcon,
   InfoIcon,
   KeyboardIcon,
   Link2Icon,
@@ -103,6 +104,7 @@ function NotificationsBadge() {
 
 const GeneralSettings = lazy(() => import("~/components/settings/GeneralSettings"));
 const ThemesSettings = lazy(() => import("~/components/settings/ThemesSettings"));
+const WallpaperSettings = lazy(() => import("~/components/settings/WallpaperSettings"));
 const AnimationsSettings = lazy(() => import("~/components/settings/AnimationsSettings"));
 const ProvidersSettings = lazy(() => import("~/components/settings/ProvidersSettings"));
 const AboutSettings = lazy(() => import("~/components/settings/AboutSettings"));
@@ -151,6 +153,7 @@ export type SettingsSectionId =
   | "general"
   | "notifications"
   | "themes"
+  | "wallpapers"
   | "workspace"
   | "profiles"
   | "providers"
@@ -171,6 +174,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   { id: "general", label: "General", icon: SlidersHorizontalIcon },
   { id: "notifications", label: "Notifications", icon: BellIcon },
   { id: "themes", label: "Themes", icon: PaletteIcon },
+  { id: "wallpapers", label: "Wallpapers", icon: ImageIcon },
   { id: "startup-animation", label: "Animations", icon: MonitorPlayIcon },
   { id: "providers", label: "Providers", icon: BotIcon },
   { id: "usage", label: "Usage & Limits", icon: GaugeIcon },
@@ -562,6 +566,7 @@ function SettingsRouteView() {
                     {activeSettingsSection === "general" ? <GeneralSettings /> : null}
                     {activeSettingsSection === "notifications" ? <NotificationsSettings /> : null}
                     {activeSettingsSection === "themes" ? <ThemesSettings /> : null}
+                    {activeSettingsSection === "wallpapers" ? <WallpaperSettings /> : null}
                     {activeSettingsSection === "startup-animation" ? <AnimationsSettings /> : null}
                     {activeSettingsSection === "workspace" ? (
                       <ProjectWorkspaceSettingsSection />

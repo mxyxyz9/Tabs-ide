@@ -5,6 +5,9 @@ import {
   DicesIcon,
   FilmIcon,
   LayoutGridIcon,
+  LayersIcon,
+  PowerOffIcon,
+  RotateCcwIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
@@ -15,48 +18,75 @@ import {
   type WallpaperOption,
 } from "./wallpapers";
 
+
 export interface WallpaperTopBarProps {
   readonly activeWallpaperUrl: string;
   readonly onSelectWallpaper: (wallpaper: WallpaperOption) => void;
   readonly onOpenGallery: () => void;
+  readonly onDisableWallpaper?: () => void;
   readonly onPlaySound?: () => void;
   readonly disabled?: boolean;
+  readonly theme?: "light" | "dark";
+  readonly isThreadSpecific?: boolean;
+  readonly onClearThreadWallpaper?: () => void;
+  /**
+   * Optional subset of wallpapers to cycle through. Defaults to all WALLPAPERS.
+   * Pass BRIGHT_WALLPAPERS to restrict to non-Night scenes (for the wizard).
+   */
+  readonly wallpapers?: readonly WallpaperOption[];
+  /**
+   * Direction the filmstrip shelf should open. Defaults to "down".
+   */
+  readonly dropDirection?: "up" | "down";
+  /**
+   * Whether to show the horizontal filmstrip dock button. Defaults to false.
+   */
+  readonly showFilmstrip?: boolean;
 }
 
 export function WallpaperTopBar({
   activeWallpaperUrl,
   onSelectWallpaper,
   onOpenGallery,
+  onDisableWallpaper,
   onPlaySound,
   disabled = false,
+  theme = "dark",
+  isThreadSpecific = false,
+  onClearThreadWallpaper,
+  wallpapers: wallpaperSet,
+  dropDirection = "down",
+  showFilmstrip = false,
 }: WallpaperTopBarProps) {
+  const isLight = theme === "light";
+  const wallpapers = wallpaperSet ?? WALLPAPERS;
   const [isFilmstripOpen, setIsFilmstripOpen] = useState(false);
   const [filmstripCategory, setFilmstripCategory] = useState<WallpaperCategory>("All");
   const filmstripScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const currentIndex = WALLPAPERS.findIndex((w) => w.url === activeWallpaperUrl);
+  const currentIndex = wallpapers.findIndex((w) => w.url === activeWallpaperUrl);
   const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-  const activeWallpaper = WALLPAPERS[safeIndex] ?? WALLPAPERS[0]!;
+  const activeWallpaper = wallpapers[safeIndex] ?? wallpapers[0]!;
 
   const handlePrev = () => {
     if (disabled) return;
     onPlaySound?.();
-    const nextIdx = (safeIndex - 1 + WALLPAPERS.length) % WALLPAPERS.length;
-    onSelectWallpaper(WALLPAPERS[nextIdx]!);
+    const nextIdx = (safeIndex - 1 + wallpapers.length) % wallpapers.length;
+    onSelectWallpaper(wallpapers[nextIdx]!);
   };
 
   const handleNext = () => {
     if (disabled) return;
     onPlaySound?.();
-    const nextIdx = (safeIndex + 1) % WALLPAPERS.length;
-    onSelectWallpaper(WALLPAPERS[nextIdx]!);
+    const nextIdx = (safeIndex + 1) % wallpapers.length;
+    onSelectWallpaper(wallpapers[nextIdx]!);
   };
 
   const handleRandom = () => {
     if (disabled) return;
     onPlaySound?.();
-    const others = WALLPAPERS.filter((_, idx) => idx !== safeIndex);
-    const random = others[Math.floor(Math.random() * others.length)] ?? WALLPAPERS[0]!;
+    const others = wallpapers.filter((_, idx) => idx !== safeIndex);
+    const random = others[Math.floor(Math.random() * others.length)] ?? wallpapers[0]!;
     onSelectWallpaper(random);
   };
 
@@ -90,8 +120,8 @@ export function WallpaperTopBar({
   // Filter wallpapers for filmstrip
   const filmstripWallpapers =
     filmstripCategory === "All"
-      ? WALLPAPERS
-      : WALLPAPERS.filter((w) => w.category === filmstripCategory);
+      ? wallpapers
+      : wallpapers.filter((w) => w.category === filmstripCategory);
 
   // Scroll active wallpaper into view inside filmstrip
   useEffect(() => {
@@ -119,14 +149,26 @@ export function WallpaperTopBar({
 
   return (
     <div className="relative">
-      {/* Sleek Top Wallpaper Control Bar */}
-      <div className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/45 p-1 backdrop-blur-2xl shadow-lg shadow-black/40">
+      {/* Sleek Wallpaper Control Pill Bar */}
+      <div
+        className={cn(
+          "flex items-center gap-1.5 rounded-full p-1 backdrop-blur-2xl shadow-xl transition-colors",
+          isLight
+            ? "border border-slate-200/90 bg-white/85 text-slate-800 shadow-slate-900/10"
+            : "border border-white/15 bg-black/55 text-white shadow-black/40",
+        )}
+      >
         {/* Previous Button */}
         <button
           type="button"
           disabled={disabled}
           onClick={handlePrev}
-          className="flex size-7 items-center justify-center rounded-full text-white/70 transition-all hover:bg-white/10 hover:text-white active:scale-95 disabled:opacity-40 cursor-pointer"
+          className={cn(
+            "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
+            isLight
+              ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              : "text-white/70 hover:bg-white/10 hover:text-white",
+          )}
           title="Previous wallpaper ([ or Alt+←])"
         >
           <ChevronLeftIcon className="size-4" />
@@ -140,74 +182,192 @@ export function WallpaperTopBar({
             onPlaySound?.();
             onOpenGallery();
           }}
-          className="group flex items-center gap-2 rounded-full py-0.5 pl-1 pr-2.5 transition-all hover:bg-white/10 cursor-pointer"
-          title="Click to browse all 30 wallpapers in full gallery"
+          className={cn(
+            "group flex items-center gap-2 rounded-full py-0.5 pl-1 pr-2.5 transition-all cursor-pointer",
+            isLight ? "hover:bg-slate-100" : "hover:bg-white/10",
+          )}
+          title="Click to browse wallpapers in full gallery"
         >
           {/* Miniature 16:9 preview chip */}
-          <div className="relative h-5.5 w-9 overflow-hidden rounded-md border border-white/30 bg-neutral-900 shadow-xs shrink-0 transition-transform duration-200 group-hover:scale-105">
+          <div
+            className={cn(
+              "relative h-5.5 w-9 overflow-hidden rounded-md border shadow-xs shrink-0 transition-transform duration-200 group-hover:scale-105",
+              isLight ? "border-slate-300 bg-slate-100" : "border-white/30 bg-neutral-900",
+            )}
+          >
             <img src={activeWallpaper.url} alt="" className="size-full object-cover" />
           </div>
 
           <div className="flex flex-col text-left">
-            <span className="text-[11px] font-semibold leading-tight text-white/95 group-hover:text-white max-w-[100px] sm:max-w-[130px] truncate">
-              {activeWallpaper.label}
-            </span>
-            <span className="text-[9px] font-mono leading-none text-white/50">
-              {safeIndex + 1} / {WALLPAPERS.length} • {activeWallpaper.category}
+            <div className="flex items-center gap-1">
+              <span
+                className={cn(
+                  "text-[11px] font-semibold leading-tight max-w-[100px] sm:max-w-[130px] truncate",
+                  isLight
+                    ? "text-slate-900 group-hover:text-black"
+                    : "text-white/95 group-hover:text-white",
+                )}
+              >
+                {activeWallpaper.label}
+              </span>
+              {isThreadSpecific && (
+                <span
+                  className={cn(
+                    "rounded px-1 py-0.2 text-[8px] font-medium leading-none shrink-0",
+                    isLight
+                      ? "bg-sky-100 text-sky-800 border border-sky-200"
+                      : "bg-sky-500/20 text-sky-300 border border-sky-400/30",
+                  )}
+                  title="Specific to this thread"
+                >
+                  Thread
+                </span>
+              )}
+            </div>
+            <span
+              className={cn(
+                "text-[9px] font-mono leading-none",
+                isLight ? "text-slate-500" : "text-white/50",
+              )}
+            >
+              {safeIndex + 1} / {wallpapers.length} • {activeWallpaper.category}
             </span>
           </div>
 
-          <LayoutGridIcon className="size-3 text-white/40 transition-colors group-hover:text-white ml-0.5" />
+          <LayoutGridIcon
+            className={cn(
+              "size-3 transition-colors ml-0.5",
+              isLight
+                ? "text-slate-400 group-hover:text-slate-700"
+                : "text-white/40 group-hover:text-white",
+            )}
+          />
         </button>
+
+        {/* Reset thread-specific wallpaper button (if thread-specific) */}
+        {isThreadSpecific && onClearThreadWallpaper && (
+          <button
+            type="button"
+            onClick={onClearThreadWallpaper}
+            className={cn(
+              "flex size-6 items-center justify-center rounded-full transition-all active:scale-95 cursor-pointer",
+              isLight
+                ? "text-sky-600 hover:bg-sky-100 hover:text-sky-800"
+                : "text-sky-300 hover:bg-sky-500/20 hover:text-sky-200",
+            )}
+            title="Reset to global workspace wallpaper"
+          >
+            <RotateCcwIcon className="size-3" />
+          </button>
+        )}
 
         {/* Next Button */}
         <button
           type="button"
           disabled={disabled}
           onClick={handleNext}
-          className="flex size-7 items-center justify-center rounded-full text-white/70 transition-all hover:bg-white/10 hover:text-white active:scale-95 disabled:opacity-40 cursor-pointer"
+          className={cn(
+            "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
+            isLight
+              ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              : "text-white/70 hover:bg-white/10 hover:text-white",
+          )}
           title="Next wallpaper (] or Alt+→])"
         >
           <ChevronRightIcon className="size-4" />
         </button>
 
         {/* Divider */}
-        <div className="h-4 w-px bg-white/15 mx-0.5" />
+        <div className={cn("h-4 w-px mx-0.5", isLight ? "bg-slate-300" : "bg-white/15")} />
 
         {/* Surprise Me / Random Shuffle */}
         <button
           type="button"
           disabled={disabled}
           onClick={handleRandom}
-          className="flex size-7 items-center justify-center rounded-full text-amber-300/80 transition-all hover:bg-amber-400/20 hover:text-amber-200 active:scale-95 disabled:opacity-40 cursor-pointer"
+          className={cn(
+            "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
+            isLight
+              ? "text-amber-600 hover:bg-amber-100 hover:text-amber-700"
+              : "text-amber-300/80 hover:bg-amber-400/20 hover:text-amber-200",
+          )}
           title="Surprise me with a random wallpaper"
         >
           <DicesIcon className="size-3.5" />
         </button>
 
-        {/* Toggle Filmstrip Shelf */}
+        {/* Direct Full Gallery Grid Button */}
         <button
           type="button"
           disabled={disabled}
           onClick={() => {
             onPlaySound?.();
-            setIsFilmstripOpen((prev) => !prev);
+            onOpenGallery();
           }}
           className={cn(
             "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
-            isFilmstripOpen
-              ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/40"
-              : "text-white/60 hover:bg-white/10 hover:text-white",
+            isLight
+              ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              : "text-white/65 hover:bg-white/10 hover:text-white",
           )}
-          title="Toggle horizontal wallpaper filmstrip dock"
+          title="Browse all wallpapers in gallery"
         >
-          <FilmIcon className="size-3.5" />
+          <LayoutGridIcon className="size-3.5" />
         </button>
+
+        {/* Optional Toggle Filmstrip Shelf */}
+        {showFilmstrip && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onPlaySound?.();
+              setIsFilmstripOpen((prev) => !prev);
+            }}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
+              isFilmstripOpen
+                ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/40"
+                : isLight
+                  ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-white/60 hover:bg-white/10 hover:text-white",
+            )}
+            title="Toggle horizontal wallpaper filmstrip dock"
+          >
+            <FilmIcon className="size-3.5" />
+          </button>
+        )}
+
+        {/* Disable / Turn Off Wallpaper Button */}
+        {onDisableWallpaper && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onPlaySound?.();
+              onDisableWallpaper();
+            }}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
+              isLight
+                ? "text-red-500 hover:bg-red-50 hover:text-red-700"
+                : "text-red-400/60 hover:bg-red-500/20 hover:text-red-300",
+            )}
+            title="Turn off wallpaper (Hide this icon & switch to default IDE look)"
+          >
+            <PowerOffIcon className="size-3" />
+          </button>
+        )}
       </div>
 
-      {/* Floating Horizontal Filmstrip Shelf (Floats right beneath the header) */}
+      {/* Floating Horizontal Filmstrip Shelf */}
       {isFilmstripOpen && (
-        <div className="absolute right-0 top-full mt-3 w-[min(92vw,700px)] rounded-2xl border border-white/20 bg-neutral-950/95 p-3.5 backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div
+          className={cn(
+            "absolute right-0 w-[min(92vw,700px)] rounded-2xl border border-white/20 bg-neutral-950/95 p-3.5 backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] z-50 animate-in fade-in zoom-in-95 duration-150",
+            dropDirection === "up" ? "bottom-full mb-3" : "top-full mt-3",
+          )}
+        >
           {/* Top row with Category filters and Grid Modal link */}
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-white/10 mb-2.5">
             <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">

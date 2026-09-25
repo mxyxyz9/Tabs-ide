@@ -332,6 +332,7 @@ import { useKeybindings } from "../state/settings";
 import { projectsAtom, threadsAtom, threadsHydratedAtom } from "../state/threads";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
+import { AgentBackground } from "./AgentBackground";
 
 const BROWSER_DEVICE_PRESETS = [
   { id: "project-default", label: "Project", width: null, height: null },
@@ -972,6 +973,7 @@ function ProjectTabs(props: {
 
   return (
     <div
+      data-wallpaper-shell="tabs-bar"
       className={cn(
         "drag-region flex items-end justify-between gap-2 overflow-x-auto border-b px-3 pt-2 select-none backdrop-blur-md transition-colors duration-200",
         "border-border/80 bg-background/95 text-foreground",
@@ -1165,7 +1167,7 @@ function ProjectToolBar(props: {
   }, [activeIndex, props.availableTools, toolbarStyle]);
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-card/85 px-3 py-2">
+    <div data-wallpaper-shell="tool-bar" className="flex items-center justify-between gap-3 border-b border-border/70 bg-card/85 px-3 py-2">
       <div
         ref={trackRef}
         role="tablist"
@@ -2659,8 +2661,10 @@ function AgentsThreadList(props: {
       </div>
 
       {/* ── Main content ── */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        {props.children}
+      <div data-wallpaper-shell="chat-area" className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <AgentBackground threadId={props.activeThreadId}>
+          {props.children}
+        </AgentBackground>
       </div>
 
       {/* ── Delete confirmation dialog ── */}
@@ -12988,7 +12992,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   );
 
   return (
-    <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
+    <div
+      data-wallpaper-shell="root"
+      className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground"
+    >
       <CloneRepositoryDialog
         open={cloneDialogOpen}
         onOpenChange={setCloneDialogOpen}
@@ -13051,7 +13058,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         />
       ) : null}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div data-wallpaper-shell="content" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ToolErrorBoundary
           resetKey={`${activeProject?.environmentId ?? "none"}:${activeProject?.id ?? "none"}:${activeTool?.id ?? "none"}`}
         >
