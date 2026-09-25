@@ -21,15 +21,40 @@ export interface ChangelogRelease {
   }[];
 }
 
-export const TOTAL_TAGS_COUNT = 165;
+export const TOTAL_TAGS_COUNT = 166;
 
 export const changelogData: ChangelogRelease[] = [
+  {
+    tag: "v1.3.23",
+    title: "Vibrant setup wizard wallpapers, filmstrip dock, and modal portaling",
+    date: "September 25, 2026",
+    shortDate: "Sep 25",
+    isLatest: true,
+    type: "patch",
+    summary:
+      "Tabs enhances the first-run onboarding experience with curated bright anime wallpapers, a horizontal filmstrip dock for quick scene switching, and portaled modal rendering.",
+    highlights: [
+      "The first-run welcome wizard now filters wallpaper options to bright daytime and sunset anime scenes, ensuring striking visual contrast against the dark-glass interface.",
+      "Enabled the quick-access horizontal wallpaper shelf in the welcome wizard header, letting you preview and switch scenes without opening the full-screen modal.",
+      "Updated the full-screen wallpaper gallery modal to mount directly to the document root, eliminating overlay clipping and dialog stacking conflicts.",
+    ],
+    categories: [
+      {
+        title: "Onboarding",
+        items: [
+          "Curated bright daytime and sunset anime wallpapers in the welcome wizard.",
+          "Interactive horizontal wallpaper filmstrip dock for fast browsing.",
+          "Document-level modal portaling for overlay stability.",
+        ],
+      },
+    ],
+  },
   {
     tag: "v1.3.22",
     title: "Interactive onboarding sandbox, wallpaper gallery, and system icon theme",
     date: "September 25, 2026",
     shortDate: "Sep 25",
-    isLatest: true,
+    isLatest: false,
     type: "patch",
     summary:
       "Tabs introduces an interactive project prototype sandbox in the welcome wizard, a curated gallery of 30 aesthetic desktop wallpapers, and automatic system-matching application icons.",
@@ -56,9 +81,7 @@ export const changelogData: ChangelogRelease[] = [
       },
       {
         title: "Packaging",
-        items: [
-          "Refined bundled Code-OSS runtime staging and dependency asset verification.",
-        ],
+        items: ["Refined bundled Code-OSS runtime staging and dependency asset verification."],
       },
     ],
   },

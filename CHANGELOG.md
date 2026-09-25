@@ -2,6 +2,14 @@
 
 All notable changes to Tabs IDE will be documented in this file.
 
+## [v1.3.23] - 2026-09-25
+
+### Vibrant setup wizard wallpapers, filmstrip dock, and modal portaling
+
+- **Vibrant onboarding wallpaper selection**: The first-run welcome wizard now filters wallpaper options to bright daytime and sunset anime scenes, ensuring striking visual contrast against the dark-glass interface.
+- **Horizontal filmstrip dock in setup**: Enabled the quick-access horizontal wallpaper shelf in the welcome wizard header, letting you preview and switch scenes without opening the full-screen modal.
+- **Portaled wallpaper gallery dialog**: Updated the full-screen wallpaper gallery modal to mount directly to the document root, eliminating overlay clipping and dialog stacking conflicts.
+
 ## [v1.3.22] - 2026-09-25
 
 ### Interactive onboarding sandbox, wallpaper gallery, and system icon theme
