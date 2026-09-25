@@ -273,6 +273,14 @@ export const WALLPAPERS: readonly WallpaperOption[] = [
 
 const WALLPAPER_STORAGE_KEY = "tabs:wallpaper";
 
+/**
+ * Wallpapers suitable for the startup wizard — bright/light only, no Night category.
+ * These pop visually against the wizard's dark-glass UI.
+ */
+export const BRIGHT_WALLPAPERS: readonly WallpaperOption[] = WALLPAPERS.filter(
+  (w) => w.category !== "Night",
+);
+
 export function getInitialWallpaper(): WallpaperOption {
   try {
     const saved = localStorage.getItem(WALLPAPER_STORAGE_KEY);
@@ -281,7 +289,7 @@ export function getInitialWallpaper(): WallpaperOption {
       if (match) return match;
     }
   } catch {}
-  return WALLPAPERS[0]!;
+  return BRIGHT_WALLPAPERS[0]!;
 }
 
 export function saveWallpaperPreference(url: string): void {

@@ -1,5 +1,6 @@
 import { CheckIcon, DicesIcon, SearchIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 import {
   WALLPAPERS,
@@ -14,6 +15,11 @@ export interface WallpaperGalleryModalProps {
   readonly onSelectWallpaper: (wallpaper: WallpaperOption) => void;
   readonly onClose: () => void;
   readonly onPlaySound?: () => void;
+  /**
+   * Optional subset of wallpapers to show. Defaults to all WALLPAPERS.
+   * Pass BRIGHT_WALLPAPERS to restrict the gallery to non-Night scenes.
+   */
+  readonly wallpapers?: readonly WallpaperOption[];
 }
 
 export function WallpaperGalleryModal({
@@ -22,7 +28,9 @@ export function WallpaperGalleryModal({
   onSelectWallpaper,
   onClose,
   onPlaySound,
+  wallpapers: wallpaperSet,
 }: WallpaperGalleryModalProps) {
+  const wallpapers = wallpaperSet ?? WALLPAPERS;
   const [selectedCategory, setSelectedCategory] = useState<WallpaperCategory>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -52,7 +60,7 @@ export function WallpaperGalleryModal({
   }, [isOpen, onClose]);
 
   const filteredWallpapers = useMemo(() => {
-    return WALLPAPERS.filter((wp) => {
+    return wallpapers.filter((wp) => {
       const matchesCategory = selectedCategory === "All" || wp.category === selectedCategory;
       const matchesSearch =
         searchQuery.trim().length === 0 ||
@@ -61,24 +69,24 @@ export function WallpaperGalleryModal({
         wp.category.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [wallpapers, selectedCategory, searchQuery]);
 
   if (!isOpen) return null;
 
   const handleShuffle = () => {
     onPlaySound?.();
-    const otherWallpapers = WALLPAPERS.filter((w) => w.url !== activeWallpaperUrl);
+    const otherWallpapers = wallpapers.filter((w) => w.url !== activeWallpaperUrl);
     const random =
-      otherWallpapers[Math.floor(Math.random() * otherWallpapers.length)] ?? WALLPAPERS[0]!;
+      otherWallpapers[Math.floor(Math.random() * otherWallpapers.length)] ?? wallpapers[0]!;
     onSelectWallpaper(random);
   };
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="wallpaper-gallery-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
@@ -100,7 +108,7 @@ export function WallpaperGalleryModal({
                   Wallpaper Gallery
                 </h2>
                 <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-mono font-medium text-white/70 border border-white/10">
-                  {WALLPAPERS.length} scenes
+                  {wallpapers.length} scenes
                 </span>
               </div>
               <p className="text-xs text-white/50">
@@ -134,12 +142,14 @@ export function WallpaperGalleryModal({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-white/10 px-6 py-3.5 shrink-0 bg-neutral-900/40">
           {/* Category Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {WALLPAPER_CATEGORIES.map((cat) => {
+            {WALLPAPER_CATEGORIES.filter(
+              (cat) => cat === "All" || wallpapers.some((w) => w.category === cat),
+            ).map((cat) => {
               const isSelected = selectedCategory === cat;
               const count =
                 cat === "All"
-                  ? WALLPAPERS.length
-                  : WALLPAPERS.filter((w) => w.category === cat).length;
+                  ? wallpapers.length
+                  : wallpapers.filter((w) => w.category === cat).length;
               return (
                 <button
                   key={cat}
@@ -280,6 +290,7 @@ export function WallpaperGalleryModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

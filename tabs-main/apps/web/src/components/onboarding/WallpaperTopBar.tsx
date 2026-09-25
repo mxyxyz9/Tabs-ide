@@ -21,6 +21,19 @@ export interface WallpaperTopBarProps {
   readonly onOpenGallery: () => void;
   readonly onPlaySound?: () => void;
   readonly disabled?: boolean;
+  /**
+   * Optional subset of wallpapers to cycle through. Defaults to all WALLPAPERS.
+   * Pass BRIGHT_WALLPAPERS to restrict to non-Night scenes (for the wizard).
+   */
+  readonly wallpapers?: readonly WallpaperOption[];
+  /**
+   * Direction the filmstrip shelf should open. Defaults to "down".
+   */
+  readonly dropDirection?: "up" | "down";
+  /**
+   * Whether to show the horizontal filmstrip dock button. Defaults to true.
+   */
+  readonly showFilmstrip?: boolean;
 }
 
 export function WallpaperTopBar({
@@ -29,34 +42,38 @@ export function WallpaperTopBar({
   onOpenGallery,
   onPlaySound,
   disabled = false,
+  wallpapers: wallpaperSet,
+  dropDirection = "down",
+  showFilmstrip = true,
 }: WallpaperTopBarProps) {
+  const wallpapers = wallpaperSet ?? WALLPAPERS;
   const [isFilmstripOpen, setIsFilmstripOpen] = useState(false);
   const [filmstripCategory, setFilmstripCategory] = useState<WallpaperCategory>("All");
   const filmstripScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const currentIndex = WALLPAPERS.findIndex((w) => w.url === activeWallpaperUrl);
+  const currentIndex = wallpapers.findIndex((w) => w.url === activeWallpaperUrl);
   const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-  const activeWallpaper = WALLPAPERS[safeIndex] ?? WALLPAPERS[0]!;
+  const activeWallpaper = wallpapers[safeIndex] ?? wallpapers[0]!;
 
   const handlePrev = () => {
     if (disabled) return;
     onPlaySound?.();
-    const nextIdx = (safeIndex - 1 + WALLPAPERS.length) % WALLPAPERS.length;
-    onSelectWallpaper(WALLPAPERS[nextIdx]!);
+    const nextIdx = (safeIndex - 1 + wallpapers.length) % wallpapers.length;
+    onSelectWallpaper(wallpapers[nextIdx]!);
   };
 
   const handleNext = () => {
     if (disabled) return;
     onPlaySound?.();
-    const nextIdx = (safeIndex + 1) % WALLPAPERS.length;
-    onSelectWallpaper(WALLPAPERS[nextIdx]!);
+    const nextIdx = (safeIndex + 1) % wallpapers.length;
+    onSelectWallpaper(wallpapers[nextIdx]!);
   };
 
   const handleRandom = () => {
     if (disabled) return;
     onPlaySound?.();
-    const others = WALLPAPERS.filter((_, idx) => idx !== safeIndex);
-    const random = others[Math.floor(Math.random() * others.length)] ?? WALLPAPERS[0]!;
+    const others = wallpapers.filter((_, idx) => idx !== safeIndex);
+    const random = others[Math.floor(Math.random() * others.length)] ?? wallpapers[0]!;
     onSelectWallpaper(random);
   };
 
@@ -90,8 +107,8 @@ export function WallpaperTopBar({
   // Filter wallpapers for filmstrip
   const filmstripWallpapers =
     filmstripCategory === "All"
-      ? WALLPAPERS
-      : WALLPAPERS.filter((w) => w.category === filmstripCategory);
+      ? wallpapers
+      : wallpapers.filter((w) => w.category === filmstripCategory);
 
   // Scroll active wallpaper into view inside filmstrip
   useEffect(() => {
@@ -141,7 +158,7 @@ export function WallpaperTopBar({
             onOpenGallery();
           }}
           className="group flex items-center gap-2 rounded-full py-0.5 pl-1 pr-2.5 transition-all hover:bg-white/10 cursor-pointer"
-          title="Click to browse all 30 wallpapers in full gallery"
+          title="Click to browse all wallpapers in full gallery"
         >
           {/* Miniature 16:9 preview chip */}
           <div className="relative h-5.5 w-9 overflow-hidden rounded-md border border-white/30 bg-neutral-900 shadow-xs shrink-0 transition-transform duration-200 group-hover:scale-105">
@@ -153,7 +170,7 @@ export function WallpaperTopBar({
               {activeWallpaper.label}
             </span>
             <span className="text-[9px] font-mono leading-none text-white/50">
-              {safeIndex + 1} / {WALLPAPERS.length} • {activeWallpaper.category}
+              {safeIndex + 1} / {wallpapers.length} • {activeWallpaper.category}
             </span>
           </div>
 
@@ -186,28 +203,35 @@ export function WallpaperTopBar({
         </button>
 
         {/* Toggle Filmstrip Shelf */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            onPlaySound?.();
-            setIsFilmstripOpen((prev) => !prev);
-          }}
-          className={cn(
-            "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
-            isFilmstripOpen
-              ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/40"
-              : "text-white/60 hover:bg-white/10 hover:text-white",
-          )}
-          title="Toggle horizontal wallpaper filmstrip dock"
-        >
-          <FilmIcon className="size-3.5" />
-        </button>
+        {showFilmstrip && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onPlaySound?.();
+              setIsFilmstripOpen((prev) => !prev);
+            }}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer",
+              isFilmstripOpen
+                ? "bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/40"
+                : "text-white/60 hover:bg-white/10 hover:text-white",
+            )}
+            title="Toggle horizontal wallpaper filmstrip dock"
+          >
+            <FilmIcon className="size-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Floating Horizontal Filmstrip Shelf (Floats right beneath the header) */}
+      {/* Floating Horizontal Filmstrip Shelf */}
       {isFilmstripOpen && (
-        <div className="absolute right-0 top-full mt-3 w-[min(92vw,700px)] rounded-2xl border border-white/20 bg-neutral-950/95 p-3.5 backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div
+          className={cn(
+            "absolute right-0 w-[min(92vw,700px)] rounded-2xl border border-white/20 bg-neutral-950/95 p-3.5 backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] z-50 animate-in fade-in zoom-in-95 duration-150",
+            dropDirection === "up" ? "bottom-full mb-3" : "top-full mt-3",
+          )}
+        >
           {/* Top row with Category filters and Grid Modal link */}
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-white/10 mb-2.5">
             <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">
